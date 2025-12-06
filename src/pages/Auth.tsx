@@ -10,7 +10,20 @@ import { Handshake, Mail, Lock, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const authSchema = z.object({
-  email: z.string().email('Please enter a valid email'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email address')
+    .refine(
+      (email) => {
+        // Supabase requires at least 2 characters in the local part (before @)
+        const localPart = email.split('@')[0];
+        return localPart && localPart.length >= 2;
+      },
+      {
+        message: 'Email must have at least 2 characters before the @ symbol',
+      }
+    ),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -58,30 +71,44 @@ export default function Auth() {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) {
+          let errorTitle = 'Sign in failed';
+          let errorDescription = error.message;
+
+          if (error.message === 'Invalid login credentials' || error.message.includes('Invalid login')) {
+            errorDescription = 'Invalid email or password. Please try again.';
+          } else if (error.message.includes('Email not confirmed')) {
+            errorDescription = 'Please check your email and confirm your account before signing in.';
+          }
+
           toast({
-            title: 'Sign in failed',
-            description: error.message === 'Invalid login credentials' 
-              ? 'Invalid email or password. Please try again.'
-              : error.message,
+            title: errorTitle,
+            description: errorDescription,
             variant: 'destructive',
           });
         }
       } else {
         const { error } = await signUp(email, password);
         if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              title: 'Account exists',
-              description: 'This email is already registered. Please sign in instead.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Sign up failed',
-              description: error.message,
-              variant: 'destructive',
-            });
+          let errorTitle = 'Sign up failed';
+          let errorDescription = error.message;
+
+          // Handle specific error cases
+          if (error.message.includes('already registered') || error.message.includes('already been registered')) {
+            errorTitle = 'Account exists';
+            errorDescription = 'This email is already registered. Please sign in instead.';
+          } else if (error.message.includes('invalid') && error.message.includes('email')) {
+            errorTitle = 'Invalid email address';
+            errorDescription = 'Please enter a valid email address. The email must have at least 2 characters before the @ symbol.';
+          } else if (error.message.includes('Password')) {
+            errorTitle = 'Password error';
+            errorDescription = error.message;
           }
+
+          toast({
+            title: errorTitle,
+            description: errorDescription,
+            variant: 'destructive',
+          });
         } else {
           toast({
             title: 'Welcome to Growbro!',
