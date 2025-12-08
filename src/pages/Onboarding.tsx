@@ -21,6 +21,7 @@ import {
   CalendarDays,
   Sparkles,
   Coffee,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -89,6 +90,69 @@ export default function Onboarding() {
     setProductCollabTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
+  };
+
+  const handleSkip = async () => {
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      // Create minimal profile with defaults
+      const defaultHandle = `user_${user.id.slice(0, 8)}`;
+      const defaultDisplayName = user.email?.split('@')[0] || 'User';
+
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: user.id,
+        role: role || 'brand', // Default to brand if no role selected
+        display_name: displayName || defaultDisplayName,
+        handle: handle || defaultHandle,
+        city: city || null,
+        country: country || null,
+        short_bio: shortBio || null,
+        website_url: websiteUrl || null,
+        instagram_handle: instagramHandle || null,
+        tags: tags.length > 0 ? tags : [],
+        preferred_collab_types: selectedCollabTypes.length > 0 ? selectedCollabTypes : [],
+      });
+
+      if (profileError) {
+        // If handle is taken, try with a different suffix
+        if (profileError.message.includes('duplicate key') && profileError.message.includes('handle')) {
+          const fallbackHandle = `${defaultHandle}_${Date.now().toString().slice(-4)}`;
+          const { error: retryError } = await supabase.from('profiles').insert({
+            id: user.id,
+            role: role || 'brand',
+            display_name: displayName || defaultDisplayName,
+            handle: fallbackHandle,
+            city: city || null,
+            country: country || null,
+            short_bio: shortBio || null,
+            website_url: websiteUrl || null,
+            instagram_handle: instagramHandle || null,
+            tags: tags.length > 0 ? tags : [],
+            preferred_collab_types: selectedCollabTypes.length > 0 ? selectedCollabTypes : [],
+          });
+          if (retryError) throw retryError;
+        } else {
+          throw profileError;
+        }
+      }
+
+      await refreshProfile();
+      toast({
+        title: 'Welcome to Growbro!',
+        description: 'You can complete your profile later from settings.',
+      });
+      navigate('/home');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create profile',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleComplete = async () => {
@@ -173,7 +237,17 @@ export default function Onboarding() {
   const totalSteps = role === 'brand' ? 4 : 3;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero relative">
+      {/* Skip button - upper right corner */}
+      <button
+        onClick={handleSkip}
+        disabled={loading}
+        className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-background/50 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <X className="h-4 w-4" />
+        <span>Skip for now</span>
+      </button>
+
       {/* Progress indicator */}
       <div className="w-full max-w-md mb-8">
         <div className="flex items-center justify-between mb-2">
