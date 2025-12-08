@@ -47,19 +47,76 @@ const HK_DISTRICTS: Record<string, string[]> = {
   'New Territories': ['Islands', 'North', 'Sai Kung', 'Sha Tin', 'Tai Po', 'Tsuen Wan', 'Tuen Mun', 'Yuen Long'],
 };
 
-// Business types
-const BUSINESS_TYPES = [
-  'Café / Coffee Shop',
-  'Restaurant',
-  'Retail Store',
-  'Event Space',
-  'Gallery',
-  'Workshop',
-  'Co-working Space',
-  'Pop-up Store',
-  'Online Store',
-  'Other',
-] as const;
+// MTR Stations / Areas by District
+const HK_AREAS: Record<string, string[]> = {
+  'Central & Western': ['Central', 'Admiralty', 'Sheung Wan', 'Kennedy Town', 'Sai Ying Pun', 'Pok Fu Lam'],
+  'Eastern': ['Chai Wan', 'Heng Fa Chuen', 'Shau Kei Wan', 'Tai Koo', 'Quarry Bay', 'Sai Wan Ho', 'North Point'],
+  'Southern': ['Aberdeen', 'Ap Lei Chau', 'Ocean Park', 'Wong Chuk Hang', 'Repulse Bay', 'Stanley'],
+  'Wan Chai': ['Wan Chai', 'Causeway Bay', 'Happy Valley', 'Tin Hau', 'Fortress Hill'],
+  'Kowloon City': ['Kowloon City', 'Kowloon Tong', 'To Kwa Wan', 'Hung Hom', 'Ho Man Tin'],
+  'Kwun Tong': ['Kwun Tong', 'Ngau Tau Kok', 'Lam Tin', 'Yau Tong', 'Tiu Keng Leng', 'Diamond Hill'],
+  'Sham Shui Po': ['Sham Shui Po', 'Cheung Sha Wan', 'Lai Chi Kok', 'Mei Foo', 'Nam Cheong'],
+  'Wong Tai Sin': ['Wong Tai Sin', 'Lok Fu', 'Kowloon Tong', 'Diamond Hill'],
+  'Yau Tsim Mong': ['Tsim Sha Tsui', 'Jordan', 'Yau Ma Tei', 'Mong Kok', 'Prince Edward', 'Olympic'],
+  'Islands': ['Tung Chung', 'Discovery Bay', 'Mui Wo', 'Cheung Chau'],
+  'North': ['Sheung Shui', 'Fanling', 'Tai Po Market', 'University'],
+  'Sai Kung': ['Po Lam', 'Hang Hau', 'Tseung Kwan O', 'Sai Kung'],
+  'Sha Tin': ['Sha Tin', 'Tai Wai', 'Fo Tan', 'University', 'Ma On Shan'],
+  'Tai Po': ['Tai Po Market', 'Tai Wo', 'University'],
+  'Tsuen Wan': ['Tsuen Wan', 'Tsuen Wan West', 'Kwai Hing', 'Kwai Fong', 'Lai King'],
+  'Tuen Mun': ['Tuen Mun', 'Siu Hong', 'Tin Shui Wai', 'Long Ping'],
+  'Yuen Long': ['Yuen Long', 'Long Ping', 'Tin Shui Wai', 'Kam Sheung Road'],
+};
+
+// Business Nature (first level)
+const BUSINESS_NATURES = ['F&B', 'Retail', 'Service', 'Entertainment', 'Creative', 'Other'] as const;
+
+// Business Industries by Nature
+const BUSINESS_INDUSTRIES: Record<string, string[]> = {
+  'F&B': [
+    'Café / Coffee Shop',
+    'Restaurant',
+    'Bar / Lounge',
+    'Bakery',
+    'Bubble Tea',
+    'Dessert Shop',
+    'Food Truck',
+    'Other F&B',
+  ],
+  'Retail': [
+    'Fashion / Apparel',
+    'Beauty / Cosmetics',
+    'Electronics',
+    'Home & Living',
+    'Books & Stationery',
+    'Specialty Store',
+    'Pop-up Store',
+    'Other Retail',
+  ],
+  'Service': [
+    'Salon / Spa',
+    'Fitness / Gym',
+    'Education / Tutoring',
+    'Professional Services',
+    'Repair Services',
+    'Other Services',
+  ],
+  'Entertainment': [
+    'Event Space',
+    'Karaoke',
+    'Cinema',
+    'Arcade',
+    'Other Entertainment',
+  ],
+  'Creative': [
+    'Gallery',
+    'Workshop',
+    'Studio',
+    'Co-working Space',
+    'Other Creative',
+  ],
+  'Other': ['Other'],
+};
 
 export default function Onboarding() {
   const { user, profile, refreshProfile } = useAuth();
@@ -74,7 +131,10 @@ export default function Onboarding() {
   const [handle, setHandle] = useState('');
   const [hkRegion, setHkRegion] = useState<string>('');
   const [hkDistrict, setHkDistrict] = useState<string>('');
-  const [businessType, setBusinessType] = useState<string>('');
+  const [hkArea, setHkArea] = useState<string>('');
+  const [businessNature, setBusinessNature] = useState<string>('');
+  const [businessIndustry, setBusinessIndustry] = useState<string>('');
+  const [hasPhysicalShop, setHasPhysicalShop] = useState<boolean | null>(null);
   const [shortBio, setShortBio] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
@@ -131,21 +191,33 @@ export default function Onboarding() {
       const defaultHandle = `user_${user.id.slice(0, 8)}`;
       const defaultDisplayName = user.email?.split('@')[0] || 'User';
 
-      const finalHandle = handle.trim() 
+        const finalHandle = handle.trim() 
         ? handle.toLowerCase().replace(/[^a-z0-9_]/g, '')
         : displayName.toLowerCase().replace(/[^a-z0-9_]/g, '') || defaultHandle;
+
+      // Build tags array for skip
+      const skipTags = [...tags];
+      if (hasPhysicalShop === true) {
+        skipTags.push('has_physical_shop');
+      }
+      if (businessNature) {
+        skipTags.push(`nature_${businessNature.toLowerCase()}`);
+      }
+      if (businessIndustry) {
+        skipTags.push(`industry_${businessIndustry.toLowerCase().replace(/\s+/g, '_')}`);
+      }
 
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
         role: role || 'brand', // Default to brand if no role selected
         display_name: displayName || defaultDisplayName,
         handle: finalHandle,
-        city: hkDistrict || null,
+        city: hkArea || hkDistrict || null,
         country: 'Hong Kong',
         short_bio: shortBio || null,
         website_url: websiteUrl || null,
         instagram_handle: instagramHandle || null,
-        tags: tags.length > 0 ? tags : [],
+        tags: skipTags.length > 0 ? skipTags : [],
         preferred_collab_types: selectedCollabTypes.length > 0 ? selectedCollabTypes : [],
       });
 
@@ -153,17 +225,28 @@ export default function Onboarding() {
         // If handle is taken, try with a different suffix
         if (profileError.message.includes('duplicate key') && profileError.message.includes('handle')) {
           const fallbackHandle = `${defaultHandle}_${Date.now().toString().slice(-4)}`;
+          // Rebuild tags for retry
+          const retryTags = [...tags];
+          if (hasPhysicalShop === true) {
+            retryTags.push('has_physical_shop');
+          }
+          if (businessNature) {
+            retryTags.push(`nature_${businessNature.toLowerCase()}`);
+          }
+          if (businessIndustry) {
+            retryTags.push(`industry_${businessIndustry.toLowerCase().replace(/\s+/g, '_')}`);
+          }
           const { error: retryError } = await supabase.from('profiles').insert({
             id: user.id,
             role: role || 'brand',
             display_name: displayName || defaultDisplayName,
             handle: fallbackHandle,
-            city: hkDistrict || null,
+            city: hkArea || hkDistrict || null,
             country: 'Hong Kong',
             short_bio: shortBio || null,
             website_url: websiteUrl || null,
             instagram_handle: instagramHandle || null,
-            tags: tags.length > 0 ? tags : [],
+            tags: retryTags.length > 0 ? retryTags : [],
             preferred_collab_types: selectedCollabTypes.length > 0 ? selectedCollabTypes : [],
           });
           if (retryError) throw retryError;
@@ -200,17 +283,29 @@ export default function Onboarding() {
         ? handle.toLowerCase().replace(/[^a-z0-9_]/g, '')
         : displayName.toLowerCase().replace(/[^a-z0-9_]/g, '') || `user_${user.id.slice(0, 8)}`;
 
+      // Build tags array - include physical shop info and business type
+      const profileTags = [...tags];
+      if (hasPhysicalShop === true) {
+        profileTags.push('has_physical_shop');
+      }
+      if (businessNature) {
+        profileTags.push(`nature_${businessNature.toLowerCase()}`);
+      }
+      if (businessIndustry) {
+        profileTags.push(`industry_${businessIndustry.toLowerCase().replace(/\s+/g, '_')}`);
+      }
+
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
         role: role || 'brand', // Default to brand
         display_name: displayName,
         handle: finalHandle,
-        city: hkDistrict || null,
+        city: hkArea || hkDistrict || null, // Use area (MTR station) or district as city
         country: 'Hong Kong',
         short_bio: shortBio || null,
         website_url: websiteUrl || null,
         instagram_handle: instagramHandle || null,
-        tags: tags.length > 0 ? tags : [],
+        tags: profileTags.length > 0 ? profileTags : [],
         preferred_collab_types: selectedCollabTypes,
       });
 
@@ -261,8 +356,8 @@ export default function Onboarding() {
   const canProceed = () => {
     switch (step) {
       case 1:
-        // Required: brand name, location (region + district), business type
-        return displayName.trim() && hkRegion && hkDistrict && businessType;
+        // Required: brand name, location (region + district + area), business nature + industry, physical shop answer
+        return displayName.trim() && hkRegion && hkDistrict && hkArea && businessNature && businessIndustry && hasPhysicalShop !== null;
       case 2:
         // Optional fields - always can proceed (all optional)
         return true;
@@ -281,6 +376,38 @@ export default function Onboarding() {
   const handleRegionChange = (region: string) => {
     setHkRegion(region);
     setHkDistrict(''); // Reset district when region changes
+    setHkArea(''); // Reset area when region changes
+  };
+
+  // Reset area when district changes
+  const handleDistrictChange = (district: string) => {
+    setHkDistrict(district);
+    setHkArea(''); // Reset area when district changes
+  };
+
+  // Reset industry when nature changes
+  const handleNatureChange = (nature: string) => {
+    setBusinessNature(nature);
+    setBusinessIndustry(''); // Reset industry when nature changes
+  };
+
+  // Handle physical shop selection - set role to both brand & venue if Yes
+  const handlePhysicalShopChange = (hasShop: boolean) => {
+    setHasPhysicalShop(hasShop);
+    if (hasShop) {
+      // If they have a physical shop, they can be both brand and venue
+      // For now, we'll set role to 'brand' but they'll have venue capabilities
+      // Note: The database role field is single value, so we'll need to handle this in the app logic
+      setRole('brand'); // Default to brand, but they'll have venue features
+    }
+  };
+
+  // Get available areas for selected district
+  const getAvailableAreas = (): string[] => {
+    if (!hkDistrict) return [];
+    const areas = HK_AREAS[hkDistrict];
+    // If no MTR stations/areas for this district, return the district name
+    return areas && areas.length > 0 ? areas : [hkDistrict];
   };
 
   return (
@@ -333,62 +460,68 @@ export default function Onboarding() {
                 value={displayName}
                 onChange={(e) => {
                   setDisplayName(e.target.value);
-                  // Auto-generate handle from display name
-                  if (!handle) {
-                    const generatedHandle = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                    setHandle(generatedHandle);
-                  }
+                  // Auto-generate handle from display name (hidden from user)
+                  const generatedHandle = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                  setHandle(generatedHandle);
                 }}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="handle">Handle *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
-                <Input
-                  id="handle"
-                  placeholder="yourhandle"
-                  value={handle}
-                  onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  className="pl-8"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">This will be your unique identifier</p>
-            </div>
+            {/* Handle is auto-generated and hidden from user */}
 
             <div className="space-y-2">
               <Label>Location *</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="region" className="text-xs">Region</Label>
-                  <Select value={hkRegion} onValueChange={handleRegionChange}>
-                    <SelectTrigger id="region">
-                      <SelectValue placeholder="Select region" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HK_REGIONS.map((region) => (
-                        <SelectItem key={region} value={region}>
-                          {region}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="region" className="text-xs">Region</Label>
+                    <Select value={hkRegion} onValueChange={handleRegionChange}>
+                      <SelectTrigger id="region">
+                        <SelectValue placeholder="Select region" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HK_REGIONS.map((region) => (
+                          <SelectItem key={region} value={region}>
+                            {region}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="district" className="text-xs">District</Label>
+                    <Select 
+                      value={hkDistrict} 
+                      onValueChange={handleDistrictChange}
+                      disabled={!hkRegion}
+                    >
+                      <SelectTrigger id="district">
+                        <SelectValue placeholder={hkRegion ? "Select district" : "Select region first"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {hkRegion && HK_DISTRICTS[hkRegion]?.map((district) => (
+                          <SelectItem key={district} value={district}>
+                            {district}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="district" className="text-xs">District</Label>
+                  <Label htmlFor="area" className="text-xs">Area / MTR Station</Label>
                   <Select 
-                    value={hkDistrict} 
-                    onValueChange={setHkDistrict}
-                    disabled={!hkRegion}
+                    value={hkArea} 
+                    onValueChange={setHkArea}
+                    disabled={!hkDistrict}
                   >
-                    <SelectTrigger id="district">
-                      <SelectValue placeholder={hkRegion ? "Select district" : "Select region first"} />
+                    <SelectTrigger id="area">
+                      <SelectValue placeholder={hkDistrict ? "Select area" : "Select district first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {hkRegion && HK_DISTRICTS[hkRegion]?.map((district) => (
-                        <SelectItem key={district} value={district}>
-                          {district}
+                      {getAvailableAreas().map((area) => (
+                        <SelectItem key={area} value={area}>
+                          {area}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -398,19 +531,76 @@ export default function Onboarding() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="businessType">Business Type *</Label>
-              <Select value={businessType} onValueChange={setBusinessType}>
-                <SelectTrigger id="businessType">
-                  <SelectValue placeholder="Select your business type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BUSINESS_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Business Type *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="nature" className="text-xs">Nature</Label>
+                  <Select value={businessNature} onValueChange={handleNatureChange}>
+                    <SelectTrigger id="nature">
+                      <SelectValue placeholder="Select nature" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BUSINESS_NATURES.map((nature) => (
+                        <SelectItem key={nature} value={nature}>
+                          {nature}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="industry" className="text-xs">Industry</Label>
+                  <Select 
+                    value={businessIndustry} 
+                    onValueChange={setBusinessIndustry}
+                    disabled={!businessNature}
+                  >
+                    <SelectTrigger id="industry">
+                      <SelectValue placeholder={businessNature ? "Select industry" : "Select nature first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businessNature && BUSINESS_INDUSTRIES[businessNature]?.map((industry) => (
+                        <SelectItem key={industry} value={industry}>
+                          {industry}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Do you have a physical shop? *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant={hasPhysicalShop === true ? "default" : "outline"}
+                  onClick={() => handlePhysicalShopChange(true)}
+                  className={cn(
+                    "w-full",
+                    hasPhysicalShop === true && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  Yes
+                </Button>
+                <Button
+                  type="button"
+                  variant={hasPhysicalShop === false ? "default" : "outline"}
+                  onClick={() => handlePhysicalShopChange(false)}
+                  className={cn(
+                    "w-full",
+                    hasPhysicalShop === false && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  No
+                </Button>
+              </div>
+              {hasPhysicalShop === true && (
+                <p className="text-xs text-muted-foreground">
+                  You'll be able to use both brand and venue features
+                </p>
+              )}
             </div>
 
             <Button
