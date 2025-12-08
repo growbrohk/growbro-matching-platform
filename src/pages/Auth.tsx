@@ -13,21 +13,7 @@ const authSchema = z.object({
   email: z
     .string()
     .min(1, 'Email is required')
-    .email('Please enter a valid email address')
-    .refine(
-      (email) => {
-        const localPart = email.split('@')[0];
-        if (!localPart || localPart.length < 2) {
-          return false;
-        }
-        // Supabase requires at least one letter (not just numbers) in the local part
-        // This matches common email validation patterns
-        return /[a-zA-Z]/.test(localPart);
-      },
-      {
-        message: 'Email must contain at least one letter before the @ symbol',
-      }
-    ),
+    .email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
@@ -102,7 +88,7 @@ export default function Auth() {
             errorDescription = 'This email is already registered. Please sign in instead.';
           } else if (error.message.includes('invalid') && error.message.includes('email')) {
             errorTitle = 'Invalid email address';
-            errorDescription = 'Please enter a valid email address. The email must contain at least one letter before the @ symbol (e.g., "user@example.com" not "12@example.com").';
+            errorDescription = error.message;
           } else if (error.message.includes('Password')) {
             errorTitle = 'Password error';
             errorDescription = error.message;
