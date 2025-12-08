@@ -1,13 +1,13 @@
 -- ============================================
--- Add is_venue column to profiles table
+-- Safe migration: Add is_venue column only if it doesn't exist
 -- ============================================
--- This migration adds an is_venue boolean column to support dual roles.
--- All users are brands by default. If they have a physical shop, they're also a venue.
+-- Run this if you're getting "column specified more than once" error
 -- ============================================
 
--- Check if column exists before adding (safe for existing databases)
+-- First, check if the column already exists and handle accordingly
 DO $$
 BEGIN
+  -- Check if is_venue column exists
   IF NOT EXISTS (
     SELECT 1 
     FROM information_schema.columns 
@@ -15,19 +15,22 @@ BEGIN
     AND table_name = 'profiles' 
     AND column_name = 'is_venue'
   ) THEN
-    -- Add is_venue column (default false, all users are brands by default)
+    -- Column doesn't exist, add it
     ALTER TABLE public.profiles 
     ADD COLUMN is_venue BOOLEAN DEFAULT false NOT NULL;
+    
+    RAISE NOTICE 'Added is_venue column to profiles table';
+  ELSE
+    RAISE NOTICE 'is_venue column already exists, skipping';
   END IF;
 END $$;
 
 -- Update existing profiles: if role is 'venue', set is_venue to true
--- (for backward compatibility with existing data)
 UPDATE public.profiles 
 SET is_venue = true 
 WHERE role = 'venue' AND (is_venue IS NULL OR is_venue = false);
 
--- Set default role to 'brand' for new profiles (if not already set)
+-- Ensure default is set for role column
 DO $$
 BEGIN
   IF EXISTS (
@@ -36,13 +39,13 @@ BEGIN
     WHERE table_schema = 'public' 
     AND table_name = 'profiles' 
     AND column_name = 'role'
-    AND column_default IS NULL
+    AND (column_default IS NULL OR column_default != '''brand''::user_role')
   ) THEN
     ALTER TABLE public.profiles 
     ALTER COLUMN role SET DEFAULT 'brand';
   END IF;
 END $$;
 
--- Add comment to explain the dual role system
+-- Add comment
 COMMENT ON COLUMN public.profiles.is_venue IS 'If true, user is also a venue (in addition to being a brand). All users are brands by default.';
 
