@@ -31,7 +31,8 @@ CREATE TYPE public.inventory_location_type AS ENUM ('warehouse', 'venue');
 -- Profiles table (extends auth.users)
 CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role user_role NOT NULL,
+  role user_role NOT NULL DEFAULT 'brand',
+  is_venue BOOLEAN DEFAULT false NOT NULL,
   display_name TEXT NOT NULL,
   handle TEXT UNIQUE NOT NULL,
   avatar_url TEXT,

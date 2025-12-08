@@ -209,7 +209,8 @@ export default function Onboarding() {
 
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
-        role: role || 'brand', // Default to brand if no role selected
+        role: 'brand', // All users are brands by default
+        is_venue: hasPhysicalShop === true, // Set to true if they have a physical shop
         display_name: displayName || defaultDisplayName,
         handle: finalHandle,
         city: hkArea || hkDistrict || null,
@@ -238,7 +239,8 @@ export default function Onboarding() {
           }
           const { error: retryError } = await supabase.from('profiles').insert({
             id: user.id,
-            role: role || 'brand',
+            role: 'brand', // All users are brands by default
+            is_venue: hasPhysicalShop === true, // Set to true if they have a physical shop
             display_name: displayName || defaultDisplayName,
             handle: fallbackHandle,
             city: hkArea || hkDistrict || null,
@@ -273,7 +275,7 @@ export default function Onboarding() {
   };
 
   const handleComplete = async () => {
-    if (!user || !role) return;
+    if (!user) return;
 
     setLoading(true);
     try {
@@ -297,7 +299,8 @@ export default function Onboarding() {
 
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
-        role: role || 'brand', // Default to brand
+        role: 'brand', // All users are brands by default
+        is_venue: hasPhysicalShop === true, // Set to true if they have a physical shop
         display_name: displayName,
         handle: finalHandle,
         city: hkArea || hkDistrict || null, // Use area (MTR station) or district as city
@@ -322,8 +325,8 @@ export default function Onboarding() {
         throw profileError;
       }
 
-      // Create initial product for brands
-      if (role === 'brand' && productName) {
+      // Create initial product (all users are brands, so they can add products)
+      if (productName) {
         const { error: productError } = await supabase.from('products').insert({
           brand_user_id: user.id,
           name: productName,
@@ -364,13 +367,14 @@ export default function Onboarding() {
       case 3:
         return selectedCollabTypes.length > 0;
       case 4:
-        return role === 'venue' || (productName.trim() && productCollabTypes.length > 0);
+        // Step 4 is optional - can skip if empty
+        return true;
       default:
         return false;
     }
   };
 
-  const totalSteps = role === 'brand' ? 4 : 3;
+  const totalSteps = 4; // All users go through all 4 steps (step 4 is optional for products)
 
   // Reset district when region changes
   const handleRegionChange = (region: string) => {
@@ -391,15 +395,11 @@ export default function Onboarding() {
     setBusinessIndustry(''); // Reset industry when nature changes
   };
 
-  // Handle physical shop selection - set role to both brand & venue if Yes
+  // Handle physical shop selection - if Yes, they become a venue (in addition to brand)
   const handlePhysicalShopChange = (hasShop: boolean) => {
     setHasPhysicalShop(hasShop);
-    if (hasShop) {
-      // If they have a physical shop, they can be both brand and venue
-      // For now, we'll set role to 'brand' but they'll have venue capabilities
-      // Note: The database role field is single value, so we'll need to handle this in the app logic
-      setRole('brand'); // Default to brand, but they'll have venue features
-    }
+    // All users are brands by default, so we don't need to set role here
+    // is_venue will be set to true in the database when hasPhysicalShop is true
   };
 
   // Get available areas for selected district
@@ -432,11 +432,8 @@ export default function Onboarding() {
 
   // Handle step 3 continue/skip
   const handleStep3Continue = () => {
-    if (role === 'brand') {
-      setStep(4);
-    } else {
-      handleComplete();
-    }
+    // All users are brands, so they can add products (step 4)
+    setStep(4);
   };
 
   // Handle step 4 continue/skip
@@ -626,11 +623,7 @@ export default function Onboarding() {
             </div>
 
             <Button
-              onClick={() => {
-                // Set default role to brand if not set
-                if (!role) setRole('brand');
-                setStep(2);
-              }}
+              onClick={() => setStep(2)}
               disabled={!canProceed()}
               className="w-full mt-6"
               variant="hero"
@@ -757,10 +750,8 @@ export default function Onboarding() {
                   <>
                     {isStep3Empty() ? (
                       <>Skip Now <FastForward className="ml-2 h-4 w-4" /></>
-                    ) : role === 'brand' ? (
-                      <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
                     ) : (
-                      'Complete'
+                      <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
                     )}
                   </>
                 )}
@@ -770,8 +761,8 @@ export default function Onboarding() {
         </Card>
       )}
 
-      {/* Step 4: Initial Product (Brands only) */}
-      {step === 4 && role === 'brand' && (
+      {/* Step 4: Initial Product (Optional) */}
+      {step === 4 && (
         <Card className="w-full max-w-md shadow-xl border-0 animate-in">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Add Your First Product</CardTitle>

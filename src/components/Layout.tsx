@@ -44,16 +44,14 @@ export function Layout({ children }: LayoutProps) {
     { path: '/browse', label: 'Browse', icon: Search },
     { path: '/collabs', label: 'Collabs', icon: Handshake },
     { path: '/messages', label: 'Messages', icon: MessageCircle },
-    ...(profile?.role === 'brand'
-      ? [
-          { path: '/products', label: 'Products', icon: Package },
-          { path: '/dashboard/brand/inventory', label: 'Inventory', icon: Package },
-        ]
-      : []),
-    ...(profile?.role === 'venue'
+    // All users are brands, so they can access brand features
+    { path: '/products', label: 'Products', icon: Package },
+    { path: '/dashboard/brand/inventory', label: 'Inventory', icon: Package },
+    // Venue features only if is_venue is true
+    ...(profile?.is_venue === true
       ? [
           { path: '/venue/collab-options', label: 'Spaces', icon: Calendar },
-          { path: '/dashboard/venue/inventory', label: 'Inventory', icon: Package },
+          { path: '/dashboard/venue/inventory', label: 'Venue Inventory', icon: Package },
         ]
       : []),
   ];

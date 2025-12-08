@@ -6,6 +6,7 @@ export type VenueOptionType = 'event_slot' | 'shelf_space' | 'exhibition_period'
 export interface Profile {
   id: string;
   role: UserRole;
+  is_venue: boolean; // If true, user is also a venue (in addition to being a brand)
   display_name: string;
   handle: string;
   avatar_url?: string;
