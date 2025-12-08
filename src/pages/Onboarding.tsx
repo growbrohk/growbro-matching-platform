@@ -410,6 +410,40 @@ export default function Onboarding() {
     return areas && areas.length > 0 ? areas : [hkDistrict];
   };
 
+  // Check if step 2 is empty (all optional fields empty)
+  const isStep2Empty = (): boolean => {
+    return !shortBio.trim() && !websiteUrl.trim() && !instagramHandle.trim();
+  };
+
+  // Check if step 3 is empty (no collab types selected)
+  const isStep3Empty = (): boolean => {
+    return selectedCollabTypes.length === 0;
+  };
+
+  // Check if step 4 is empty (no product info)
+  const isStep4Empty = (): boolean => {
+    return !productName.trim() && productCollabTypes.length === 0;
+  };
+
+  // Handle step 2 continue/skip
+  const handleStep2Continue = () => {
+    setStep(3);
+  };
+
+  // Handle step 3 continue/skip
+  const handleStep3Continue = () => {
+    if (role === 'brand') {
+      setStep(4);
+    } else {
+      handleComplete();
+    }
+  };
+
+  // Handle step 4 continue/skip
+  const handleStep4Continue = () => {
+    handleComplete();
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero relative">
       {/* Progress indicator */}
@@ -671,12 +705,15 @@ export default function Onboarding() {
                 Back
               </Button>
               <Button
-                onClick={() => setStep(3)}
+                onClick={handleStep2Continue}
                 variant="hero"
                 className="flex-1"
               >
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
+                {isStep2Empty() ? (
+                  <>Skip Now <FastForward className="ml-2 h-4 w-4" /></>
+                ) : (
+                  <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
+                )}
               </Button>
             </div>
           </CardContent>
@@ -732,16 +769,22 @@ export default function Onboarding() {
                 Back
               </Button>
               <Button
-                onClick={() => role === 'brand' ? setStep(4) : handleComplete()}
-                disabled={!canProceed() || loading}
+                onClick={handleStep3Continue}
+                disabled={loading}
                 variant="hero"
                 className="flex-1"
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {role === 'brand' ? (
-                  <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
-                ) : (
-                  'Complete'
+                {!loading && (
+                  <>
+                    {isStep3Empty() ? (
+                      <>Skip Now <FastForward className="ml-2 h-4 w-4" /></>
+                    ) : role === 'brand' ? (
+                      <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>
+                    ) : (
+                      'Complete'
+                    )}
+                  </>
                 )}
               </Button>
             </div>
@@ -827,13 +870,21 @@ export default function Onboarding() {
                 Back
               </Button>
               <Button
-                onClick={handleComplete}
-                disabled={!canProceed() || loading}
+                onClick={handleStep4Continue}
+                disabled={loading}
                 variant="hero"
                 className="flex-1"
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Complete
+                {!loading && (
+                  <>
+                    {isStep4Empty() ? (
+                      <>Skip Now <FastForward className="ml-2 h-4 w-4" /></>
+                    ) : (
+                      <>Complete <Check className="ml-2 h-4 w-4" /></>
+                    )}
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
