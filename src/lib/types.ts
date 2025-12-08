@@ -2,6 +2,8 @@ export type UserRole = 'brand' | 'venue';
 export type CollabType = 'consignment' | 'event' | 'collab_product' | 'cup_sleeve_marketing';
 export type CollabStatus = 'pending' | 'accepted' | 'declined' | 'closed';
 export type VenueOptionType = 'event_slot' | 'shelf_space' | 'exhibition_period' | 'wall_space' | 'other';
+export type ProductOwnerType = 'brand' | 'venue';
+export type ProductClass = 'physical' | 'ticket' | 'booking' | 'service' | 'space';
 
 export interface Profile {
   id: string;
@@ -26,7 +28,12 @@ export interface Profile {
 
 export interface Product {
   id: string;
-  brand_user_id: string;
+  // Legacy field (kept for backward compatibility)
+  brand_user_id?: string;
+  // New unified ownership fields
+  owner_type: ProductOwnerType;
+  owner_user_id: string;
+  product_class: ProductClass;
   name: string;
   slug?: string;
   short_description?: string;
@@ -165,4 +172,20 @@ export const VENUE_OPTION_TYPE_COLORS: Record<VenueOptionType, string> = {
   exhibition_period: 'bg-emerald-100 text-emerald-700',
   wall_space: 'bg-amber-100 text-amber-700',
   other: 'bg-gray-100 text-gray-700',
+};
+
+export const PRODUCT_CLASS_LABELS: Record<ProductClass, string> = {
+  physical: 'Physical',
+  ticket: 'Ticket',
+  booking: 'Booking',
+  service: 'Service',
+  space: 'Space',
+};
+
+export const PRODUCT_CLASS_COLORS: Record<ProductClass, string> = {
+  physical: 'bg-blue-100 text-blue-700',
+  ticket: 'bg-purple-100 text-purple-700',
+  booking: 'bg-green-100 text-green-700',
+  service: 'bg-orange-100 text-orange-700',
+  space: 'bg-pink-100 text-pink-700',
 };

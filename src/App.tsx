@@ -19,6 +19,9 @@ import Shop from "./pages/Shop";
 import ShopProduct from "./pages/ShopProduct";
 import BrandInventory from "./pages/BrandInventory";
 import VenueInventory from "./pages/VenueInventory";
+import BrandProducts from "./pages/dashboard/products/BrandProducts";
+import VenueProducts from "./pages/dashboard/products/VenueProducts";
+import ProductForm from "./pages/dashboard/products/ProductForm";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -79,6 +82,11 @@ function AppRoutes() {
       <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
       <Route path="/dashboard/brand/inventory" element={<ProtectedRoute><BrandInventory /></ProtectedRoute>} />
       <Route path="/dashboard/venue/inventory" element={<ProtectedRoute><VenueInventory /></ProtectedRoute>} />
+      {/* Product Management Routes */}
+      <Route path="/dashboard/products/brand" element={<ProtectedRoute><BrandProducts /></ProtectedRoute>} />
+      <Route path="/dashboard/products/venue" element={<ProtectedRoute><VenueProducts /></ProtectedRoute>} />
+      <Route path="/dashboard/products/new" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+      <Route path="/dashboard/products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
       {/* Public webstore routes */}
       <Route path="/shop" element={<Shop />} />
       <Route path="/shop/products/:slug" element={<ShopProduct />} />
