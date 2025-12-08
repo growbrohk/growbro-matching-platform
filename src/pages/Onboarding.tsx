@@ -466,18 +466,7 @@ export default function Onboarding() {
 
       {/* Step 1: Required Information */}
       {step === 1 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in relative">
-          {/* Skip button - upper right corner inside card */}
-          {step !== 2 && (
-            <button
-              onClick={handleSkip}
-              disabled={loading}
-              className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed z-10"
-            >
-              <FastForward className="h-4 w-4" />
-              <span>Skip</span>
-            </button>
-          )}
+        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Tell us about your business</CardTitle>
             <CardDescription>
@@ -722,18 +711,7 @@ export default function Onboarding() {
 
       {/* Step 3: Collab Types */}
       {step === 3 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in relative">
-          {/* Skip button - upper right corner inside card */}
-          {step !== 2 && (
-            <button
-              onClick={handleSkip}
-              disabled={loading}
-              className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed z-10"
-            >
-              <FastForward className="h-4 w-4" />
-              <span>Skip</span>
-            </button>
-          )}
+        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Collaboration Preferences</CardTitle>
             <CardDescription>
@@ -794,18 +772,7 @@ export default function Onboarding() {
 
       {/* Step 4: Initial Product (Brands only) */}
       {step === 4 && role === 'brand' && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in relative">
-          {/* Skip button - upper right corner inside card */}
-          {step !== 2 && (
-            <button
-              onClick={handleSkip}
-              disabled={loading}
-              className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed z-10"
-            >
-              <FastForward className="h-4 w-4" />
-              <span>Skip</span>
-            </button>
-          )}
+        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Add Your First Product</CardTitle>
             <CardDescription>
