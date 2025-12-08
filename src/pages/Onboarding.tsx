@@ -7,6 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { CollabChip } from '@/components/CollabChip';
 import { UserRole, CollabType } from '@/lib/types';
@@ -32,6 +39,28 @@ const COLLAB_TYPES: { type: CollabType; label: string; icon: React.ElementType; 
   { type: 'cup_sleeve_marketing', label: 'Cup Sleeve', icon: Coffee, description: 'Branded marketing' },
 ];
 
+// Hong Kong location data
+const HK_REGIONS = ['HK Island', 'Kowloon', 'New Territories'] as const;
+const HK_DISTRICTS: Record<string, string[]> = {
+  'HK Island': ['Central & Western', 'Eastern', 'Southern', 'Wan Chai'],
+  'Kowloon': ['Kowloon City', 'Kwun Tong', 'Sham Shui Po', 'Wong Tai Sin', 'Yau Tsim Mong'],
+  'New Territories': ['Islands', 'North', 'Sai Kung', 'Sha Tin', 'Tai Po', 'Tsuen Wan', 'Tuen Mun', 'Yuen Long'],
+};
+
+// Business types
+const BUSINESS_TYPES = [
+  'Café / Coffee Shop',
+  'Restaurant',
+  'Retail Store',
+  'Event Space',
+  'Gallery',
+  'Workshop',
+  'Co-working Space',
+  'Pop-up Store',
+  'Online Store',
+  'Other',
+] as const;
+
 export default function Onboarding() {
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -43,8 +72,9 @@ export default function Onboarding() {
   const [role, setRole] = useState<UserRole | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [handle, setHandle] = useState('');
-  const [city, setCity] = useState('');
-  const [country, setCountry] = useState('');
+  const [hkRegion, setHkRegion] = useState<string>('');
+  const [hkDistrict, setHkDistrict] = useState<string>('');
+  const [businessType, setBusinessType] = useState<string>('');
   const [shortBio, setShortBio] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
@@ -101,13 +131,17 @@ export default function Onboarding() {
       const defaultHandle = `user_${user.id.slice(0, 8)}`;
       const defaultDisplayName = user.email?.split('@')[0] || 'User';
 
+      const finalHandle = handle.trim() 
+        ? handle.toLowerCase().replace(/[^a-z0-9_]/g, '')
+        : displayName.toLowerCase().replace(/[^a-z0-9_]/g, '') || defaultHandle;
+
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
         role: role || 'brand', // Default to brand if no role selected
         display_name: displayName || defaultDisplayName,
-        handle: handle || defaultHandle,
-        city: city || null,
-        country: country || null,
+        handle: finalHandle,
+        city: hkDistrict || null,
+        country: 'Hong Kong',
         short_bio: shortBio || null,
         website_url: websiteUrl || null,
         instagram_handle: instagramHandle || null,
@@ -124,8 +158,8 @@ export default function Onboarding() {
             role: role || 'brand',
             display_name: displayName || defaultDisplayName,
             handle: fallbackHandle,
-            city: city || null,
-            country: country || null,
+            city: hkDistrict || null,
+            country: 'Hong Kong',
             short_bio: shortBio || null,
             website_url: websiteUrl || null,
             instagram_handle: instagramHandle || null,
@@ -161,17 +195,22 @@ export default function Onboarding() {
     setLoading(true);
     try {
       // Create profile
+      // Generate handle from display name if not provided
+      const finalHandle = handle.trim() 
+        ? handle.toLowerCase().replace(/[^a-z0-9_]/g, '')
+        : displayName.toLowerCase().replace(/[^a-z0-9_]/g, '') || `user_${user.id.slice(0, 8)}`;
+
       const { error: profileError } = await supabase.from('profiles').insert({
         id: user.id,
-        role,
+        role: role || 'brand', // Default to brand
         display_name: displayName,
-        handle: handle.toLowerCase().replace(/[^a-z0-9_]/g, ''),
-        city,
-        country,
-        short_bio: shortBio,
+        handle: finalHandle,
+        city: hkDistrict || null,
+        country: 'Hong Kong',
+        short_bio: shortBio || null,
         website_url: websiteUrl || null,
         instagram_handle: instagramHandle || null,
-        tags,
+        tags: tags.length > 0 ? tags : [],
         preferred_collab_types: selectedCollabTypes,
       });
 
@@ -182,7 +221,7 @@ export default function Onboarding() {
             description: 'This handle is already in use. Please choose another.',
             variant: 'destructive',
           });
-          setStep(2);
+          setStep(1);
           return;
         }
         throw profileError;
@@ -222,9 +261,11 @@ export default function Onboarding() {
   const canProceed = () => {
     switch (step) {
       case 1:
-        return role !== null;
+        // Required: brand name, location (region + district), business type
+        return displayName.trim() && hkRegion && hkDistrict && businessType;
       case 2:
-        return displayName.trim() && handle.trim();
+        // Optional fields - always can proceed (all optional)
+        return true;
       case 3:
         return selectedCollabTypes.length > 0;
       case 4:
@@ -236,17 +277,25 @@ export default function Onboarding() {
 
   const totalSteps = role === 'brand' ? 4 : 3;
 
+  // Reset district when region changes
+  const handleRegionChange = (region: string) => {
+    setHkRegion(region);
+    setHkDistrict(''); // Reset district when region changes
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero relative">
-      {/* Skip button - upper right corner */}
-      <button
-        onClick={handleSkip}
-        disabled={loading}
-        className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-background/50 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <X className="h-4 w-4" />
-        <span>Skip for now</span>
-      </button>
+      {/* Skip button - upper right corner (hidden on step 2) */}
+      {step !== 2 && (
+        <button
+          onClick={handleSkip}
+          disabled={loading}
+          className="absolute top-4 right-4 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-background/50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <X className="h-4 w-4" />
+          <span>Skip for now</span>
+        </button>
+      )}
 
       {/* Progress indicator */}
       <div className="w-full max-w-md mb-8">
@@ -266,97 +315,30 @@ export default function Onboarding() {
         </p>
       </div>
 
-      {/* Step 1: Role Selection */}
+      {/* Step 1: Required Information */}
       {step === 1 && (
         <Card className="w-full max-w-md shadow-xl border-0 animate-in">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">What brings you here?</CardTitle>
+            <CardTitle className="text-2xl">Tell us about your business</CardTitle>
             <CardDescription>
-              Choose your role to personalize your experience
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <button
-              onClick={() => setRole('brand')}
-              className={cn(
-                'w-full p-6 rounded-2xl border-2 text-left transition-all',
-                role === 'brand'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-primary/50'
-              )}
-            >
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-6 w-6 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">I'm a Brand</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Looking for venues to showcase products, host events, or create collaborations
-                  </p>
-                </div>
-                {role === 'brand' && (
-                  <Check className="h-5 w-5 text-primary" />
-                )}
-              </div>
-            </button>
-
-            <button
-              onClick={() => setRole('venue')}
-              className={cn(
-                'w-full p-6 rounded-2xl border-2 text-left transition-all',
-                role === 'venue'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-primary/50'
-              )}
-            >
-              <div className="flex items-start gap-4">
-                <div className="h-12 w-12 rounded-xl bg-secondary flex items-center justify-center">
-                  <Store className="h-6 w-6 text-secondary-foreground" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg">I'm a Venue / Host</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Have a space or platform to host brands, events, or collaborations
-                  </p>
-                </div>
-                {role === 'venue' && (
-                  <Check className="h-5 w-5 text-primary" />
-                )}
-              </div>
-            </button>
-
-            <Button
-              onClick={() => setStep(2)}
-              disabled={!canProceed()}
-              className="w-full mt-6"
-              variant="hero"
-              size="lg"
-            >
-              Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 2: Basic Profile */}
-      {step === 2 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Tell us about yourself</CardTitle>
-            <CardDescription>
-              Create your public profile
+              We need some basic information to get started
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name *</Label>
+              <Label htmlFor="displayName">Brand / Business Name *</Label>
               <Input
                 id="displayName"
-                placeholder={role === 'brand' ? 'Your brand name' : 'Your venue name'}
+                placeholder="Enter your brand or business name"
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={(e) => {
+                  setDisplayName(e.target.value);
+                  // Auto-generate handle from display name
+                  if (!handle) {
+                    const generatedHandle = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    setHandle(generatedHandle);
+                  }
+                }}
               />
             </div>
 
@@ -372,31 +354,95 @@ export default function Onboarding() {
                   className="pl-8"
                 />
               </div>
+              <p className="text-xs text-muted-foreground">This will be your unique identifier</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="Hong Kong"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="country">Country</Label>
-                <Input
-                  id="country"
-                  placeholder="China"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                />
+            <div className="space-y-2">
+              <Label>Location *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="region" className="text-xs">Region</Label>
+                  <Select value={hkRegion} onValueChange={handleRegionChange}>
+                    <SelectTrigger id="region">
+                      <SelectValue placeholder="Select region" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HK_REGIONS.map((region) => (
+                        <SelectItem key={region} value={region}>
+                          {region}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="district" className="text-xs">District</Label>
+                  <Select 
+                    value={hkDistrict} 
+                    onValueChange={setHkDistrict}
+                    disabled={!hkRegion}
+                  >
+                    <SelectTrigger id="district">
+                      <SelectValue placeholder={hkRegion ? "Select district" : "Select region first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hkRegion && HK_DISTRICTS[hkRegion]?.map((district) => (
+                        <SelectItem key={district} value={district}>
+                          {district}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bio">Short Bio</Label>
+              <Label htmlFor="businessType">Business Type *</Label>
+              <Select value={businessType} onValueChange={setBusinessType}>
+                <SelectTrigger id="businessType">
+                  <SelectValue placeholder="Select your business type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BUSINESS_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={() => {
+                // Set default role to brand if not set
+                if (!role) setRole('brand');
+                setStep(2);
+              }}
+              disabled={!canProceed()}
+              className="w-full mt-6"
+              variant="hero"
+              size="lg"
+            >
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: Optional Information */}
+      {step === 2 && (
+        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Additional Information</CardTitle>
+            <CardDescription>
+              Optional details to enhance your profile
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bio">Bio</Label>
               <Textarea
                 id="bio"
                 placeholder="Tell others what you're about..."
@@ -430,30 +476,6 @@ export default function Onboarding() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <Input
-                placeholder="Type and press Enter (e.g. coffee shop, streetwear)"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleAddTag}
-              />
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-secondary rounded-full text-sm cursor-pointer hover:bg-secondary/80"
-                      onClick={() => removeTag(tag)}
-                    >
-                      {tag}
-                      <span className="text-muted-foreground">×</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <div className="flex gap-3 mt-6">
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -461,7 +483,6 @@ export default function Onboarding() {
               </Button>
               <Button
                 onClick={() => setStep(3)}
-                disabled={!canProceed()}
                 variant="hero"
                 className="flex-1"
               >
