@@ -116,14 +116,70 @@ export default function BrandProducts() {
     return `${symbol}${amount.toFixed(2)}`;
   };
 
+  // Download CSV template (when no products)
+  const handleDownloadTemplate = () => {
+    // CSV Headers
+    const headers = [
+      'name',
+      'slug',
+      'product_class',
+      'short_description',
+      'full_description',
+      'category',
+      'thumbnail_url',
+      'price_in_cents',
+      'currency',
+      'is_purchasable',
+      'is_public',
+      'is_active',
+      'suitable_collab_types',
+      'margin_notes',
+      'inventory_notes',
+    ];
+
+    // Example row for template
+    const exampleRow = [
+      'Example Product Name',
+      'example-product-name',
+      'physical',
+      'Short description of the product',
+      'Full detailed description of the product',
+      'Category Name',
+      'https://example.com/image.jpg',
+      '1000',
+      'hkd',
+      'true',
+      'false',
+      'true',
+      'consignment;event',
+      'Margin notes here',
+      'Inventory notes here',
+    ];
+
+    // Combine headers and example row
+    const csvContent = [headers.join(','), exampleRow.join(',')].join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `product-import-template.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: 'Template downloaded',
+      description: 'CSV template downloaded. Fill in your products and import them.',
+    });
+  };
+
   // Export products to CSV
   const handleExportCSV = () => {
     if (!products.length) {
-      toast({
-        title: 'No products',
-        description: 'There are no products to export',
-        variant: 'destructive',
-      });
+      handleDownloadTemplate();
       return;
     }
 
@@ -382,18 +438,14 @@ export default function BrandProducts() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {products.length > 0 && (
-              <>
-                <Button variant="outline" onClick={handleExportCSV}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </Button>
-                <Button variant="outline" onClick={() => setUploadDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import CSV
-                </Button>
-              </>
-            )}
+            <Button variant="outline" onClick={handleExportCSV}>
+              <Download className="mr-2 h-4 w-4" />
+              {products.length > 0 ? 'Export CSV' : 'Download CSV Template'}
+            </Button>
+            <Button variant="outline" onClick={() => setUploadDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
             <Button onClick={() => navigate('/dashboard/products/new?owner_type=brand')}>
               <Plus className="mr-2 h-4 w-4" />
               New Product
