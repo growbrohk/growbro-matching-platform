@@ -509,7 +509,7 @@ export default function Onboarding() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="area" className="text-xs">Area / MTR Station</Label>
+                  <Label htmlFor="area" className="text-xs">Area</Label>
                   <Select 
                     value={hkArea} 
                     onValueChange={setHkArea}
