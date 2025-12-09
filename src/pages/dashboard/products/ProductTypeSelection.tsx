@@ -18,11 +18,19 @@ interface ProductTypeOption {
 
 const BRAND_PRODUCT_TYPES: ProductTypeOption[] = [
   {
-    id: 'physical',
-    label: 'Product',
-    description: 'Physical variable product with inventory (merchandise, items, etc.)',
+    id: 'simple-product',
+    label: 'Simple Product',
+    description: 'Single product with one price and inventory (no variations)',
     icon: Package,
-    product_type: 'variable', // Default to variable, user can choose simple/variable in form
+    product_type: 'simple',
+    owner_type: 'brand',
+  },
+  {
+    id: 'variable-product',
+    label: 'Variable Product',
+    description: 'Product with variations (size, color, etc.) and inventory',
+    icon: Package,
+    product_type: 'variable',
     owner_type: 'brand',
   },
   {
@@ -226,7 +234,7 @@ export default function ProductTypeSelection() {
           <p className="text-muted-foreground mt-1">{subtitle}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {productTypes.map((type) => {
             const Icon = type.icon;
             return (
