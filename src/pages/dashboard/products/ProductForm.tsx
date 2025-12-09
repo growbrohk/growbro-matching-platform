@@ -18,7 +18,7 @@ import {
 import { createProduct, updateProduct, getProductById, generateSlug } from '@/lib/api/products';
 import { Product, ProductOwnerType, ProductClass, CollabType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Plus, Trash2, X } from 'lucide-react';
 import { CollabChip } from '@/components/CollabChip';
 
 const PRODUCT_CLASSES: { value: ProductClass; label: string; description: string }[] = [
@@ -52,11 +52,13 @@ export default function ProductForm() {
   const [fullDescription, setFullDescription] = useState('');
   const [category, setCategory] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
-  const [priceInCents, setPriceInCents] = useState('');
+  const [priceInDollars, setPriceInDollars] = useState('');
   const [currency, setCurrency] = useState('hkd');
-  const [isPurchasable, setIsPurchasable] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
+  const [isPurchasable, setIsPurchasable] = useState(true);
+  const [isPublic, setIsPublic] = useState(true);
   const [isActive, setIsActive] = useState(true);
+  const [productType, setProductType] = useState<'simple' | 'variable'>('simple');
+  const [variables, setVariables] = useState<Array<{ name: string; values: string[] }>>([]);
   const [suitableCollabTypes, setSuitableCollabTypes] = useState<CollabType[]>([]);
   const [marginNotes, setMarginNotes] = useState('');
   const [inventoryNotes, setInventoryNotes] = useState('');
@@ -86,13 +88,15 @@ export default function ProductForm() {
         setProductTypeId(productTypeIdParam);
       }
 
-      // Set defaults based on product type
+      // Set defaults (all products are purchasable, public, and active by default)
+      setIsPurchasable(true);
+      setIsPublic(true);
+      setIsActive(true);
+      
+      // Set category based on product type
       if (productClassParam === 'ticket') {
-        setIsPurchasable(true);
-        setIsPublic(true);
         setCategory('Event');
       } else if (productClassParam === 'booking') {
-        setIsPurchasable(true);
         setCategory('Workshop');
       } else if (productClassParam === 'space' && ownerTypeParam === 'venue') {
         // Venue products
@@ -137,10 +141,11 @@ export default function ProductForm() {
       setFullDescription(data.full_description || '');
       setCategory(data.category || '');
       setThumbnailUrl(data.thumbnail_url || '');
-      setPriceInCents(data.price_in_cents?.toString() || '');
+      // Convert cents to dollars for display
+      setPriceInDollars(data.price_in_cents ? (data.price_in_cents / 100).toString() : '');
       setCurrency(data.currency || 'hkd');
-      setIsPurchasable(data.is_purchasable || false);
-      setIsPublic(data.is_public || false);
+      setIsPurchasable(data.is_purchasable ?? true);
+      setIsPublic(data.is_public ?? true);
       setIsActive(data.is_active ?? true);
       setSuitableCollabTypes(data.suitable_collab_types || []);
       setMarginNotes(data.margin_notes || '');
@@ -159,10 +164,8 @@ export default function ProductForm() {
 
   const handleNameChange = (value: string) => {
     setName(value);
-    // Auto-generate slug if not in edit mode or if slug is empty
-    if (!isEditMode || !slug) {
-      setSlug(generateSlug(value));
-    }
+    // Auto-generate slug (hidden from user but still used internally)
+    setSlug(generateSlug(value));
   };
 
   const toggleCollabType = (type: CollabType) => {
@@ -217,6 +220,9 @@ export default function ProductForm() {
 
     setSaving(true);
     try {
+      // Convert dollars to cents for storage
+      const priceInCents = priceInDollars ? Math.round(parseFloat(priceInDollars) * 100) : 0;
+
       const productData = {
         name: name.trim(),
         slug: slug.trim() || generateSlug(name),
@@ -226,7 +232,7 @@ export default function ProductForm() {
         full_description: fullDescription.trim() || undefined,
         category: category.trim() || undefined,
         thumbnail_url: thumbnailUrl.trim() || undefined,
-        price_in_cents: priceInCents ? parseInt(priceInCents) : 0,
+        price_in_cents: priceInCents,
         currency: currency,
         is_purchasable: isPurchasable,
         is_public: isPublic,
@@ -329,48 +335,28 @@ export default function ProductForm() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="slug">Slug</Label>
-                  <Input
-                    id="slug"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    placeholder="auto-generated-from-name"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    URL-friendly identifier (auto-generated from name)
-                  </p>
-                </div>
 
-                {/* Product Class and Owner Type - Read-only when creating (pre-selected) */}
+                {/* Product Class - Read-only when creating (pre-selected) */}
                 {!isEditMode ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Product Type</Label>
-                      <div className="p-3 bg-muted rounded-md">
-                        <div className="font-medium">
-                          {productClass === 'physical' && 'Product (Physical)'}
-                          {productClass === 'ticket' && 'Event (Ticket)'}
-                          {productClass === 'booking' && 'Workshop (Booking)'}
-                          {productClass === 'space' && ownerType === 'venue' && (
-                            <>
-                              {productTypeId === 'venue-rental' && 'Venue Rental'}
-                              {productTypeId === 'poster-space' && 'Poster Space'}
-                              {productTypeId === 'consignment-space' && 'Consignment Space'}
-                              {productTypeId === 'cup-sleeve' && 'Cup Sleeve'}
-                            </>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {PRODUCT_CLASSES.find((pc) => pc.value === productClass)?.description}
-                        </p>
+                  <div className="space-y-2">
+                    <Label>Product Type</Label>
+                    <div className="p-3 bg-muted rounded-md">
+                      <div className="font-medium">
+                        {productClass === 'physical' && 'Product (Physical)'}
+                        {productClass === 'ticket' && 'Event (Ticket)'}
+                        {productClass === 'booking' && 'Workshop (Booking)'}
+                        {productClass === 'space' && ownerType === 'venue' && (
+                          <>
+                            {productTypeId === 'venue-rental' && 'Venue Rental'}
+                            {productTypeId === 'poster-space' && 'Poster Space'}
+                            {productTypeId === 'consignment-space' && 'Consignment Space'}
+                            {productTypeId === 'cup-sleeve' && 'Cup Sleeve'}
+                          </>
+                        )}
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Owner Type</Label>
-                      <div className="p-3 bg-muted rounded-md">
-                        <div className="font-medium capitalize">{ownerType}</div>
-                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {PRODUCT_CLASSES.find((pc) => pc.value === productClass)?.description}
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -456,6 +442,116 @@ export default function ProductForm() {
                   />
                 </div>
 
+                {/* Product Type Selection for Physical Products */}
+                {productClass === 'physical' && (
+                  <div className="space-y-2">
+                    <Label>Product Type</Label>
+                    <Select value={productType} onValueChange={(value: 'simple' | 'variable') => setProductType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple Product</SelectItem>
+                        <SelectItem value="variable">Variable Product</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Simple: One price. Variable: Multiple options (size, color, etc.)
+                    </p>
+                  </div>
+                )}
+
+                {/* Variable Product Management */}
+                {productClass === 'physical' && productType === 'variable' && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                    <div className="flex items-center justify-between">
+                      <Label>Product Variables</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setVariables([...variables, { name: '', values: [] }])}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Variable
+                      </Button>
+                    </div>
+                    {variables.map((variable, varIndex) => (
+                      <Card key={varIndex}>
+                        <CardContent className="pt-6">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Variable name (e.g., Size, Color)"
+                                value={variable.name}
+                                onChange={(e) => {
+                                  const newVars = [...variables];
+                                  newVars[varIndex].name = e.target.value;
+                                  setVariables(newVars);
+                                }}
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setVariables(variables.filter((_, i) => i !== varIndex));
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-sm">Values</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {variable.values.map((value, valIndex) => (
+                                  <div key={valIndex} className="flex items-center gap-1 bg-background px-2 py-1 rounded border">
+                                    <span className="text-sm">{value}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newVars = [...variables];
+                                        newVars[varIndex].values = newVars[varIndex].values.filter((_, i) => i !== valIndex);
+                                        setVariables(newVars);
+                                      }}
+                                      className="ml-1 text-muted-foreground hover:text-destructive"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                                <Input
+                                  placeholder="Add value"
+                                  className="w-32"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const input = e.currentTarget;
+                                      const value = input.value.trim();
+                                      if (value) {
+                                        const newVars = [...variables];
+                                        newVars[varIndex].values.push(value);
+                                        setVariables(newVars);
+                                        input.value = '';
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    {variables.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No variables added yet. Click "Add Variable" to create options like Size, Color, etc.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="thumbnailUrl">Thumbnail URL</Label>
                   <Input
@@ -478,17 +574,18 @@ export default function ProductForm() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="priceInCents">Price (in cents)</Label>
+                    <Label htmlFor="priceInDollars">Price</Label>
                     <Input
-                      id="priceInCents"
+                      id="priceInDollars"
                       type="number"
                       min="0"
-                      value={priceInCents}
-                      onChange={(e) => setPriceInCents(e.target.value)}
-                      placeholder="0"
+                      step="0.01"
+                      value={priceInDollars}
+                      onChange={(e) => setPriceInDollars(e.target.value)}
+                      placeholder="0.00"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Enter price in smallest currency unit (e.g., 1000 = $10.00)
+                      Enter price in {currency.toUpperCase()} (e.g., 10.00 = $10.00)
                     </p>
                   </div>
 
