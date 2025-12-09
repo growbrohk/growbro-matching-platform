@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Package, Warehouse, ChevronDown, ChevronRight } from 'lucide-react';
+import { Package, Warehouse, ChevronDown, ChevronRight, Edit2, Check, X } from 'lucide-react';
 import { ProductWithInventory } from './Inventory';
 import { InventoryLocation } from './Inventory';
 import { ProductVariation } from '@/lib/types/variable-products';
@@ -11,6 +11,10 @@ interface VariableInventoryViewProps {
   locations: InventoryLocation[];
   onUpdateStock: (productId: string, locationId: string, quantity: number, variationId?: string) => void;
   saving: string | null;
+  editMode: Record<string, { editing: boolean; tempValue: number }>;
+  onStartEdit: (key: string, currentValue: number) => void;
+  onCancelEdit: (key: string) => void;
+  onConfirmEdit: (key: string, productId: string, locationId: string, variationId?: string) => void;
   productVariations: Record<string, ProductVariation[]>;
   variationInventory: Record<string, Record<string, number>>; // {variationId: {locationId: stock}}
   expandedProducts: Set<string>;
@@ -24,6 +28,10 @@ export function VariableInventoryView({
   locations,
   onUpdateStock,
   saving,
+  editMode,
+  onStartEdit,
+  onCancelEdit,
+  onConfirmEdit,
   productVariations,
   variationInventory,
   expandedProducts,
@@ -150,6 +158,8 @@ export function VariableInventoryView({
                                     {warehouses.map((warehouse) => {
                                       const key = `${variation.id}-${warehouse.id}`;
                                       const stock = variationInventory[variation.id]?.[warehouse.id] || 0;
+                                      const isEditing = editMode[key]?.editing || false;
+                                      const tempValue = editMode[key]?.tempValue ?? stock;
 
                                       return (
                                         <div key={warehouse.id} className="flex items-center gap-2 md:gap-4">
@@ -162,16 +172,67 @@ export function VariableInventoryView({
                                             </div>
                                           </div>
                                           <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                                            <Input
-                                              type="number"
-                                              value={stock}
-                                              onChange={(e) =>
-                                                onUpdateStock(product.id, warehouse.id, parseInt(e.target.value) || 0, variation.id)
-                                              }
-                                              className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
-                                              disabled={saving === key}
-                                            />
-                                            <span className="text-[10px] md:text-sm text-muted-foreground hidden sm:inline">units</span>
+                                            {isEditing ? (
+                                              <>
+                                                <Input
+                                                  type="number"
+                                                  value={tempValue}
+                                                  onChange={(e) => {
+                                                    const newValue = parseInt(e.target.value) || 0;
+                                                    onStartEdit(key, newValue);
+                                                  }}
+                                                  className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
+                                                  disabled={saving === key}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                      onConfirmEdit(key, product.id, warehouse.id, variation.id);
+                                                    } else if (e.key === 'Escape') {
+                                                      onCancelEdit(key);
+                                                    }
+                                                  }}
+                                                />
+                                                <Button
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onConfirmEdit(key, product.id, warehouse.id, variation.id);
+                                                  }}
+                                                  disabled={saving === key}
+                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                                >
+                                                  <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onCancelEdit(key);
+                                                  }}
+                                                  disabled={saving === key}
+                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                                >
+                                                  <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                                                </Button>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
+                                                <span className="text-[10px] md:text-sm text-muted-foreground hidden sm:inline">units</span>
+                                                <Button
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onStartEdit(key, stock);
+                                                  }}
+                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                                >
+                                                  <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
+                                                </Button>
+                                              </>
+                                            )}
                                           </div>
                                         </div>
                                       );
@@ -194,4 +255,3 @@ export function VariableInventoryView({
     </div>
   );
 }
-

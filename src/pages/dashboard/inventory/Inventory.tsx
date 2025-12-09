@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight, Edit2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Product } from '@/lib/types';
 import { ProductVariation } from '@/lib/types/variable-products';
@@ -60,6 +60,8 @@ export default function Inventory() {
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('simple');
+  // Edit mode state: {productId-locationId: {editing: boolean, tempValue: number}} or {variationId-locationId: {...}}
+  const [editMode, setEditMode] = useState<Record<string, { editing: boolean; tempValue: number }>>({});
 
   const fetchData = useCallback(async () => {
     if (!profile) return;
@@ -162,7 +164,8 @@ export default function Inventory() {
     if (profile?.id) {
       fetchData();
     }
-  }, [profile?.id, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]); // Only fetch on profile change, not on tab change
 
   async function createWarehouse() {
     if (!newWarehouseName.trim() || !profile) return;
@@ -185,43 +188,97 @@ export default function Inventory() {
     }
   }
 
+  async function logStockChange(
+    productId: string,
+    locationId: string,
+    quantityBefore: number,
+    quantityAfter: number,
+    variationId?: string,
+    notes?: string
+  ) {
+    if (!profile) return;
+
+    const { error } = await supabase.from('stock_log').insert({
+      product_id: productId,
+      product_variation_id: variationId || null,
+      inventory_location_id: locationId,
+      user_id: profile.id,
+      change_type: 'adjustment',
+      quantity_before: quantityBefore,
+      quantity_after: quantityAfter,
+      notes: notes || null,
+    });
+
+    if (error) {
+      console.error('Failed to log stock change:', error);
+      // Don't throw - logging failure shouldn't prevent stock update
+    }
+  }
+
   async function updateStock(productId: string, locationId: string, quantity: number, variationId?: string) {
     if (!profile) return;
 
     const savingKey = variationId ? `${variationId}-${locationId}` : `${productId}-${locationId}`;
     setSaving(savingKey);
 
-    if (variationId) {
-      // Update variation inventory using the API
-      const { error } = await updateVariationInventory(variationId, locationId, quantity, 0);
-
-      if (error) {
-        toast.error('Failed to update variation stock');
+    try {
+      // Get current stock for logging
+      let quantityBefore = 0;
+      if (variationId) {
+        const currentInv = variationInventory[variationId]?.[locationId] || 0;
+        quantityBefore = currentInv;
       } else {
-        toast.success('Variation stock updated');
-        fetchData();
+        const product = allProducts.find(p => p.id === productId);
+        const inventory = product?.product_inventory?.find(inv => inv.inventory_location_id === locationId);
+        quantityBefore = inventory?.stock_quantity || 0;
       }
-    } else {
-      // Update simple product inventory
-      const { error } = await supabase
-        .from('product_inventory')
-        .upsert(
-          {
-            product_id: productId,
-            inventory_location_id: locationId,
-            stock_quantity: quantity,
-          },
-          { onConflict: 'product_id,inventory_location_id' }
-        );
 
-      if (error) {
-        toast.error('Failed to update stock');
+      if (variationId) {
+        // Update variation inventory using the API
+        const { error } = await updateVariationInventory(variationId, locationId, quantity, 0);
+
+        if (error) {
+          toast.error('Failed to update variation stock');
+        } else {
+          // Log the change
+          await logStockChange(productId, locationId, quantityBefore, quantity, variationId);
+          toast.success('Variation stock updated');
+          fetchData();
+        }
       } else {
-        toast.success('Stock updated');
-        fetchData();
+        // Update simple product inventory
+        const { error } = await supabase
+          .from('product_inventory')
+          .upsert(
+            {
+              product_id: productId,
+              inventory_location_id: locationId,
+              stock_quantity: quantity,
+            },
+            { onConflict: 'product_id,inventory_location_id' }
+          );
+
+        if (error) {
+          toast.error('Failed to update stock');
+        } else {
+          // Log the change
+          await logStockChange(productId, locationId, quantityBefore, quantity);
+          toast.success('Stock updated');
+          fetchData();
+        }
       }
+
+      // Exit edit mode
+      setEditMode(prev => {
+        const newMode = { ...prev };
+        delete newMode[savingKey];
+        return newMode;
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update stock');
+    } finally {
+      setSaving(null);
     }
-    setSaving(null);
   }
 
   const toggleProductExpansion = (productId: string) => {
@@ -248,6 +305,7 @@ export default function Inventory() {
   const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
   const variableProducts = allProducts.filter(p => p.product_type === 'variable');
   const eventProducts = allProducts.filter(p => p.product_type === 'event');
+  const warehouses = locations.filter((loc) => loc.type === 'warehouse');
 
   async function addProductToLocation() {
     if (!selectedProduct || !selectedLocationId || !profile) return;
@@ -272,6 +330,29 @@ export default function Inventory() {
     }
   }
 
+  const handleStartEdit = (key: string, currentValue: number) => {
+    setEditMode(prev => ({
+      ...prev,
+      [key]: { editing: true, tempValue: currentValue },
+    }));
+  };
+
+  const handleCancelEdit = (key: string) => {
+    setEditMode(prev => {
+      const newMode = { ...prev };
+      delete newMode[key];
+      return newMode;
+    });
+  };
+
+  const handleConfirmEdit = (key: string, productId: string, locationId: string, variationId?: string) => {
+    const editState = editMode[key];
+    if (!editState) return;
+
+    const quantity = editState.tempValue;
+    updateStock(productId, locationId, quantity, variationId);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -292,6 +373,33 @@ export default function Inventory() {
               Manage product inventory across locations
             </p>
           </div>
+          <Dialog open={newWarehouseOpen} onOpenChange={setNewWarehouseOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-xs md:text-sm">
+                <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                <span className="hidden sm:inline">New Warehouse</span>
+                <span className="sm:hidden">Warehouse</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Warehouse</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Warehouse Name</Label>
+                  <Input
+                    value={newWarehouseName}
+                    onChange={(e) => setNewWarehouseName(e.target.value)}
+                    placeholder="Main Warehouse"
+                  />
+                </div>
+                <Button onClick={createWarehouse} className="w-full">
+                  Create
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>
@@ -308,6 +416,11 @@ export default function Inventory() {
                   <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">
                     Event Tickets ({eventProducts.length})
                   </TabsTrigger>
+                  {warehouses.map((warehouse) => (
+                    <TabsTrigger key={warehouse.id} value={`warehouse-${warehouse.id}`} className="whitespace-nowrap flex-shrink-0">
+                      {warehouse.name}
+                    </TabsTrigger>
+                  ))}
                   {profile?.is_venue && (
                     <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0">
                       Venue Inventory ({venueInventory.length})
@@ -323,11 +436,10 @@ export default function Inventory() {
                     locations={locations}
                     onUpdateStock={updateStock}
                     saving={saving}
-                    onCreateWarehouse={createWarehouse}
-                    newWarehouseName={newWarehouseName}
-                    setNewWarehouseName={setNewWarehouseName}
-                    newWarehouseOpen={newWarehouseOpen}
-                    setNewWarehouseOpen={setNewWarehouseOpen}
+                    editMode={editMode}
+                    onStartEdit={handleStartEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onConfirmEdit={handleConfirmEdit}
                     onAddProductToLocation={addProductToLocation}
                     addLocationOpen={addLocationOpen}
                     setAddLocationOpen={setAddLocationOpen}
@@ -346,6 +458,10 @@ export default function Inventory() {
                     locations={locations}
                     onUpdateStock={updateStock}
                     saving={saving}
+                    editMode={editMode}
+                    onStartEdit={handleStartEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onConfirmEdit={handleConfirmEdit}
                     productVariations={productVariations}
                     variationInventory={variationInventory}
                     expandedProducts={expandedProducts}
@@ -363,11 +479,10 @@ export default function Inventory() {
                     locations={locations}
                     onUpdateStock={updateStock}
                     saving={saving}
-                    onCreateWarehouse={createWarehouse}
-                    newWarehouseName={newWarehouseName}
-                    setNewWarehouseName={setNewWarehouseName}
-                    newWarehouseOpen={newWarehouseOpen}
-                    setNewWarehouseOpen={setNewWarehouseOpen}
+                    editMode={editMode}
+                    onStartEdit={handleStartEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onConfirmEdit={handleConfirmEdit}
                     onAddProductToLocation={addProductToLocation}
                     addLocationOpen={addLocationOpen}
                     setAddLocationOpen={setAddLocationOpen}
@@ -378,6 +493,24 @@ export default function Inventory() {
                   />
                 </CardContent>
               </TabsContent>
+
+              {warehouses.map((warehouse) => (
+                <TabsContent key={warehouse.id} value={`warehouse-${warehouse.id}`} className="mt-6">
+                  <CardContent className="p-2 md:p-6">
+                    <WarehouseInventoryView
+                      warehouse={warehouse}
+                      products={allProducts}
+                      locations={locations}
+                      onUpdateStock={updateStock}
+                      saving={saving}
+                      editMode={editMode}
+                      onStartEdit={handleStartEdit}
+                      onCancelEdit={handleCancelEdit}
+                      onConfirmEdit={handleConfirmEdit}
+                    />
+                  </CardContent>
+                </TabsContent>
+              ))}
 
               {profile?.is_venue && (
                 <TabsContent value="venue" className="mt-6">
@@ -400,11 +533,10 @@ interface BrandInventoryViewProps {
   locations: InventoryLocation[];
   onUpdateStock: (productId: string, locationId: string, quantity: number) => void;
   saving: string | null;
-  onCreateWarehouse: () => void;
-  newWarehouseName: string;
-  setNewWarehouseName: (name: string) => void;
-  newWarehouseOpen: boolean;
-  setNewWarehouseOpen: (open: boolean) => void;
+  editMode: Record<string, { editing: boolean; tempValue: number }>;
+  onStartEdit: (key: string, currentValue: number) => void;
+  onCancelEdit: (key: string) => void;
+  onConfirmEdit: (key: string, productId: string, locationId: string) => void;
   onAddProductToLocation: () => void;
   addLocationOpen: boolean;
   setAddLocationOpen: (open: boolean) => void;
@@ -419,11 +551,10 @@ function BrandInventoryView({
   locations,
   onUpdateStock,
   saving,
-  onCreateWarehouse,
-  newWarehouseName,
-  setNewWarehouseName,
-  newWarehouseOpen,
-  setNewWarehouseOpen,
+  editMode,
+  onStartEdit,
+  onCancelEdit,
+  onConfirmEdit,
   onAddProductToLocation,
   addLocationOpen,
   setAddLocationOpen,
@@ -439,29 +570,50 @@ function BrandInventoryView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-0">
         <h2 className="text-lg md:text-xl font-semibold">Product Inventory</h2>
         <div className="flex gap-2">
-          <Dialog open={newWarehouseOpen} onOpenChange={setNewWarehouseOpen}>
+          <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-xs md:text-sm">
-                <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                <span className="hidden sm:inline">New Warehouse</span>
-                <span className="sm:hidden">Warehouse</span>
+                <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                Add Product
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create Warehouse</DialogTitle>
+                <DialogTitle>Add Product to Location</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Warehouse Name</Label>
-                  <Input
-                    value={newWarehouseName}
-                    onChange={(e) => setNewWarehouseName(e.target.value)}
-                    placeholder="Main Warehouse"
-                  />
+                  <Label>Product</Label>
+                  <Select value={selectedProduct || ''} onValueChange={setSelectedProduct}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Button onClick={onCreateWarehouse} className="w-full">
-                  Create
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={onAddProductToLocation} className="w-full">
+                  Add
                 </Button>
               </div>
             </DialogContent>
@@ -506,6 +658,8 @@ function BrandInventoryView({
                       );
                       const stock = inventory?.stock_quantity || 0;
                       const key = `${product.id}-${warehouse.id}`;
+                      const isEditing = editMode[key]?.editing || false;
+                      const tempValue = editMode[key]?.tempValue ?? stock;
 
                       return (
                         <div key={warehouse.id} className="flex items-center gap-2 md:gap-4 py-1 md:py-0">
@@ -516,16 +670,61 @@ function BrandInventoryView({
                             </div>
                           </div>
                           <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                            <Input
-                              type="number"
-                              value={stock}
-                              onChange={(e) =>
-                                onUpdateStock(product.id, warehouse.id, parseInt(e.target.value) || 0)
-                              }
-                              className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
-                              disabled={saving === key}
-                            />
-                            <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
+                            {isEditing ? (
+                              <>
+                                <Input
+                                  type="number"
+                                  value={tempValue}
+                                  onChange={(e) => {
+                                    const newValue = parseInt(e.target.value) || 0;
+                                    onStartEdit(key, newValue);
+                                  }}
+                                  className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
+                                  disabled={saving === key}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      onConfirmEdit(key, product.id, warehouse.id);
+                                    } else if (e.key === 'Escape') {
+                                      onCancelEdit(key);
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => onConfirmEdit(key, product.id, warehouse.id)}
+                                  disabled={saving === key}
+                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                >
+                                  <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => onCancelEdit(key)}
+                                  disabled={saving === key}
+                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                >
+                                  <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
+                                <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onStartEdit(key, stock);
+                                  }}
+                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
+                                >
+                                  <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -537,6 +736,141 @@ function BrandInventoryView({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Warehouse Inventory View Component
+interface WarehouseInventoryViewProps {
+  warehouse: InventoryLocation;
+  products: ProductWithInventory[];
+  locations: InventoryLocation[];
+  onUpdateStock: (productId: string, locationId: string, quantity: number) => void;
+  saving: string | null;
+  editMode: Record<string, { editing: boolean; tempValue: number }>;
+  onStartEdit: (key: string, currentValue: number) => void;
+  onCancelEdit: (key: string) => void;
+  onConfirmEdit: (key: string, productId: string, locationId: string) => void;
+}
+
+function WarehouseInventoryView({
+  warehouse,
+  products,
+  locations,
+  onUpdateStock,
+  saving,
+  editMode,
+  onStartEdit,
+  onCancelEdit,
+  onConfirmEdit,
+}: WarehouseInventoryViewProps) {
+  // Filter products that have inventory at this warehouse
+  const productsWithInventory = products.filter((product) =>
+    product.product_inventory?.some((inv) => inv.inventory_location_id === warehouse.id)
+  );
+
+  if (productsWithInventory.length === 0) {
+    return (
+      <div className="text-center py-8 md:py-12">
+        <p className="text-sm md:text-base text-muted-foreground">No products at this warehouse yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 md:space-y-4">
+      <h2 className="text-lg md:text-xl font-semibold">{warehouse.name}</h2>
+      {productsWithInventory.map((product) => {
+        const inventory = product.product_inventory?.find(
+          (inv) => inv.inventory_location_id === warehouse.id
+        );
+        const stock = inventory?.stock_quantity || 0;
+        const key = `${product.id}-${warehouse.id}`;
+        const isEditing = editMode[key]?.editing || false;
+        const tempValue = editMode[key]?.tempValue ?? stock;
+
+        return (
+          <Card key={product.id} className="border">
+            <CardContent className="p-3 md:p-6">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  {product.thumbnail_url ? (
+                    <img
+                      src={product.thumbnail_url}
+                      alt={product.name}
+                      className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                      <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-xs md:text-sm truncate">{product.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+                  {isEditing ? (
+                    <>
+                      <Input
+                        type="number"
+                        value={tempValue}
+                        onChange={(e) => {
+                          const newValue = parseInt(e.target.value) || 0;
+                          onStartEdit(key, newValue);
+                        }}
+                        className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
+                        disabled={saving === key}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            onConfirmEdit(key, product.id, warehouse.id);
+                          } else if (e.key === 'Escape') {
+                            onCancelEdit(key);
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onConfirmEdit(key, product.id, warehouse.id)}
+                        disabled={saving === key}
+                        className="h-7 w-7 md:h-8 md:w-8 p-0"
+                      >
+                        <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onCancelEdit(key)}
+                        disabled={saving === key}
+                        className="h-7 w-7 md:h-8 md:w-8 p-0"
+                      >
+                        <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
+                      <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStartEdit(key, stock);
+                        }}
+                        className="h-7 w-7 md:h-8 md:w-8 p-0"
+                      >
+                        <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -594,4 +928,3 @@ function VenueInventoryView({ inventory }: VenueInventoryViewProps) {
     </div>
   );
 }
-
