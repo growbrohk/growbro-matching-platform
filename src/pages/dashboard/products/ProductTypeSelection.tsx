@@ -91,6 +91,19 @@ export default function ProductTypeSelection() {
   const isVenue = profile?.is_venue === true;
   const showOwnerTypeSelector = isVenue && !ownerTypeParam;
 
+  // Show loading state if profile is not loaded yet
+  if (!profile) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   const getBackPath = () => {
     return '/dashboard/products';
   };
@@ -160,10 +173,46 @@ export default function ProductTypeSelection() {
     );
   }
 
-  const productTypes = ownerTypeParam === 'venue' ? VENUE_PRODUCT_TYPES : BRAND_PRODUCT_TYPES;
-  const title = ownerTypeParam === 'venue' ? 'Create Venue Product' : 'Create Brand Product';
+  // Determine which product types to show
+  // Default to brand if owner_type is not specified or user is not a venue
+  const effectiveOwnerType = ownerTypeParam || 'brand';
+  const isVenueRequestingVenue = effectiveOwnerType === 'venue';
+  
+  // Validate: non-venue users cannot create venue products
+  if (isVenueRequestingVenue && !isVenue) {
+    // Redirect to brand products
+    return (
+      <Layout>
+        <div className="container mx-auto py-8 px-4 max-w-4xl">
+          <div className="mb-6">
+            <Button variant="ghost" onClick={() => navigate(getBackPath())} className="mb-4">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Products
+            </Button>
+            <h1 className="text-3xl font-bold">Access Denied</h1>
+            <p className="text-muted-foreground mt-1">
+              Only venue users can create venue products.
+            </p>
+          </div>
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground mb-4">
+                You need to be a venue user to create venue products.
+              </p>
+              <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
+                Create Brand Product Instead
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  const productTypes = isVenueRequestingVenue ? VENUE_PRODUCT_TYPES : BRAND_PRODUCT_TYPES;
+  const title = isVenueRequestingVenue ? 'Create Venue Product' : 'Create Brand Product';
   const subtitle =
-    ownerTypeParam === 'venue'
+    isVenueRequestingVenue
       ? 'Choose the type of venue offering you want to create'
       : 'Choose the type of product you want to create';
 
@@ -203,14 +252,6 @@ export default function ProductTypeSelection() {
             );
           })}
         </div>
-
-        {showVenueProducts && !isVenue && (
-          <div className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-sm text-destructive">
-              Note: Only venue users can create venue products. You will be redirected to brand products.
-            </p>
-          </div>
-        )}
       </div>
     </Layout>
   );
