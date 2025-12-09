@@ -42,8 +42,7 @@ export default function Products() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
-  const [brandProducts, setBrandProducts] = useState<Product[]>([]);
-  const [venueProducts, setVenueProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -53,8 +52,8 @@ export default function Products() {
   const [productStocks, setProductStocks] = useState<Record<string, number>>({});
   const [productVariations, setProductVariations] = useState<Record<string, ProductVariation[]>>({});
 
-  // Get active tab from URL or default to 'brand'
-  const activeTab = searchParams.get('tab') || 'brand';
+  // Get active tab from URL or default to 'simple'
+  const activeTab = searchParams.get('tab') || 'simple';
 
   useEffect(() => {
     if (profile) {
@@ -67,22 +66,23 @@ export default function Products() {
 
     setLoading(true);
     try {
-      // Fetch brand products (all users)
+      // Fetch all products (brand and venue if user is venue)
       const { data: brandData, error: brandError } = await getMyProducts(profile, 'brand');
       if (brandError) throw brandError;
-      setBrandProducts(brandData || []);
 
+      let allProductsData: Product[] = [...(brandData || [])];
+      
       // Fetch venue products (only if user is venue)
-      let venueData: Product[] = [];
       if (profile.is_venue) {
         const { data: venueProductsData, error: venueError } = await getMyProducts(profile, 'venue');
         if (venueError) throw venueError;
-        venueData = venueProductsData || [];
-        setVenueProducts(venueData);
+        allProductsData = [...allProductsData, ...(venueProductsData || [])];
       }
 
+      setAllProducts(allProductsData);
+
       // Fetch stock and variations for all products
-      await fetchProductStocksAndVariations([...(brandData || []), ...venueData]);
+      await fetchProductStocksAndVariations(allProductsData);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -199,16 +199,20 @@ export default function Products() {
   };
 
   const getCurrentProducts = () => {
-    return activeTab === 'brand' ? brandProducts : venueProducts;
+    if (activeTab === 'simple') {
+      return allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
+    } else if (activeTab === 'variable') {
+      return allProducts.filter(p => p.product_type === 'variable');
+    }
+    return allProducts;
   };
 
   const handleCreateProduct = () => {
-    if (activeTab === 'venue' && profile?.is_venue) {
-      navigate('/dashboard/products/select-type?owner_type=venue');
-    } else {
-      navigate('/dashboard/products/select-type?owner_type=brand');
-    }
+    navigate('/dashboard/products/select-type?owner_type=brand');
   };
+
+  const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
+  const variableProducts = allProducts.filter(p => p.product_type === 'variable');
 
   if (loading) {
     return (
@@ -242,17 +246,15 @@ export default function Products() {
           <CardHeader>
             <Tabs value={activeTab} onValueChange={handleTabChange}>
               <TabsList>
-                <TabsTrigger value="brand">Brand Products ({brandProducts.length})</TabsTrigger>
-                {profile?.is_venue && (
-                  <TabsTrigger value="venue">Venue Products ({venueProducts.length})</TabsTrigger>
-                )}
+                <TabsTrigger value="simple">Simple Products ({simpleProducts.length})</TabsTrigger>
+                <TabsTrigger value="variable">Variable Products ({variableProducts.length})</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="brand" className="mt-6">
+              <TabsContent value="simple" className="mt-6">
                 <CardContent>
-                  {brandProducts.length === 0 ? (
+                  {simpleProducts.length === 0 ? (
                     <div className="text-center py-12">
-                      <p className="text-muted-foreground mb-4">No brand products yet</p>
+                      <p className="text-muted-foreground mb-4">No simple products yet</p>
                       <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Your First Product
@@ -260,7 +262,7 @@ export default function Products() {
                     </div>
                   ) : (
                     <ProductTable
-                      products={brandProducts}
+                      products={simpleProducts}
                       onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
                       onDelete={(product) => {
                         setProductToDelete(product);
@@ -279,38 +281,36 @@ export default function Products() {
                 </CardContent>
               </TabsContent>
 
-              {profile?.is_venue && (
-                <TabsContent value="venue" className="mt-6">
-                  <CardContent>
-                    {venueProducts.length === 0 ? (
-                      <div className="text-center py-12">
-                        <p className="text-muted-foreground mb-4">No venue products yet</p>
-                        <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=venue')}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Create Your First Venue Product
-                        </Button>
-                      </div>
-                    ) : (
-                      <ProductTable
-                        products={venueProducts}
-                        onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
-                        onDelete={(product) => {
-                          setProductToDelete(product);
-                          setDeleteDialogOpen(true);
-                        }}
-                        deletingId={deletingId}
-                        formatPrice={formatPrice}
-                        productStocks={productStocks}
-                        productVariations={productVariations}
-                        expandedProducts={expandedProducts}
-                        expandedColors={expandedColors}
-                        onToggleExpansion={toggleProductExpansion}
-                        onToggleColorExpansion={toggleColorExpansion}
-                      />
-                    )}
-                  </CardContent>
-                </TabsContent>
-              )}
+              <TabsContent value="variable" className="mt-6">
+                <CardContent>
+                  {variableProducts.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground mb-4">No variable products yet</p>
+                      <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Your First Variable Product
+                      </Button>
+                    </div>
+                  ) : (
+                    <ProductTable
+                      products={variableProducts}
+                      onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
+                      onDelete={(product) => {
+                        setProductToDelete(product);
+                        setDeleteDialogOpen(true);
+                      }}
+                      deletingId={deletingId}
+                      formatPrice={formatPrice}
+                      productStocks={productStocks}
+                      productVariations={productVariations}
+                      expandedProducts={expandedProducts}
+                      expandedColors={expandedColors}
+                      onToggleExpansion={toggleProductExpansion}
+                      onToggleColorExpansion={toggleColorExpansion}
+                    />
+                  )}
+                </CardContent>
+              </TabsContent>
             </Tabs>
           </CardHeader>
         </Card>
