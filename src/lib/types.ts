@@ -34,6 +34,7 @@ export interface Product {
   owner_type: ProductOwnerType;
   owner_user_id: string;
   product_class: ProductClass;
+  product_type?: 'simple' | 'variable'; // Product type: simple or variable
   name: string;
   slug?: string;
   short_description?: string;

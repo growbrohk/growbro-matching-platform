@@ -132,6 +132,7 @@ export async function createProduct(
       owner_type: ownerType,
       owner_user_id: profile.id,
       product_class: data.product_class,
+      product_type: (data as any).product_type || 'simple', // Default to simple if not specified
       name: data.name.trim(),
       slug: data.slug,
       short_description: data.short_description || null,
@@ -218,6 +219,7 @@ export async function updateProduct(
 
     if (data.slug !== undefined) updateData.slug = data.slug;
     if (data.product_class !== undefined) updateData.product_class = data.product_class;
+    if ((data as any).product_type !== undefined) updateData.product_type = (data as any).product_type;
     if (data.short_description !== undefined) updateData.short_description = data.short_description || null;
     if (data.full_description !== undefined) updateData.full_description = data.full_description || null;
     if (data.category !== undefined) updateData.category = data.category || null;

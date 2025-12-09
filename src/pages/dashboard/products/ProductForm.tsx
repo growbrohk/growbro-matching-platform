@@ -138,6 +138,10 @@ export default function ProductForm() {
       setSlug(data.slug || '');
       setProductClass(data.product_class);
       setOwnerType(data.owner_type);
+      // Set product type for physical products
+      if (data.product_class === 'physical') {
+        setProductType(data.product_type === 'variable' ? 'variable' : 'simple');
+      }
       setShortDescription(data.short_description || '');
       setFullDescription(data.full_description || '');
       setCategory(data.category || '');
@@ -245,6 +249,7 @@ export default function ProductForm() {
         slug: slug.trim() || generateSlug(name),
         product_class: productClass as ProductClass,
         owner_type: finalOwnerType,
+        product_type: productClass === 'physical' ? (productType === 'variable' ? 'variable' : 'simple') : 'simple',
         short_description: shortDescription.trim() || undefined,
         full_description: fullDescription.trim() || undefined,
         category: category.trim() || undefined,
@@ -261,7 +266,7 @@ export default function ProductForm() {
 
       let savedProduct;
       if (isEditMode && id) {
-        const { data, error } = await updateProduct({ ...productData, id }, profile);
+        const { data, error } = await updateProduct({ ...productData, id, product_type: productClass === 'physical' ? (productType === 'variable' ? 'variable' : 'simple') : 'simple' }, profile);
         if (error) throw error;
         savedProduct = data;
         toast({
