@@ -49,6 +49,7 @@ export default function Products() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set()); // Format: "productId-color"
   const [productStocks, setProductStocks] = useState<Record<string, number>>({});
   const [productVariations, setProductVariations] = useState<Record<string, ProductVariation[]>>({});
 
@@ -129,10 +130,29 @@ export default function Products() {
     const newExpanded = new Set(expandedProducts);
     if (newExpanded.has(productId)) {
       newExpanded.delete(productId);
+      // Also collapse all colors when collapsing product
+      const newExpandedColors = new Set(expandedColors);
+      Array.from(newExpandedColors).forEach((key: string) => {
+        if (key.startsWith(`${productId}-`)) {
+          newExpandedColors.delete(key);
+        }
+      });
+      setExpandedColors(newExpandedColors);
     } else {
       newExpanded.add(productId);
     }
     setExpandedProducts(newExpanded);
+  };
+
+  const toggleColorExpansion = (productId: string, color: string) => {
+    const key = `${productId}-${color}`;
+    const newExpanded = new Set(expandedColors);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedColors(newExpanded);
   };
 
   const handleDelete = async () => {
@@ -251,7 +271,9 @@ export default function Products() {
                       productStocks={productStocks}
                       productVariations={productVariations}
                       expandedProducts={expandedProducts}
+                      expandedColors={expandedColors}
                       onToggleExpansion={toggleProductExpansion}
+                      onToggleColorExpansion={toggleColorExpansion}
                     />
                   )}
                 </CardContent>
@@ -281,7 +303,9 @@ export default function Products() {
                         productStocks={productStocks}
                         productVariations={productVariations}
                         expandedProducts={expandedProducts}
+                        expandedColors={expandedColors}
                         onToggleExpansion={toggleProductExpansion}
+                        onToggleColorExpansion={toggleColorExpansion}
                       />
                     )}
                   </CardContent>
@@ -322,7 +346,9 @@ interface ProductTableProps {
   productStocks: Record<string, number>;
   productVariations: Record<string, ProductVariation[]>;
   expandedProducts: Set<string>;
+  expandedColors: Set<string>;
   onToggleExpansion: (productId: string) => void;
+  onToggleColorExpansion: (productId: string, color: string) => void;
 }
 
 function ProductTable({
@@ -334,12 +360,44 @@ function ProductTable({
   productStocks,
   productVariations,
   expandedProducts,
+  expandedColors,
   onToggleExpansion,
+  onToggleColorExpansion,
 }: ProductTableProps) {
   const formatVariationAttributes = (attributes: Record<string, string>): string => {
     return Object.entries(attributes)
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ');
+  };
+
+  // Group variations by color (first variable) and then by size (second variable)
+  const groupVariationsByColor = (variations: ProductVariation[]) => {
+    // Find color and size variables (assuming color is first, size is second)
+    const grouped: Record<string, ProductVariation[]> = {};
+    
+    variations.forEach((variation) => {
+      // Try to find "color" or "Color" as the grouping key
+      const colorKey = variation.attributes['color'] || variation.attributes['Color'] || 'Other';
+      if (!grouped[colorKey]) {
+        grouped[colorKey] = [];
+      }
+      grouped[colorKey].push(variation);
+    });
+
+    return grouped;
+  };
+
+  // Get size from variation attributes (assuming size is the second variable)
+  const getSizeFromVariation = (variation: ProductVariation): string => {
+    // Try common size field names
+    return variation.attributes['size'] || 
+           variation.attributes['Size'] || 
+           variation.attributes['SIZE'] ||
+           Object.values(variation.attributes).find((val, idx, arr) => {
+             // Return the value that's not the color
+             const color = variation.attributes['color'] || variation.attributes['Color'];
+             return val !== color;
+           }) || 'N/A';
   };
 
   return (
@@ -466,43 +524,106 @@ function ProductTable({
                     <div className="py-4 pl-8">
                       <h4 className="font-medium mb-3 text-sm">Variations</h4>
                       <div className="space-y-2">
-                        {variations.map((variation) => (
-                          <div
-                            key={variation.id}
-                            className="flex items-center justify-between p-3 bg-background rounded border"
-                          >
-                            <div className="flex-1">
-                              <div className="font-medium text-sm">
-                                {formatVariationAttributes(variation.attributes)}
+                        {Object.entries(groupVariationsByColor(variations)).map(([color, colorVariations]) => {
+                          const colorKey = `${product.id}-${color}`;
+                          const isColorExpanded = expandedColors.has(colorKey);
+                          const totalColorStock = colorVariations.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
+                          const avgPrice = colorVariations.length > 0
+                            ? colorVariations.reduce((sum, v) => sum + (v.price_in_cents || product.price_in_cents || 0), 0) / colorVariations.length
+                            : product.price_in_cents || 0;
+
+                          return (
+                            <div key={color} className="bg-background rounded border">
+                              {/* Color Header - Clickable */}
+                              <div
+                                className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => onToggleColorExpansion(product.id, color)}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  {isColorExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                  <div>
+                                    <div className="font-medium text-sm capitalize">
+                                      Color: {color}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {colorVariations.length} size{colorVariations.length !== 1 ? 's' : ''}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                  <div className="text-right">
+                                    <div className="text-sm font-medium">
+                                      {formatPrice(avgPrice, product.currency)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">Avg Price</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div
+                                      className={`text-sm font-medium ${
+                                        totalColorStock === 0 ? 'text-destructive' : ''
+                                      }`}
+                                    >
+                                      {totalColorStock}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">Total Stock</div>
+                                  </div>
+                                </div>
                               </div>
-                              {variation.sku && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  SKU: {variation.sku}
+
+                              {/* Size Variations - Expandable */}
+                              {isColorExpanded && (
+                                <div className="border-t bg-muted/20">
+                                  <div className="p-3 space-y-2">
+                                    {colorVariations.map((variation) => {
+                                      const size = getSizeFromVariation(variation);
+                                      return (
+                                        <div
+                                          key={variation.id}
+                                          className="flex items-center justify-between p-2 bg-background rounded"
+                                        >
+                                          <div className="flex-1 pl-6">
+                                            <div className="font-medium text-sm">
+                                              Size: {size}
+                                            </div>
+                                            {variation.sku && (
+                                              <div className="text-xs text-muted-foreground mt-1">
+                                                SKU: {variation.sku}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-6">
+                                            <div className="text-right">
+                                              <div className="text-sm font-medium">
+                                                {variation.price_in_cents
+                                                  ? formatPrice(variation.price_in_cents, product.currency)
+                                                  : formatPrice(product.price_in_cents || 0, product.currency)}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">Price</div>
+                                            </div>
+                                            <div className="text-right">
+                                              <div
+                                                className={`text-sm font-medium ${
+                                                  variation.stock_quantity === 0 ? 'text-destructive' : ''
+                                                }`}
+                                              >
+                                                {variation.stock_quantity}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">Stock</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <div className="text-sm font-medium">
-                                  {variation.price_in_cents
-                                    ? formatPrice(variation.price_in_cents, product.currency)
-                                    : formatPrice(product.price_in_cents || 0, product.currency)}
-                                </div>
-                                <div className="text-xs text-muted-foreground">Price</div>
-                              </div>
-                              <div className="text-right">
-                                <div
-                                  className={`text-sm font-medium ${
-                                    variation.stock_quantity === 0 ? 'text-destructive' : ''
-                                  }`}
-                                >
-                                  {variation.stock_quantity}
-                                </div>
-                                <div className="text-xs text-muted-foreground">Stock</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </TableCell>
