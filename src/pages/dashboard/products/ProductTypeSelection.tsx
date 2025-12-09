@@ -109,7 +109,13 @@ export default function ProductTypeSelection() {
   };
 
   const handleTypeSelect = (type: ProductTypeOption) => {
-    // Navigate to product form with pre-filled type
+    // If Event ticket, navigate to the new event ticketing form
+    if (type.product_class === 'ticket' || type.product_class === 'event_ticket') {
+      navigate('/events/new');
+      return;
+    }
+    
+    // For other product types, navigate to product form with pre-filled type
     const params = new URLSearchParams({
       product_class: type.product_class,
       owner_type: type.owner_type,
