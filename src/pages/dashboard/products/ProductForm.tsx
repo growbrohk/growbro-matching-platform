@@ -243,7 +243,7 @@ export default function ProductForm() {
           title: 'Success',
           description: 'Product updated successfully',
         });
-        navigate(`/dashboard/products/${finalOwnerType === 'brand' ? 'brand' : 'venue'}`);
+        navigate('/dashboard/products');
       } else {
         const { data, error } = await createProduct(productData, profile);
         if (error) throw error;
@@ -251,7 +251,7 @@ export default function ProductForm() {
           title: 'Success',
           description: 'Product created successfully',
         });
-        navigate(`/dashboard/products/${finalOwnerType === 'brand' ? 'brand' : 'venue'}`);
+        navigate('/dashboard/products');
       }
     } catch (error: any) {
       toast({

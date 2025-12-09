@@ -44,20 +44,31 @@ export function Layout({ children }: LayoutProps) {
     { path: '/browse', label: 'Browse', icon: Search },
     { path: '/collabs', label: 'Collabs', icon: Handshake },
     { path: '/messages', label: 'Messages', icon: MessageCircle },
-    // All users are brands, so they can access brand features
-    { path: '/dashboard/products/brand', label: 'Brand Products', icon: Package },
-    { path: '/dashboard/brand/inventory', label: 'Inventory', icon: Package },
+    { path: '/dashboard/products', label: 'Products', icon: Package },
+    { path: '/dashboard/inventory', label: 'Inventory', icon: Package },
     // Venue features only if is_venue is true
     ...(profile?.is_venue === true
-      ? [
-          { path: '/venue/collab-options', label: 'Spaces', icon: Calendar },
-          { path: '/dashboard/products/venue', label: 'Venue Products', icon: Package },
-          { path: '/dashboard/venue/inventory', label: 'Venue Inventory', icon: Package },
-        ]
+      ? [{ path: '/dashboard/spaces', label: 'Spaces', icon: Calendar }]
       : []),
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/dashboard/products') {
+      return location.pathname.startsWith('/dashboard/products') && 
+             !location.pathname.includes('/select-type') &&
+             !location.pathname.includes('/new') &&
+             !location.pathname.match(/\/dashboard\/products\/[^/]+\/edit/);
+    }
+    if (path === '/dashboard/inventory') {
+      return location.pathname.startsWith('/dashboard/inventory') ||
+             location.pathname.startsWith('/dashboard/brand/inventory') ||
+             location.pathname.startsWith('/dashboard/venue/inventory');
+    }
+    if (path === '/dashboard/spaces') {
+      return location.pathname === '/dashboard/spaces';
+    }
+    return location.pathname === path;
+  };
 
   return (
     <div className="min-h-screen bg-background">

@@ -19,10 +19,11 @@ import Shop from "./pages/Shop";
 import ShopProduct from "./pages/ShopProduct";
 import BrandInventory from "./pages/BrandInventory";
 import VenueInventory from "./pages/VenueInventory";
-import BrandProducts from "./pages/dashboard/products/BrandProducts";
-import VenueProducts from "./pages/dashboard/products/VenueProducts";
+import Products from "./pages/dashboard/products/Products";
 import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
+import Inventory from "./pages/dashboard/inventory/Inventory";
+import Spaces from "./pages/dashboard/spaces/Spaces";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -81,14 +82,20 @@ function AppRoutes() {
       <Route path="/venue/collab-options" element={<ProtectedRoute><VenueCollabOptions /></ProtectedRoute>} />
       <Route path="/collabs" element={<ProtectedRoute><Collabs /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-      <Route path="/dashboard/brand/inventory" element={<ProtectedRoute><BrandInventory /></ProtectedRoute>} />
-      <Route path="/dashboard/venue/inventory" element={<ProtectedRoute><VenueInventory /></ProtectedRoute>} />
-      {/* Product Management Routes */}
-      <Route path="/dashboard/products/brand" element={<ProtectedRoute><BrandProducts /></ProtectedRoute>} />
-      <Route path="/dashboard/products/venue" element={<ProtectedRoute><VenueProducts /></ProtectedRoute>} />
+      {/* Unified Product Management Routes */}
+      <Route path="/dashboard/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/dashboard/products/select-type" element={<ProtectedRoute><ProductTypeSelection /></ProtectedRoute>} />
       <Route path="/dashboard/products/new" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
       <Route path="/dashboard/products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+      {/* Unified Inventory Route */}
+      <Route path="/dashboard/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+      {/* Spaces Route (Venue only) */}
+      <Route path="/dashboard/spaces" element={<ProtectedRoute><Spaces /></ProtectedRoute>} />
+      {/* Legacy routes - redirect to new unified routes */}
+      <Route path="/dashboard/products/brand" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/dashboard/products/venue" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/dashboard/brand/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+      <Route path="/dashboard/venue/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       {/* Public webstore routes */}
       <Route path="/shop" element={<Shop />} />
       <Route path="/shop/products/:slug" element={<ShopProduct />} />

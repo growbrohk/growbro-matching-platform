@@ -83,16 +83,16 @@ export default function ProductTypeSelection() {
   const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const ownerTypeParam = searchParams.get('owner_type') as ProductOwnerType | null;
+  const [selectedOwnerType, setSelectedOwnerType] = useState<ProductOwnerType>(
+    ownerTypeParam || 'brand'
+  );
 
   // Determine which product types to show
   const isVenue = profile?.is_venue === true;
-  const showVenueProducts = ownerTypeParam === 'venue' || (isVenue && ownerTypeParam !== 'brand');
+  const showOwnerTypeSelector = isVenue && !ownerTypeParam;
 
   const getBackPath = () => {
-    if (showVenueProducts) {
-      return '/dashboard/products/venue';
-    }
-    return '/dashboard/products/brand';
+    return '/dashboard/products';
   };
 
   const handleTypeSelect = (type: ProductTypeOption) => {
@@ -105,11 +105,67 @@ export default function ProductTypeSelection() {
     navigate(`/dashboard/products/new?${params.toString()}`);
   };
 
-  const productTypes = showVenueProducts ? VENUE_PRODUCT_TYPES : BRAND_PRODUCT_TYPES;
-  const title = showVenueProducts ? 'Create Venue Product' : 'Create Brand Product';
-  const subtitle = showVenueProducts
-    ? 'Choose the type of venue offering you want to create'
-    : 'Choose the type of product you want to create';
+  // If venue user and no owner_type specified, show selector first
+  if (showOwnerTypeSelector) {
+    return (
+      <Layout>
+        <div className="container mx-auto py-8 px-4 max-w-4xl">
+          <div className="mb-6">
+            <Button variant="ghost" onClick={() => navigate(getBackPath())} className="mb-4">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Products
+            </Button>
+            <h1 className="text-3xl font-bold">Create Product</h1>
+            <p className="text-muted-foreground mt-1">
+              Choose whether to create a brand product or venue product
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card
+              className="cursor-pointer hover:border-primary transition-colors"
+              onClick={() => setSelectedOwnerType('brand')}
+            >
+              <CardHeader>
+                <CardTitle>Brand Product</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Create a product for your brand (physical items, events, workshops)
+                </CardDescription>
+              </CardContent>
+            </Card>
+            <Card
+              className="cursor-pointer hover:border-primary transition-colors"
+              onClick={() => setSelectedOwnerType('venue')}
+            >
+              <CardHeader>
+                <CardTitle>Venue Product</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Create a venue offering (rental space, consignment, poster space, cup sleeve)
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <Button onClick={() => navigate(`/dashboard/products/select-type?owner_type=${selectedOwnerType}`)}>
+              Continue
+            </Button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  const productTypes = ownerTypeParam === 'venue' ? VENUE_PRODUCT_TYPES : BRAND_PRODUCT_TYPES;
+  const title = ownerTypeParam === 'venue' ? 'Create Venue Product' : 'Create Brand Product';
+  const subtitle =
+    ownerTypeParam === 'venue'
+      ? 'Choose the type of venue offering you want to create'
+      : 'Choose the type of product you want to create';
 
   return (
     <Layout>
