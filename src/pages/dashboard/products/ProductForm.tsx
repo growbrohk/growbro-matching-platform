@@ -17,18 +17,10 @@ import {
 } from '@/components/ui/select';
 import { createProduct, updateProduct, getProductById, generateSlug } from '@/lib/api/products';
 import { saveProductVariables, getProductVariables, generateVariations, saveProductVariations } from '@/lib/api/variable-products';
-import { Product, ProductOwnerType, ProductClass, CollabType } from '@/lib/types';
+import { Product, ProductOwnerType, ProductType, CollabType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Save, Plus, Trash2, X } from 'lucide-react';
 import { CollabChip } from '@/components/CollabChip';
-
-const PRODUCT_CLASSES: { value: ProductClass; label: string; description: string }[] = [
-  { value: 'physical', label: 'Physical', description: 'Tangible product with inventory' },
-  { value: 'ticket', label: 'Ticket', description: 'Event ticket or admission' },
-  { value: 'booking', label: 'Booking', description: 'Reservable time slot or service' },
-  { value: 'service', label: 'Service', description: 'Design, workshop, or other service' },
-  { value: 'space', label: 'Space', description: 'Venue space rental' },
-];
 
 const COLLAB_TYPES: CollabType[] = ['consignment', 'event', 'collab_product', 'cup_sleeve_marketing'];
 
@@ -46,9 +38,10 @@ export default function ProductForm() {
   // Form state
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [productClass, setProductClass] = useState<ProductClass | ''>('');
+  const [productType, setProductType] = useState<ProductType | ''>('');
   const [ownerType, setOwnerType] = useState<ProductOwnerType>('brand');
   const [productTypeId, setProductTypeId] = useState<string>('');
+  const [isVariableProduct, setIsVariableProduct] = useState(false);
   const [shortDescription, setShortDescription] = useState('');
   const [fullDescription, setFullDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -58,7 +51,6 @@ export default function ProductForm() {
   const [isPurchasable, setIsPurchasable] = useState(true);
   const [isPublic, setIsPublic] = useState(true);
   const [isActive, setIsActive] = useState(true);
-  const [productType, setProductType] = useState<'simple' | 'variable'>('simple');
   const [variables, setVariables] = useState<Array<{ name: string; values: string[] }>>([]);
   const [suitableCollabTypes, setSuitableCollabTypes] = useState<CollabType[]>([]);
   const [marginNotes, setMarginNotes] = useState('');
@@ -67,14 +59,14 @@ export default function ProductForm() {
   const isEditMode = !!id;
 
   useEffect(() => {
-    // If creating new product, check if product_class and owner_type are provided
+    // If creating new product, check if product_type and owner_type are provided
     // If not, redirect to type selection
     if (!id) {
-      const productClassParam = searchParams.get('product_class') as ProductClass;
+      const productTypeParam = searchParams.get('product_type') as ProductType;
       const ownerTypeParam = searchParams.get('owner_type') as ProductOwnerType;
       const productTypeIdParam = searchParams.get('product_type_id');
 
-      if (!productClassParam || !ownerTypeParam) {
+      if (!productTypeParam || !ownerTypeParam) {
         // Redirect to type selection
         const redirectParams = new URLSearchParams();
         if (ownerTypeParam) redirectParams.set('owner_type', ownerTypeParam);
@@ -83,7 +75,7 @@ export default function ProductForm() {
       }
 
       // Set from URL params
-      setProductClass(productClassParam);
+      setProductType(productTypeParam);
       setOwnerType(ownerTypeParam);
       if (productTypeIdParam) {
         setProductTypeId(productTypeIdParam);
@@ -94,12 +86,18 @@ export default function ProductForm() {
       setIsPublic(true);
       setIsActive(true);
       
-      // Set category based on product type
-      if (productClassParam === 'ticket') {
+      // Set category and variable flag based on product type
+      if (productTypeParam === 'event') {
         setCategory('Event');
-      } else if (productClassParam === 'booking') {
+        setIsVariableProduct(false);
+      } else if (productTypeParam === 'workshop') {
         setCategory('Workshop');
-      } else if (productClassParam === 'space' && ownerTypeParam === 'venue') {
+        setIsVariableProduct(false);
+      } else if (productTypeParam === 'variable') {
+        setIsVariableProduct(true);
+      } else if (productTypeParam === 'simple') {
+        setIsVariableProduct(false);
+      } else if (productTypeParam === 'space' && ownerTypeParam === 'venue') {
         // Venue products
         if (productTypeIdParam === 'poster-space') {
           setCategory('Poster Space');
@@ -136,12 +134,8 @@ export default function ProductForm() {
       // Populate form
       setName(data.name);
       setSlug(data.slug || '');
-      setProductClass(data.product_class);
+      setProductType(data.product_type || 'simple');
       setOwnerType(data.owner_type);
-      // Set product type for physical products
-      if (data.product_class === 'physical') {
-        setProductType(data.product_type === 'variable' ? 'variable' : 'simple');
-      }
       setShortDescription(data.short_description || '');
       setFullDescription(data.full_description || '');
       setCategory(data.category || '');
@@ -153,20 +147,20 @@ export default function ProductForm() {
       setIsPublic(data.is_public ?? true);
       setIsActive(data.is_active ?? true);
 
-      // Load variable product data if it's a physical product
-      if (data.product_class === 'physical') {
+      // Load variable product data if it's a variable product
+      if (data.product_type === 'variable') {
+        setIsVariableProduct(true);
         const { data: variablesData, error: varsError } = await getProductVariables(id);
         if (!varsError && variablesData && variablesData.length > 0) {
-          setProductType('variable');
           setVariables(
             variablesData.map((v) => ({
               name: v.name,
               values: v.values.map((val) => val.value),
             }))
           );
-        } else {
-          setProductType('simple');
         }
+      } else {
+        setIsVariableProduct(false);
       }
       setSuitableCollabTypes(data.suitable_collab_types || []);
       setMarginNotes(data.margin_notes || '');
@@ -217,10 +211,10 @@ export default function ProductForm() {
       return;
     }
 
-    if (!productClass) {
+    if (!productType) {
       toast({
         title: 'Validation Error',
-        description: 'Product class is required',
+        description: 'Product type is required',
         variant: 'destructive',
       });
       return;
@@ -247,9 +241,8 @@ export default function ProductForm() {
       const productData = {
         name: name.trim(),
         slug: slug.trim() || generateSlug(name),
-        product_class: productClass as ProductClass,
+        product_type: productType as ProductType,
         owner_type: finalOwnerType,
-        product_type: productClass === 'physical' ? (productType === 'variable' ? 'variable' : 'simple') : 'simple',
         short_description: shortDescription.trim() || undefined,
         full_description: fullDescription.trim() || undefined,
         category: category.trim() || undefined,
@@ -266,7 +259,7 @@ export default function ProductForm() {
 
       let savedProduct;
       if (isEditMode && id) {
-        const { data, error } = await updateProduct({ ...productData, id, product_type: productClass === 'physical' ? (productType === 'variable' ? 'variable' : 'simple') : 'simple' }, profile);
+        const { data, error } = await updateProduct({ ...productData, id }, profile);
         if (error) throw error;
         savedProduct = data;
         toast({
@@ -284,7 +277,7 @@ export default function ProductForm() {
       }
 
       // Save variable product data if it's a variable product
-      if (productClass === 'physical' && productType === 'variable' && savedProduct && variables.length > 0) {
+      if (productType === 'variable' && savedProduct && variables.length > 0) {
         // Save variables and values
         const { error: varsError } = await saveProductVariables(savedProduct.id, variables);
         if (varsError) {
@@ -358,12 +351,12 @@ export default function ProductForm() {
           <p className="text-muted-foreground mt-1">
             {isEditMode
               ? 'Update your product information'
-              : productClass === 'physical'
-                ? 'Create a new physical product'
-                : productClass === 'ticket'
-                  ? 'Create a new event ticket'
-                  : productClass === 'booking'
-                    ? 'Create a new workshop or bookable service'
+              : productType === 'simple' || productType === 'variable'
+                ? 'Create a new product'
+                : productType === 'event'
+                  ? 'Create a new event'
+                  : productType === 'workshop'
+                    ? 'Create a new workshop'
                     : ownerType === 'venue'
                       ? 'Create a new venue offering'
                       : 'Create a new product'}
@@ -393,16 +386,17 @@ export default function ProductForm() {
                 </div>
 
 
-                {/* Product Class - Read-only when creating (pre-selected) */}
+                {/* Product Type - Read-only when creating (pre-selected) */}
                 {!isEditMode ? (
                   <div className="space-y-2">
                     <Label>Product Type</Label>
                     <div className="p-3 bg-muted rounded-md">
-                      <div className="font-medium">
-                        {productClass === 'physical' && 'Product (Physical)'}
-                        {productClass === 'ticket' && 'Event (Ticket)'}
-                        {productClass === 'booking' && 'Workshop (Booking)'}
-                        {productClass === 'space' && ownerType === 'venue' && (
+                      <div className="font-medium capitalize">
+                        {productType === 'simple' && 'Simple Product'}
+                        {productType === 'variable' && 'Variable Product'}
+                        {productType === 'event' && 'Event'}
+                        {productType === 'workshop' && 'Workshop'}
+                        {productType === 'space' && ownerType === 'venue' && (
                           <>
                             {productTypeId === 'venue-rental' && 'Venue Rental'}
                             {productTypeId === 'poster-space' && 'Poster Space'}
@@ -411,60 +405,42 @@ export default function ProductForm() {
                           </>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {PRODUCT_CLASSES.find((pc) => pc.value === productClass)?.description}
-                      </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="productClass">
-                        Product Class <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={productClass}
-                        onValueChange={(value) => setProductClass(value as ProductClass)}
-                        required
-                      >
-                        <SelectTrigger id="productClass">
-                          <SelectValue placeholder="Select product class" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRODUCT_CLASSES.map((pc) => (
-                            <SelectItem key={pc.value} value={pc.value}>
-                              <div>
-                                <div className="font-medium">{pc.label}</div>
-                                <div className="text-xs text-muted-foreground">{pc.description}</div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {profile?.is_venue && (
-                      <div className="space-y-2">
-                        <Label htmlFor="ownerType">Owner Type</Label>
-                        <Select
-                          value={ownerType}
-                          onValueChange={(value) => setOwnerType(value as ProductOwnerType)}
-                        >
-                          <SelectTrigger id="ownerType">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="brand">Brand</SelectItem>
-                            <SelectItem value="venue">Venue</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          {ownerType === 'venue'
-                            ? 'Venue products: bookings, spaces, services'
-                            : 'Brand products: physical items, tickets'}
-                        </p>
-                      </div>
-                    )}
+                  <div className="space-y-2">
+                    <Label htmlFor="productType">
+                      Product Type <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={productType}
+                      onValueChange={(value) => {
+                        setProductType(value as ProductType);
+                        if (value === 'variable') {
+                          setIsVariableProduct(true);
+                        } else {
+                          setIsVariableProduct(false);
+                        }
+                      }}
+                      required
+                    >
+                      <SelectTrigger id="productType">
+                        <SelectValue placeholder="Select product type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple Product</SelectItem>
+                        <SelectItem value="variable">Variable Product</SelectItem>
+                        <SelectItem value="event">Event</SelectItem>
+                        <SelectItem value="workshop">Workshop</SelectItem>
+                        {profile?.is_venue && (
+                          <>
+                            <SelectItem value="space">Space</SelectItem>
+                            <SelectItem value="booking">Booking</SelectItem>
+                            <SelectItem value="service">Service</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 
@@ -499,11 +475,17 @@ export default function ProductForm() {
                   />
                 </div>
 
-                {/* Product Type Selection for Physical Products */}
-                {productClass === 'physical' && (
+                {/* Product Type Selection for Simple/Variable Products */}
+                {productType === 'simple' || productType === 'variable' ? (
                   <div className="space-y-2">
-                    <Label>Product Type</Label>
-                    <Select value={productType} onValueChange={(value: 'simple' | 'variable') => setProductType(value)}>
+                    <Label>Product Variant Type</Label>
+                    <Select 
+                      value={isVariableProduct ? 'variable' : 'simple'} 
+                      onValueChange={(value: 'simple' | 'variable') => {
+                        setIsVariableProduct(value === 'variable');
+                        setProductType(value);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -516,10 +498,10 @@ export default function ProductForm() {
                       Simple: One price. Variable: Multiple options (size, color, etc.)
                     </p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Variable Product Management */}
-                {productClass === 'physical' && productType === 'variable' && (
+                {productType === 'variable' && isVariableProduct && (
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
                     <div className="flex items-center justify-between">
                       <Label>Product Variables</Label>

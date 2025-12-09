@@ -4,12 +4,12 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { Product, ProductOwnerType, ProductClass, Profile } from '@/lib/types';
+import { Product, ProductOwnerType, ProductType, Profile } from '@/lib/types';
 
 export interface CreateProductData {
   name: string;
   slug?: string;
-  product_class: ProductClass;
+  product_type: ProductType;
   owner_type?: ProductOwnerType; // Auto-determined if not provided
   short_description?: string;
   full_description?: string;
@@ -54,15 +54,15 @@ function validateProductData(
     return { valid: false, error: 'Product name is required' };
   }
 
-  // Product class is required
-  if (!data.product_class) {
-    return { valid: false, error: 'Product class is required' };
+  // Product type is required
+  if (!data.product_type) {
+    return { valid: false, error: 'Product type is required' };
   }
 
-  // Validate product class
-  const validClasses: ProductClass[] = ['physical', 'ticket', 'booking', 'service', 'space'];
-  if (!validClasses.includes(data.product_class)) {
-    return { valid: false, error: 'Invalid product class' };
+  // Validate product type
+  const validTypes: ProductType[] = ['simple', 'variable', 'event', 'workshop', 'space', 'booking', 'service', 'ticket'];
+  if (!validTypes.includes(data.product_type)) {
+    return { valid: false, error: 'Invalid product type' };
   }
 
   // Validate owner_type
@@ -131,8 +131,7 @@ export async function createProduct(
       brand_user_id: profile.id, // Required legacy field
       owner_type: ownerType,
       owner_user_id: profile.id,
-      product_class: data.product_class,
-      product_type: (data as any).product_type || 'simple', // Default to simple if not specified
+      product_type: data.product_type,
       name: data.name.trim(),
       slug: data.slug,
       short_description: data.short_description || null,
@@ -218,8 +217,7 @@ export async function updateProduct(
     }
 
     if (data.slug !== undefined) updateData.slug = data.slug;
-    if (data.product_class !== undefined) updateData.product_class = data.product_class;
-    if ((data as any).product_type !== undefined) updateData.product_type = (data as any).product_type;
+    if (data.product_type !== undefined) updateData.product_type = data.product_type;
     if (data.short_description !== undefined) updateData.short_description = data.short_description || null;
     if (data.full_description !== undefined) updateData.full_description = data.full_description || null;
     if (data.category !== undefined) updateData.category = data.category || null;

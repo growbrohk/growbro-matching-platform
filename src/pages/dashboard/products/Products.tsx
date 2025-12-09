@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getMyProducts, deleteProduct } from '@/lib/api/products';
 import { getProductVariations } from '@/lib/api/variable-products';
-import { Product, PRODUCT_CLASS_LABELS, PRODUCT_CLASS_COLORS } from '@/lib/types';
+import { Product } from '@/lib/types';
 import { ProductVariation } from '@/lib/types/variable-products';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Loader2, Image as ImageIcon, ChevronDown, ChevronRight, Package } from 'lucide-react';
@@ -407,8 +407,6 @@ function ProductTable({
           <TableHead className="w-[50px]"></TableHead>
           <TableHead className="w-[80px]">Image</TableHead>
           <TableHead>Name</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Class</TableHead>
           <TableHead>Price</TableHead>
           <TableHead>Stock</TableHead>
           <TableHead>Status</TableHead>
@@ -455,19 +453,6 @@ function ProductTable({
                   )}
                 </TableCell>
                 <TableCell className="font-medium">{product.name}</TableCell>
-                <TableCell>
-                  <Badge variant={isVariable ? 'default' : 'outline'}>
-                    {isVariable ? 'Variable' : 'Simple'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={PRODUCT_CLASS_COLORS[product.product_class]}
-                  >
-                    {PRODUCT_CLASS_LABELS[product.product_class]}
-                  </Badge>
-                </TableCell>
                 <TableCell>
                   {formatPrice(product.price_in_cents || 0, product.currency)}
                 </TableCell>
@@ -520,7 +505,7 @@ function ProductTable({
               </TableRow>
               {isVariable && isExpanded && variations.length > 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="bg-muted/30">
+                  <TableCell colSpan={7} className="bg-muted/30">
                     <div className="py-4 pl-8">
                       <h4 className="font-medium mb-3 text-sm">Variations</h4>
                       <div className="space-y-2">

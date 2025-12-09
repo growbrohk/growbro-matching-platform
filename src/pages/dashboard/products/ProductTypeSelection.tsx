@@ -49,7 +49,7 @@ const VENUE_PRODUCT_TYPES: ProductTypeOption[] = [
     label: 'Venue Rental',
     description: 'Rent out your venue space for events',
     icon: Building2,
-    product_class: 'space',
+    product_type: 'space',
     owner_type: 'venue',
   },
   {
@@ -57,7 +57,7 @@ const VENUE_PRODUCT_TYPES: ProductTypeOption[] = [
     label: 'Poster Space',
     description: 'Wall space for posters and marketing materials',
     icon: Image,
-    product_class: 'space',
+    product_type: 'space',
     owner_type: 'venue',
   },
   {
@@ -65,7 +65,7 @@ const VENUE_PRODUCT_TYPES: ProductTypeOption[] = [
     label: 'Consignment Space',
     description: 'Shelf or display space for consignment products',
     icon: ShoppingBag,
-    product_class: 'space',
+    product_type: 'space',
     owner_type: 'venue',
   },
   {
@@ -73,7 +73,7 @@ const VENUE_PRODUCT_TYPES: ProductTypeOption[] = [
     label: 'Cup Sleeve',
     description: 'Cup sleeve marketing space',
     icon: Coffee,
-    product_class: 'space',
+    product_type: 'space',
     owner_type: 'venue',
   },
 ];
@@ -109,15 +109,15 @@ export default function ProductTypeSelection() {
   };
 
   const handleTypeSelect = (type: ProductTypeOption) => {
-    // If Event ticket, navigate to the new event ticketing form
-    if (type.product_class === 'ticket' || type.product_class === 'event_ticket') {
+    // If Event, navigate to the new event ticketing form
+    if (type.product_type === 'event') {
       navigate('/events/new');
       return;
     }
     
     // For other product types, navigate to product form with pre-filled type
     const params = new URLSearchParams({
-      product_class: type.product_class,
+      product_type: type.product_type,
       owner_type: type.owner_type,
       product_type_id: type.id,
     });

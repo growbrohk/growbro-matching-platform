@@ -3,7 +3,11 @@ export type CollabType = 'consignment' | 'event' | 'collab_product' | 'cup_sleev
 export type CollabStatus = 'pending' | 'accepted' | 'declined' | 'closed';
 export type VenueOptionType = 'event_slot' | 'shelf_space' | 'exhibition_period' | 'wall_space' | 'other';
 export type ProductOwnerType = 'brand' | 'venue';
+// ProductClass is deprecated - use product_type instead
+// Keeping for backward compatibility during migration
 export type ProductClass = 'physical' | 'ticket' | 'booking' | 'service' | 'space' | 'event_ticket';
+
+export type ProductType = 'simple' | 'variable' | 'event' | 'workshop' | 'space' | 'booking' | 'service' | 'ticket';
 
 export interface Profile {
   id: string;
@@ -33,8 +37,8 @@ export interface Product {
   // New unified ownership fields
   owner_type: ProductOwnerType;
   owner_user_id: string;
-  product_class: ProductClass;
-  product_type?: 'simple' | 'variable'; // Product type: simple or variable
+  product_class?: ProductClass; // Deprecated - use product_type instead
+  product_type: ProductType; // Product type: simple, variable, event, workshop, etc.
   name: string;
   slug?: string;
   short_description?: string;

@@ -219,7 +219,7 @@ export async function createOrUpdateEvent(
       brand_user_id: profile.id, // Required legacy field
       owner_type: 'brand' as const,
       owner_user_id: profile.id,
-      product_class: 'event_ticket' as const,
+      product_type: 'event' as const,
       name: eventData.name,
       slug: event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
       category: 'Event',

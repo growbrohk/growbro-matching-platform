@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { getMyProducts, deleteProduct } from '@/lib/api/products';
-import { Product, PRODUCT_CLASS_LABELS, PRODUCT_CLASS_COLORS } from '@/lib/types';
+import { Product } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Loader2, Image as ImageIcon } from 'lucide-react';
 import {
@@ -59,13 +59,13 @@ export default function Spaces() {
 
     setLoading(true);
     try {
-      // Fetch venue products with product_class IN ('space', 'booking')
+      // Fetch venue products with product_type IN ('space', 'booking')
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .eq('owner_user_id', profile.id)
         .eq('owner_type', 'venue')
-        .in('product_class', ['space', 'booking'])
+        .in('product_type', ['space', 'booking'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -211,9 +211,9 @@ export default function Spaces() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={PRODUCT_CLASS_COLORS[space.product_class]}
+                          className="bg-blue-100 text-blue-800"
                         >
-                          {PRODUCT_CLASS_LABELS[space.product_class]}
+                          {space.product_type === 'space' ? 'Space' : space.product_type === 'booking' ? 'Booking' : space.product_type}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-xs">
