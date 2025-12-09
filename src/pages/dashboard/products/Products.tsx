@@ -203,6 +203,8 @@ export default function Products() {
       return allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
     } else if (activeTab === 'variable') {
       return allProducts.filter(p => p.product_type === 'variable');
+    } else if (activeTab === 'event') {
+      return allProducts.filter(p => p.product_type === 'event');
     }
     return allProducts;
   };
@@ -213,6 +215,7 @@ export default function Products() {
 
   const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
   const variableProducts = allProducts.filter(p => p.product_type === 'variable');
+  const eventProducts = allProducts.filter(p => p.product_type === 'event');
 
   if (loading) {
     return (
@@ -248,6 +251,7 @@ export default function Products() {
               <TabsList>
                 <TabsTrigger value="simple">Simple Products ({simpleProducts.length})</TabsTrigger>
                 <TabsTrigger value="variable">Variable Products ({variableProducts.length})</TabsTrigger>
+                <TabsTrigger value="event">Event Tickets ({eventProducts.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="simple" className="mt-6">
@@ -295,6 +299,45 @@ export default function Products() {
                     <ProductTable
                       products={variableProducts}
                       onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
+                      onDelete={(product) => {
+                        setProductToDelete(product);
+                        setDeleteDialogOpen(true);
+                      }}
+                      deletingId={deletingId}
+                      formatPrice={formatPrice}
+                      productStocks={productStocks}
+                      productVariations={productVariations}
+                      expandedProducts={expandedProducts}
+                      expandedColors={expandedColors}
+                      onToggleExpansion={toggleProductExpansion}
+                      onToggleColorExpansion={toggleColorExpansion}
+                    />
+                  )}
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value="event" className="mt-6">
+                <CardContent>
+                  {eventProducts.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground mb-4">No event tickets yet</p>
+                      <Button onClick={() => navigate('/events/new')}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Your First Event Ticket
+                      </Button>
+                    </div>
+                  ) : (
+                    <ProductTable
+                      products={eventProducts}
+                      onEdit={(product) => {
+                        // For event tickets, navigate to event edit page
+                        const eventId = (product as any).event_id;
+                        if (eventId) {
+                          navigate(`/events/${eventId}/edit`);
+                        } else {
+                          navigate(`/dashboard/products/${product.id}/edit`);
+                        }
+                      }}
                       onDelete={(product) => {
                         setProductToDelete(product);
                         setDeleteDialogOpen(true);
