@@ -87,35 +87,45 @@ export default function Inventory() {
         const productsWithInventory = productsData as unknown as ProductWithInventory[];
         setAllProducts(productsWithInventory);
         
-        // Fetch variations for variable products
+        // Fetch variations for variable products in parallel
+        const variableProducts = productsWithInventory.filter(p => p.product_type === 'variable');
         const variationsMap: Record<string, ProductVariation[]> = {};
         const variationInvMap: Record<string, Record<string, number>> = {};
         
-        for (const product of productsWithInventory) {
-          if (product.product_type === 'variable') {
-            const { data: varsData } = await getProductVariations(product.id);
-            if (varsData) {
-              variationsMap[product.id] = varsData;
-              
-              // Fetch inventory for each variation
-              for (const variation of varsData) {
-                const { data: invData } = await supabase
-                  .from('product_variation_inventory')
-                  .select('inventory_location_id, stock_quantity')
-                  .eq('product_variation_id', variation.id);
-                
-                if (invData) {
-                  if (!variationInvMap[variation.id]) {
-                    variationInvMap[variation.id] = {};
-                  }
-                  invData.forEach((inv) => {
-                    variationInvMap[variation.id][inv.inventory_location_id] = inv.stock_quantity || 0;
-                  });
-                }
+        // Batch fetch all variations in parallel
+        const variationPromises = variableProducts.map(async (product) => {
+          const { data: varsData } = await getProductVariations(product.id);
+          return { productId: product.id, varsData: varsData || [] };
+        });
+        
+        const variationResults = await Promise.all(variationPromises);
+        
+        // Collect all variation IDs for batch inventory fetch
+        const allVariationIds: string[] = [];
+        variationResults.forEach(({ productId, varsData }) => {
+          if (varsData.length > 0) {
+            variationsMap[productId] = varsData;
+            varsData.forEach(v => allVariationIds.push(v.id));
+          }
+        });
+        
+        // Batch fetch all variation inventory in one query
+        if (allVariationIds.length > 0) {
+          const { data: allVariationInvData } = await supabase
+            .from('product_variation_inventory')
+            .select('product_variation_id, inventory_location_id, stock_quantity')
+            .in('product_variation_id', allVariationIds);
+          
+          if (allVariationInvData) {
+            allVariationInvData.forEach((inv) => {
+              if (!variationInvMap[inv.product_variation_id]) {
+                variationInvMap[inv.product_variation_id] = {};
               }
-            }
+              variationInvMap[inv.product_variation_id][inv.inventory_location_id] = inv.stock_quantity || 0;
+            });
           }
         }
+        
         setProductVariations(variationsMap);
         setVariationInventory(variationInvMap);
       }

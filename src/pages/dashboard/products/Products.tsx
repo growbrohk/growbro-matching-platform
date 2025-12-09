@@ -98,29 +98,50 @@ export default function Products() {
     const stocks: Record<string, number> = {};
     const variations: Record<string, ProductVariation[]> = {};
 
-    for (const product of products) {
-      if (product.product_type === 'variable') {
-        // Fetch variations for variable products
-        const { data: varsData } = await getProductVariations(product.id);
-        if (varsData) {
-          variations[product.id] = varsData;
-          // Calculate total stock from all variations
-          stocks[product.id] = varsData.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
-        }
-      } else {
-        // Fetch stock from product_inventory for simple products
-        const { data: inventoryData } = await supabase
-          .from('product_inventory')
-          .select('stock_quantity')
-          .eq('product_id', product.id);
+    // Separate products by type
+    const variableProducts = products.filter(p => p.product_type === 'variable');
+    const simpleProducts = products.filter(p => p.product_type !== 'variable');
 
-        if (inventoryData) {
-          stocks[product.id] = inventoryData.reduce((sum, inv) => sum + (inv.stock_quantity || 0), 0);
-        } else {
-          stocks[product.id] = 0;
-        }
-      }
+    // Batch fetch all variations for variable products in parallel
+    const variationPromises = variableProducts.map(async (product) => {
+      const { data: varsData } = await getProductVariations(product.id);
+      return { productId: product.id, varsData: varsData || [] };
+    });
+
+    // Batch fetch all inventory for simple products in one query
+    const simpleProductIds = simpleProducts.map(p => p.id);
+    let simpleInventoryData: any[] = [];
+    if (simpleProductIds.length > 0) {
+      const { data } = await supabase
+        .from('product_inventory')
+        .select('product_id, stock_quantity')
+        .in('product_id', simpleProductIds);
+      simpleInventoryData = data || [];
     }
+
+    // Process simple products inventory
+    simpleProducts.forEach((product) => {
+      const inventoryItems = simpleInventoryData.filter(inv => inv.product_id === product.id);
+      stocks[product.id] = inventoryItems.reduce((sum, inv) => sum + (inv.stock_quantity || 0), 0);
+    });
+
+    // Process variable products variations (in parallel)
+    const variationResults = await Promise.all(variationPromises);
+    variationResults.forEach(({ productId, varsData }) => {
+      if (varsData.length > 0) {
+        variations[productId] = varsData;
+        stocks[productId] = varsData.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
+      } else {
+        stocks[productId] = 0;
+      }
+    });
+
+    // Set default stock to 0 for products without inventory
+    products.forEach((product) => {
+      if (stocks[product.id] === undefined) {
+        stocks[product.id] = 0;
+      }
+    });
 
     setProductStocks(stocks);
     setProductVariations(variations);
