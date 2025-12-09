@@ -9,8 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package, Plus, Save, Warehouse, Store } from 'lucide-react';
+import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { Product } from '@/lib/types';
+import { ProductVariation } from '@/lib/types/variable-products';
+import { getProductVariations, updateVariationInventory } from '@/lib/api/variable-products';
+import { VariableInventoryView } from './VariableInventoryView';
 
 interface ProductInventory {
   id: string;
@@ -27,7 +31,7 @@ interface ProductInventory {
   };
 }
 
-interface InventoryLocation {
+export interface InventoryLocation {
   id: string;
   type: string;
   name: string;
@@ -35,17 +39,13 @@ interface InventoryLocation {
   is_active: boolean;
 }
 
-interface ProductWithInventory {
-  id: string;
-  name: string;
-  thumbnail_url?: string;
-  owner_type: string;
+export interface ProductWithInventory extends Product {
   product_inventory: (ProductInventory & { inventory_location: InventoryLocation })[];
 }
 
 export default function Inventory() {
   const { profile } = useAuth();
-  const [brandProducts, setBrandProducts] = useState<ProductWithInventory[]>([]);
+  const [allProducts, setAllProducts] = useState<ProductWithInventory[]>([]);
   const [venueInventory, setVenueInventory] = useState<ProductInventory[]>([]);
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +55,11 @@ export default function Inventory() {
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [addLocationOpen, setAddLocationOpen] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [productVariations, setProductVariations] = useState<Record<string, ProductVariation[]>>({});
+  const [variationInventory, setVariationInventory] = useState<Record<string, Record<string, number>>>({}); // Format: {variationId: {locationId: stock}}
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState('simple');
 
   useEffect(() => {
     if (profile) {
@@ -79,7 +84,40 @@ export default function Inventory() {
 
       if (productsError) throw productsError;
       if (productsData) {
-        setBrandProducts(productsData as unknown as ProductWithInventory[]);
+        const productsWithInventory = productsData as unknown as ProductWithInventory[];
+        setAllProducts(productsWithInventory);
+        
+        // Fetch variations for variable products
+        const variationsMap: Record<string, ProductVariation[]> = {};
+        const variationInvMap: Record<string, Record<string, number>> = {};
+        
+        for (const product of productsWithInventory) {
+          if (product.product_type === 'variable') {
+            const { data: varsData } = await getProductVariations(product.id);
+            if (varsData) {
+              variationsMap[product.id] = varsData;
+              
+              // Fetch inventory for each variation
+              for (const variation of varsData) {
+                const { data: invData } = await supabase
+                  .from('product_variation_inventory')
+                  .select('inventory_location_id, stock_quantity')
+                  .eq('product_variation_id', variation.id);
+                
+                if (invData) {
+                  if (!variationInvMap[variation.id]) {
+                    variationInvMap[variation.id] = {};
+                  }
+                  invData.forEach((inv) => {
+                    variationInvMap[variation.id][inv.inventory_location_id] = inv.stock_quantity || 0;
+                  });
+                }
+              }
+            }
+          }
+        }
+        setProductVariations(variationsMap);
+        setVariationInventory(variationInvMap);
       }
 
       // Fetch all active locations
@@ -137,30 +175,69 @@ export default function Inventory() {
     }
   }
 
-  async function updateStock(productId: string, locationId: string, quantity: number) {
+  async function updateStock(productId: string, locationId: string, quantity: number, variationId?: string) {
     if (!profile) return;
 
-    setSaving(`${productId}-${locationId}`);
+    const savingKey = variationId ? `${variationId}-${locationId}` : `${productId}-${locationId}`;
+    setSaving(savingKey);
 
-    const { error } = await supabase
-      .from('product_inventory')
-      .upsert(
-        {
-          product_id: productId,
-          inventory_location_id: locationId,
-          stock_quantity: quantity,
-        },
-        { onConflict: 'product_id,inventory_location_id' }
-      );
+    if (variationId) {
+      // Update variation inventory using the API
+      const { error } = await updateVariationInventory(variationId, locationId, quantity, 0);
 
-    if (error) {
-      toast.error('Failed to update stock');
+      if (error) {
+        toast.error('Failed to update variation stock');
+      } else {
+        toast.success('Variation stock updated');
+        fetchData();
+      }
     } else {
-      toast.success('Stock updated');
-      fetchData();
+      // Update simple product inventory
+      const { error } = await supabase
+        .from('product_inventory')
+        .upsert(
+          {
+            product_id: productId,
+            inventory_location_id: locationId,
+            stock_quantity: quantity,
+          },
+          { onConflict: 'product_id,inventory_location_id' }
+        );
+
+      if (error) {
+        toast.error('Failed to update stock');
+      } else {
+        toast.success('Stock updated');
+        fetchData();
+      }
     }
     setSaving(null);
   }
+
+  const toggleProductExpansion = (productId: string) => {
+    const newExpanded = new Set(expandedProducts);
+    if (newExpanded.has(productId)) {
+      newExpanded.delete(productId);
+    } else {
+      newExpanded.add(productId);
+    }
+    setExpandedProducts(newExpanded);
+  };
+
+  const toggleColorExpansion = (productId: string, color: string) => {
+    const key = `${productId}-${color}`;
+    const newExpanded = new Set(expandedColors);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedColors(newExpanded);
+  };
+
+  const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
+  const variableProducts = allProducts.filter(p => p.product_type === 'variable');
+  const eventProducts = allProducts.filter(p => p.product_type === 'event');
 
   async function addProductToLocation() {
     if (!selectedProduct || !selectedLocationId || !profile) return;
@@ -197,34 +274,82 @@ export default function Inventory() {
 
   return (
     <Layout>
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-between mb-6">
+      <div className="container mx-auto py-4 md:py-8 px-4">
+        <div className="flex items-center justify-between mb-4 md:mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Inventory</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold">Inventory</h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-1">
               Manage product inventory across locations
             </p>
           </div>
         </div>
 
         <Card>
-          <CardHeader>
-            <Tabs defaultValue="brand" className="w-full">
-              <TabsList>
-                <TabsTrigger value="brand">
-                  Brand Inventory ({brandProducts.length} products)
-                </TabsTrigger>
-                {profile?.is_venue && (
-                  <TabsTrigger value="venue">
-                    Venue Inventory ({venueInventory.length} items)
+          <CardHeader className="pb-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <TabsList className="inline-flex w-full md:w-auto min-w-max">
+                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0">
+                    Simple Products ({simpleProducts.length})
                   </TabsTrigger>
-                )}
-              </TabsList>
+                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0">
+                    Variable Products ({variableProducts.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">
+                    Event Tickets ({eventProducts.length})
+                  </TabsTrigger>
+                  {profile?.is_venue && (
+                    <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0">
+                      Venue Inventory ({venueInventory.length})
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
 
-              <TabsContent value="brand" className="mt-6">
-                <CardContent>
+              <TabsContent value="simple" className="mt-6">
+                <CardContent className="p-2 md:p-6">
                   <BrandInventoryView
-                    products={brandProducts}
+                    products={simpleProducts}
+                    locations={locations}
+                    onUpdateStock={updateStock}
+                    saving={saving}
+                    onCreateWarehouse={createWarehouse}
+                    newWarehouseName={newWarehouseName}
+                    setNewWarehouseName={setNewWarehouseName}
+                    newWarehouseOpen={newWarehouseOpen}
+                    setNewWarehouseOpen={setNewWarehouseOpen}
+                    onAddProductToLocation={addProductToLocation}
+                    addLocationOpen={addLocationOpen}
+                    setAddLocationOpen={setAddLocationOpen}
+                    selectedProduct={selectedProduct}
+                    setSelectedProduct={setSelectedProduct}
+                    selectedLocationId={selectedLocationId}
+                    setSelectedLocationId={setSelectedLocationId}
+                  />
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value="variable" className="mt-6">
+                <CardContent className="p-2 md:p-6">
+                  <VariableInventoryView
+                    products={variableProducts}
+                    locations={locations}
+                    onUpdateStock={updateStock}
+                    saving={saving}
+                    productVariations={productVariations}
+                    variationInventory={variationInventory}
+                    expandedProducts={expandedProducts}
+                    expandedColors={expandedColors}
+                    onToggleExpansion={toggleProductExpansion}
+                    onToggleColorExpansion={toggleColorExpansion}
+                  />
+                </CardContent>
+              </TabsContent>
+
+              <TabsContent value="event" className="mt-6">
+                <CardContent className="p-2 md:p-6">
+                  <BrandInventoryView
+                    products={eventProducts}
                     locations={locations}
                     onUpdateStock={updateStock}
                     saving={saving}
@@ -246,7 +371,7 @@ export default function Inventory() {
 
               {profile?.is_venue && (
                 <TabsContent value="venue" className="mt-6">
-                  <CardContent>
+                  <CardContent className="p-2 md:p-6">
                     <VenueInventoryView inventory={venueInventory} />
                   </CardContent>
                 </TabsContent>
@@ -300,15 +425,16 @@ function BrandInventoryView({
   const warehouses = locations.filter((loc) => loc.type === 'warehouse');
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Brand Product Inventory</h2>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-0">
+        <h2 className="text-lg md:text-xl font-semibold">Product Inventory</h2>
         <div className="flex gap-2">
           <Dialog open={newWarehouseOpen} onOpenChange={setNewWarehouseOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
-                <Warehouse className="mr-2 h-4 w-4" />
-                New Warehouse
+              <Button variant="outline" size="sm" className="text-xs md:text-sm">
+                <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                <span className="hidden sm:inline">New Warehouse</span>
+                <span className="sm:hidden">Warehouse</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -334,63 +460,67 @@ function BrandInventoryView({
       </div>
 
       {products.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No products with inventory yet</p>
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">No products with inventory yet</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3 md:space-y-4">
           {products.map((product) => (
-            <Card key={product.id}>
-              <CardHeader>
-                <div className="flex items-center gap-3">
+            <Card key={product.id} className="border">
+              <CardHeader className="p-3 md:p-6">
+                <div className="flex items-center gap-2 md:gap-3">
                   {product.thumbnail_url ? (
                     <img
                       src={product.thumbnail_url}
                       alt={product.name}
-                      className="w-12 h-12 object-cover rounded"
+                      className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                      <Package className="h-6 w-6 text-muted-foreground" />
+                    <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                      <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
                     </div>
                   )}
-                  <div>
-                    <CardTitle className="text-lg">{product.name}</CardTitle>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-sm md:text-lg truncate">{product.name}</CardTitle>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {warehouses.map((warehouse) => {
-                    const inventory = product.product_inventory?.find(
-                      (inv) => inv.inventory_location_id === warehouse.id
-                    );
-                    const stock = inventory?.stock_quantity || 0;
-                    const key = `${product.id}-${warehouse.id}`;
+              <CardContent className="p-3 md:p-6 pt-0">
+                <div className="space-y-2 md:space-y-4">
+                  {warehouses.length === 0 ? (
+                    <p className="text-xs md:text-sm text-muted-foreground">No warehouses available</p>
+                  ) : (
+                    warehouses.map((warehouse) => {
+                      const inventory = product.product_inventory?.find(
+                        (inv) => inv.inventory_location_id === warehouse.id
+                      );
+                      const stock = inventory?.stock_quantity || 0;
+                      const key = `${product.id}-${warehouse.id}`;
 
-                    return (
-                      <div key={warehouse.id} className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Warehouse className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{warehouse.name}</span>
+                      return (
+                        <div key={warehouse.id} className="flex items-center gap-2 md:gap-4 py-1 md:py-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 md:gap-2">
+                              <Warehouse className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
+                              <span className="font-medium text-xs md:text-sm truncate">{warehouse.name}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+                            <Input
+                              type="number"
+                              value={stock}
+                              onChange={(e) =>
+                                onUpdateStock(product.id, warehouse.id, parseInt(e.target.value) || 0)
+                              }
+                              className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
+                              disabled={saving === key}
+                            />
+                            <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            value={stock}
-                            onChange={(e) =>
-                              onUpdateStock(product.id, warehouse.id, parseInt(e.target.value) || 0)
-                            }
-                            className="w-24"
-                            disabled={saving === key}
-                          />
-                          <span className="text-sm text-muted-foreground">units</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -409,42 +539,42 @@ interface VenueInventoryViewProps {
 function VenueInventoryView({ inventory }: VenueInventoryViewProps) {
   if (inventory.length === 0) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">No inventory at your venue yet</p>
+      <div className="text-center py-8 md:py-12">
+        <p className="text-sm md:text-base text-muted-foreground">No inventory at your venue yet</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Venue Inventory</h2>
-      <div className="space-y-4">
+    <div className="space-y-3 md:space-y-4">
+      <h2 className="text-lg md:text-xl font-semibold">Venue Inventory</h2>
+      <div className="space-y-2 md:space-y-4">
         {inventory.map((item) => (
-          <Card key={item.id}>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+          <Card key={item.id} className="border">
+            <CardContent className="p-3 md:p-6">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                   {item.products?.thumbnail_url ? (
                     <img
                       src={item.products.thumbnail_url}
                       alt={item.products.name}
-                      className="w-12 h-12 object-cover rounded"
+                      className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-muted rounded flex items-center justify-center">
-                      <Package className="h-6 w-6 text-muted-foreground" />
+                    <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                      <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
                     </div>
                   )}
-                  <div>
-                    <p className="font-medium">{item.products?.name || 'Unknown Product'}</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-xs md:text-sm truncate">{item.products?.name || 'Unknown Product'}</p>
+                    <p className="text-[10px] md:text-sm text-muted-foreground truncate">
                       {item.inventory_location?.name || 'Unknown Location'}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold">{item.stock_quantity}</p>
-                  <p className="text-xs text-muted-foreground">in stock</p>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-semibold text-sm md:text-base">{item.stock_quantity}</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">in stock</p>
                 </div>
               </div>
             </CardContent>
