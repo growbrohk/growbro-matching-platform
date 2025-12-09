@@ -17,9 +17,7 @@ import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import Shop from "./pages/Shop";
 import ShopProduct from "./pages/ShopProduct";
-import BrandInventory from "./pages/BrandInventory";
-import VenueInventory from "./pages/VenueInventory";
-import Products from "./pages/dashboard/products/Products";
+import DashboardProducts from "./pages/dashboard/products/Products";
 import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
 import Inventory from "./pages/dashboard/inventory/Inventory";
@@ -85,7 +83,7 @@ function AppRoutes() {
       <Route path="/collabs" element={<ProtectedRoute><Collabs /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
       {/* Unified Product Management Routes */}
-      <Route path="/dashboard/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/dashboard/products" element={<ProtectedRoute><DashboardProducts /></ProtectedRoute>} />
       <Route path="/dashboard/products/select-type" element={<ProtectedRoute><ProductTypeSelection /></ProtectedRoute>} />
       <Route path="/dashboard/products/new" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
       <Route path="/dashboard/products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
@@ -98,8 +96,8 @@ function AppRoutes() {
       <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
       <Route path="/events/:id/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
       {/* Legacy routes - redirect to new unified routes */}
-      <Route path="/dashboard/products/brand" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-      <Route path="/dashboard/products/venue" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/dashboard/products/brand" element={<ProtectedRoute><DashboardProducts /></ProtectedRoute>} />
+      <Route path="/dashboard/products/venue" element={<ProtectedRoute><DashboardProducts /></ProtectedRoute>} />
       <Route path="/dashboard/brand/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       <Route path="/dashboard/venue/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       {/* Public webstore routes */}
