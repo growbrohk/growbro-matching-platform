@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createProduct, updateProduct, getProductById, generateSlug } from '@/lib/api/products';
+import { saveProductVariables, getProductVariables, generateVariations, saveProductVariations } from '@/lib/api/variable-products';
 import { Product, ProductOwnerType, ProductClass, CollabType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Save, Plus, Trash2, X } from 'lucide-react';
@@ -147,6 +148,22 @@ export default function ProductForm() {
       setIsPurchasable(data.is_purchasable ?? true);
       setIsPublic(data.is_public ?? true);
       setIsActive(data.is_active ?? true);
+
+      // Load variable product data if it's a physical product
+      if (data.product_class === 'physical') {
+        const { data: variablesData, error: varsError } = await getProductVariables(id);
+        if (!varsError && variablesData && variablesData.length > 0) {
+          setProductType('variable');
+          setVariables(
+            variablesData.map((v) => ({
+              name: v.name,
+              values: v.values.map((val) => val.value),
+            }))
+          );
+        } else {
+          setProductType('simple');
+        }
+      }
       setSuitableCollabTypes(data.suitable_collab_types || []);
       setMarginNotes(data.margin_notes || '');
       setInventoryNotes(data.inventory_notes || '');
@@ -242,23 +259,58 @@ export default function ProductForm() {
         inventory_notes: inventoryNotes.trim() || undefined,
       };
 
+      let savedProduct;
       if (isEditMode && id) {
         const { data, error } = await updateProduct({ ...productData, id }, profile);
         if (error) throw error;
+        savedProduct = data;
         toast({
           title: 'Success',
           description: 'Product updated successfully',
         });
-        navigate('/dashboard/products');
       } else {
         const { data, error } = await createProduct(productData, profile);
         if (error) throw error;
+        savedProduct = data;
         toast({
           title: 'Success',
           description: 'Product created successfully',
         });
-        navigate('/dashboard/products');
       }
+
+      // Save variable product data if it's a variable product
+      if (productClass === 'physical' && productType === 'variable' && savedProduct && variables.length > 0) {
+        // Save variables and values
+        const { error: varsError } = await saveProductVariables(savedProduct.id, variables);
+        if (varsError) {
+          toast({
+            title: 'Warning',
+            description: 'Product saved but failed to save variables: ' + varsError.message,
+            variant: 'destructive',
+          });
+        } else {
+          // Generate and save variations
+          const { data: savedVariables } = await getProductVariables(savedProduct.id);
+          if (savedVariables && savedVariables.length > 0) {
+            const combinations = generateVariations(savedVariables);
+            const variations = combinations.map((attrs) => ({
+              attributes: attrs,
+              stock_quantity: 0,
+              is_active: true,
+            }));
+            const { error: variationsError } = await saveProductVariations(savedProduct.id, variations);
+            if (variationsError) {
+              toast({
+                title: 'Warning',
+                description: 'Variables saved but failed to generate variations: ' + variationsError.message,
+                variant: 'destructive',
+              });
+            }
+          }
+        }
+      }
+
+      navigate('/dashboard/products');
     } catch (error: any) {
       toast({
         title: 'Error',
