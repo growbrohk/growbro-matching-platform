@@ -4,15 +4,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ProductClass, ProductOwnerType } from '@/lib/types';
-import { ArrowLeft, Package, Ticket, Calendar, Building2, Image, ShoppingBag, Coffee } from 'lucide-react';
+import { ProductType, ProductOwnerType } from '@/lib/types';
+import { ArrowLeft, Package, Ticket, Building2, Image, ShoppingBag, Coffee } from 'lucide-react';
 
 interface ProductTypeOption {
   id: string;
   label: string;
   description: string;
   icon: React.ElementType;
-  product_class: ProductClass;
+  product_type: ProductType;
   owner_type: ProductOwnerType;
 }
 
@@ -22,23 +22,15 @@ const BRAND_PRODUCT_TYPES: ProductTypeOption[] = [
     label: 'Product',
     description: 'Physical variable product with inventory (merchandise, items, etc.)',
     icon: Package,
-    product_class: 'physical',
+    product_type: 'variable', // Default to variable, user can choose simple/variable in form
     owner_type: 'brand',
   },
   {
-    id: 'ticket',
-    label: 'Event',
-    description: 'Event ticket or admission pass',
+    id: 'event-tickets',
+    label: 'Event Tickets',
+    description: 'Event tickets, workshops, classes, or admission passes',
     icon: Ticket,
-    product_class: 'ticket',
-    owner_type: 'brand',
-  },
-  {
-    id: 'booking',
-    label: 'Workshop',
-    description: 'Bookable workshop, class, or service session',
-    icon: Calendar,
-    product_class: 'booking',
+    product_type: 'event',
     owner_type: 'brand',
   },
 ];
@@ -109,8 +101,8 @@ export default function ProductTypeSelection() {
   };
 
   const handleTypeSelect = (type: ProductTypeOption) => {
-    // If Event, navigate to the new event ticketing form
-    if (type.product_type === 'event') {
+    // If Event Tickets, navigate to the new event ticketing form
+    if (type.product_type === 'event' || type.id === 'event-tickets') {
       navigate('/events/new');
       return;
     }
@@ -150,7 +142,7 @@ export default function ProductTypeSelection() {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Create a product for your brand (physical items, events, workshops)
+                  Create a product for your brand (physical items, event tickets)
                 </CardDescription>
               </CardContent>
             </Card>
