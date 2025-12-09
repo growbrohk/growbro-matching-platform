@@ -47,6 +47,7 @@ export default function ProductForm() {
   const [slug, setSlug] = useState('');
   const [productClass, setProductClass] = useState<ProductClass | ''>('');
   const [ownerType, setOwnerType] = useState<ProductOwnerType>('brand');
+  const [productTypeId, setProductTypeId] = useState<string>('');
   const [shortDescription, setShortDescription] = useState('');
   const [fullDescription, setFullDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -63,16 +64,52 @@ export default function ProductForm() {
   const isEditMode = !!id;
 
   useEffect(() => {
-    // Set owner_type from URL param if provided
-    const ownerTypeParam = searchParams.get('owner_type') as ProductOwnerType;
-    if (ownerTypeParam && (ownerTypeParam === 'brand' || ownerTypeParam === 'venue')) {
-      setOwnerType(ownerTypeParam);
-    }
+    // If creating new product, check if product_class and owner_type are provided
+    // If not, redirect to type selection
+    if (!id) {
+      const productClassParam = searchParams.get('product_class') as ProductClass;
+      const ownerTypeParam = searchParams.get('owner_type') as ProductOwnerType;
+      const productTypeIdParam = searchParams.get('product_type_id');
 
-    if (id && profile) {
+      if (!productClassParam || !ownerTypeParam) {
+        // Redirect to type selection
+        const redirectParams = new URLSearchParams();
+        if (ownerTypeParam) redirectParams.set('owner_type', ownerTypeParam);
+        navigate(`/dashboard/products/select-type?${redirectParams.toString()}`);
+        return;
+      }
+
+      // Set from URL params
+      setProductClass(productClassParam);
+      setOwnerType(ownerTypeParam);
+      if (productTypeIdParam) {
+        setProductTypeId(productTypeIdParam);
+      }
+
+      // Set defaults based on product type
+      if (productClassParam === 'ticket') {
+        setIsPurchasable(true);
+        setIsPublic(true);
+        setCategory('Event');
+      } else if (productClassParam === 'booking') {
+        setIsPurchasable(true);
+        setCategory('Workshop');
+      } else if (productClassParam === 'space' && ownerTypeParam === 'venue') {
+        // Venue products
+        if (productTypeIdParam === 'poster-space') {
+          setCategory('Poster Space');
+        } else if (productTypeIdParam === 'consignment-space') {
+          setCategory('Consignment Space');
+        } else if (productTypeIdParam === 'cup-sleeve') {
+          setCategory('Cup Sleeve');
+        } else if (productTypeIdParam === 'venue-rental') {
+          setCategory('Venue Rental');
+        }
+      }
+    } else if (id && profile) {
       loadProduct();
     }
-  }, [id, profile, searchParams]);
+  }, [id, profile, searchParams, navigate]);
 
   const loadProduct = async () => {
     if (!id || !profile) return;
@@ -258,9 +295,15 @@ export default function ProductForm() {
           <p className="text-muted-foreground mt-1">
             {isEditMode
               ? 'Update your product information'
-              : ownerType === 'venue'
-                ? 'Create a new venue product (booking, space, service)'
-                : 'Create a new brand product'}
+              : productClass === 'physical'
+                ? 'Create a new physical product'
+                : productClass === 'ticket'
+                  ? 'Create a new event ticket'
+                  : productClass === 'booking'
+                    ? 'Create a new workshop or bookable service'
+                    : ownerType === 'venue'
+                      ? 'Create a new venue offering'
+                      : 'Create a new product'}
           </p>
         </div>
 
@@ -299,55 +342,88 @@ export default function ProductForm() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="productClass">
-                      Product Class <span className="text-destructive">*</span>
-                    </Label>
-                    <Select
-                      value={productClass}
-                      onValueChange={(value) => setProductClass(value as ProductClass)}
-                      required
-                    >
-                      <SelectTrigger id="productClass">
-                        <SelectValue placeholder="Select product class" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRODUCT_CLASSES.map((pc) => (
-                          <SelectItem key={pc.value} value={pc.value}>
-                            <div>
-                              <div className="font-medium">{pc.label}</div>
-                              <div className="text-xs text-muted-foreground">{pc.description}</div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {profile?.is_venue && (
+                {/* Product Class and Owner Type - Read-only when creating (pre-selected) */}
+                {!isEditMode ? (
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="ownerType">Owner Type</Label>
+                      <Label>Product Type</Label>
+                      <div className="p-3 bg-muted rounded-md">
+                        <div className="font-medium">
+                          {productClass === 'physical' && 'Product (Physical)'}
+                          {productClass === 'ticket' && 'Event (Ticket)'}
+                          {productClass === 'booking' && 'Workshop (Booking)'}
+                          {productClass === 'space' && ownerType === 'venue' && (
+                            <>
+                              {productTypeId === 'venue-rental' && 'Venue Rental'}
+                              {productTypeId === 'poster-space' && 'Poster Space'}
+                              {productTypeId === 'consignment-space' && 'Consignment Space'}
+                              {productTypeId === 'cup-sleeve' && 'Cup Sleeve'}
+                            </>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {PRODUCT_CLASSES.find((pc) => pc.value === productClass)?.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Owner Type</Label>
+                      <div className="p-3 bg-muted rounded-md">
+                        <div className="font-medium capitalize">{ownerType}</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="productClass">
+                        Product Class <span className="text-destructive">*</span>
+                      </Label>
                       <Select
-                        value={ownerType}
-                        onValueChange={(value) => setOwnerType(value as ProductOwnerType)}
+                        value={productClass}
+                        onValueChange={(value) => setProductClass(value as ProductClass)}
+                        required
                       >
-                        <SelectTrigger id="ownerType">
-                          <SelectValue />
+                        <SelectTrigger id="productClass">
+                          <SelectValue placeholder="Select product class" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="brand">Brand</SelectItem>
-                          <SelectItem value="venue">Venue</SelectItem>
+                          {PRODUCT_CLASSES.map((pc) => (
+                            <SelectItem key={pc.value} value={pc.value}>
+                              <div>
+                                <div className="font-medium">{pc.label}</div>
+                                <div className="text-xs text-muted-foreground">{pc.description}</div>
+                              </div>
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {ownerType === 'venue'
-                          ? 'Venue products: bookings, spaces, services'
-                          : 'Brand products: physical items, tickets'}
-                      </p>
                     </div>
-                  )}
-                </div>
+
+                    {profile?.is_venue && (
+                      <div className="space-y-2">
+                        <Label htmlFor="ownerType">Owner Type</Label>
+                        <Select
+                          value={ownerType}
+                          onValueChange={(value) => setOwnerType(value as ProductOwnerType)}
+                        >
+                          <SelectTrigger id="ownerType">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="brand">Brand</SelectItem>
+                            <SelectItem value="venue">Venue</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {ownerType === 'venue'
+                            ? 'Venue products: bookings, spaces, services'
+                            : 'Brand products: physical items, tickets'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="shortDescription">Short Description</Label>

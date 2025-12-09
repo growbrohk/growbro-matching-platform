@@ -135,7 +135,7 @@ export default function VenueProducts() {
               Manage your venue offerings (bookings, spaces, services)
             </p>
           </div>
-          <Button onClick={() => navigate('/dashboard/products/new?owner_type=venue')}>
+          <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=venue')}>
             <Plus className="mr-2 h-4 w-4" />
             New Venue Product
           </Button>
@@ -149,7 +149,7 @@ export default function VenueProducts() {
             {products.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No venue products yet</p>
-                <Button onClick={() => navigate('/dashboard/products/new?owner_type=venue')}>
+                <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=venue')}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Your First Venue Product
                 </Button>

@@ -446,7 +446,7 @@ export default function BrandProducts() {
               <Upload className="mr-2 h-4 w-4" />
               Import CSV
             </Button>
-            <Button onClick={() => navigate('/dashboard/products/new?owner_type=brand')}>
+            <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
               <Plus className="mr-2 h-4 w-4" />
               New Product
             </Button>
@@ -461,7 +461,7 @@ export default function BrandProducts() {
             {products.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No products yet</p>
-                <Button onClick={() => navigate('/dashboard/products/new?owner_type=brand')}>
+                <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Your First Product
                 </Button>
