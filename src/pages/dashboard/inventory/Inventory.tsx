@@ -59,9 +59,11 @@ export default function Inventory() {
   const [variationInventory, setVariationInventory] = useState<Record<string, Record<string, number>>>({}); // Format: {variationId: {locationId: stock}}
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState('simple');
+  const [activeTab, setActiveTab] = useState('all'); // Default to 'all'
   // Edit mode state: {productId-locationId: {editing: boolean, tempValue: number}} or {variationId-locationId: {...}}
   const [editMode, setEditMode] = useState<Record<string, { editing: boolean; tempValue: number }>>({});
+  // Multi-select warehouse state
+  const [selectedWarehouses, setSelectedWarehouses] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     if (!profile) return;
@@ -307,6 +309,39 @@ export default function Inventory() {
   const eventProducts = allProducts.filter(p => p.product_type === 'event');
   const warehouses = locations.filter((loc) => loc.type === 'warehouse');
 
+  // Initialize selected warehouses to all warehouses on first load
+  useEffect(() => {
+    if (warehouses.length > 0 && selectedWarehouses.size === 0) {
+      setSelectedWarehouses(new Set(warehouses.map(w => w.id)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warehouses.length]);
+
+  const toggleWarehouseSelection = (warehouseId: string) => {
+    setSelectedWarehouses(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(warehouseId)) {
+        newSet.delete(warehouseId);
+      } else {
+        newSet.add(warehouseId);
+      }
+      return newSet;
+    });
+  };
+
+  const getCurrentProducts = () => {
+    if (activeTab === 'all') {
+      return allProducts;
+    } else if (activeTab === 'simple') {
+      return simpleProducts;
+    } else if (activeTab === 'variable') {
+      return variableProducts;
+    } else if (activeTab === 'event') {
+      return eventProducts;
+    }
+    return allProducts;
+  };
+
   async function addProductToLocation() {
     if (!selectedProduct || !selectedLocationId || !profile) return;
 
@@ -402,11 +437,39 @@ export default function Inventory() {
           </Dialog>
         </div>
 
+        {/* Warehouse Multi-Select - Outside Card */}
+        {warehouses.length > 0 && (
+          <div className="mb-4 md:mb-6">
+            <Label className="text-sm font-medium mb-2 block">Select Warehouses</Label>
+            <div className="flex flex-wrap gap-2">
+              {warehouses.map((warehouse) => {
+                const isSelected = selectedWarehouses.has(warehouse.id);
+                return (
+                  <Button
+                    key={warehouse.id}
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleWarehouseSelection(warehouse.id)}
+                    className="text-xs md:text-sm"
+                  >
+                    <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                    {warehouse.name}
+                    {isSelected && <Check className="ml-1 md:ml-2 h-3 w-3 md:h-4 md:w-4" />}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <Card>
           <CardHeader className="pb-0">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <TabsList className="inline-flex w-full md:w-auto min-w-max">
+                  <TabsTrigger value="all" className="whitespace-nowrap flex-shrink-0">
+                    All Products ({allProducts.length})
+                  </TabsTrigger>
                   <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0">
                     Simple Products ({simpleProducts.length})
                   </TabsTrigger>
@@ -416,11 +479,6 @@ export default function Inventory() {
                   <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">
                     Event Tickets ({eventProducts.length})
                   </TabsTrigger>
-                  {warehouses.map((warehouse) => (
-                    <TabsTrigger key={warehouse.id} value={`warehouse-${warehouse.id}`} className="whitespace-nowrap flex-shrink-0">
-                      {warehouse.name}
-                    </TabsTrigger>
-                  ))}
                   {profile?.is_venue && (
                     <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0">
                       Venue Inventory ({venueInventory.length})
@@ -429,11 +487,35 @@ export default function Inventory() {
                 </TabsList>
               </div>
 
+              <TabsContent value="all" className="mt-6">
+                <CardContent className="p-2 md:p-6">
+                  <BrandInventoryView
+                    products={getCurrentProducts()}
+                    locations={locations}
+                    selectedWarehouses={selectedWarehouses}
+                    onUpdateStock={updateStock}
+                    saving={saving}
+                    editMode={editMode}
+                    onStartEdit={handleStartEdit}
+                    onCancelEdit={handleCancelEdit}
+                    onConfirmEdit={handleConfirmEdit}
+                    onAddProductToLocation={addProductToLocation}
+                    addLocationOpen={addLocationOpen}
+                    setAddLocationOpen={setAddLocationOpen}
+                    selectedProduct={selectedProduct}
+                    setSelectedProduct={setSelectedProduct}
+                    selectedLocationId={selectedLocationId}
+                    setSelectedLocationId={setSelectedLocationId}
+                  />
+                </CardContent>
+              </TabsContent>
+
               <TabsContent value="simple" className="mt-6">
                 <CardContent className="p-2 md:p-6">
                   <BrandInventoryView
                     products={simpleProducts}
                     locations={locations}
+                    selectedWarehouses={selectedWarehouses}
                     onUpdateStock={updateStock}
                     saving={saving}
                     editMode={editMode}
@@ -456,6 +538,7 @@ export default function Inventory() {
                   <VariableInventoryView
                     products={variableProducts}
                     locations={locations}
+                    selectedWarehouses={selectedWarehouses}
                     onUpdateStock={updateStock}
                     saving={saving}
                     editMode={editMode}
@@ -477,6 +560,7 @@ export default function Inventory() {
                   <BrandInventoryView
                     products={eventProducts}
                     locations={locations}
+                    selectedWarehouses={selectedWarehouses}
                     onUpdateStock={updateStock}
                     saving={saving}
                     editMode={editMode}
@@ -493,24 +577,6 @@ export default function Inventory() {
                   />
                 </CardContent>
               </TabsContent>
-
-              {warehouses.map((warehouse) => (
-                <TabsContent key={warehouse.id} value={`warehouse-${warehouse.id}`} className="mt-6">
-                  <CardContent className="p-2 md:p-6">
-                    <WarehouseInventoryView
-                      warehouse={warehouse}
-                      products={allProducts}
-                      locations={locations}
-                      onUpdateStock={updateStock}
-                      saving={saving}
-                      editMode={editMode}
-                      onStartEdit={handleStartEdit}
-                      onCancelEdit={handleCancelEdit}
-                      onConfirmEdit={handleConfirmEdit}
-                    />
-                  </CardContent>
-                </TabsContent>
-              ))}
 
               {profile?.is_venue && (
                 <TabsContent value="venue" className="mt-6">
@@ -531,6 +597,7 @@ export default function Inventory() {
 interface BrandInventoryViewProps {
   products: ProductWithInventory[];
   locations: InventoryLocation[];
+  selectedWarehouses: Set<string>;
   onUpdateStock: (productId: string, locationId: string, quantity: number) => void;
   saving: string | null;
   editMode: Record<string, { editing: boolean; tempValue: number }>;
@@ -549,6 +616,7 @@ interface BrandInventoryViewProps {
 function BrandInventoryView({
   products,
   locations,
+  selectedWarehouses,
   onUpdateStock,
   saving,
   editMode,
@@ -563,7 +631,8 @@ function BrandInventoryView({
   selectedLocationId,
   setSelectedLocationId,
 }: BrandInventoryViewProps) {
-  const warehouses = locations.filter((loc) => loc.type === 'warehouse');
+  // Filter warehouses to only show selected ones
+  const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -649,7 +718,9 @@ function BrandInventoryView({
               </CardHeader>
               <CardContent className="p-3 md:p-6 pt-0">
                 <div className="space-y-2 md:space-y-4">
-                  {warehouses.length === 0 ? (
+                  {selectedWarehouses.size === 0 ? (
+                    <p className="text-xs md:text-sm text-muted-foreground">Please select at least one warehouse</p>
+                  ) : warehouses.length === 0 ? (
                     <p className="text-xs md:text-sm text-muted-foreground">No warehouses available</p>
                   ) : (
                     warehouses.map((warehouse) => {
@@ -736,141 +807,6 @@ function BrandInventoryView({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// Warehouse Inventory View Component
-interface WarehouseInventoryViewProps {
-  warehouse: InventoryLocation;
-  products: ProductWithInventory[];
-  locations: InventoryLocation[];
-  onUpdateStock: (productId: string, locationId: string, quantity: number) => void;
-  saving: string | null;
-  editMode: Record<string, { editing: boolean; tempValue: number }>;
-  onStartEdit: (key: string, currentValue: number) => void;
-  onCancelEdit: (key: string) => void;
-  onConfirmEdit: (key: string, productId: string, locationId: string) => void;
-}
-
-function WarehouseInventoryView({
-  warehouse,
-  products,
-  locations,
-  onUpdateStock,
-  saving,
-  editMode,
-  onStartEdit,
-  onCancelEdit,
-  onConfirmEdit,
-}: WarehouseInventoryViewProps) {
-  // Filter products that have inventory at this warehouse
-  const productsWithInventory = products.filter((product) =>
-    product.product_inventory?.some((inv) => inv.inventory_location_id === warehouse.id)
-  );
-
-  if (productsWithInventory.length === 0) {
-    return (
-      <div className="text-center py-8 md:py-12">
-        <p className="text-sm md:text-base text-muted-foreground">No products at this warehouse yet</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3 md:space-y-4">
-      <h2 className="text-lg md:text-xl font-semibold">{warehouse.name}</h2>
-      {productsWithInventory.map((product) => {
-        const inventory = product.product_inventory?.find(
-          (inv) => inv.inventory_location_id === warehouse.id
-        );
-        const stock = inventory?.stock_quantity || 0;
-        const key = `${product.id}-${warehouse.id}`;
-        const isEditing = editMode[key]?.editing || false;
-        const tempValue = editMode[key]?.tempValue ?? stock;
-
-        return (
-          <Card key={product.id} className="border">
-            <CardContent className="p-3 md:p-6">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                  {product.thumbnail_url ? (
-                    <img
-                      src={product.thumbnail_url}
-                      alt={product.name}
-                      className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                      <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-xs md:text-sm truncate">{product.name}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                  {isEditing ? (
-                    <>
-                      <Input
-                        type="number"
-                        value={tempValue}
-                        onChange={(e) => {
-                          const newValue = parseInt(e.target.value) || 0;
-                          onStartEdit(key, newValue);
-                        }}
-                        className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
-                        disabled={saving === key}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            onConfirmEdit(key, product.id, warehouse.id);
-                          } else if (e.key === 'Escape') {
-                            onCancelEdit(key);
-                          }
-                        }}
-                      />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onConfirmEdit(key, product.id, warehouse.id)}
-                        disabled={saving === key}
-                        className="h-7 w-7 md:h-8 md:w-8 p-0"
-                      >
-                        <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onCancelEdit(key)}
-                        disabled={saving === key}
-                        className="h-7 w-7 md:h-8 md:w-8 p-0"
-                      >
-                        <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
-                      <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStartEdit(key, stock);
-                        }}
-                        className="h-7 w-7 md:h-8 md:w-8 p-0"
-                      >
-                        <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
     </div>
   );
 }

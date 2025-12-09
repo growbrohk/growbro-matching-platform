@@ -9,6 +9,7 @@ import { ProductVariation } from '@/lib/types/variable-products';
 interface VariableInventoryViewProps {
   products: ProductWithInventory[];
   locations: InventoryLocation[];
+  selectedWarehouses: Set<string>;
   onUpdateStock: (productId: string, locationId: string, quantity: number, variationId?: string) => void;
   saving: string | null;
   editMode: Record<string, { editing: boolean; tempValue: number }>;
@@ -26,6 +27,7 @@ interface VariableInventoryViewProps {
 export function VariableInventoryView({
   products,
   locations,
+  selectedWarehouses,
   onUpdateStock,
   saving,
   editMode,
@@ -39,7 +41,8 @@ export function VariableInventoryView({
   onToggleExpansion,
   onToggleColorExpansion,
 }: VariableInventoryViewProps) {
-  const warehouses = locations.filter((loc) => loc.type === 'warehouse');
+  // Filter warehouses to only show selected ones
+  const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
 
   // Group variations by color
   const groupVariationsByColor = (variations: ProductVariation[]) => {
