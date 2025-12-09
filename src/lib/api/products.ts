@@ -128,6 +128,7 @@ export async function createProduct(
 
     // Prepare product data
     const productData: any = {
+      brand_user_id: profile.id, // Required legacy field
       owner_type: ownerType,
       owner_user_id: profile.id,
       product_class: data.product_class,

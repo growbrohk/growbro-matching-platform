@@ -216,6 +216,7 @@ export async function createOrUpdateEvent(
       .maybeSingle();
 
     const productData = {
+      brand_user_id: profile.id, // Required legacy field
       owner_type: 'brand' as const,
       owner_user_id: profile.id,
       product_class: 'event_ticket' as const,
@@ -229,6 +230,7 @@ export async function createOrUpdateEvent(
       is_purchasable: eventData.is_purchasable,
       is_public: eventData.is_public && eventData.visibility === 'public',
       is_active: eventData.is_active,
+      event_id: event.id, // Link to the event
     };
 
     if (existingProduct) {
@@ -241,10 +243,7 @@ export async function createOrUpdateEvent(
     } else {
       const { error: createProductError } = await supabase
         .from('products')
-        .insert({
-          ...productData,
-          event_id: event.id,
-        });
+        .insert(productData);
 
       if (createProductError) throw createProductError;
     }
