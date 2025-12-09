@@ -49,10 +49,89 @@ WHERE product_type IS NULL;
 ALTER TABLE public.products
   ALTER COLUMN product_type SET NOT NULL;
 
--- Step 5: Drop product_class column
+-- Step 5: Update RLS policies to use product_type instead of product_class
+-- Drop existing policies that reference product_class
+DROP POLICY IF EXISTS "Users can insert their own products" ON public.products;
+DROP POLICY IF EXISTS "Users can update their own products" ON public.products;
+DROP POLICY IF EXISTS "Users can view their own products" ON public.products;
+DROP POLICY IF EXISTS "Users can delete their own products" ON public.products;
+
+-- Recreate policies using product_type instead of product_class
+CREATE POLICY "Users can insert their own products"
+  ON public.products FOR INSERT
+  WITH CHECK (
+    -- Allow if owner_user_id matches current user (new unified system)
+    owner_user_id = auth.uid()
+    OR
+    -- Legacy support: brand_user_id matches current user
+    brand_user_id = auth.uid()
+    OR
+    -- Allow event ticket products if the event belongs to the user
+    (product_type = 'event' AND EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = products.event_id
+      AND events.brand_id = auth.uid()
+    ))
+  );
+
+CREATE POLICY "Users can update their own products"
+  ON public.products FOR UPDATE
+  USING (
+    -- Allow if owner_user_id matches current user (new unified system)
+    owner_user_id = auth.uid()
+    OR
+    -- Legacy support: brand_user_id matches current user
+    brand_user_id = auth.uid()
+    OR
+    -- Allow event ticket products if the event belongs to the user
+    (product_type = 'event' AND EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = products.event_id
+      AND events.brand_id = auth.uid()
+    ))
+  );
+
+CREATE POLICY "Users can view their own products"
+  ON public.products FOR SELECT
+  USING (
+    -- Public products are viewable by everyone
+    is_public = true
+    OR
+    -- Allow if owner_user_id matches current user (new unified system)
+    owner_user_id = auth.uid()
+    OR
+    -- Legacy support: brand_user_id matches current user
+    brand_user_id = auth.uid()
+    OR
+    -- Allow event ticket products if the event belongs to the user
+    (product_type = 'event' AND EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = products.event_id
+      AND events.brand_id = auth.uid()
+    ))
+  );
+
+CREATE POLICY "Users can delete their own products"
+  ON public.products FOR DELETE
+  USING (
+    -- Allow if owner_user_id matches current user (new unified system)
+    owner_user_id = auth.uid()
+    OR
+    -- Legacy support: brand_user_id matches current user
+    brand_user_id = auth.uid()
+    OR
+    -- Allow event ticket products if the event belongs to the user
+    (product_type = 'event' AND EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = products.event_id
+      AND events.brand_id = auth.uid()
+    ))
+  );
+
+-- Step 6: Drop product_class column (now safe since policies are updated)
 ALTER TABLE public.products
   DROP COLUMN IF EXISTS product_class;
 
--- Step 6: Update comment
+-- Step 7: Update comment
 COMMENT ON COLUMN public.products.product_type IS 'Product type: simple, variable, event, workshop, space, booking, service, or ticket';
 

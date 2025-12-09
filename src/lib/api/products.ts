@@ -127,10 +127,14 @@ export async function createProduct(
     }
 
     // Prepare product data
+    // Note: For brand products, brand_user_id = owner_user_id (enforced by constraint)
+    // For venue products, brand_user_id should point to the brand, owner_user_id points to the venue
+    // Currently, we set brand_user_id = profile.id for both, which works for brand products
+    // For venue products, this assumes the venue user is also the brand (which is true if is_venue = true)
     const productData: any = {
-      brand_user_id: profile.id, // Required legacy field
+      brand_user_id: profile.id, // For brand products, equals owner_user_id. For venue products, points to the brand.
       owner_type: ownerType,
-      owner_user_id: profile.id,
+      owner_user_id: ownerType === 'brand' ? profile.id : profile.id, // Points to the owner (brand or venue)
       product_type: data.product_type,
       name: data.name.trim(),
       slug: data.slug,

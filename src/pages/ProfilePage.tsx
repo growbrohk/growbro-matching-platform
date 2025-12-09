@@ -62,7 +62,8 @@ export default function ProfilePage() {
         const { data: productsData } = await supabase
           .from('products')
           .select('*')
-          .eq('brand_user_id', profileData.id)
+          .eq('owner_user_id', profileData.id)
+          .eq('owner_type', 'brand')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
 

@@ -216,9 +216,9 @@ export async function createOrUpdateEvent(
       .maybeSingle();
 
     const productData = {
-      brand_user_id: profile.id, // Required legacy field
+      brand_user_id: profile.id, // For brand products, equals owner_user_id (enforced by constraint)
       owner_type: 'brand' as const,
-      owner_user_id: profile.id,
+      owner_user_id: profile.id, // For brand products, equals brand_user_id
       product_type: 'event' as const,
       name: eventData.name,
       slug: event.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),

@@ -42,7 +42,8 @@ export default function BrandInventory() {
           *,
           product_inventory(*, inventory_location:inventory_locations(*))
         `)
-        .eq('brand_user_id', profile!.id),
+        .eq('owner_user_id', profile!.id)
+        .eq('owner_type', 'brand'),
       supabase
         .from('inventory_locations')
         .select('*')

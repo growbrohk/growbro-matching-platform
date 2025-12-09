@@ -61,7 +61,8 @@ export default function Products() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('brand_user_id', profile.id)
+        .eq('owner_user_id', profile.id)
+        .eq('owner_type', 'brand')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
