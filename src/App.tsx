@@ -24,6 +24,8 @@ import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
 import Inventory from "./pages/dashboard/inventory/Inventory";
 import Spaces from "./pages/dashboard/spaces/Spaces";
+import EventsList from "./pages/events/EventsList";
+import EventForm from "./pages/events/EventForm";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -91,6 +93,10 @@ function AppRoutes() {
       <Route path="/dashboard/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
       {/* Spaces Route (Venue only) */}
       <Route path="/dashboard/spaces" element={<ProtectedRoute><Spaces /></ProtectedRoute>} />
+      {/* Events Routes */}
+      <Route path="/events" element={<ProtectedRoute><EventsList /></ProtectedRoute>} />
+      <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
+      <Route path="/events/:id/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
       {/* Legacy routes - redirect to new unified routes */}
       <Route path="/dashboard/products/brand" element={<ProtectedRoute><Products /></ProtectedRoute>} />
       <Route path="/dashboard/products/venue" element={<ProtectedRoute><Products /></ProtectedRoute>} />

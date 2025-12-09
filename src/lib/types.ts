@@ -3,7 +3,7 @@ export type CollabType = 'consignment' | 'event' | 'collab_product' | 'cup_sleev
 export type CollabStatus = 'pending' | 'accepted' | 'declined' | 'closed';
 export type VenueOptionType = 'event_slot' | 'shelf_space' | 'exhibition_period' | 'wall_space' | 'other';
 export type ProductOwnerType = 'brand' | 'venue';
-export type ProductClass = 'physical' | 'ticket' | 'booking' | 'service' | 'space';
+export type ProductClass = 'physical' | 'ticket' | 'booking' | 'service' | 'space' | 'event_ticket';
 
 export interface Profile {
   id: string;
