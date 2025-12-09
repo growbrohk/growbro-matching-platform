@@ -246,13 +246,15 @@ export default function Products() {
         </div>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-0">
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList>
-                <TabsTrigger value="simple">Simple Products ({simpleProducts.length})</TabsTrigger>
-                <TabsTrigger value="variable">Variable Products ({variableProducts.length})</TabsTrigger>
-                <TabsTrigger value="event">Event Tickets ({eventProducts.length})</TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <TabsList className="inline-flex w-full md:w-auto min-w-max">
+                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0">Simple Products ({simpleProducts.length})</TabsTrigger>
+                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0">Variable Products ({variableProducts.length})</TabsTrigger>
+                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">Event Tickets ({eventProducts.length})</TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="simple" className="mt-6">
                 <CardContent>
