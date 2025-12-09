@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Layout } from '@/components/Layout';
@@ -55,46 +55,7 @@ export default function Products() {
   // Get active tab from URL or default to 'simple'
   const activeTab = searchParams.get('tab') || 'simple';
 
-  useEffect(() => {
-    if (profile) {
-      fetchProducts();
-    }
-  }, [profile]);
-
-  const fetchProducts = async () => {
-    if (!profile) return;
-
-    setLoading(true);
-    try {
-      // Fetch all products (brand and venue if user is venue)
-      const { data: brandData, error: brandError } = await getMyProducts(profile, 'brand');
-      if (brandError) throw brandError;
-
-      let allProductsData: Product[] = [...(brandData || [])];
-      
-      // Fetch venue products (only if user is venue)
-      if (profile.is_venue) {
-        const { data: venueProductsData, error: venueError } = await getMyProducts(profile, 'venue');
-        if (venueError) throw venueError;
-        allProductsData = [...allProductsData, ...(venueProductsData || [])];
-      }
-
-      setAllProducts(allProductsData);
-
-      // Fetch stock and variations for all products
-      await fetchProductStocksAndVariations(allProductsData);
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to load products',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProductStocksAndVariations = async (products: Product[]) => {
+  const fetchProductStocksAndVariations = useCallback(async (products: Product[]) => {
     const stocks: Record<string, number> = {};
     const variations: Record<string, ProductVariation[]> = {};
 
@@ -145,7 +106,46 @@ export default function Products() {
 
     setProductStocks(stocks);
     setProductVariations(variations);
-  };
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
+    if (!profile) return;
+
+    setLoading(true);
+    try {
+      // Fetch all products (brand and venue if user is venue)
+      const { data: brandData, error: brandError } = await getMyProducts(profile, 'brand');
+      if (brandError) throw brandError;
+
+      let allProductsData: Product[] = [...(brandData || [])];
+      
+      // Fetch venue products (only if user is venue)
+      if (profile.is_venue) {
+        const { data: venueProductsData, error: venueError } = await getMyProducts(profile, 'venue');
+        if (venueError) throw venueError;
+        allProductsData = [...allProductsData, ...(venueProductsData || [])];
+      }
+
+      setAllProducts(allProductsData);
+
+      // Fetch stock and variations for all products
+      await fetchProductStocksAndVariations(allProductsData);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to load products',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [profile, fetchProductStocksAndVariations, toast]);
+
+  useEffect(() => {
+    if (profile?.id) {
+      fetchProducts();
+    }
+  }, [profile?.id, fetchProducts]);
 
   const toggleProductExpansion = (productId: string) => {
     const newExpanded = new Set(expandedProducts);

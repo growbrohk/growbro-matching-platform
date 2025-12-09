@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Layout } from '@/components/Layout';
@@ -61,13 +61,7 @@ export default function Inventory() {
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('simple');
 
-  useEffect(() => {
-    if (profile) {
-      fetchData();
-    }
-  }, [profile]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     if (!profile) return;
 
     setLoading(true);
@@ -162,7 +156,13 @@ export default function Inventory() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile?.id) {
+      fetchData();
+    }
+  }, [profile?.id, fetchData]);
 
   async function createWarehouse() {
     if (!newWarehouseName.trim() || !profile) return;
