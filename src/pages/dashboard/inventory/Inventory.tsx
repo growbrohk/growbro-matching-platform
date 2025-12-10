@@ -276,12 +276,16 @@ export default function Inventory() {
 
       if (variationId) {
         // Update variation inventory using the API
-        const { error } = await updateVariationInventory(variationId, locationId, quantity, 0);
+        const { error, data: updatedData } = await updateVariationInventory(variationId, locationId, quantity, 0);
 
         if (error) {
           toast.error('Failed to update variation stock');
+          console.error('Update variation inventory error:', error);
         } else {
-          // Optimistically update local state immediately
+          // Use the returned data from upsert, or fall back to the quantity we sent
+          const finalQuantity = updatedData?.stock_quantity ?? quantity;
+          
+          // Update local state with the actual database value
           setVariationInventory(prev => {
             const newState = { ...prev };
             if (!newState[variationId]) {
@@ -289,20 +293,14 @@ export default function Inventory() {
             }
             newState[variationId] = {
               ...newState[variationId],
-              [locationId]: quantity
+              [locationId]: finalQuantity
             };
             return newState;
           });
 
           // Log the change
-          await logStockChange(productId, locationId, quantityBefore, quantity, variationId);
+          await logStockChange(productId, locationId, quantityBefore, finalQuantity, variationId);
           toast.success('Variation stock updated');
-          
-          // Refetch data in background to ensure consistency (without showing loading state)
-          fetchData(false).catch(err => {
-            console.error('Background data refresh failed:', err);
-            // If background refresh fails, the optimistic update is still visible
-          });
         }
       } else {
         // Update simple product inventory

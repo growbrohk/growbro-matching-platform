@@ -228,9 +228,9 @@ export async function updateVariationInventory(
   locationId: string,
   stockQuantity: number,
   reservedQuantity: number = 0
-): Promise<{ error: Error | null }> {
+): Promise<{ error: Error | null; data?: any }> {
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('product_variation_inventory')
       .upsert({
         variation_id: variationId,
@@ -239,12 +239,18 @@ export async function updateVariationInventory(
         reserved_quantity: reservedQuantity,
       }, {
         onConflict: 'variation_id,inventory_location_id'
-      });
+      })
+      .select()
+      .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('updateVariationInventory error:', error);
+      throw error;
+    }
 
-    return { error: null };
+    return { error: null, data };
   } catch (error: any) {
+    console.error('updateVariationInventory exception:', error);
     return { error: error as Error };
   }
 }
