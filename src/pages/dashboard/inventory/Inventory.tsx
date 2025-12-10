@@ -257,9 +257,14 @@ export default function Inventory() {
   }
 
   async function updateStock(productId: string, locationId: string, quantity: number, variationId?: string) {
-    if (!profile) return;
+    console.log('updateStock called:', { productId, locationId, quantity, variationId, profile: profile?.id });
+    if (!profile) {
+      console.error('No profile found, cannot update stock');
+      return;
+    }
 
     const savingKey = variationId ? `${variationId}-${locationId}` : `${productId}-${locationId}`;
+    console.log('Setting saving state:', savingKey);
     setSaving(savingKey);
 
     try {
@@ -279,11 +284,24 @@ export default function Inventory() {
         const { error, data: updatedData } = await updateVariationInventory(variationId, locationId, quantity, 0);
 
         if (error) {
-          toast.error('Failed to update variation stock');
+          toast.error(`Failed to update variation stock: ${error.message || 'Unknown error'}`);
           console.error('Update variation inventory error:', error);
+          // Revert optimistic update on error
+          setVariationInventory(prev => {
+            const newState = { ...prev };
+            if (newState[variationId]) {
+              newState[variationId] = {
+                ...newState[variationId],
+                [locationId]: quantityBefore // Revert to previous value
+              };
+            }
+            return newState;
+          });
         } else {
           // Use the returned data from upsert, or fall back to the quantity we sent
           const finalQuantity = updatedData?.stock_quantity ?? quantity;
+          
+          console.log('Stock updated successfully:', { variationId, locationId, finalQuantity, updatedData });
           
           // Update local state with the actual database value
           setVariationInventory(prev => {
@@ -436,10 +454,15 @@ export default function Inventory() {
   };
 
   const handleConfirmEdit = (key: string, productId: string, locationId: string, variationId?: string) => {
+    console.log('handleConfirmEdit called:', { key, productId, locationId, variationId });
     const editState = editMode[key];
-    if (!editState) return;
+    if (!editState) {
+      console.warn('No edit state found for key:', key);
+      return;
+    }
 
     const quantity = editState.tempValue;
+    console.log('Calling updateStock with:', { productId, locationId, quantity, variationId });
     updateStock(productId, locationId, quantity, variationId);
   };
 
