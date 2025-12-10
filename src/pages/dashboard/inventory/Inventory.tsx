@@ -142,15 +142,17 @@ export default function Inventory() {
       }
 
       // Fetch venue inventory (only if user is venue)
+      // Only show products where owner_type = 'venue'
       if (profile.is_venue) {
         const { data: venueInvData, error: venueInvError } = await supabase
           .from('product_inventory')
           .select(`
             *,
             inventory_location:inventory_locations(*),
-            products(id, name, thumbnail_url, owner_type)
+            products!inner(id, name, thumbnail_url, owner_type)
           `)
-          .eq('inventory_locations.venue_user_id', profile.id);
+          .eq('inventory_locations.venue_user_id', profile.id)
+          .eq('products.owner_type', 'venue');
 
         if (venueInvError) throw venueInvError;
         if (venueInvData) {
