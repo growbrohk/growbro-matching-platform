@@ -125,17 +125,35 @@ export default function Inventory() {
         
         // Batch fetch all variation inventory in one query
         if (allVariationIds.length > 0) {
-          const { data: allVariationInvData } = await supabase
-            .from('product_variation_inventory')
-            .select('product_variation_id, inventory_location_id, stock_quantity')
-            .in('product_variation_id', allVariationIds);
+          // Split into chunks to avoid URL length issues
+          const chunkSize = 100;
+          const chunks: string[][] = [];
+          for (let i = 0; i < allVariationIds.length; i += chunkSize) {
+            chunks.push(allVariationIds.slice(i, i + chunkSize));
+          }
           
-          if (allVariationInvData) {
+          const allVariationInvData: any[] = [];
+          for (const chunk of chunks) {
+            const { data, error } = await supabase
+              .from('product_variation_inventory')
+              .select('variation_id, inventory_location_id, stock_quantity')
+              .in('variation_id', chunk);
+            
+            if (error) {
+              console.error('Error fetching variation inventory:', error);
+              toast.error(`Failed to load some inventory data: ${error.message}`);
+            } else if (data) {
+              allVariationInvData.push(...data);
+            }
+          }
+          
+          if (allVariationInvData.length > 0) {
             allVariationInvData.forEach((inv) => {
-              if (!variationInvMap[inv.product_variation_id]) {
-                variationInvMap[inv.product_variation_id] = {};
+              const variationId = inv.variation_id || inv.product_variation_id; // Support both column names
+              if (!variationInvMap[variationId]) {
+                variationInvMap[variationId] = {};
               }
-              variationInvMap[inv.product_variation_id][inv.inventory_location_id] = inv.stock_quantity || 0;
+              variationInvMap[variationId][inv.inventory_location_id] = inv.stock_quantity || 0;
             });
           }
         }
