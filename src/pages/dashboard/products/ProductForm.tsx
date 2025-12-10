@@ -21,6 +21,7 @@ import { Product, ProductOwnerType, ProductType, CollabType } from '@/lib/types'
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Save, Plus, Trash2, X } from 'lucide-react';
 import { CollabChip } from '@/components/CollabChip';
+import { supabase } from '@/integrations/supabase/client';
 
 const COLLAB_TYPES: CollabType[] = ['consignment', 'event', 'collab_product', 'cup_sleeve_marketing'];
 
@@ -55,10 +56,16 @@ export default function ProductForm() {
   const [suitableCollabTypes, setSuitableCollabTypes] = useState<CollabType[]>([]);
   const [marginNotes, setMarginNotes] = useState('');
   const [inventoryNotes, setInventoryNotes] = useState('');
+  const [existingCategories, setExistingCategories] = useState<string[]>([]);
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const isEditMode = !!id;
 
   useEffect(() => {
+    // Fetch existing categories
+    fetchExistingCategories();
+    
     // If creating new product, check if product_type and owner_type are provided
     // If not, redirect to type selection
     if (!id) {
@@ -114,6 +121,31 @@ export default function ProductForm() {
     }
   }, [id, profile, searchParams, navigate]);
 
+  const fetchExistingCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('category')
+        .not('category', 'is', null)
+        .neq('category', '');
+
+      if (error) throw error;
+
+      // Extract unique categories
+      const uniqueCategories = Array.from(
+        new Set(
+          (data || [])
+            .map((p) => p.category)
+            .filter((cat): cat is string => typeof cat === 'string' && cat.trim() !== '')
+        )
+      ).sort();
+
+      setExistingCategories(uniqueCategories);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const loadProduct = async () => {
     if (!id || !profile) return;
 
@@ -138,7 +170,12 @@ export default function ProductForm() {
       setOwnerType(data.owner_type);
       setShortDescription(data.short_description || '');
       setFullDescription(data.full_description || '');
-      setCategory(data.category || '');
+      const productCategory = data.category || '';
+      setCategory(productCategory);
+      // If category exists but not in existingCategories, add it
+      if (productCategory && !existingCategories.includes(productCategory)) {
+        setExistingCategories((prev) => [...prev, productCategory].sort());
+      }
       setThumbnailUrl(data.thumbnail_url || '');
       // Convert cents to dollars for display
       setPriceInDollars(data.price_in_cents ? (data.price_in_cents / 100).toString() : '');
@@ -467,12 +504,83 @@ export default function ProductForm() {
 
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Input
-                    id="category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="e.g. Apparel, Drinkware, Snacks"
-                  />
+                  {!isCreatingNewCategory ? (
+                    <Select
+                      value={category || ''}
+                      onValueChange={(value) => {
+                        if (value === '__create_new__') {
+                          setIsCreatingNewCategory(true);
+                          setNewCategoryName('');
+                        } else {
+                          setCategory(value);
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="category">
+                        <SelectValue placeholder="Select or create a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {existingCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                        {/* Show current category if it's not in the list (for edit mode) */}
+                        {category && !existingCategories.includes(category) && (
+                          <SelectItem value={category}>
+                            {category}
+                          </SelectItem>
+                        )}
+                        <SelectItem value="__create_new__">
+                          <span className="flex items-center gap-2">
+                            <Plus className="h-4 w-4" />
+                            Create new Category
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        id="newCategory"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="Enter new category name"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (newCategoryName.trim()) {
+                              setCategory(newCategoryName.trim());
+                              setExistingCategories((prev) => {
+                                const updated = [...prev, newCategoryName.trim()].sort();
+                                return updated;
+                              });
+                            }
+                            setIsCreatingNewCategory(false);
+                            setNewCategoryName('');
+                          }}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsCreatingNewCategory(false);
+                            setNewCategoryName('');
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Product Type Selection for Simple/Variable Products */}
