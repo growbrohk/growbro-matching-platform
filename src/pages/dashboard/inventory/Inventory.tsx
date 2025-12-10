@@ -486,6 +486,98 @@ export default function Inventory() {
     updateStock(productId, locationId, quantity, variationId);
   };
 
+  // Global edit mode handlers
+  const handleStartGlobalEdit = () => {
+    setIsGlobalEditMode(true);
+    // Initialize all stock values in edit mode
+    const newEditMode: Record<string, { editing: boolean; tempValue: number }> = {};
+    
+    // For simple products
+    const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
+    const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
+    
+    simpleProducts.forEach((product) => {
+      warehouses.forEach((warehouse) => {
+        const inventory = product.product_inventory?.find(
+          (inv) => inv.inventory_location_id === warehouse.id
+        );
+        const stock = inventory?.stock_quantity || 0;
+        const key = `${product.id}-${warehouse.id}`;
+        newEditMode[key] = { editing: true, tempValue: stock };
+      });
+    });
+
+    // For variable products
+    Object.keys(productVariations).forEach((productId) => {
+      const variations = productVariations[productId];
+      warehouses.forEach((warehouse) => {
+        variations.forEach((variation) => {
+          const stock = variationInventory[variation.id]?.[warehouse.id] || 0;
+          const key = `${variation.id}-${warehouse.id}`;
+          newEditMode[key] = { editing: true, tempValue: stock };
+        });
+      });
+    });
+
+    setEditMode(newEditMode);
+  };
+
+  const handleCancelGlobalEdit = () => {
+    setIsGlobalEditMode(false);
+    setEditMode({});
+  };
+
+  const handleSaveAllChanges = async () => {
+    setIsGlobalEditMode(false);
+    
+    // Save all changes
+    const savePromises: Promise<void>[] = [];
+    
+    Object.entries(editMode).forEach(([key, editState]) => {
+      // Type guard for editState
+      if (!editState || typeof editState !== 'object' || !('tempValue' in editState)) {
+        return;
+      }
+      
+      const typedEditState = editState as { editing: boolean; tempValue: number };
+      
+      // Parse key to get productId/locationId or variationId/locationId
+      const parts = key.split('-');
+      if (parts.length >= 2) {
+        const firstId = parts[0];
+        const locationId = parts.slice(1).join('-'); // In case location ID has dashes
+        
+        // Check if this is a variation (check if firstId exists in variationInventory)
+        const isVariation = Object.keys(variationInventory).includes(firstId);
+        
+        if (isVariation) {
+          // Find the product ID for this variation
+          let productId = '';
+          for (const [pid, variations] of Object.entries(productVariations)) {
+            if (Array.isArray(variations) && variations.some((v: ProductVariation) => v.id === firstId)) {
+              productId = pid;
+              break;
+            }
+          }
+          if (productId) {
+            savePromises.push(updateStock(productId, locationId, typedEditState.tempValue, firstId));
+          }
+        } else {
+          // Simple product
+          const product = allProducts.find(p => p.id === firstId);
+          if (product) {
+            savePromises.push(updateStock(firstId, locationId, typedEditState.tempValue));
+          }
+        }
+      }
+    });
+
+    // Wait for all saves to complete
+    await Promise.all(savePromises);
+    setEditMode({});
+    toast.success('All stock changes saved');
+  };
+
   // CSV Export for inventory
   const handleExportCSV = (productType: 'all' | 'simple' | 'variable' | 'event') => {
     const productsToExport = productType === 'all' 
@@ -891,6 +983,9 @@ export default function Inventory() {
                         [key]: { editing: true, tempValue: value },
                       }));
                     }}
+                    onStartGlobalEdit={handleStartGlobalEdit}
+                    onCancelGlobalEdit={handleCancelGlobalEdit}
+                    onSaveAllChanges={handleSaveAllChanges}
                   />
                 </CardContent>
               </TabsContent>
@@ -936,6 +1031,9 @@ export default function Inventory() {
                         [key]: { editing: true, tempValue: value },
                       }));
                     }}
+                    onStartGlobalEdit={handleStartGlobalEdit}
+                    onCancelGlobalEdit={handleCancelGlobalEdit}
+                    onSaveAllChanges={handleSaveAllChanges}
                   />
                 </CardContent>
               </TabsContent>
@@ -1050,6 +1148,9 @@ interface BrandInventoryViewProps {
   onConfirmEdit: (key: string, productId: string, locationId: string) => void;
   isGlobalEditMode: boolean;
   onStockValueChange: (key: string, value: number) => void;
+  onStartGlobalEdit: () => void;
+  onCancelGlobalEdit: () => void;
+  onSaveAllChanges: () => Promise<void>;
 }
 
 function BrandInventoryView({
@@ -1064,6 +1165,9 @@ function BrandInventoryView({
   onConfirmEdit,
   isGlobalEditMode,
   onStockValueChange,
+  onStartGlobalEdit,
+  onCancelGlobalEdit,
+  onSaveAllChanges,
 }: BrandInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
@@ -1079,14 +1183,14 @@ function BrandInventoryView({
                 variant="outline" 
                 size="sm" 
                 className="text-xs md:text-sm"
-                onClick={handleCancelGlobalEdit}
+                onClick={onCancelGlobalEdit}
               >
                 Cancel
               </Button>
               <Button 
                 size="sm" 
                 className="text-xs md:text-sm"
-                onClick={handleSaveAllChanges}
+                onClick={onSaveAllChanges}
                 disabled={saving !== null}
               >
                 {saving ? (
@@ -1107,53 +1211,12 @@ function BrandInventoryView({
               variant="outline" 
               size="sm" 
               className="text-xs md:text-sm"
-              onClick={handleStartGlobalEdit}
+              onClick={onStartGlobalEdit}
             >
               <Edit2 className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
               Edit Stock
             </Button>
           )}
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Product to Location</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Product</Label>
-                  <Select value={selectedProduct || ''} onValueChange={setSelectedProduct}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                          {warehouse.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={onAddProductToLocation} className="w-full">
-                  Add
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
