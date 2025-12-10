@@ -1192,9 +1192,7 @@ function EventInventoryView({ products, eventDataMap, onCreateProduct }: EventIn
               <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Category</TableHead>
               <TableHead className="text-xs md:text-sm min-w-[120px] md:min-w-[150px]">Product</TableHead>
               <TableHead className="text-xs md:text-sm w-[150px] md:w-[200px]">Ticket Type</TableHead>
-              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Capacity</TableHead>
-              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Sold</TableHead>
-              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Remaining</TableHead>
+              <TableHead className="text-xs md:text-sm text-center w-[120px] md:w-[150px]">Quota</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1209,14 +1207,13 @@ function EventInventoryView({ products, eventDataMap, onCreateProduct }: EventIn
                     <TableCell className="text-xs md:text-sm font-medium">{product.name}</TableCell>
                     <TableCell className="text-xs md:text-sm text-muted-foreground">No ticket types</TableCell>
                     <TableCell className="text-center text-xs md:text-sm">-</TableCell>
-                    <TableCell className="text-center text-xs md:text-sm">-</TableCell>
-                    <TableCell className="text-center text-xs md:text-sm">-</TableCell>
                   </TableRow>
                 );
               }
 
               return ticketProducts.map((ticketProduct, index) => {
-                const sold = (ticketProduct.capacity_total || 0) - (ticketProduct.capacity_remaining || 0);
+                const remaining = ticketProduct.capacity_remaining || 0;
+                const total = ticketProduct.capacity_total || 0;
                 return (
                   <TableRow key={`${product.id}-${ticketProduct.id}`} className="border-b">
                     {index === 0 && (
@@ -1230,10 +1227,8 @@ function EventInventoryView({ products, eventDataMap, onCreateProduct }: EventIn
                       </>
                     )}
                     <TableCell className="text-xs md:text-sm">{ticketProduct.name}</TableCell>
-                    <TableCell className="text-center text-xs md:text-sm">{ticketProduct.capacity_total || 0}</TableCell>
-                    <TableCell className="text-center text-xs md:text-sm">{sold}</TableCell>
                     <TableCell className="text-center text-xs md:text-sm font-semibold">
-                      {ticketProduct.capacity_remaining || 0}
+                      {remaining} / {total}
                     </TableCell>
                   </TableRow>
                 );
