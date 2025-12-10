@@ -58,6 +58,7 @@ export default function Products() {
   const fetchProductStocksAndVariations = useCallback(async (products: Product[]) => {
     const stocks: Record<string, number> = {};
     const variations: Record<string, ProductVariation[]> = {};
+    const variationInventoryMap: Record<string, Record<string, number>> = {}; // {variationId: {locationId: stock}}
 
     // Separate products by type
     const variableProducts = products.filter(p => p.product_type === 'variable');
@@ -88,12 +89,49 @@ export default function Products() {
 
     // Process variable products variations (in parallel)
     const variationResults = await Promise.all(variationPromises);
+    
+    // Collect all variation IDs for batch inventory fetch
+    const allVariationIds: string[] = [];
     variationResults.forEach(({ productId, varsData }) => {
       if (varsData.length > 0) {
         variations[productId] = varsData;
-        stocks[productId] = varsData.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
+        varsData.forEach(v => allVariationIds.push(v.id));
       } else {
         stocks[productId] = 0;
+      }
+    });
+
+    // Batch fetch all variation inventory in one query
+    if (allVariationIds.length > 0) {
+      const { data: allVariationInvData } = await supabase
+        .from('product_variation_inventory')
+        .select('product_variation_id, inventory_location_id, stock_quantity')
+        .in('product_variation_id', allVariationIds);
+      
+      if (allVariationInvData) {
+        allVariationInvData.forEach((inv) => {
+          if (!variationInventoryMap[inv.product_variation_id]) {
+            variationInventoryMap[inv.product_variation_id] = {};
+          }
+          variationInventoryMap[inv.product_variation_id][inv.inventory_location_id] = inv.stock_quantity || 0;
+        });
+      }
+    }
+
+    // Calculate totals for variable products from actual inventory data
+    variationResults.forEach(({ productId, varsData }) => {
+      if (varsData.length > 0) {
+        // Update variations with calculated stock from inventory
+        const updatedVariations = varsData.map(variation => {
+          const locationStocks = variationInventoryMap[variation.id] || {};
+          const totalStock = Object.values(locationStocks).reduce((sum, stock) => sum + (stock || 0), 0);
+          return {
+            ...variation,
+            stock_quantity: totalStock // Override with actual inventory total
+          };
+        });
+        variations[productId] = updatedVariations;
+        stocks[productId] = updatedVariations.reduce((sum, v) => sum + (v.stock_quantity || 0), 0);
       }
     });
 
