@@ -653,83 +653,89 @@ export default function Inventory() {
               Manage product inventory across locations
             </p>
           </div>
-          <Dialog open={newWarehouseOpen} onOpenChange={setNewWarehouseOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs md:text-sm">
-                <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                <span className="hidden sm:inline">New Warehouse</span>
-                <span className="sm:hidden">Warehouse</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Warehouse</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Warehouse Name</Label>
-                  <Input
-                    value={newWarehouseName}
-                    onChange={(e) => setNewWarehouseName(e.target.value)}
-                    placeholder="Main Warehouse"
-                  />
-                </div>
-                <Button onClick={createWarehouse} className="w-full">
-                  Create
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
-
-        {/* Warehouse Multi-Select - Outside Card */}
-        {warehouses.length > 0 && (
-          <div className="mb-4 md:mb-6">
-            <Label className="text-sm font-medium mb-2 block">Select Warehouses</Label>
-            <div className="flex flex-wrap gap-2">
-              {warehouses.map((warehouse) => {
-                const isSelected = selectedWarehouses.has(warehouse.id);
-                return (
-                  <Button
-                    key={warehouse.id}
-                    variant={isSelected ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => toggleWarehouseSelection(warehouse.id)}
-                    className="text-xs md:text-sm"
-                  >
-                    <Warehouse className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                    {warehouse.name}
-                    {isSelected && <Check className="ml-1 md:ml-2 h-3 w-3 md:h-4 md:w-4" />}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <Card>
           <CardHeader className="pb-0 p-2 md:p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="overflow-x-auto -mx-2 px-2 md:-mx-6 md:px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <TabsList className="inline-flex w-full md:w-auto min-w-max h-8 md:h-10 gap-0.5 md:gap-1">
-                  <TabsTrigger value="all" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
-                    All ({allProducts.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
-                    Simple ({simpleProducts.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
-                    Variable ({variableProducts.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
-                    Event ({eventProducts.length})
-                  </TabsTrigger>
-                  {profile?.is_venue && (
-                    <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
-                      Venue ({venueInventory.length})
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-4 mb-4">
+                <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <TabsList className="inline-flex w-full md:w-auto min-w-max h-8 md:h-10 gap-0.5 md:gap-1">
+                    <TabsTrigger value="all" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                      All ({allProducts.length})
                     </TabsTrigger>
-                  )}
-                </TabsList>
+                    <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                      Simple ({simpleProducts.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                      Variable ({variableProducts.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                      Event ({eventProducts.length})
+                    </TabsTrigger>
+                    {profile?.is_venue && (
+                      <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                        Venue ({venueInventory.length})
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+                </div>
+                
+                {/* Warehouse Selection and New Warehouse Button - Only show in simple & variable tabs */}
+                {(activeTab === 'simple' || activeTab === 'variable') && (
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-3 w-full md:w-auto">
+                    {warehouses.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Label className="text-xs md:text-sm font-medium whitespace-nowrap">Select Warehouses:</Label>
+                        <div className="flex flex-wrap gap-1 md:gap-2">
+                          {warehouses.map((warehouse) => {
+                            const isSelected = selectedWarehouses.has(warehouse.id);
+                            return (
+                              <Button
+                                key={warehouse.id}
+                                variant={isSelected ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => toggleWarehouseSelection(warehouse.id)}
+                                className="text-[10px] md:text-xs h-6 md:h-7 px-2 md:px-3"
+                              >
+                                <Warehouse className="mr-1 h-3 w-3 md:h-3 md:w-3" />
+                                {warehouse.name}
+                                {isSelected && <Check className="ml-1 h-3 w-3 md:h-3 md:w-3" />}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <Dialog open={newWarehouseOpen} onOpenChange={setNewWarehouseOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-[10px] md:text-xs h-6 md:h-7 px-2 md:px-3">
+                          <Warehouse className="mr-1 h-3 w-3 md:h-3 md:w-3" />
+                          <span className="hidden sm:inline">New Warehouse</span>
+                          <span className="sm:hidden">New</span>
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Create Warehouse</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>Warehouse Name</Label>
+                            <Input
+                              value={newWarehouseName}
+                              onChange={(e) => setNewWarehouseName(e.target.value)}
+                              placeholder="Main Warehouse"
+                            />
+                          </div>
+                          <Button onClick={createWarehouse} className="w-full">
+                            Create
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
               </div>
 
               <TabsContent value="all" className="mt-6">
@@ -773,7 +779,6 @@ export default function Inventory() {
                     setSelectedProduct={setSelectedProduct}
                     selectedLocationId={selectedLocationId}
                     setSelectedLocationId={setSelectedLocationId}
-                    onCreateProduct={() => navigate('/dashboard/products/select-type?owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
@@ -819,7 +824,6 @@ export default function Inventory() {
                     setSelectedProduct={setSelectedProduct}
                     selectedLocationId={selectedLocationId}
                     setSelectedLocationId={setSelectedLocationId}
-                    onCreateProduct={() => navigate('/dashboard/products/new?product_type=simple&owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
@@ -864,7 +868,6 @@ export default function Inventory() {
                     expandedColors={expandedColors}
                     onToggleExpansion={toggleProductExpansion}
                     onToggleColorExpansion={toggleColorExpansion}
-                    onCreateProduct={() => navigate('/dashboard/products/new?product_type=variable&owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
@@ -896,7 +899,6 @@ export default function Inventory() {
                   <EventInventoryView
                     products={eventProducts}
                     eventDataMap={eventDataMap}
-                    onCreateProduct={() => navigate('/events/new')}
                   />
                 </CardContent>
               </TabsContent>
@@ -934,7 +936,6 @@ interface BrandInventoryViewProps {
   setSelectedProduct: (product: string | null) => void;
   selectedLocationId: string;
   setSelectedLocationId: (id: string) => void;
-  onCreateProduct?: () => void;
 }
 
 function BrandInventoryView({
@@ -954,7 +955,6 @@ function BrandInventoryView({
   setSelectedProduct,
   selectedLocationId,
   setSelectedLocationId,
-  onCreateProduct,
 }: BrandInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
@@ -964,13 +964,6 @@ function BrandInventoryView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-0">
         <h2 className="text-lg md:text-xl font-semibold">Product Inventory</h2>
         <div className="flex gap-2">
-          {onCreateProduct && (
-            <Button variant="outline" size="sm" onClick={onCreateProduct} className="text-xs md:text-sm">
-              <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden sm:inline">Create Product</span>
-              <span className="sm:hidden">Create</span>
-            </Button>
-          )}
           <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-xs md:text-sm">
@@ -1153,38 +1146,19 @@ function BrandInventoryView({
 interface EventInventoryViewProps {
   products: ProductWithInventory[];
   eventDataMap: Record<string, EventWithTicketProducts>;
-  onCreateProduct?: () => void;
 }
 
-function EventInventoryView({ products, eventDataMap, onCreateProduct }: EventInventoryViewProps) {
+function EventInventoryView({ products, eventDataMap }: EventInventoryViewProps) {
   if (products.length === 0) {
     return (
-      <div className="space-y-4">
-        {onCreateProduct && (
-          <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={onCreateProduct}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Event
-            </Button>
-          </div>
-        )}
-        <div className="text-center py-8 md:py-12">
-          <p className="text-sm md:text-base text-muted-foreground">No event products yet</p>
-        </div>
+      <div className="text-center py-8 md:py-12">
+        <p className="text-sm md:text-base text-muted-foreground">No event products yet</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {onCreateProduct && (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={onCreateProduct}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Event
-          </Button>
-        </div>
-      )}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>

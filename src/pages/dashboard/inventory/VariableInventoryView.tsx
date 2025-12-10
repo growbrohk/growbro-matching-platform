@@ -29,7 +29,6 @@ interface VariableInventoryViewProps {
   expandedColors: Set<string>;
   onToggleExpansion: (productId: string) => void;
   onToggleColorExpansion: (productId: string, color: string) => void;
-  onCreateProduct?: () => void;
 }
 
 export function VariableInventoryView({
@@ -48,7 +47,6 @@ export function VariableInventoryView({
   expandedColors,
   onToggleExpansion,
   onToggleColorExpansion,
-  onCreateProduct,
 }: VariableInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
@@ -78,18 +76,8 @@ export function VariableInventoryView({
 
   if (products.length === 0) {
     return (
-      <div className="space-y-4">
-        {onCreateProduct && (
-          <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={onCreateProduct}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Variable Product
-            </Button>
-          </div>
-        )}
-        <div className="text-center py-8 md:py-12">
-          <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
-        </div>
+      <div className="text-center py-8 md:py-12">
+        <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
       </div>
     );
   }
@@ -104,14 +92,6 @@ export function VariableInventoryView({
 
   return (
     <div className="space-y-4">
-      {onCreateProduct && (
-        <div className="flex justify-end">
-          <Button variant="outline" size="sm" onClick={onCreateProduct}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Variable Product
-          </Button>
-        </div>
-      )}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
