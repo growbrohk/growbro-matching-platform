@@ -72,6 +72,8 @@ export default function Inventory() {
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState('all'); // Default to 'all'
+  // Global edit mode - when true, all stocks are editable
+  const [isGlobalEditMode, setIsGlobalEditMode] = useState(false);
   // Edit mode state: {productId-locationId: {editing: boolean, tempValue: number}} or {variationId-locationId: {...}}
   const [editMode, setEditMode] = useState<Record<string, { editing: boolean; tempValue: number }>>({});
   // Multi-select warehouse state
@@ -882,13 +884,13 @@ export default function Inventory() {
                     onStartEdit={handleStartEdit}
                     onCancelEdit={handleCancelEdit}
                     onConfirmEdit={handleConfirmEdit}
-                    onAddProductToLocation={addProductToLocation}
-                    addLocationOpen={addLocationOpen}
-                    setAddLocationOpen={setAddLocationOpen}
-                    selectedProduct={selectedProduct}
-                    setSelectedProduct={setSelectedProduct}
-                    selectedLocationId={selectedLocationId}
-                    setSelectedLocationId={setSelectedLocationId}
+                    isGlobalEditMode={isGlobalEditMode}
+                    onStockValueChange={(key, value) => {
+                      setEditMode(prev => ({
+                        ...prev,
+                        [key]: { editing: true, tempValue: value },
+                      }));
+                    }}
                   />
                 </CardContent>
               </TabsContent>
@@ -927,13 +929,13 @@ export default function Inventory() {
                     onStartEdit={handleStartEdit}
                     onCancelEdit={handleCancelEdit}
                     onConfirmEdit={handleConfirmEdit}
-                    onAddProductToLocation={addProductToLocation}
-                    addLocationOpen={addLocationOpen}
-                    setAddLocationOpen={setAddLocationOpen}
-                    selectedProduct={selectedProduct}
-                    setSelectedProduct={setSelectedProduct}
-                    selectedLocationId={selectedLocationId}
-                    setSelectedLocationId={setSelectedLocationId}
+                    isGlobalEditMode={isGlobalEditMode}
+                    onStockValueChange={(key, value) => {
+                      setEditMode(prev => ({
+                        ...prev,
+                        [key]: { editing: true, tempValue: value },
+                      }));
+                    }}
                   />
                 </CardContent>
               </TabsContent>
@@ -978,6 +980,13 @@ export default function Inventory() {
                     expandedColors={expandedColors}
                     onToggleExpansion={toggleProductExpansion}
                     onToggleColorExpansion={toggleColorExpansion}
+                    isGlobalEditMode={isGlobalEditMode}
+                    onStockValueChange={(key, value) => {
+                      setEditMode(prev => ({
+                        ...prev,
+                        [key]: { editing: true, tempValue: value },
+                      }));
+                    }}
                   />
                 </CardContent>
               </TabsContent>
@@ -1039,13 +1048,8 @@ interface BrandInventoryViewProps {
   onStartEdit: (key: string, currentValue: number) => void;
   onCancelEdit: (key: string) => void;
   onConfirmEdit: (key: string, productId: string, locationId: string) => void;
-  onAddProductToLocation: () => void;
-  addLocationOpen: boolean;
-  setAddLocationOpen: (open: boolean) => void;
-  selectedProduct: string | null;
-  setSelectedProduct: (product: string | null) => void;
-  selectedLocationId: string;
-  setSelectedLocationId: (id: string) => void;
+  isGlobalEditMode: boolean;
+  onStockValueChange: (key: string, value: number) => void;
 }
 
 function BrandInventoryView({
@@ -1058,13 +1062,8 @@ function BrandInventoryView({
   onStartEdit,
   onCancelEdit,
   onConfirmEdit,
-  onAddProductToLocation,
-  addLocationOpen,
-  setAddLocationOpen,
-  selectedProduct,
-  setSelectedProduct,
-  selectedLocationId,
-  setSelectedLocationId,
+  isGlobalEditMode,
+  onStockValueChange,
 }: BrandInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
@@ -1074,13 +1073,46 @@ function BrandInventoryView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-0">
         <h2 className="text-lg md:text-xl font-semibold">Product Inventory</h2>
         <div className="flex gap-2">
-          <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs md:text-sm">
-                <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-                Add Product
+          {isGlobalEditMode ? (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs md:text-sm"
+                onClick={handleCancelGlobalEdit}
+              >
+                Cancel
               </Button>
-            </DialogTrigger>
+              <Button 
+                size="sm" 
+                className="text-xs md:text-sm"
+                onClick={handleSaveAllChanges}
+                disabled={saving !== null}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+                    Save
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-xs md:text-sm"
+              onClick={handleStartGlobalEdit}
+            >
+              <Edit2 className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              Edit Stock
+            </Button>
+          )}
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add Product to Location</DialogTitle>

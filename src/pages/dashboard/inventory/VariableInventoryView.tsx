@@ -29,6 +29,8 @@ interface VariableInventoryViewProps {
   expandedColors: Set<string>;
   onToggleExpansion: (productId: string) => void;
   onToggleColorExpansion: (productId: string, color: string) => void;
+  isGlobalEditMode: boolean;
+  onStockValueChange: (key: string, value: number) => void;
 }
 
 export function VariableInventoryView({
@@ -47,6 +49,8 @@ export function VariableInventoryView({
   expandedColors,
   onToggleExpansion,
   onToggleColorExpansion,
+  isGlobalEditMode,
+  onStockValueChange,
 }: VariableInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
