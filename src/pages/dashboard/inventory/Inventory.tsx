@@ -79,10 +79,12 @@ export default function Inventory() {
   // Event data with ticket products
   const [eventDataMap, setEventDataMap] = useState<Record<string, EventWithTicketProducts>>({});
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     if (!profile) return;
 
-    setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       // Fetch brand products with inventory (all users)
       const { data: productsData, error: productsError } = await supabase
@@ -193,7 +195,9 @@ export default function Inventory() {
     } catch (error: any) {
       toast.error(error.message || 'Failed to load inventory');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, [profile]);
 
@@ -277,10 +281,28 @@ export default function Inventory() {
         if (error) {
           toast.error('Failed to update variation stock');
         } else {
+          // Optimistically update local state immediately
+          setVariationInventory(prev => {
+            const newState = { ...prev };
+            if (!newState[variationId]) {
+              newState[variationId] = {};
+            }
+            newState[variationId] = {
+              ...newState[variationId],
+              [locationId]: quantity
+            };
+            return newState;
+          });
+
           // Log the change
           await logStockChange(productId, locationId, quantityBefore, quantity, variationId);
           toast.success('Variation stock updated');
-          fetchData();
+          
+          // Refetch data in background to ensure consistency (without showing loading state)
+          fetchData(false).catch(err => {
+            console.error('Background data refresh failed:', err);
+            // If background refresh fails, the optimistic update is still visible
+          });
         }
       } else {
         // Update simple product inventory
@@ -652,7 +674,7 @@ export default function Inventory() {
               continue;
             }
 
-            // Update variation inventory
+            // Update variation inventory using updateStock which handles state updates
             await updateStock(productId, warehouseId, stockQuantity, matchingVariation.id);
             successCount++;
           } else {

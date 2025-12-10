@@ -62,20 +62,29 @@ CREATE INDEX IF NOT EXISTS idx_product_variation_inventory_variation_id ON publi
 CREATE INDEX IF NOT EXISTS idx_product_variation_inventory_location_id ON public.product_variation_inventory(inventory_location_id);
 
 -- 6. Add updated_at trigger for product_variables
+-- First ensure the function exists
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER product_variables_updated_at
   BEFORE UPDATE ON public.product_variables
   FOR EACH ROW
-  EXECUTE FUNCTION update_events_updated_at();
+  EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER product_variations_updated_at
   BEFORE UPDATE ON public.product_variations
   FOR EACH ROW
-  EXECUTE FUNCTION update_events_updated_at();
+  EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER product_variation_inventory_updated_at
   BEFORE UPDATE ON public.product_variation_inventory
   FOR EACH ROW
-  EXECUTE FUNCTION update_events_updated_at();
+  EXECUTE FUNCTION update_updated_at_column();
 
 -- 7. RLS Policies for product_variables
 ALTER TABLE public.product_variables ENABLE ROW LEVEL SECURITY;
