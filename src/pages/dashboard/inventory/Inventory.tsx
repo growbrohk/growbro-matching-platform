@@ -23,6 +23,8 @@ import { toast } from 'sonner';
 import { Product } from '@/lib/types';
 import { ProductVariation } from '@/lib/types/variable-products';
 import { getProductVariations, updateVariationInventory } from '@/lib/api/variable-products';
+import { getEventWithTickets } from '@/lib/api/ticketing';
+import { EventWithTicketProducts, TicketProductRecord } from '@/lib/types/ticketing';
 import { VariableInventoryView } from './VariableInventoryView';
 
 interface ProductInventory {
@@ -74,6 +76,8 @@ export default function Inventory() {
   const [editMode, setEditMode] = useState<Record<string, { editing: boolean; tempValue: number }>>({});
   // Multi-select warehouse state
   const [selectedWarehouses, setSelectedWarehouses] = useState<Set<string>>(new Set());
+  // Event data with ticket products
+  const [eventDataMap, setEventDataMap] = useState<Record<string, EventWithTicketProducts>>({});
 
   const fetchData = useCallback(async () => {
     if (!profile) return;
@@ -136,6 +140,25 @@ export default function Inventory() {
         
         setProductVariations(variationsMap);
         setVariationInventory(variationInvMap);
+
+        // Fetch event data for event products
+        const eventProducts = productsWithInventory.filter(p => p.product_type === 'event');
+        const eventDataPromises = eventProducts.map(async (product) => {
+          const eventId = (product as any).event_id;
+          if (eventId && profile) {
+            const { data } = await getEventWithTickets(eventId, profile);
+            return { productId: product.id, eventData: data };
+          }
+          return { productId: product.id, eventData: null };
+        });
+        const eventDataResults = await Promise.all(eventDataPromises);
+        const eventMap: Record<string, EventWithTicketProducts> = {};
+        eventDataResults.forEach(({ productId, eventData }) => {
+          if (eventData) {
+            eventMap[productId] = eventData;
+          }
+        });
+        setEventDataMap(eventMap);
       }
 
       // Fetch all active locations
@@ -870,23 +893,9 @@ export default function Inventory() {
                       </label>
                     </div>
                   </div>
-                  <BrandInventoryView
+                  <EventInventoryView
                     products={eventProducts}
-                    locations={locations}
-                    selectedWarehouses={selectedWarehouses}
-                    onUpdateStock={updateStock}
-                    saving={saving}
-                    editMode={editMode}
-                    onStartEdit={handleStartEdit}
-                    onCancelEdit={handleCancelEdit}
-                    onConfirmEdit={handleConfirmEdit}
-                    onAddProductToLocation={addProductToLocation}
-                    addLocationOpen={addLocationOpen}
-                    setAddLocationOpen={setAddLocationOpen}
-                    selectedProduct={selectedProduct}
-                    setSelectedProduct={setSelectedProduct}
-                    selectedLocationId={selectedLocationId}
-                    setSelectedLocationId={setSelectedLocationId}
+                    eventDataMap={eventDataMap}
                     onCreateProduct={() => navigate('/events/new')}
                   />
                 </CardContent>
@@ -1136,6 +1145,103 @@ function BrandInventoryView({
           </Table>
         </div>
       )}
+    </div>
+  );
+}
+
+// Event Inventory View Component
+interface EventInventoryViewProps {
+  products: ProductWithInventory[];
+  eventDataMap: Record<string, EventWithTicketProducts>;
+  onCreateProduct?: () => void;
+}
+
+function EventInventoryView({ products, eventDataMap, onCreateProduct }: EventInventoryViewProps) {
+  if (products.length === 0) {
+    return (
+      <div className="space-y-4">
+        {onCreateProduct && (
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={onCreateProduct}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Event
+            </Button>
+          </div>
+        )}
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">No event products yet</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {onCreateProduct && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onCreateProduct}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Event
+          </Button>
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Category</TableHead>
+              <TableHead className="text-xs md:text-sm min-w-[120px] md:min-w-[150px]">Product</TableHead>
+              <TableHead className="text-xs md:text-sm w-[150px] md:w-[200px]">Ticket Type</TableHead>
+              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Capacity</TableHead>
+              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Sold</TableHead>
+              <TableHead className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">Remaining</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => {
+              const eventData = eventDataMap[product.id];
+              const ticketProducts = eventData?.ticket_products || [];
+
+              if (ticketProducts.length === 0) {
+                return (
+                  <TableRow key={product.id} className="border-b">
+                    <TableCell className="text-xs md:text-sm">Event</TableCell>
+                    <TableCell className="text-xs md:text-sm font-medium">{product.name}</TableCell>
+                    <TableCell className="text-xs md:text-sm text-muted-foreground">No ticket types</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm">-</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm">-</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm">-</TableCell>
+                  </TableRow>
+                );
+              }
+
+              return ticketProducts.map((ticketProduct, index) => {
+                const sold = (ticketProduct.capacity_total || 0) - (ticketProduct.capacity_remaining || 0);
+                return (
+                  <TableRow key={`${product.id}-${ticketProduct.id}`} className="border-b">
+                    {index === 0 && (
+                      <>
+                        <TableCell rowSpan={ticketProducts.length} className="text-xs md:text-sm align-top">
+                          Event
+                        </TableCell>
+                        <TableCell rowSpan={ticketProducts.length} className="text-xs md:text-sm font-medium align-top">
+                          {product.name}
+                        </TableCell>
+                      </>
+                    )}
+                    <TableCell className="text-xs md:text-sm">{ticketProduct.name}</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm">{ticketProduct.capacity_total || 0}</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm">{sold}</TableCell>
+                    <TableCell className="text-center text-xs md:text-sm font-semibold">
+                      {ticketProduct.capacity_remaining || 0}
+                    </TableCell>
+                  </TableRow>
+                );
+              });
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
