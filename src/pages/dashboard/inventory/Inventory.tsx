@@ -675,25 +675,25 @@ export default function Inventory() {
         )}
 
         <Card>
-          <CardHeader className="pb-0">
+          <CardHeader className="pb-0 p-2 md:p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <TabsList className="inline-flex w-full md:w-auto min-w-max">
-                  <TabsTrigger value="all" className="whitespace-nowrap flex-shrink-0">
-                    All Products ({allProducts.length})
+              <div className="overflow-x-auto -mx-2 px-2 md:-mx-6 md:px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <TabsList className="inline-flex w-full md:w-auto min-w-max h-8 md:h-10 gap-0.5 md:gap-1">
+                  <TabsTrigger value="all" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    All ({allProducts.length})
                   </TabsTrigger>
-                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0">
-                    Simple Products ({simpleProducts.length})
+                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Simple ({simpleProducts.length})
                   </TabsTrigger>
-                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0">
-                    Variable Products ({variableProducts.length})
+                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Variable ({variableProducts.length})
                   </TabsTrigger>
-                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">
-                    Event Tickets ({eventProducts.length})
+                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Event ({eventProducts.length})
                   </TabsTrigger>
                   {profile?.is_venue && (
-                    <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0">
-                      Venue Inventory ({venueInventory.length})
+                    <TabsTrigger value="venue" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                      Venue ({venueInventory.length})
                     </TabsTrigger>
                   )}
                 </TabsList>

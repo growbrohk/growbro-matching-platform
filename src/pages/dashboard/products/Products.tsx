@@ -267,13 +267,19 @@ export default function Products() {
         </div>
 
         <Card>
-          <CardHeader className="pb-0">
+          <CardHeader className="pb-0 p-2 md:p-6">
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <div className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <TabsList className="inline-flex w-full md:w-auto min-w-max">
-                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0">Simple Products ({simpleProducts.length})</TabsTrigger>
-                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0">Variable Products ({variableProducts.length})</TabsTrigger>
-                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0">Event Tickets ({eventProducts.length})</TabsTrigger>
+              <div className="overflow-x-auto -mx-2 px-2 md:-mx-6 md:px-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <TabsList className="inline-flex w-full md:w-auto min-w-max h-8 md:h-10 gap-0.5 md:gap-1">
+                  <TabsTrigger value="simple" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Simple ({simpleProducts.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="variable" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Variable ({variableProducts.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="event" className="whitespace-nowrap flex-shrink-0 text-[10px] md:text-sm px-2 md:px-3 py-1 md:py-2 h-7 md:h-9">
+                    Event ({eventProducts.length})
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
