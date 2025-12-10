@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Layout } from '@/components/Layout';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight, Edit2, Check, X } from 'lucide-react';
+import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight, Edit2, Check, X, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Product } from '@/lib/types';
 import { ProductVariation } from '@/lib/types/variable-products';
@@ -45,6 +46,7 @@ export interface ProductWithInventory extends Product {
 
 export default function Inventory() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [allProducts, setAllProducts] = useState<ProductWithInventory[]>([]);
   const [venueInventory, setVenueInventory] = useState<ProductInventory[]>([]);
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
@@ -388,6 +390,216 @@ export default function Inventory() {
     updateStock(productId, locationId, quantity, variationId);
   };
 
+  // CSV Export for inventory
+  const handleExportCSV = (productType: 'all' | 'simple' | 'variable' | 'event') => {
+    const productsToExport = productType === 'all' 
+      ? getCurrentProducts()
+      : productType === 'simple' 
+        ? simpleProducts 
+        : productType === 'variable'
+          ? variableProducts
+          : eventProducts;
+
+    if (productsToExport.length === 0) {
+      // Download template if no products
+      handleDownloadTemplate(productType);
+      return;
+    }
+
+    // CSV Headers
+    const headers = ['product_id', 'product_name', 'warehouse_id', 'warehouse_name', 'stock_quantity'];
+
+    // Convert inventory to CSV rows
+    const rows: string[][] = [];
+    const selectedWarehouseList = warehouses.filter(w => selectedWarehouses.has(w.id));
+
+    productsToExport.forEach((product) => {
+      if (productType === 'variable') {
+        // For variable products, export variations
+        const variations = productVariations[product.id] || [];
+        variations.forEach((variation) => {
+          selectedWarehouseList.forEach((warehouse) => {
+            const stock = variationInventory[variation.id]?.[warehouse.id] || 0;
+            rows.push([
+              product.id,
+              `${product.name} - ${Object.values(variation.attributes).join(', ')}`,
+              warehouse.id,
+              warehouse.name,
+              stock.toString(),
+            ]);
+          });
+        });
+      } else {
+        // For simple products, export product inventory
+        selectedWarehouseList.forEach((warehouse) => {
+          const inventory = product.product_inventory?.find(
+            (inv) => inv.inventory_location_id === warehouse.id
+          );
+          const stock = inventory?.stock_quantity || 0;
+          rows.push([
+            product.id,
+            product.name,
+            warehouse.id,
+            warehouse.name,
+            stock.toString(),
+          ]);
+        });
+      }
+    });
+
+    // Escape CSV values
+    const escapeCSV = (value: string): string => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map(escapeCSV).join(',')),
+    ].join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inventory-${productType}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success(`Exported ${rows.length} inventory records to CSV`);
+  };
+
+  // Download CSV template
+  const handleDownloadTemplate = (productType: 'all' | 'simple' | 'variable' | 'event') => {
+    const headers = ['product_id', 'product_name', 'warehouse_id', 'warehouse_name', 'stock_quantity'];
+    const exampleRow = ['', 'Product Name', '', 'Warehouse Name', '0'];
+    const csvContent = [headers.join(','), exampleRow.join(',')].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inventory-${productType}-template.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success('CSV template downloaded');
+  };
+
+  // Parse CSV file
+  const parseCSV = (csvText: string): any[] => {
+    const lines = csvText.split('\n').filter((line) => line.trim());
+    if (lines.length < 2) {
+      throw new Error('CSV file must have at least a header row and one data row');
+    }
+
+    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
+    const rows: any[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      const values: string[] = [];
+      let currentValue = '';
+      let inQuotes = false;
+
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        if (char === '"') {
+          if (inQuotes && line[j + 1] === '"') {
+            currentValue += '"';
+            j++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim());
+
+      const row: any = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      rows.push(row);
+    }
+
+    return rows;
+  };
+
+  // Handle CSV import
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>, productType: 'all' | 'simple' | 'variable' | 'event') => {
+    const file = event.target.files?.[0];
+    if (!file || !profile) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast.error('Please upload a CSV file');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+
+      if (rows.length === 0) {
+        throw new Error('CSV file is empty');
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      // Create a map of warehouse names to IDs
+      const warehouseMap = new Map<string, string>();
+      warehouses.forEach(w => warehouseMap.set(w.name.toLowerCase(), w.id));
+
+      for (const row of rows) {
+        try {
+          const productId = row.product_id?.trim();
+          const warehouseId = row.warehouse_id?.trim() || warehouseMap.get(row.warehouse_name?.trim().toLowerCase());
+          const stockQuantity = parseInt(row.stock_quantity?.trim() || '0');
+
+          if (!productId || !warehouseId) {
+            errorCount++;
+            continue;
+          }
+
+          // Update stock
+          await updateStock(productId, warehouseId, stockQuantity);
+          successCount++;
+        } catch (error: any) {
+          errorCount++;
+          console.error('Error importing row:', error);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} inventory record(s)`);
+        fetchData();
+      }
+      if (errorCount > 0) {
+        toast.error(`${errorCount} record(s) failed to import`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to process CSV file');
+    } finally {
+      // Reset file input
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -489,6 +701,28 @@ export default function Inventory() {
 
               <TabsContent value="all" className="mt-6">
                 <CardContent className="p-2 md:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV('all')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {getCurrentProducts().length > 0 ? 'Export CSV' : 'Download Template'}
+                      </Button>
+                      <label>
+                        <Button variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import CSV
+                          </span>
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => handleImportCSV(e, 'all')}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <BrandInventoryView
                     products={getCurrentProducts()}
                     locations={locations}
@@ -506,12 +740,35 @@ export default function Inventory() {
                     setSelectedProduct={setSelectedProduct}
                     selectedLocationId={selectedLocationId}
                     setSelectedLocationId={setSelectedLocationId}
+                    onCreateProduct={() => navigate('/dashboard/products/select-type?owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
 
               <TabsContent value="simple" className="mt-6">
                 <CardContent className="p-2 md:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV('simple')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {simpleProducts.length > 0 ? 'Export CSV' : 'Download Template'}
+                      </Button>
+                      <label>
+                        <Button variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import CSV
+                          </span>
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => handleImportCSV(e, 'simple')}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <BrandInventoryView
                     products={simpleProducts}
                     locations={locations}
@@ -529,12 +786,35 @@ export default function Inventory() {
                     setSelectedProduct={setSelectedProduct}
                     selectedLocationId={selectedLocationId}
                     setSelectedLocationId={setSelectedLocationId}
+                    onCreateProduct={() => navigate('/dashboard/products/new?product_type=simple&owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
 
               <TabsContent value="variable" className="mt-6">
                 <CardContent className="p-2 md:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV('variable')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {variableProducts.length > 0 ? 'Export CSV' : 'Download Template'}
+                      </Button>
+                      <label>
+                        <Button variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import CSV
+                          </span>
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => handleImportCSV(e, 'variable')}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <VariableInventoryView
                     products={variableProducts}
                     locations={locations}
@@ -551,12 +831,35 @@ export default function Inventory() {
                     expandedColors={expandedColors}
                     onToggleExpansion={toggleProductExpansion}
                     onToggleColorExpansion={toggleColorExpansion}
+                    onCreateProduct={() => navigate('/dashboard/products/new?product_type=variable&owner_type=brand')}
                   />
                 </CardContent>
               </TabsContent>
 
               <TabsContent value="event" className="mt-6">
                 <CardContent className="p-2 md:p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleExportCSV('event')}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {eventProducts.length > 0 ? 'Export CSV' : 'Download Template'}
+                      </Button>
+                      <label>
+                        <Button variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import CSV
+                          </span>
+                        </Button>
+                        <input
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={(e) => handleImportCSV(e, 'event')}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <BrandInventoryView
                     products={eventProducts}
                     locations={locations}
@@ -574,6 +877,7 @@ export default function Inventory() {
                     setSelectedProduct={setSelectedProduct}
                     selectedLocationId={selectedLocationId}
                     setSelectedLocationId={setSelectedLocationId}
+                    onCreateProduct={() => navigate('/events/new')}
                   />
                 </CardContent>
               </TabsContent>
@@ -611,6 +915,7 @@ interface BrandInventoryViewProps {
   setSelectedProduct: (product: string | null) => void;
   selectedLocationId: string;
   setSelectedLocationId: (id: string) => void;
+  onCreateProduct?: () => void;
 }
 
 function BrandInventoryView({
@@ -630,6 +935,7 @@ function BrandInventoryView({
   setSelectedProduct,
   selectedLocationId,
   setSelectedLocationId,
+  onCreateProduct,
 }: BrandInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
@@ -639,6 +945,13 @@ function BrandInventoryView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 md:gap-0">
         <h2 className="text-lg md:text-xl font-semibold">Product Inventory</h2>
         <div className="flex gap-2">
+          {onCreateProduct && (
+            <Button variant="outline" size="sm" onClick={onCreateProduct} className="text-xs md:text-sm">
+              <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Create Product</span>
+              <span className="sm:hidden">Create</span>
+            </Button>
+          )}
           <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-xs md:text-sm">

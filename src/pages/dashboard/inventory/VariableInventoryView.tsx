@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Package, Warehouse, ChevronDown, ChevronRight, Edit2, Check, X } from 'lucide-react';
+import { Package, Warehouse, ChevronDown, ChevronRight, Edit2, Check, X, Plus } from 'lucide-react';
 import { ProductWithInventory } from './Inventory';
 import { InventoryLocation } from './Inventory';
 import { ProductVariation } from '@/lib/types/variable-products';
@@ -22,6 +22,7 @@ interface VariableInventoryViewProps {
   expandedColors: Set<string>;
   onToggleExpansion: (productId: string) => void;
   onToggleColorExpansion: (productId: string, color: string) => void;
+  onCreateProduct?: () => void;
 }
 
 export function VariableInventoryView({
@@ -40,9 +41,28 @@ export function VariableInventoryView({
   expandedColors,
   onToggleExpansion,
   onToggleColorExpansion,
+  onCreateProduct,
 }: VariableInventoryViewProps) {
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
+
+  if (products.length === 0) {
+    return (
+      <div className="space-y-4">
+        {onCreateProduct && (
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={onCreateProduct}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Variable Product
+            </Button>
+          </div>
+        )}
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
+        </div>
+      </div>
+    );
+  }
 
   // Group variations by color
   const groupVariationsByColor = (variations: ProductVariation[]) => {
@@ -67,16 +87,16 @@ export function VariableInventoryView({
            }) || 'N/A';
   };
 
-  if (products.length === 0) {
-    return (
-      <div className="text-center py-8 md:py-12">
-        <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3 md:space-y-6">
+      {onCreateProduct && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onCreateProduct}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Variable Product
+          </Button>
+        </div>
+      )}
       {products.map((product) => {
         const variations = productVariations[product.id] || [];
         const isExpanded = expandedProducts.has(product.id);
