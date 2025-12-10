@@ -599,17 +599,67 @@ export default function Inventory() {
       for (const row of rows) {
         try {
           const productId = row.product_id?.trim();
-          const warehouseId = row.warehouse_id?.trim() || warehouseMap.get(row.warehouse_name?.trim().toLowerCase());
-          const stockQuantity = parseInt(row.stock_quantity?.trim() || '0');
+          const warehouseId = row.warehouse_id?.trim() || warehouseMap.get((row.warehouse_name as string)?.trim().toLowerCase());
+          const stockQuantity = parseInt((row.stock_quantity as string)?.trim() || '0');
+          const productName = (row.product_name as string)?.trim() || '';
 
           if (!productId || !warehouseId) {
             errorCount++;
             continue;
           }
 
-          // Update stock
-          await updateStock(productId, warehouseId, stockQuantity);
-          successCount++;
+          // Check if this is a variable product
+          const product = allProducts.find(p => p.id === productId);
+          const isVariableProduct = product?.product_type === 'variable';
+
+          if (isVariableProduct) {
+            // For variable products, we need to find the matching variation
+            // The product_name in CSV format is: "Product Name - Attribute1, Attribute2"
+            const variationMatch = productName.match(/^(.+?)\s*-\s*(.+)$/);
+            if (!variationMatch) {
+              errorCount++;
+              console.error('Could not parse variation attributes from product name:', productName);
+              continue;
+            }
+
+            const variationAttributesStr = variationMatch[2].trim();
+            // Parse attributes: "Black, S" or "Color: Black, Size: S"
+            const attributeValues = variationAttributesStr.split(',').map(v => v.trim());
+            
+            // Get all variations for this product
+            const variations = productVariations[productId] || [];
+            
+            // Find matching variation by comparing attributes
+            let matchingVariation = null;
+            for (const variation of variations) {
+              const variationAttrValues = Object.values(variation.attributes).map(v => String(v).trim().toLowerCase());
+              const csvAttrValues = attributeValues.map(v => v.trim().toLowerCase());
+              
+              // Check if all CSV attribute values match the variation attributes
+              const allMatch = csvAttrValues.every(csvVal => 
+                variationAttrValues.some(varVal => varVal === csvVal)
+              ) && variationAttrValues.length === csvAttrValues.length;
+              
+              if (allMatch) {
+                matchingVariation = variation;
+                break;
+              }
+            }
+
+            if (!matchingVariation) {
+              errorCount++;
+              console.error('Could not find matching variation for:', productName, 'Attributes:', attributeValues);
+              continue;
+            }
+
+            // Update variation inventory
+            await updateStock(productId, warehouseId, stockQuantity, matchingVariation.id);
+            successCount++;
+          } else {
+            // For simple products, update product inventory directly
+            await updateStock(productId, warehouseId, stockQuantity);
+            successCount++;
+          }
         } catch (error: any) {
           errorCount++;
           console.error('Error importing row:', error);
