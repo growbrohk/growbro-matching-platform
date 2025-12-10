@@ -10,6 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Loader2, Package, Plus, Save, Warehouse, Store, ChevronDown, ChevronRight, Edit2, Check, X, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Product } from '@/lib/types';
@@ -1009,36 +1017,49 @@ function BrandInventoryView({
         <div className="text-center py-8 md:py-12">
           <p className="text-sm md:text-base text-muted-foreground">No products with inventory yet</p>
         </div>
+      ) : selectedWarehouses.size === 0 ? (
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">Please select at least one warehouse</p>
+        </div>
+      ) : warehouses.length === 0 ? (
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">No warehouses available</p>
+        </div>
       ) : (
-        <div className="space-y-3 md:space-y-4">
-          {products.map((product) => (
-            <Card key={product.id} className="border">
-              <CardHeader className="p-3 md:p-6">
-                <div className="flex items-center gap-2 md:gap-3">
-                  {product.thumbnail_url ? (
-                    <img
-                      src={product.thumbnail_url}
-                      alt={product.name}
-                      className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                      <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-sm md:text-lg truncate">{product.name}</CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-6 pt-0">
-                <div className="space-y-2 md:space-y-4">
-                  {selectedWarehouses.size === 0 ? (
-                    <p className="text-xs md:text-sm text-muted-foreground">Please select at least one warehouse</p>
-                  ) : warehouses.length === 0 ? (
-                    <p className="text-xs md:text-sm text-muted-foreground">No warehouses available</p>
-                  ) : (
-                    warehouses.map((warehouse) => {
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Category</TableHead>
+                <TableHead className="text-xs md:text-sm min-w-[120px] md:min-w-[150px]">Product</TableHead>
+                <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Variation</TableHead>
+                <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Size</TableHead>
+                {warehouses.map((warehouse) => (
+                  <TableHead key={warehouse.id} className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">
+                    {warehouse.name}
+                  </TableHead>
+                ))}
+                <TableHead className="text-xs md:text-sm text-center w-[80px] md:w-[100px]">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((product) => {
+                // Calculate totals for simple products
+                let totalStock = 0;
+                warehouses.forEach((warehouse) => {
+                  const inventory = product.product_inventory?.find(
+                    (inv) => inv.inventory_location_id === warehouse.id
+                  );
+                  totalStock += inventory?.stock_quantity || 0;
+                });
+
+                return (
+                  <TableRow key={product.id} className="border-b">
+                    <TableCell className="text-xs md:text-sm">Simple</TableCell>
+                    <TableCell className="text-xs md:text-sm font-medium">{product.name}</TableCell>
+                    <TableCell className="text-xs md:text-sm">-</TableCell>
+                    <TableCell className="text-xs md:text-sm">-</TableCell>
+                    {warehouses.map((warehouse) => {
                       const inventory = product.product_inventory?.find(
                         (inv) => inv.inventory_location_id === warehouse.id
                       );
@@ -1048,78 +1069,71 @@ function BrandInventoryView({
                       const tempValue = editMode[key]?.tempValue ?? stock;
 
                       return (
-                        <div key={warehouse.id} className="flex items-center gap-2 md:gap-4 py-1 md:py-0">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1 md:gap-2">
-                              <Warehouse className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
-                              <span className="font-medium text-xs md:text-sm truncate">{warehouse.name}</span>
+                        <TableCell key={warehouse.id} className="text-center p-1 md:p-2">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <Input
+                                type="number"
+                                value={tempValue}
+                                onChange={(e) => {
+                                  const newValue = parseInt(e.target.value) || 0;
+                                  onStartEdit(key, newValue);
+                                }}
+                                className="w-12 md:w-16 h-6 md:h-8 text-xs md:text-sm text-center"
+                                disabled={saving === key}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    onConfirmEdit(key, product.id, warehouse.id);
+                                  } else if (e.key === 'Escape') {
+                                    onCancelEdit(key);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onConfirmEdit(key, product.id, warehouse.id)}
+                                disabled={saving === key}
+                                className="h-5 w-5 md:h-6 md:w-6 p-0"
+                              >
+                                <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onCancelEdit(key)}
+                                disabled={saving === key}
+                                className="h-5 w-5 md:h-6 md:w-6 p-0"
+                              >
+                                <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                              </Button>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                            {isEditing ? (
-                              <>
-                                <Input
-                                  type="number"
-                                  value={tempValue}
-                                  onChange={(e) => {
-                                    const newValue = parseInt(e.target.value) || 0;
-                                    onStartEdit(key, newValue);
-                                  }}
-                                  className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
-                                  disabled={saving === key}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      onConfirmEdit(key, product.id, warehouse.id);
-                                    } else if (e.key === 'Escape') {
-                                      onCancelEdit(key);
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => onConfirmEdit(key, product.id, warehouse.id)}
-                                  disabled={saving === key}
-                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                >
-                                  <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => onCancelEdit(key)}
-                                  disabled={saving === key}
-                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                >
-                                  <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
-                                <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">units</span>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onStartEdit(key, stock);
-                                  }}
-                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                >
-                                  <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <span className="text-xs md:text-sm">{stock}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onStartEdit(key, stock);
+                                }}
+                                className="h-5 w-5 md:h-6 md:w-6 p-0"
+                              >
+                                <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
                       );
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    })}
+                    <TableCell className="text-center text-xs md:text-sm font-semibold">{totalStock}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

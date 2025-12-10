@@ -1,10 +1,17 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Package, Warehouse, ChevronDown, ChevronRight, Edit2, Check, X, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Edit2, Check, X, Plus } from 'lucide-react';
 import { ProductWithInventory } from './Inventory';
 import { InventoryLocation } from './Inventory';
 import { ProductVariation } from '@/lib/types/variable-products';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface VariableInventoryViewProps {
   products: ProductWithInventory[];
@@ -46,24 +53,6 @@ export function VariableInventoryView({
   // Filter warehouses to only show selected ones
   const warehouses = locations.filter((loc) => loc.type === 'warehouse' && selectedWarehouses.has(loc.id));
 
-  if (products.length === 0) {
-    return (
-      <div className="space-y-4">
-        {onCreateProduct && (
-          <div className="flex justify-end">
-            <Button variant="outline" size="sm" onClick={onCreateProduct}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Variable Product
-            </Button>
-          </div>
-        )}
-        <div className="text-center py-8 md:py-12">
-          <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
-        </div>
-      </div>
-    );
-  }
-
   // Group variations by color
   const groupVariationsByColor = (variations: ProductVariation[]) => {
     const grouped: Record<string, ProductVariation[]> = {};
@@ -87,8 +76,34 @@ export function VariableInventoryView({
            }) || 'N/A';
   };
 
+  if (products.length === 0) {
+    return (
+      <div className="space-y-4">
+        {onCreateProduct && (
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={onCreateProduct}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Variable Product
+            </Button>
+          </div>
+        )}
+        <div className="text-center py-8 md:py-12">
+          <p className="text-sm md:text-base text-muted-foreground">No variable products with inventory yet</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedWarehouses.size === 0 || warehouses.length === 0) {
+    return (
+      <div className="text-center py-8 md:py-12">
+        <p className="text-sm md:text-base text-muted-foreground">Please select at least one warehouse</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3 md:space-y-6">
+    <div className="space-y-4">
       {onCreateProduct && (
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={onCreateProduct}>
@@ -97,184 +112,220 @@ export function VariableInventoryView({
           </Button>
         </div>
       )}
-      {products.map((product) => {
-        const variations = productVariations[product.id] || [];
-        const isExpanded = expandedProducts.has(product.id);
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Category</TableHead>
+              <TableHead className="text-xs md:text-sm min-w-[120px] md:min-w-[150px]">Product</TableHead>
+              <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Variation</TableHead>
+              <TableHead className="text-xs md:text-sm w-[80px] md:w-[100px]">Size</TableHead>
+              {warehouses.map((warehouse) => (
+                <TableHead key={warehouse.id} className="text-xs md:text-sm text-center w-[100px] md:w-[120px]">
+                  {warehouse.name}
+                </TableHead>
+              ))}
+              <TableHead className="text-xs md:text-sm text-center w-[80px] md:w-[100px]">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => {
+              const variations = productVariations[product.id] || [];
+              const isProductExpanded = expandedProducts.has(product.id);
+              const groupedByColor = groupVariationsByColor(variations);
 
-        return (
-          <Card key={product.id}>
-            <CardHeader className="p-3 md:p-6">
-              <div className="flex items-center gap-2 md:gap-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onToggleExpansion(product.id)}
-                  className="h-5 w-5 md:h-6 md:w-6 p-0 flex-shrink-0"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-3 w-3 md:h-4 md:w-4" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
-                  )}
-                </Button>
-                {product.thumbnail_url ? (
-                  <img
-                    src={product.thumbnail_url}
-                    alt={product.name}
-                    className="w-8 h-8 md:w-12 md:h-12 object-cover rounded flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-8 h-8 md:w-12 md:h-12 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                    <Package className="h-4 w-4 md:h-6 md:w-6 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-sm md:text-lg truncate">{product.name}</CardTitle>
-                </div>
-              </div>
-            </CardHeader>
-            {isExpanded && variations.length > 0 && (
-              <CardContent className="p-3 md:p-6 pt-0">
-                <div className="space-y-2 md:space-y-4">
-                  <h4 className="font-medium text-xs md:text-sm mb-2 md:mb-3">Variations</h4>
-                  {Object.entries(groupVariationsByColor(variations)).map(([color, colorVariations]) => {
+              // Calculate total stock for all variations
+              let productTotal = 0;
+              variations.forEach((variation) => {
+                warehouses.forEach((warehouse) => {
+                  productTotal += variationInventory[variation.id]?.[warehouse.id] || 0;
+                });
+              });
+
+              return (
+                <>
+                  {/* Product Row - Shows total of all variations */}
+                  <TableRow key={product.id} className="border-b bg-muted/30">
+                    <TableCell className="text-xs md:text-sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleExpansion(product.id)}
+                        className="h-5 w-5 md:h-6 md:w-6 p-0"
+                      >
+                        {isProductExpanded ? (
+                          <ChevronDown className="h-3 w-3 md:h-4 md:w-4" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+                        )}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-xs md:text-sm font-medium">{product.name}</TableCell>
+                    <TableCell className="text-xs md:text-sm">Total</TableCell>
+                    <TableCell className="text-xs md:text-sm">-</TableCell>
+                    {warehouses.map((warehouse) => {
+                      // Calculate total for this warehouse across all variations
+                      let warehouseTotal = 0;
+                      variations.forEach((variation) => {
+                        warehouseTotal += variationInventory[variation.id]?.[warehouse.id] || 0;
+                      });
+                      return (
+                        <TableCell key={warehouse.id} className="text-center text-xs md:text-sm">
+                          {warehouseTotal}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="text-center text-xs md:text-sm font-semibold">{productTotal}</TableCell>
+                  </TableRow>
+
+                  {/* Color Rows - Expandable */}
+                  {isProductExpanded && Object.entries(groupedByColor).map(([color, colorVariations]) => {
                     const colorKey = `${product.id}-${color}`;
                     const isColorExpanded = expandedColors.has(colorKey);
 
-                    return (
-                      <div key={color} className="bg-muted/30 rounded border">
-                        <div
-                          className="flex items-center justify-between p-2 md:p-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => onToggleColorExpansion(product.id, color)}
-                        >
-                          <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0">
-                            {isColorExpanded ? (
-                              <ChevronDown className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
-                            ) : (
-                              <ChevronRight className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
-                            )}
-                            <span className="font-medium text-xs md:text-sm capitalize truncate">
-                              Color: {color}
-                            </span>
-                            <span className="text-[10px] md:text-xs text-muted-foreground">
-                              ({colorVariations.length} sizes)
-                            </span>
-                          </div>
-                        </div>
-                        {isColorExpanded && (
-                          <div className="border-t p-2 md:p-3 space-y-1 md:space-y-2">
-                            {colorVariations.map((variation) => {
-                              const size = getSizeFromVariation(variation);
-                              return (
-                                <div key={variation.id} className="space-y-2 md:space-y-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs md:text-sm font-medium min-w-[60px] md:min-w-[80px]">
-                                      Size: {size}
-                                    </span>
-                                    {variation.sku && (
-                                      <span className="text-[10px] md:text-xs text-muted-foreground truncate">
-                                        SKU: {variation.sku}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="space-y-1 md:space-y-2 pl-4 md:pl-6">
-                                    {warehouses.map((warehouse) => {
-                                      const key = `${variation.id}-${warehouse.id}`;
-                                      const stock = variationInventory[variation.id]?.[warehouse.id] || 0;
-                                      const isEditing = editMode[key]?.editing || false;
-                                      const tempValue = editMode[key]?.tempValue ?? stock;
+                    // Calculate totals for this color
+                    let colorTotal = 0;
+                    colorVariations.forEach((variation) => {
+                      warehouses.forEach((warehouse) => {
+                        colorTotal += variationInventory[variation.id]?.[warehouse.id] || 0;
+                      });
+                    });
 
-                                      return (
-                                        <div key={warehouse.id} className="flex items-center gap-2 md:gap-4">
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1 md:gap-2">
-                                              <Warehouse className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
-                                              <span className="font-medium text-xs md:text-sm truncate">
-                                                {warehouse.name}
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-                                            {isEditing ? (
-                                              <>
-                                                <Input
-                                                  type="number"
-                                                  value={tempValue}
-                                                  onChange={(e) => {
-                                                    const newValue = parseInt(e.target.value) || 0;
-                                                    onStartEdit(key, newValue);
-                                                  }}
-                                                  className="w-16 md:w-24 h-7 md:h-10 text-xs md:text-sm"
-                                                  disabled={saving === key}
-                                                  onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                      onConfirmEdit(key, product.id, warehouse.id, variation.id);
-                                                    } else if (e.key === 'Escape') {
-                                                      onCancelEdit(key);
-                                                    }
-                                                  }}
-                                                />
-                                                <Button
-                                                  size="sm"
-                                                  variant="ghost"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onConfirmEdit(key, product.id, warehouse.id, variation.id);
-                                                  }}
-                                                  disabled={saving === key}
-                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                                >
-                                                  <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
-                                                </Button>
-                                                <Button
-                                                  size="sm"
-                                                  variant="ghost"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onCancelEdit(key);
-                                                  }}
-                                                  disabled={saving === key}
-                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                                >
-                                                  <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
-                                                </Button>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <span className="text-xs md:text-sm font-medium w-12 md:w-16 text-right">{stock}</span>
-                                                <span className="text-[10px] md:text-sm text-muted-foreground hidden sm:inline">units</span>
-                                                <Button
-                                                  size="sm"
-                                                  variant="ghost"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onStartEdit(key, stock);
-                                                  }}
-                                                  className="h-7 w-7 md:h-8 md:w-8 p-0"
-                                                >
-                                                  <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
-                                                </Button>
-                                              </>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
+                    return (
+                      <>
+                        {/* Color Row */}
+                        <TableRow key={colorKey} className="border-b bg-muted/10">
+                          <TableCell className="text-xs md:text-sm"></TableCell>
+                          <TableCell className="text-xs md:text-sm"></TableCell>
+                          <TableCell className="text-xs md:text-sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onToggleColorExpansion(product.id, color)}
+                              className="h-5 w-5 md:h-6 md:w-6 p-0"
+                            >
+                              {isColorExpanded ? (
+                                <ChevronDown className="h-3 w-3 md:h-4 md:w-4" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="text-xs md:text-sm font-medium capitalize">{color}</TableCell>
+                          {warehouses.map((warehouse) => {
+                            // Calculate total for this color in this warehouse
+                            let colorWarehouseTotal = 0;
+                            colorVariations.forEach((variation) => {
+                              colorWarehouseTotal += variationInventory[variation.id]?.[warehouse.id] || 0;
+                            });
+                            return (
+                              <TableCell key={warehouse.id} className="text-center text-xs md:text-sm">
+                                {colorWarehouseTotal}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-center text-xs md:text-sm font-semibold">{colorTotal}</TableCell>
+                        </TableRow>
+
+                        {/* Size Rows - Under each color */}
+                        {isColorExpanded && colorVariations.map((variation) => {
+                          const size = getSizeFromVariation(variation);
+                          let sizeTotal = 0;
+                          warehouses.forEach((warehouse) => {
+                            sizeTotal += variationInventory[variation.id]?.[warehouse.id] || 0;
+                          });
+
+                          return (
+                            <TableRow key={variation.id} className="border-b">
+                              <TableCell className="text-xs md:text-sm"></TableCell>
+                              <TableCell className="text-xs md:text-sm"></TableCell>
+                              <TableCell className="text-xs md:text-sm"></TableCell>
+                              <TableCell className="text-xs md:text-sm pl-4 md:pl-6">{size}</TableCell>
+                              {warehouses.map((warehouse) => {
+                                const key = `${variation.id}-${warehouse.id}`;
+                                const stock = variationInventory[variation.id]?.[warehouse.id] || 0;
+                                const isEditing = editMode[key]?.editing || false;
+                                const tempValue = editMode[key]?.tempValue ?? stock;
+
+                                return (
+                                  <TableCell key={warehouse.id} className="text-center p-1 md:p-2">
+                                    {isEditing ? (
+                                      <div className="flex items-center justify-center gap-1">
+                                        <Input
+                                          type="number"
+                                          value={tempValue}
+                                          onChange={(e) => {
+                                            const newValue = parseInt(e.target.value) || 0;
+                                            onStartEdit(key, newValue);
+                                          }}
+                                          className="w-12 md:w-16 h-6 md:h-8 text-xs md:text-sm text-center"
+                                          disabled={saving === key}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              onConfirmEdit(key, product.id, warehouse.id, variation.id);
+                                            } else if (e.key === 'Escape') {
+                                              onCancelEdit(key);
+                                            }
+                                          }}
+                                          autoFocus
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onConfirmEdit(key, product.id, warehouse.id, variation.id);
+                                          }}
+                                          disabled={saving === key}
+                                          className="h-5 w-5 md:h-6 md:w-6 p-0"
+                                        >
+                                          <Check className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onCancelEdit(key);
+                                          }}
+                                          disabled={saving === key}
+                                          className="h-5 w-5 md:h-6 md:w-6 p-0"
+                                        >
+                                          <X className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center gap-1">
+                                        <span className="text-xs md:text-sm">{stock}</span>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onStartEdit(key, stock);
+                                          }}
+                                          className="h-5 w-5 md:h-6 md:w-6 p-0"
+                                        >
+                                          <Edit2 className="h-3 w-3 md:h-4 md:w-4" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                );
+                              })}
+                              <TableCell className="text-center text-xs md:text-sm font-semibold">{sizeTotal}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </>
                     );
                   })}
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        );
-      })}
+                </>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
