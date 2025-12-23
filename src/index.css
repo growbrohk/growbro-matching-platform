@@ -135,7 +135,7 @@
   }
   
   .collab-chip-event {
-    @apply bg-primary-soft/20 text-primary border-primary/20;
+    @apply bg-accent/20 text-primary border-primary/20;
   }
   
   .collab-chip-collab-product {
