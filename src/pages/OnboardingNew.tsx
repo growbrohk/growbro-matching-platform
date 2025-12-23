@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,9 +15,10 @@ type Step = 'org' | 'type' | 'product' | 'inventory' | 'complete';
 
 export default function OnboardingNew() {
   const navigate = useNavigate();
-  const { user, refreshOrgMemberships } = useAuth();
+  const { user, orgMemberships, loading: authLoading, refreshOrgMemberships } = useAuth();
   const [step, setStep] = useState<Step>('org');
   const [loading, setLoading] = useState(false);
+  const [membershipsLoading, setMembershipsLoading] = useState(true);
   
   // Step 1: Org creation
   const [orgName, setOrgName] = useState('');
@@ -254,11 +255,57 @@ export default function OnboardingNew() {
     setVariants(updated);
   };
 
+  // Check if memberships are loaded
+  useEffect(() => {
+    if (!authLoading) {
+      // Small delay to ensure orgMemberships are checked
+      const timer = setTimeout(() => {
+        setMembershipsLoading(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, orgMemberships]);
+
+  // Always render the shell UI immediately
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
       <div className="w-full max-w-2xl">
-        {/* Progress indicator */}
-        <div className="mb-8">
+        {/* Loading state overlay */}
+        {(authLoading || membershipsLoading) && (
+          <Card className="rounded-3xl border shadow-xl mb-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+            <CardContent className="pt-6 pb-6 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" style={{ color: '#0E7A3A' }} />
+              <p style={{ color: '#0F1F17', fontSize: '14px' }}>
+                {authLoading ? 'Loading your account...' : 'Checking your workspace...'}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Main content shell - always visible */}
+        <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardHeader>
+            <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+              Set up your Growbro workspace
+            </CardTitle>
+            <CardDescription style={{ color: 'rgba(15,31,23,0.72)' }}>
+              {authLoading || membershipsLoading 
+                ? 'Please wait while we load your account...'
+                : step === 'org' 
+                  ? 'Get started by creating your organization'
+                  : step === 'type'
+                  ? 'Choose your organization type'
+                  : step === 'product'
+                  ? 'Create your first product'
+                  : step === 'inventory'
+                  ? 'Set initial inventory'
+                  : 'You\'re all set!'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Progress indicator - only show when not loading */}
+            {!authLoading && !membershipsLoading && (
+              <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
               Step {step === 'org' ? 1 : step === 'type' ? 2 : step === 'product' ? 3 : step === 'inventory' ? 4 : 5} of 5
@@ -279,57 +326,43 @@ export default function OnboardingNew() {
                 backgroundColor: '#0E7A3A',
               }}
             />
-          </div>
-        </div>
-
-        {/* Step 1: Create Organization */}
-        {step === 'org' && (
-          <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader>
-              <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                Welcome to Growbro!
-              </CardTitle>
-              <CardDescription>
-                Let's start by creating your organization
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="orgName">Organization Name</Label>
-                <Input
-                  id="orgName"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="My Company"
-                  className="mt-1"
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateOrg()}
-                />
               </div>
-              <Button
-                onClick={handleCreateOrg}
-                disabled={loading || !orgName.trim()}
-                className="w-full"
-                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Organization
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+            )}
 
-        {/* Step 2: Choose Organization Type */}
-        {step === 'type' && (
-          <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader>
-              <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                What type of organization are you?
-              </CardTitle>
-              <CardDescription>
-                This helps us customize your experience
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            {/* Step content - only show when not loading */}
+            {!authLoading && !membershipsLoading && (
+              <>
+                {/* Step 1: Create Organization */}
+                {step === 'org' && (
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="orgName" style={{ color: '#0F1F17' }}>Organization Name</Label>
+                      <Input
+                        id="orgName"
+                        value={orgName}
+                        onChange={(e) => setOrgName(e.target.value)}
+                        placeholder="My Company"
+                        className="mt-1"
+                        style={{ backgroundColor: '#FBF8F4', color: '#0F1F17' }}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreateOrg()}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCreateOrg}
+                      disabled={loading || !orgName.trim()}
+                      className="w-full"
+                      style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                    >
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Create Organization
+                    </Button>
+                  </div>
+                )}
+
+                {/* Step 2: Choose Organization Type */}
+                {step === 'type' && (
+                  <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   onClick={() => setOrgType('brand')}
@@ -370,23 +403,13 @@ export default function OnboardingNew() {
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Continue
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                  </Button>
+                  </div>
+                )}
 
-        {/* Step 3: Create First Product */}
-        {step === 'product' && (
-          <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader>
-              <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                Create your first product
-              </CardTitle>
-              <CardDescription>
-                {orgType === 'venue' ? 'Add a venue asset (space, room, etc.)' : 'Add a physical product'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+                {/* Step 3: Create First Product */}
+                {step === 'product' && (
+                  <div className="space-y-4">
               {orgType === 'brand' && (
                 <div>
                   <Label>Product Type</Label>
@@ -489,23 +512,13 @@ export default function OnboardingNew() {
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Product
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                  </Button>
+                  </div>
+                )}
 
-        {/* Step 4: Set Initial Inventory (for physical products) */}
-        {step === 'inventory' && (
-          <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader>
-              <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                Set Initial Inventory
-              </CardTitle>
-              <CardDescription>
-                Add initial stock for your product variant
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+                {/* Step 4: Set Initial Inventory (for physical products) */}
+                {step === 'inventory' && (
+                  <div className="space-y-4">
               <div>
                 <Label htmlFor="initialStock">Initial Stock Quantity</Label>
                 <Input
@@ -538,35 +551,45 @@ export default function OnboardingNew() {
                   Skip for now
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
+                  </div>
+                )}
 
-        {/* Step 5: Complete */}
-        {step === 'complete' && (
-          <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4 h-16 w-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
-                <Package className="h-8 w-8 text-white" />
+                {/* Step 5: Complete */}
+                {step === 'complete' && (
+                  <>
+                    <div className="text-center mb-6">
+                      <div className="mx-auto mb-4 h-16 w-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
+                        <Package className="h-8 w-8 text-white" />
+                      </div>
+                      <h3 className="text-2xl font-bold mb-2" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+                        You're all set!
+                      </h3>
+                      <p style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        Your organization and first product are ready
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleComplete}
+                      className="w-full"
+                      style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                    >
+                      Go to Dashboard
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Debug UI - non-production */}
+            {!authLoading && !membershipsLoading && (
+              <div className="mt-6 pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                <p className="text-xs text-center" style={{ color: 'rgba(15,31,23,0.5)' }}>
+                  Debug: User ID: {user?.id?.substring(0, 8)}... | Memberships: {orgMemberships.length}
+                </p>
               </div>
-              <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                You're all set!
-              </CardTitle>
-              <CardDescription>
-                Your organization and first product are ready
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={handleComplete}
-                className="w-full"
-                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-              >
-                Go to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

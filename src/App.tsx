@@ -98,12 +98,41 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OnboardingRoute({ children }: { children: React.ReactNode }) {
+  const { user, orgMemberships, loading } = useAuth();
+
+  // If auth is still loading, show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" style={{ color: '#0E7A3A' }} />
+          <p style={{ color: '#0F1F17' }}>Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If signed out -> redirect to auth
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // If signed in and has org membership -> redirect to dashboard
+  if (user && orgMemberships.length > 0) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If signed in and no org membership -> allow access to onboarding
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
-      <Route path="/onboarding" element={<ProtectedRoute><OnboardingNew /></ProtectedRoute>} />
+      <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
       {/* Dashboard Routes - Dashboard includes AppLayout */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       {/* Other dashboard routes need to be updated to include AppLayout individually */}
