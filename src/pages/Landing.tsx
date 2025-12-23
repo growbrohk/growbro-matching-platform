@@ -1,50 +1,212 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { CollabChip } from "@/components/CollabChip";
-import { 
-  Store, 
-  Users, 
-  Handshake, 
-  Calendar, 
-  Package, 
-  Coffee,
-  UserPlus,
-  Search,
-  Send,
-  ChevronDown,
-  Instagram,
-  ExternalLink
-} from "lucide-react";
+import { motion, useMotionValue, useSpring, AnimatePresence, useInView } from "framer-motion";
+import { useRef, useState, useEffect } from "react";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+  Store,
+  ShoppingCart,
+  Calendar,
+  Users,
+  Database,
+  TrendingUp,
+  Sparkles,
+  Zap,
+  Globe,
+  Package,
+  CreditCard,
+  BarChart3,
+  Handshake,
+  Rocket,
+  LucideIcon,
+} from "lucide-react";
+
+type BentoCard = {
+  id: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: LucideIcon;
+  color: string;
+  borderColor: string;
+  rowSpan: string;
+  colSpan: string;
+};
 
 export default function Landing() {
-  const scrollToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const springConfig = { damping: 25, stiffness: 200 };
+  const x = useSpring(mouseX, springConfig);
+  const y = useSpring(mouseY, springConfig);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setMousePosition({ x, y });
+        mouseX.set(x);
+        mouseY.set(y);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("mousemove", handleMouseMove);
+      return () => container.removeEventListener("mousemove", handleMouseMove);
+    }
+  }, [mouseX, mouseY]);
+
+  const bentoCards: BentoCard[] = [
+    {
+      id: 1,
+      title: "One Backend",
+      subtitle: "Unified Inventory",
+      description: "Single source of truth. No data migration. No double stocking.",
+      icon: Database,
+      color: "from-[#CCFF00]/20 to-[#CCFF00]/5",
+      borderColor: "border-[#CCFF00]/30",
+      rowSpan: "row-span-2",
+      colSpan: "col-span-1",
+    },
+    {
+      id: 2,
+      title: "POS System",
+      subtitle: "In-Store Sales",
+      description: "Complete point-of-sale solution for your physical location.",
+      icon: CreditCard,
+      color: "from-purple-500/20 to-purple-500/5",
+      borderColor: "border-purple-500/30",
+      rowSpan: "row-span-1",
+      colSpan: "col-span-1",
+    },
+    {
+      id: 3,
+      title: "Online Shop",
+      subtitle: "E-Commerce Ready",
+      description: "Beautiful online storefront that syncs with your inventory instantly.",
+      icon: ShoppingCart,
+      color: "from-blue-500/20 to-blue-500/5",
+      borderColor: "border-blue-500/30",
+      rowSpan: "row-span-1",
+      colSpan: "col-span-1",
+    },
+    {
+      id: 4,
+      title: "Events & Bookings",
+      subtitle: "Ticketing System",
+      description: "Sell tickets, manage capacity, track attendance. All integrated.",
+      icon: Calendar,
+      color: "from-pink-500/20 to-pink-500/5",
+      borderColor: "border-pink-500/30",
+      rowSpan: "row-span-1",
+      colSpan: "col-span-1",
+    },
+    {
+      id: 5,
+      title: "Collab Partners",
+      subtitle: "Network Effects",
+      description: "Connect with brands and venues. Cross-promote. Grow together.",
+      icon: Handshake,
+      color: "from-orange-500/20 to-orange-500/5",
+      borderColor: "border-orange-500/30",
+      rowSpan: "row-span-1",
+      colSpan: "col-span-2",
+    },
+    {
+      id: 6,
+      title: "Promotions & Growth",
+      subtitle: "Marketing Tools",
+      description: "Built-in campaigns, analytics, and growth features for small businesses.",
+      icon: TrendingUp,
+      color: "from-green-500/20 to-green-500/5",
+      borderColor: "border-green-500/30",
+      rowSpan: "row-span-1",
+      colSpan: "col-span-1",
+    },
+  ];
+
+  const floatingIcons = [
+    { Icon: Sparkles, delay: 0, x: "10%", y: "15%" },
+    { Icon: Zap, delay: 0.2, x: "85%", y: "20%" },
+    { Icon: Globe, delay: 0.4, x: "15%", y: "75%" },
+    { Icon: Package, delay: 0.6, x: "80%", y: "70%" },
+    { Icon: Rocket, delay: 0.8, x: "5%", y: "50%" },
+    { Icon: BarChart3, delay: 1, x: "90%", y: "55%" },
+  ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      ref={containerRef}
+      className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden"
+    >
+      {/* Grid Background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
+      {/* Vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,#0a0a0a_100%)] pointer-events-none" />
+
+      {/* Mouse Follower Glow */}
+      <motion.div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background: `radial-gradient(600px circle at ${x}px ${y}px, rgba(204,255,0,0.15), transparent 40%)`,
+        }}
+      />
+
+      {/* Floating Decorative Icons */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {floatingIcons.map(({ Icon, delay, x, y }) => (
+          <motion.div
+            key={Icon.name}
+            className="absolute"
+            style={{ left: x, top: y }}
+            animate={{
+              y: [0, -20, 0],
+              rotate: [0, 5, -5, 0],
+            }}
+            transition={{
+              duration: 4 + delay,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: delay,
+            }}
+          >
+            <Icon className="w-8 h-8 text-[#CCFF00]/20" />
+          </motion.div>
+        ))}
+      </div>
+
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="relative z-50 sticky top-0 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
-                <Handshake className="w-5 h-5 text-primary-foreground" />
+              <div className="w-8 h-8 bg-[#CCFF00] rounded-xl flex items-center justify-center">
+                <Handshake className="w-5 h-5 text-[#0a0a0a]" />
               </div>
-              <span className="font-bold text-lg text-foreground">Growbro Collab Hub</span>
+              <span className="font-bold text-lg">Growbro</span>
             </div>
             <div className="flex items-center gap-3">
               <Link to="/auth">
-                <Button variant="ghost" size="sm">Log in</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white/80 hover:text-white hover:bg-white/10"
+                >
+                  Log in
+                </Button>
               </Link>
               <Link to="/auth">
-                <Button size="sm">Get Started</Button>
+                <Button
+                  size="sm"
+                  className="bg-[#CCFF00] text-[#0a0a0a] hover:bg-[#CCFF00]/90 font-semibold"
+                >
+                  Get Started
+                </Button>
               </Link>
             </div>
           </div>
@@ -52,398 +214,163 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-8">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
-                Match brands and venues for{" "}
-                <span className="text-primary">real-world collaborations</span>
-              </h1>
-              <p className="text-xl text-muted-foreground leading-relaxed">
-                Growbro Collab Hub is a "business collab Tinder" that helps brands and venues match for consignment, events, collab products, and cup sleeve marketing — all in one place.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/auth">
-                  <Button size="xl" variant="hero" className="w-full sm:w-auto">
-                    Get started – it's free
-                  </Button>
-                </Link>
-                <Button 
-                  variant="outline" 
-                  size="xl" 
-                  onClick={() => scrollToSection('how-it-works')}
-                  className="gap-2"
-                >
-                  View how it works
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-            
-            {/* Mock UI Preview */}
-            <div className="relative">
-              <div className="bg-card rounded-3xl p-6 shadow-xl border border-border">
-                <div className="text-center mb-6">
-                  <span className="text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
-                    It's a match! 🎉
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-4 mb-6">
-                  <div className="w-20 h-20 bg-secondary rounded-2xl flex items-center justify-center">
-                    <Store className="w-10 h-10 text-secondary-foreground" />
-                  </div>
-                  <div className="text-3xl">❤️</div>
-                  <div className="w-20 h-20 bg-accent rounded-2xl flex items-center justify-center">
-                    <Coffee className="w-10 h-10 text-accent-foreground" />
-                  </div>
-                </div>
-                <div className="text-center mb-6">
-                  <p className="font-semibold text-foreground">Local Coffee Co. & Urban Streetwear</p>
-                  <p className="text-sm text-muted-foreground">Both interested in collaborating</p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <CollabChip type="consignment" size="sm" />
-                  <CollabChip type="event" size="sm" />
-                  <CollabChip type="collab_product" size="sm" />
-                  <CollabChip type="cup_sleeve_marketing" size="sm" />
-                </div>
-              </div>
-              {/* Decorative elements */}
-              <div className="absolute -z-10 -top-4 -right-4 w-full h-full bg-primary/10 rounded-3xl" />
-            </div>
-          </div>
-        </div>
-      </section>
+      <section className="relative z-10 pt-32 pb-20 lg:pt-40 lg:pb-32">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="text-center space-y-8"
+          >
+            <motion.h1
+              className="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl font-extrabold leading-[0.9] tracking-tight"
+              style={{ fontFamily: "'Inter Tight', sans-serif" }}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, ease: [0.34, 1.56, 0.64, 1] }}
+            >
+              All-in-one online
+              <br />
+              <span className="text-[#CCFF00]">↔ offline</span>
+              <br />
+              collaboration platform
+            </motion.h1>
 
-      {/* Who It's For */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Built for brands and venues
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-card rounded-3xl p-8 shadow-md border border-border">
-              <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
-                <Store className="w-7 h-7 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-4">For Brands</h3>
-              <ul className="space-y-3 text-muted-foreground">
-                <li className="flex items-start gap-3">
-                  <span className="text-primary mt-1">✓</span>
-                  Put your products into an App Store–style catalog
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-primary mt-1">✓</span>
-                  Match with venues that actually fit your vibe
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-primary mt-1">✓</span>
-                  Pitch collabs in a few clicks, not 50 cold DMs
-                </li>
-              </ul>
-            </div>
-            <div className="bg-card rounded-3xl p-8 shadow-md border border-border">
-              <div className="w-14 h-14 bg-secondary rounded-2xl flex items-center justify-center mb-6">
-                <Coffee className="w-7 h-7 text-secondary-foreground" />
-              </div>
-              <h3 className="text-2xl font-bold text-foreground mb-4">For Venues & Hosts</h3>
-              <ul className="space-y-3 text-muted-foreground">
-                <li className="flex items-start gap-3">
-                  <span className="text-secondary-foreground mt-1">✓</span>
-                  Discover local brands to activate your space
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-secondary-foreground mt-1">✓</span>
-                  Browse their product catalog and hand-pick items
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-secondary-foreground mt-1">✓</span>
-                  Run collab events, pop-ups, and cup sleeve campaigns
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4 Collaboration Types */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Four ways to collaborate from day one
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Start simple. Growbro Collab Hub supports four key collab formats out of the box.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-card rounded-2xl p-6 border border-border hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
-                <Package className="w-6 h-6 text-primary" />
-              </div>
-              <h3 className="font-bold text-foreground mb-2">Consignment</h3>
-              <p className="text-sm text-muted-foreground">
-                Place brand products in your space on a consignment basis and bring new stories onto your shelves.
-              </p>
-            </div>
-            <div className="bg-card rounded-2xl p-6 border border-border hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center mb-4">
-                <Calendar className="w-6 h-6 text-accent-foreground" />
-              </div>
-              <h3 className="font-bold text-foreground mb-2">Events</h3>
-              <p className="text-sm text-muted-foreground">
-                Co-host runs, workshops, pop-ups, or launches that bring real people into your space.
-              </p>
-            </div>
-            <div className="bg-card rounded-2xl p-6 border border-border hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-secondary rounded-xl flex items-center justify-center mb-4">
-                <Handshake className="w-6 h-6 text-secondary-foreground" />
-              </div>
-              <h3 className="font-bold text-foreground mb-2">Collab Product</h3>
-              <p className="text-sm text-muted-foreground">
-                Design limited collab drops together — from tees and socks to custom drinks.
-              </p>
-            </div>
-            <div className="bg-card rounded-2xl p-6 border border-border hover:shadow-lg transition-shadow">
-              <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center mb-4">
-                <Coffee className="w-6 h-6 text-yellow-800" />
-              </div>
-              <h3 className="font-bold text-foreground mb-2">Cup Sleeve Marketing</h3>
-              <p className="text-sm text-muted-foreground">
-                Turn every cup into a billboard with seasonal sleeve designs, QR codes, and partner campaigns.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* App Store for Products */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-                An "app store" for your products
-              </h2>
-              <p className="text-lg text-muted-foreground">
-                Brands can create a product catalog inside Growbro — think of it like an app store, but for physical products. Venues can browse, filter, and pick the items they'd love to feature.
-              </p>
-              <ul className="space-y-4">
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-primary text-sm">✓</span>
-                  </div>
-                  <span className="text-muted-foreground">Add product photos, descriptions, and collab options</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-primary text-sm">✓</span>
-                  </div>
-                  <span className="text-muted-foreground">Tag products by category and collab type</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-primary text-sm">✓</span>
-                  </div>
-                  <span className="text-muted-foreground">Venues can select products directly inside a collab request</span>
-                </li>
-              </ul>
-            </div>
-            
-            {/* Product Grid Mock */}
-            <div className="bg-card rounded-3xl p-6 shadow-xl border border-border">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <Store className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">Urban Streetwear Co.</p>
-                  <p className="text-sm text-muted-foreground">12 products</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="bg-muted rounded-xl p-3">
-                    <div className="aspect-square bg-background rounded-lg mb-2 flex items-center justify-center">
-                      <Package className="w-8 h-8 text-muted-foreground/50" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground truncate">Product {i}</p>
-                    <p className="text-xs text-muted-foreground">Apparel</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              How Growbro Collab Hub works
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <UserPlus className="w-8 h-8 text-primary" />
-              </div>
-              <div className="text-sm font-medium text-primary mb-2">Step 1</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Create your profile</h3>
-              <p className="text-muted-foreground">
-                Sign up as a brand or venue, tell us who you are, where you are, and what kind of collabs you're open to.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-secondary rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Search className="w-8 h-8 text-secondary-foreground" />
-              </div>
-              <div className="text-sm font-medium text-secondary-foreground mb-2">Step 2</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Match & browse</h3>
-              <p className="text-muted-foreground">
-                Swipe through potential partners, filter by collab type, and explore profiles that match your vibe.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Send className="w-8 h-8 text-accent-foreground" />
-              </div>
-              <div className="text-sm font-medium text-accent-foreground mb-2">Step 3</div>
-              <h3 className="text-xl font-bold text-foreground mb-3">Send a collab request</h3>
-              <p className="text-muted-foreground">
-                Pick a collab type, select products (for brands), add your notes, and start a chat to bring the idea to life.
-              </p>
-            </div>
-          </div>
-          <p className="text-center text-muted-foreground mt-12 max-w-xl mx-auto">
-            Everything happens in one place — no messy spreadsheets, no scattered DMs.
-          </p>
-        </div>
-      </section>
-
-      {/* Made for Local Scenes */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Perfect for coffee shops, studios, galleries, and local brands
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-            Growbro Collab Hub is designed for real-world collabs — from neighbourhood cafés and indie stores to lifestyle brands, running clubs, and creators.
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {['Coffee shops', 'Lifestyle & apparel brands', 'Studios & galleries', 'Running clubs & communities', 'Event spaces', 'Pop-up hosts'].map((tag) => (
-              <span 
-                key={tag} 
-                className="px-4 py-2 bg-card border border-border rounded-full text-sm font-medium text-foreground"
-              >
-                {tag}
+            <motion.p
+              className="text-xl sm:text-2xl lg:text-3xl text-white/70 max-w-4xl mx-auto leading-relaxed"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              POS + Online Shop + Inventory + Events + Collabs
+              <br />
+              <span className="text-white/50 text-lg sm:text-xl lg:text-2xl">
+                Single backend, unified inventory. Affordable for small businesses.
               </span>
-            ))}
-          </div>
+            </motion.p>
+
+            <motion.div
+              className="flex flex-col sm:flex-row gap-4 justify-center pt-8"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+            >
+              <Link to="/auth">
+                <Button
+                  size="lg"
+                  className="bg-[#CCFF00] text-[#0a0a0a] hover:bg-[#CCFF00]/90 font-bold text-lg px-8 py-6 h-auto"
+                >
+                  Get Started — It's Free
+                </Button>
+              </Link>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section className="py-20">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Frequently asked questions
-            </h2>
-          </div>
-          <Accordion type="single" collapsible className="space-y-4">
-            <AccordionItem value="item-1" className="bg-card border border-border rounded-2xl px-6">
-              <AccordionTrigger className="text-left font-semibold">
-                Is Growbro Collab Hub free to start?
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                Yes. You can create a profile, list products, and explore matches for free in the early phase.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-2" className="bg-card border border-border rounded-2xl px-6">
-              <AccordionTrigger className="text-left font-semibold">
-                Who should sign up as a brand vs. a venue?
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                If you sell products or services and want more exposure, sign up as a brand. If you have a physical space or host events, sign up as a venue.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-3" className="bg-card border border-border rounded-2xl px-6">
-              <AccordionTrigger className="text-left font-semibold">
-                What types of collaborations can I run?
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                The platform supports consignment, events, collab products, and cup sleeve marketing — with more formats coming later.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-4" className="bg-card border border-border rounded-2xl px-6">
-              <AccordionTrigger className="text-left font-semibold">
-                Can I message partners inside the platform?
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                Yes. Once there's a match or a collab request, you can chat directly inside Growbro Collab Hub.
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="item-5" className="bg-card border border-border rounded-2xl px-6">
-              <AccordionTrigger className="text-left font-semibold">
-                Do you handle payments or contracts?
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                For this MVP, Growbro focuses on discovery, matching, and communication. Payments and contracts stay between partners.
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="py-20 bg-primary/5">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Ready to find your next collab?
-          </h2>
-          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Turn your space or brand into a collab magnet — and meet partners who actually fit your vibe.
-          </p>
-          <Link to="/auth">
-            <Button size="xl" variant="hero">
-              Start matching now
-            </Button>
-          </Link>
+      {/* Bento Grid */}
+      <section className="relative z-10 pb-32">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+          <BentoGrid cards={bentoCards} />
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <footer className="relative z-10 py-12 border-t border-white/5">
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center">
-                <Handshake className="w-5 h-5 text-primary-foreground" />
+              <div className="w-8 h-8 bg-[#CCFF00] rounded-xl flex items-center justify-center">
+                <Handshake className="w-5 h-5 text-[#0a0a0a]" />
               </div>
-              <span className="font-bold text-foreground">Growbro Collab Hub</span>
+              <span className="font-bold">Growbro</span>
             </div>
-            <p className="text-sm text-muted-foreground text-center">
-              Built by Growbro to make collaboration easier in the real world.
+            <p className="text-sm text-white/50 text-center">
+              Built for small businesses. One backend. No complexity.
             </p>
             <div className="flex items-center gap-6">
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Contact</a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-                <Instagram className="w-4 h-4" />
-                Instagram
+              <a
+                href="#"
+                className="text-sm text-white/50 hover:text-white transition-colors"
+              >
+                Contact
               </a>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy</a>
+              <a
+                href="#"
+                className="text-sm text-white/50 hover:text-white transition-colors"
+              >
+                Privacy
+              </a>
             </div>
           </div>
         </div>
       </footer>
     </div>
+  );
+}
+
+function BentoGrid({ cards }: { cards: BentoCard[] }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <AnimatePresence>
+        {cards.map((card, index) => (
+          <BentoCard key={card.id} card={card} index={index} />
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function BentoCard({
+  card,
+  index,
+}: {
+  card: BentoCard;
+  index: number;
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const Icon = card.icon;
+
+  return (
+    <motion.div
+      ref={ref}
+      className={`${card.rowSpan} ${card.colSpan} group relative overflow-hidden rounded-3xl border ${card.borderColor} bg-gradient-to-br ${card.color} backdrop-blur-sm p-8 cursor-pointer`}
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={
+        isInView
+          ? { opacity: 1, y: 0, scale: 1 }
+          : { opacity: 0, y: 50, scale: 0.9 }
+      }
+      transition={{
+        duration: 0.6,
+        delay: index * 0.1,
+        ease: [0.34, 1.56, 0.64, 1],
+      }}
+      whileHover={{
+        scale: 1.02,
+        transition: {
+          type: "spring",
+          stiffness: 300,
+          damping: 20,
+        },
+      }}
+    >
+      <div className="relative z-10 h-full flex flex-col">
+        <div className="mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center mb-4 group-hover:bg-white/20 transition-colors">
+            <Icon className="w-7 h-7 text-white" />
+          </div>
+          <h3 className="text-2xl font-bold text-white mb-2">{card.title}</h3>
+          <p className="text-sm text-white/60 font-medium">{card.subtitle}</p>
+        </div>
+        <p className="text-white/70 text-sm leading-relaxed mt-auto">
+          {card.description}
+        </p>
+      </div>
+
+      {/* Hover Glow Effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+    </motion.div>
   );
 }
