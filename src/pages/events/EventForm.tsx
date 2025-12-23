@@ -130,7 +130,7 @@ export default function EventForm() {
         description: error.message || 'Failed to load event',
         variant: 'destructive',
       });
-      navigate('/events');
+      navigate('/app/events');
     } finally {
       setLoading(false);
     }
@@ -228,7 +228,7 @@ export default function EventForm() {
         title: 'Success',
         description: isEditMode ? 'Event updated successfully' : 'Event created successfully',
       });
-      navigate('/events');
+      navigate('/app/events');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -308,7 +308,7 @@ export default function EventForm() {
           </div>
         </form>
       </div>
-    </Layout>
+    </div>
   );
 }
 
