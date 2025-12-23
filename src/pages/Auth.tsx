@@ -112,49 +112,62 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent/30 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
+      {/* Subtle grid background */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.35]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(14,122,58,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(14,122,58,0.05) 1px, transparent 1px)",
+          backgroundSize: "72px 72px",
+        }}
+      />
 
       {/* Logo */}
       <div className="flex items-center gap-3 mb-8 relative">
-        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-[hsl(30_90%_65%)] flex items-center justify-center shadow-lg">
-          <Handshake className="h-8 w-8 text-primary-foreground" />
+        <div className="h-14 w-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
+          <Handshake className="h-8 w-8 text-white" />
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Growbro</h1>
-          <p className="text-sm text-muted-foreground">Collab Hub</p>
+        <div className="leading-none">
+          <div className="font-bold tracking-tight text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+            Growbro
+          </div>
+          <div className="text-xs mt-1" style={{ color: "rgba(15,31,23,0.6)" }}>
+            Online ↔ Offline Collaboration
+          </div>
         </div>
       </div>
 
       {/* Auth Card */}
-      <Card className="w-full max-w-md relative shadow-xl border-0">
+      <Card className="w-full max-w-md relative shadow-xl rounded-3xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
         <CardHeader className="text-center pb-4">
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             {isLogin ? 'Welcome back' : 'Create your account'}
           </CardTitle>
-          <CardDescription>
+          <CardDescription style={{ color: 'rgba(15,31,23,0.72)' }}>
             {isLogin
-              ? 'Sign in to find your perfect collab partner'
-              : 'Join the community and start collaborating'}
+              ? 'Sign in to continue growing your business'
+              : 'Join Growbro and start collaborating'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" style={{ color: '#0F1F17' }}>Email</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'rgba(15,31,23,0.5)' }} />
                 <Input
                   id="email"
                   type="email"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 rounded-2xl"
+                  style={{ 
+                    borderColor: 'rgba(14,122,58,0.14)',
+                    backgroundColor: '#FBF8F4',
+                    color: '#0F1F17'
+                  }}
                 />
               </div>
               {errors.email && (
@@ -163,16 +176,21 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" style={{ color: '#0F1F17' }}>Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'rgba(15,31,23,0.5)' }} />
                 <Input
                   id="password"
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 rounded-2xl"
+                  style={{ 
+                    borderColor: 'rgba(14,122,58,0.14)',
+                    backgroundColor: '#FBF8F4',
+                    color: '#0F1F17'
+                  }}
                 />
               </div>
               {errors.password && (
@@ -180,7 +198,13 @@ export default function Auth() {
               )}
             </div>
 
-            <Button type="submit" className="w-full" variant="hero" size="lg" disabled={formLoading}>
+            <Button 
+              type="submit" 
+              className="w-full font-bold rounded-2xl" 
+              size="lg" 
+              disabled={formLoading}
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            >
               {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLogin ? 'Sign In' : 'Create Account'}
             </Button>
@@ -190,7 +214,10 @@ export default function Auth() {
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              className="text-sm transition-colors"
+              style={{ color: 'rgba(15,31,23,0.72)' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#0E7A3A'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(15,31,23,0.72)'}
             >
               {isLogin
                 ? "Don't have an account? Sign up"
@@ -201,10 +228,10 @@ export default function Auth() {
       </Card>
 
       {/* Tagline */}
-      <p className="mt-8 text-center text-muted-foreground max-w-md relative">
+      <p className="mt-8 text-center max-w-md relative" style={{ color: 'rgba(15,31,23,0.72)' }}>
         Connect brands with venues for meaningful collaborations.
         <br />
-        <span className="text-primary font-medium">Swipe. Match. Collab.</span>
+        <span style={{ color: '#0E7A3A', fontWeight: 600 }}>One backend. One inventory. One place to grow.</span>
       </p>
     </div>
   );

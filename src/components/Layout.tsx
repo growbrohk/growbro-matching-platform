@@ -71,108 +71,135 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={{ backgroundColor: '#FBF8F4' }}>
+      {/* Subtle grid background */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.35]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(14,122,58,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(14,122,58,0.05) 1px, transparent 1px)",
+          backgroundSize: "72px 72px",
+        }}
+      />
+
       {/* Header */}
-      <header className="sticky top-0 z-50 glass border-b">
-        <div className="container flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link to="/home" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-[hsl(30_90%_65%)] flex items-center justify-center">
-              <Handshake className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg hidden sm:inline">Growbro</span>
-          </Link>
+      <header
+        className="sticky top-0 z-50 border-b backdrop-blur-xl"
+        style={{
+          borderColor: "rgba(14,122,58,0.12)",
+          backgroundColor: "rgba(251,248,244,0.86)",
+        }}
+      >
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
+          <div className="h-16 flex items-center justify-between">
+            {/* Logo */}
+            <Link to="/home" className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
+                <Handshake className="h-5 w-5 text-white" />
+              </div>
+              <div className="leading-none">
+                <div className="font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+                  Growbro
+                </div>
+                <div className="text-xs" style={{ color: "rgba(15,31,23,0.6)" }}>
+                  Online ↔ Offline Collaboration
+                </div>
+              </div>
+            </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link key={item.path} to={item.path}>
-                <Button
-                  variant={isActive(item.path) ? 'secondary' : 'ghost'}
-                  className={cn(
-                    'gap-2',
-                    isActive(item.path) && 'bg-primary/10 text-primary'
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Button>
-              </Link>
-            ))}
-          </nav>
-
-          {/* User Menu */}
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2 px-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={profile?.avatar_url} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                      {profile?.display_name?.charAt(0)?.toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden sm:inline text-sm font-medium">
-                    {profile?.display_name || 'User'}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <Link to={`/profiles/${profile?.handle}`} className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    View Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Mobile Menu Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <nav className="md:hidden border-t bg-card p-4 animate-in">
-            <div className="flex flex-col gap-2">
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-1">
               {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
+                <Link key={item.path} to={item.path}>
                   <Button
                     variant={isActive(item.path) ? 'secondary' : 'ghost'}
                     className={cn(
-                      'w-full justify-start gap-2',
+                      'gap-2',
                       isActive(item.path) && 'bg-primary/10 text-primary'
                     )}
+                    style={isActive(item.path) ? {} : { color: 'rgba(15,31,23,0.75)' }}
                   >
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </Button>
                 </Link>
               ))}
+            </nav>
+
+            {/* User Menu */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="gap-2 px-2" style={{ color: 'rgba(15,31,23,0.78)' }}>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={profile?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        {profile?.display_name?.charAt(0)?.toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden sm:inline text-sm font-medium">
+                      {profile?.display_name || 'User'}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link to={`/profiles/${profile?.handle}`} className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      View Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Mobile Menu Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                style={{ color: 'rgba(15,31,23,0.78)' }}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
             </div>
-          </nav>
-        )}
+          </div>
+
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <nav className="md:hidden border-t p-4 animate-in" style={{ backgroundColor: 'rgba(251,248,244,0.95)', borderColor: 'rgba(14,122,58,0.12)' }}>
+              <div className="flex flex-col gap-2">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Button
+                      variant={isActive(item.path) ? 'secondary' : 'ghost'}
+                      className={cn(
+                        'w-full justify-start gap-2',
+                        isActive(item.path) && 'bg-primary/10 text-primary'
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            </nav>
+          )}
+        </div>
       </header>
 
       {/* Main Content */}
-      <main className="container py-6">{children}</main>
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 py-6 relative">{children}</main>
     </div>
   );
 }

@@ -7,106 +7,111 @@
 
 @layer base {
   :root {
-    /* Warm, inviting palette inspired by Headspace */
-    --background: 30 30% 98%;
-    --foreground: 20 25% 15%;
-
-    --card: 30 25% 99%;
-    --card-foreground: 20 25% 15%;
-
-    --popover: 30 25% 99%;
-    --popover-foreground: 20 25% 15%;
-
-    /* Coral/Peach primary */
-    --primary: 16 85% 60%;
+    /* Growbro Design System - Green + Beige Palette */
+    /* Primary green: #0E7A3A */
+    --primary: 145 75% 26%;
     --primary-foreground: 0 0% 100%;
 
-    /* Soft sage secondary */
-    --secondary: 150 25% 92%;
-    --secondary-foreground: 150 30% 25%;
+    /* Soft green: #2F9B63 */
+    --primary-soft: 145 50% 40%;
 
-    --muted: 30 15% 94%;
-    --muted-foreground: 20 10% 50%;
+    /* Beige: #F4EFE9 */
+    --beige: 35 30% 95%;
+    
+    /* Beige soft: #FBF8F4 */
+    --background: 35 40% 98%;
+    --foreground: 145 30% 8%;
 
-    /* Warm lavender accent */
-    --accent: 260 40% 94%;
-    --accent-foreground: 260 40% 30%;
+    /* Card: rgba(251,248,244,0.9) */
+    --card: 35 40% 98%;
+    --card-foreground: 145 30% 8%;
+
+    --popover: 35 40% 98%;
+    --popover-foreground: 145 30% 8%;
+
+    /* Secondary: soft beige with green accent */
+    --secondary: 35 30% 95%;
+    --secondary-foreground: 145 30% 8%;
+
+    --muted: 35 25% 94%;
+    --muted-foreground: 145 20% 40%;
+
+    /* Accent: soft green */
+    --accent: 145 50% 40%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 20% 90%;
-    --input: 30 20% 90%;
-    --ring: 16 85% 60%;
+    /* Borders: rgba(14,122,58,0.14) */
+    --border: 145 75% 26% / 0.14;
+    --input: 145 75% 26% / 0.14;
+    --ring: 145 75% 26%;
 
     --radius: 1rem;
 
-    /* Collab type colors */
-    --consignment: 16 85% 60%;
-    --event: 260 60% 65%;
-    --collab-product: 150 50% 50%;
+    /* Collab type colors - updated to green palette */
+    --consignment: 145 75% 26%;
+    --event: 145 50% 40%;
+    --collab-product: 145 60% 35%;
     --cup-sleeve: 45 90% 55%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(16 85% 60%) 0%, hsl(30 90% 65%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(30 30% 98%) 0%, hsl(30 25% 95%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(30 20% 98%) 100%);
+    /* Shadows - soft, low contrast */
+    --shadow-sm: 0 1px 2px 0 rgba(15, 31, 23, 0.03);
+    --shadow-md: 0 4px 6px -1px rgba(15, 31, 23, 0.05), 0 2px 4px -2px rgba(15, 31, 23, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(15, 31, 23, 0.08), 0 4px 6px -4px rgba(15, 31, 23, 0.05);
+    --shadow-xl: 0 18px 60px rgba(15, 31, 23, 0.08);
+    --shadow-glow: 0 0 40px rgba(14, 122, 58, 0.2);
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(20 25% 15% / 0.03);
-    --shadow-md: 0 4px 6px -1px hsl(20 25% 15% / 0.05), 0 2px 4px -2px hsl(20 25% 15% / 0.05);
-    --shadow-lg: 0 10px 15px -3px hsl(20 25% 15% / 0.08), 0 4px 6px -4px hsl(20 25% 15% / 0.05);
-    --shadow-xl: 0 20px 25px -5px hsl(20 25% 15% / 0.1), 0 8px 10px -6px hsl(20 25% 15% / 0.05);
-    --shadow-glow: 0 0 40px hsl(16 85% 60% / 0.2);
-
-    /* Sidebar - keeping defaults for compatibility */
-    --sidebar-background: 30 25% 99%;
-    --sidebar-foreground: 20 25% 15%;
-    --sidebar-primary: 16 85% 60%;
+    /* Sidebar */
+    --sidebar-background: 35 40% 98%;
+    --sidebar-foreground: 145 30% 8%;
+    --sidebar-primary: 145 75% 26%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 30 15% 94%;
-    --sidebar-accent-foreground: 20 25% 15%;
-    --sidebar-border: 30 20% 90%;
-    --sidebar-ring: 16 85% 60%;
+    --sidebar-accent: 35 30% 95%;
+    --sidebar-accent-foreground: 145 30% 8%;
+    --sidebar-border: 145 75% 26% / 0.14;
+    --sidebar-ring: 145 75% 26%;
   }
 
   .dark {
-    --background: 20 15% 10%;
-    --foreground: 30 20% 95%;
+    /* Deep section: #0B1510 */
+    --background: 145 30% 5%;
+    --foreground: 35 40% 95%;
 
-    --card: 20 15% 12%;
-    --card-foreground: 30 20% 95%;
+    --card: 145 30% 6%;
+    --card-foreground: 35 40% 95%;
 
-    --popover: 20 15% 12%;
-    --popover-foreground: 30 20% 95%;
+    --popover: 145 30% 6%;
+    --popover-foreground: 35 40% 95%;
 
-    --primary: 16 85% 60%;
+    --primary: 145 75% 26%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 150 15% 18%;
-    --secondary-foreground: 150 20% 80%;
+    --secondary: 145 20% 12%;
+    --secondary-foreground: 35 40% 95%;
 
-    --muted: 20 15% 18%;
-    --muted-foreground: 30 10% 60%;
+    --muted: 145 20% 12%;
+    --muted-foreground: 35 30% 60%;
 
-    --accent: 260 30% 20%;
-    --accent-foreground: 260 30% 85%;
+    --accent: 145 50% 40%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 20 15% 20%;
-    --input: 20 15% 20%;
-    --ring: 16 85% 60%;
+    --border: 35 30% 20% / 0.14;
+    --input: 35 30% 20% / 0.14;
+    --ring: 145 75% 26%;
 
-    --sidebar-background: 20 15% 10%;
-    --sidebar-foreground: 30 20% 95%;
-    --sidebar-primary: 16 85% 60%;
+    --sidebar-background: 145 30% 5%;
+    --sidebar-foreground: 35 40% 95%;
+    --sidebar-primary: 145 75% 26%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 20 15% 18%;
-    --sidebar-accent-foreground: 30 20% 95%;
-    --sidebar-border: 20 15% 20%;
-    --sidebar-ring: 16 85% 60%;
+    --sidebar-accent: 145 20% 12%;
+    --sidebar-accent-foreground: 35 40% 95%;
+    --sidebar-border: 35 30% 20% / 0.14;
+    --sidebar-ring: 145 75% 26%;
   }
 }
 
@@ -130,11 +135,11 @@
   }
   
   .collab-chip-event {
-    @apply bg-accent text-accent-foreground border-accent;
+    @apply bg-primary-soft/20 text-primary border-primary/20;
   }
   
   .collab-chip-collab-product {
-    @apply bg-secondary text-secondary-foreground border-secondary;
+    @apply bg-primary/10 text-primary border-primary/20;
   }
   
   .collab-chip-cup-sleeve {
@@ -142,11 +147,18 @@
   }
 
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-2;
   }
 
   .glass {
-    @apply bg-card/80 backdrop-blur-xl border border-border/50;
+    @apply bg-background/86 backdrop-blur-xl border border-border;
+  }
+
+  /* Growbro card style */
+  .growbro-card {
+    @apply rounded-2xl sm:rounded-3xl border shadow-xl;
+    border-color: rgba(14, 122, 58, 0.14);
+    background-color: rgba(251, 248, 244, 0.9);
   }
 }
 

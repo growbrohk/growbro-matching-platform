@@ -853,8 +853,8 @@ export default function Inventory() {
       <div className="container mx-auto py-4 md:py-8 px-4">
         <div className="flex items-center justify-between mb-4 md:mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Inventory</h1>
-            <p className="text-sm md:text-base text-muted-foreground mt-1">
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>Inventory</h1>
+            <p className="text-sm md:text-base mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
               Manage product inventory across locations
             </p>
           </div>

@@ -442,7 +442,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-hero relative">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative" style={{ backgroundColor: '#FBF8F4' }}>
       {/* Progress indicator */}
       <div className="w-full max-w-md mb-8">
         <div className="flex items-center justify-between mb-2">
@@ -463,7 +463,7 @@ export default function Onboarding() {
 
       {/* Step 1: Required Information */}
       {step === 1 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
+        <Card className="w-full max-w-md shadow-xl rounded-3xl animate-in" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Tell us about your business</CardTitle>
             <CardDescription>
@@ -638,7 +638,7 @@ export default function Onboarding() {
 
       {/* Step 2: Optional Information */}
       {step === 2 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
+        <Card className="w-full max-w-md shadow-xl rounded-3xl animate-in" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Additional Information</CardTitle>
             <CardDescription>
@@ -704,7 +704,7 @@ export default function Onboarding() {
 
       {/* Step 3: Collab Types */}
       {step === 3 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
+        <Card className="w-full max-w-md shadow-xl rounded-3xl animate-in" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Collaboration Preferences</CardTitle>
             <CardDescription>
@@ -763,7 +763,7 @@ export default function Onboarding() {
 
       {/* Step 4: Initial Product (Optional) */}
       {step === 4 && (
-        <Card className="w-full max-w-md shadow-xl border-0 animate-in">
+        <Card className="w-full max-w-md shadow-xl rounded-3xl animate-in" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Add Your First Product</CardTitle>
             <CardDescription>

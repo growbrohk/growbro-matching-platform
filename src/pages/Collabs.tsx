@@ -362,8 +362,8 @@ export default function Collabs() {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Collaborations</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>Collaborations</h1>
+            <p className="mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
               Manage your collab requests
             </p>
           </div>
@@ -372,7 +372,7 @@ export default function Collabs() {
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button variant="hero">
+              <Button style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
                 <Plus className="h-4 w-4 mr-2" />
                 New Request
               </Button>

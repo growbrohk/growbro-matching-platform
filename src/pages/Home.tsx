@@ -117,8 +117,8 @@ export default function Home() {
     <Layout>
       <div className="max-w-lg mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Discover</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-extrabold tracking-tight mb-2" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>Discover</h1>
+          <p style={{ color: 'rgba(15,31,23,0.72)' }}>
             Find your perfect {profile?.role === 'brand' ? 'venue' : 'brand'} partner
           </p>
         </div>
@@ -143,14 +143,19 @@ export default function Home() {
             {/* Profile Card */}
             <div
               className={cn(
-                'relative bg-card rounded-3xl shadow-xl overflow-hidden transition-all duration-300',
+                'relative rounded-3xl shadow-xl overflow-hidden transition-all duration-300',
                 swipeDirection === 'left' && 'swipe-out-left',
                 swipeDirection === 'right' && 'swipe-out-right',
                 !swipeDirection && 'swipe-card'
               )}
+              style={{ 
+                borderColor: 'rgba(14,122,58,0.14)',
+                backgroundColor: 'rgba(251,248,244,0.9)',
+                border: '1px solid'
+              }}
             >
               {/* Cover Image */}
-              <div className="h-48 bg-gradient-to-br from-primary/20 to-accent relative">
+              <div className="h-48 relative" style={{ backgroundColor: 'rgba(14,122,58,0.1)' }}>
                 {currentProfile.cover_image_url && (
                   <img
                     src={currentProfile.cover_image_url}

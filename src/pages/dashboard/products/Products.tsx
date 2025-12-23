@@ -310,12 +310,12 @@ export default function Products() {
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Products</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>Products</h1>
+            <p className="mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
               Manage your product catalog
             </p>
           </div>
-          <Button onClick={handleCreateProduct}>
+          <Button onClick={handleCreateProduct} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
             <Plus className="mr-2 h-4 w-4" />
             Add Product
           </Button>
