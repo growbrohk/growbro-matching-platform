@@ -15,7 +15,6 @@ import {
   MessageCircle,
   Handshake,
   Package,
-  Calendar,
   User,
   LogOut,
   Menu,
@@ -46,10 +45,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/messages', label: 'Messages', icon: MessageCircle },
     { path: '/dashboard/products', label: 'Products', icon: Package },
     { path: '/dashboard/inventory', label: 'Inventory', icon: Package },
-    // Venue features only if is_venue is true
-    ...(profile?.is_venue === true
-      ? [{ path: '/dashboard/spaces', label: 'Spaces', icon: Calendar }]
-      : []),
+    // Venue features removed - Spaces page has been deleted
   ];
 
   const isActive = (path: string) => {
@@ -63,9 +59,6 @@ export function Layout({ children }: LayoutProps) {
       return location.pathname.startsWith('/dashboard/inventory') ||
              location.pathname.startsWith('/dashboard/brand/inventory') ||
              location.pathname.startsWith('/dashboard/venue/inventory');
-    }
-    if (path === '/dashboard/spaces') {
-      return location.pathname === '/dashboard/spaces';
     }
     return location.pathname === path;
   };

@@ -24,7 +24,6 @@ import { ProductVariation } from '@/lib/types/variable-products';
 import { getProductVariations, updateVariationInventory } from '@/lib/api/variable-products';
 import { getEventWithTickets } from '@/lib/api/ticketing';
 import { EventWithTicketProducts, TicketProductRecord } from '@/lib/types/ticketing';
-import { VariableInventoryView } from './VariableInventoryView';
 
 interface ProductInventory {
   id: string;
@@ -1077,30 +1076,9 @@ export default function Inventory() {
                       </label>
                     </div>
                   </div>
-                  <VariableInventoryView
-                    products={variableProducts}
-                    locations={locations}
-                    selectedWarehouses={selectedWarehouses}
-                    onUpdateStock={updateStock}
-                    saving={saving}
-                    editMode={editMode}
-                    onStartEdit={handleStartEdit}
-                    onCancelEdit={handleCancelEdit}
-                    onConfirmEdit={handleConfirmEdit}
-                    productVariations={productVariations}
-                    variationInventory={variationInventory}
-                    expandedProducts={expandedProducts}
-                    expandedColors={expandedColors}
-                    onToggleExpansion={toggleProductExpansion}
-                    onToggleColorExpansion={toggleColorExpansion}
-                    isGlobalEditMode={isGlobalEditMode}
-                    onStockValueChange={(key, value) => {
-                      setEditMode(prev => ({
-                        ...prev,
-                        [key]: { editing: true, tempValue: value },
-                      }));
-                    }}
-                  />
+                  <div className="text-center py-12 text-muted-foreground">
+                    Variable products inventory view has been removed. This section needs to be reimplemented.
+                  </div>
                 </CardContent>
               </TabsContent>
 

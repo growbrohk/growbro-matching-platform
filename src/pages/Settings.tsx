@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { AppLayout } from '@/components/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,19 +47,16 @@ export default function Settings() {
 
   if (!currentOrg) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
-        </div>
-      </AppLayout>
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      </div>
     );
   }
 
   const orgType = (currentOrg.metadata as any)?.org_type || 'unknown';
 
   return (
-    <AppLayout>
-      <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-3xl">
         <div>
           <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Settings
@@ -114,7 +110,6 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
   );
 }
 
