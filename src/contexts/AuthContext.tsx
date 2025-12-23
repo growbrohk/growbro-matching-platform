@@ -1,17 +1,34 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Profile } from '@/lib/types';
+
+export interface Org {
+  id: string;
+  name: string;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrgMember {
+  id: string;
+  org_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  created_at: string;
+}
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: Profile | null;
+  currentOrg: Org | null;
+  orgMemberships: OrgMember[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshOrgMemberships: () => Promise<void>;
+  setCurrentOrg: (org: Org | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,26 +36,53 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [currentOrg, setCurrentOrg] = useState<Org | null>(null);
+  const [orgMemberships, setOrgMemberships] = useState<OrgMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+  const fetchOrgMemberships = async (userId: string) => {
+    const { data: memberships, error } = await supabase
+      .from('org_members')
+      .select('*, orgs(*)')
+      .eq('user_id', userId);
     
-    if (data && !error) {
-      setProfile(data as Profile);
+    if (error) {
+      console.error('Error fetching org memberships:', error);
+      setOrgMemberships([]);
+      setCurrentOrg(null);
+      return;
+    }
+
+    if (memberships && memberships.length > 0) {
+      const memberData = memberships.map((m: any) => ({
+        id: m.id,
+        org_id: m.org_id,
+        user_id: m.user_id,
+        role: m.role,
+        created_at: m.created_at,
+      }));
+      setOrgMemberships(memberData);
+
+      // Set current org to first membership if not already set
+      if (!currentOrg) {
+        const firstOrg = memberships[0].orgs as Org;
+        setCurrentOrg(firstOrg);
+      } else {
+        // Refresh current org data
+        const orgData = memberships.find((m: any) => m.org_id === currentOrg.id)?.orgs as Org | undefined;
+        if (orgData) {
+          setCurrentOrg(orgData);
+        }
+      }
     } else {
-      setProfile(null);
+      setOrgMemberships([]);
+      setCurrentOrg(null);
     }
   };
 
-  const refreshProfile = async () => {
+  const refreshOrgMemberships = async () => {
     if (user) {
-      await fetchProfile(user.id);
+      await fetchOrgMemberships(user.id);
     }
   };
 
@@ -50,10 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (session?.user) {
           setTimeout(() => {
-            fetchProfile(session.user.id);
+            fetchOrgMemberships(session.user.id);
           }, 0);
         } else {
-          setProfile(null);
+          setOrgMemberships([]);
+          setCurrentOrg(null);
         }
         setLoading(false);
       }
@@ -63,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchOrgMemberships(session.user.id);
       }
       setLoading(false);
     });
@@ -93,7 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null);
+    setOrgMemberships([]);
+    setCurrentOrg(null);
   };
 
   return (
@@ -101,12 +147,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         session,
-        profile,
+        currentOrg,
+        orgMemberships,
         loading,
         signIn,
         signUp,
         signOut,
-        refreshProfile,
+        refreshOrgMemberships,
+        setCurrentOrg,
       }}
     >
       {children}
