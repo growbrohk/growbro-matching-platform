@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +76,7 @@ export default function ProductForm() {
         // Redirect to type selection
         const redirectParams = new URLSearchParams();
         if (ownerTypeParam) redirectParams.set('owner_type', ownerTypeParam);
-        navigate(`/dashboard/products/select-type?${redirectParams.toString()}`);
+        navigate(`/app/products/select-type?${redirectParams.toString()}`);
         return;
       }
 
@@ -159,7 +158,7 @@ export default function ProductForm() {
           description: 'Product not found',
           variant: 'destructive',
         });
-        navigate('/dashboard/products/brand');
+        navigate('/app/products');
         return;
       }
 
@@ -345,7 +344,7 @@ export default function ProductForm() {
         }
       }
 
-      navigate('/dashboard/products');
+      navigate('/app/products');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -358,24 +357,19 @@ export default function ProductForm() {
   };
 
   const getBackPath = () => {
-    if (ownerType === 'venue') {
-      return '/dashboard/products/venue';
-    }
-    return '/dashboard/products/brand';
+    return '/app/products';
   };
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div>
       <div className="container mx-auto py-8 px-4 max-w-4xl">
         <div className="mb-6">
           <Button variant="ghost" onClick={() => navigate(getBackPath())} className="mb-4">
@@ -857,7 +851,7 @@ export default function ProductForm() {
           </div>
         </form>
       </div>
-    </Layout>
+    </div>
   );
 }
 

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProductType, ProductOwnerType } from '@/lib/types';
@@ -94,24 +93,24 @@ export default function ProductTypeSelection() {
   // Show loading state if profile is not loaded yet
   if (!profile) {
     return (
-      <Layout>
+      <div>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   const getBackPath = () => {
-    return '/dashboard/products';
+    return '/app/products';
   };
 
   const handleTypeSelect = (type: ProductTypeOption) => {
     // If Event Tickets, navigate to the new event ticketing form
     if (type.product_type === 'event' || type.id === 'event-tickets') {
-      navigate('/events/new');
+      navigate('/app/events/new');
       return;
     }
     
@@ -121,13 +120,13 @@ export default function ProductTypeSelection() {
       owner_type: type.owner_type,
       product_type_id: type.id,
     });
-    navigate(`/dashboard/products/new?${params.toString()}`);
+    navigate(`/app/products/new?${params.toString()}`);
   };
 
   // If venue user and no owner_type specified, show selector first
   if (showOwnerTypeSelector) {
     return (
-      <Layout>
+      <div>
         <div className="container mx-auto py-8 px-4 max-w-4xl">
           <div className="mb-6">
             <Button variant="ghost" onClick={() => navigate(getBackPath())} className="mb-4">
@@ -170,12 +169,12 @@ export default function ProductTypeSelection() {
           </div>
 
           <div className="mt-6 flex justify-end">
-            <Button onClick={() => navigate(`/dashboard/products/select-type?owner_type=${selectedOwnerType}`)}>
+            <Button onClick={() => navigate(`/app/products/select-type?owner_type=${selectedOwnerType}`)}>
               Continue
             </Button>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
@@ -188,7 +187,7 @@ export default function ProductTypeSelection() {
   if (isVenueRequestingVenue && !isVenue) {
     // Redirect to brand products
     return (
-      <Layout>
+      <div>
         <div className="container mx-auto py-8 px-4 max-w-4xl">
           <div className="mb-6">
             <Button variant="ghost" onClick={() => navigate(getBackPath())} className="mb-4">
@@ -205,13 +204,13 @@ export default function ProductTypeSelection() {
               <p className="text-muted-foreground mb-4">
                 You need to be a venue user to create venue products.
               </p>
-              <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
+              <Button onClick={() => navigate('/app/products/select-type?owner_type=brand')}>
                 Create Brand Product Instead
               </Button>
             </CardContent>
           </Card>
         </div>
-      </Layout>
+      </div>
     );
   }
 

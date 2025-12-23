@@ -238,7 +238,7 @@ export default function OnboardingNew() {
   };
 
   const handleComplete = () => {
-    navigate('/dashboard');
+    navigate('/app/dashboard');
   };
 
   const addVariant = () => {

@@ -37,6 +37,7 @@ export default function Bookings() {
   const { currentOrg } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -88,9 +89,12 @@ export default function Bookings() {
         );
 
         setBookings(enrichedBookings);
+        setError(null);
       } catch (error: any) {
+        const errorMessage = error.message || 'Failed to load bookings';
+        setError(errorMessage);
         console.error('Error fetching bookings:', error);
-        toast.error('Failed to load bookings');
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -139,6 +143,15 @@ export default function Bookings() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
           </div>
+        ) : error ? (
+          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <p className="text-destructive mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
         ) : bookings.length === 0 ? (
           <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
             <CardContent className="flex flex-col items-center justify-center py-12">

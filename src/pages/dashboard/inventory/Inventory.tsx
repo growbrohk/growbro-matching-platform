@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,8 +211,11 @@ export default function Inventory() {
           setVenueInventory(venueInvData as unknown as ProductInventory[]);
         }
       }
+      setError(null);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load inventory');
+      const errorMessage = error.message || 'Failed to load inventory';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -840,16 +842,29 @@ export default function Inventory() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={() => fetchData()}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div>
       <div className="container mx-auto py-4 md:py-8 px-4">
         <div className="flex items-center justify-between mb-4 md:mb-6">
           <div>
@@ -1131,7 +1146,7 @@ export default function Inventory() {
         </Card>
         </Tabs>
       </div>
-    </Layout>
+    </div>
   );
 }
 

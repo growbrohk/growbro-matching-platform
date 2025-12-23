@@ -7,20 +7,11 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Auth from "./pages/Auth";
 import OnboardingNew from "./pages/OnboardingNew";
 import Landing from "./pages/Landing";
-import Browse from "./pages/Browse";
-import ProfilePage from "./pages/ProfilePage";
-import Products from "./pages/Products";
-import VenueCollabOptions from "./pages/VenueCollabOptions";
-import Collabs from "./pages/Collabs";
-import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
-import Shop from "./pages/Shop";
-import ShopProduct from "./pages/ShopProduct";
 import DashboardProducts from "./pages/dashboard/products/Products";
 import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
 import Inventory from "./pages/dashboard/inventory/Inventory";
-import Spaces from "./pages/dashboard/spaces/Spaces";
 import EventsList from "./pages/events/EventsList";
 import EventForm from "./pages/events/EventForm";
 import Dashboard from "./pages/Dashboard";
@@ -65,9 +56,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If user is logged in and has org memberships, redirect to dashboard
+  // If user is logged in and has org memberships, redirect to app dashboard
   if (user && orgMemberships.length > 0) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/app/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -84,9 +75,9 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If signed in and has org membership -> redirect to dashboard
+  // If signed in and has org membership -> redirect to app dashboard
   if (user && orgMemberships.length > 0) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/app/dashboard" replace />;
   }
 
   // If signed in and no org membership -> redirect to onboarding
@@ -118,9 +109,9 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
-  // If signed in and has org membership -> redirect to dashboard
+  // If signed in and has org membership -> redirect to app dashboard
   if (user && orgMemberships.length > 0) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/app/dashboard" replace />;
   }
 
   // If signed in and no org membership -> allow access to onboarding
@@ -130,41 +121,25 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public Routes */}
       <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
-      {/* Dashboard Routes - Dashboard includes AppLayout */}
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      {/* Other dashboard routes need to be updated to include AppLayout individually */}
-      <Route path="/dashboard/products" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/products/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/products/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/products/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/events" element={<ProtectedRoute><AppLayout><EventsList /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/bookings" element={<ProtectedRoute><AppLayout><Bookings /></AppLayout></ProtectedRoute>} />
-      <Route path="/dashboard/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
-      {/* Legacy routes for backward compatibility - will be removed */}
-      <Route path="/browse" element={<ProtectedRoute><Browse /></ProtectedRoute>} />
-      <Route path="/profiles/:handle" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-      <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-      <Route path="/venue/collab-options" element={<ProtectedRoute><VenueCollabOptions /></ProtectedRoute>} />
-      <Route path="/collabs" element={<ProtectedRoute><Collabs /></ProtectedRoute>} />
-      <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-      <Route path="/dashboard/spaces" element={<ProtectedRoute><AppLayout><Spaces /></AppLayout></ProtectedRoute>} />
-      <Route path="/events" element={<ProtectedRoute><EventsList /></ProtectedRoute>} />
-      <Route path="/events/new" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
-      <Route path="/events/:id/edit" element={<ProtectedRoute><EventForm /></ProtectedRoute>} />
-      {/* Legacy routes - redirect to new unified routes */}
-      <Route path="/dashboard/products/brand" element={<ProtectedRoute><DashboardProducts /></ProtectedRoute>} />
-      <Route path="/dashboard/products/venue" element={<ProtectedRoute><DashboardProducts /></ProtectedRoute>} />
-      <Route path="/dashboard/brand/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-      <Route path="/dashboard/venue/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-      {/* Public webstore routes */}
-      <Route path="/shop" element={<Shop />} />
-      <Route path="/shop/products/:slug" element={<ShopProduct />} />
+      
+      {/* Protected Routes - Use /app prefix */}
+      <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/products" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/products/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/products/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/products/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/bookings" element={<ProtectedRoute><AppLayout><Bookings /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/events" element={<ProtectedRoute><AppLayout><EventsList /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+      
+      {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

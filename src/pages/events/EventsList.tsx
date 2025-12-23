@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -41,6 +40,7 @@ export default function EventsList() {
   const { toast } = useToast();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [eventToDelete, setEventToDelete] = useState<EventRecord | null>(null);
@@ -93,10 +93,13 @@ export default function EventsList() {
       );
 
       setEvents(eventsWithStats);
+      setError(null);
     } catch (error: any) {
+      const errorMessage = error.message || 'Failed to load events';
+      setError(errorMessage);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load events',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -143,16 +146,29 @@ export default function EventsList() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={() => fetchEvents()}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div>
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -161,7 +177,7 @@ export default function EventsList() {
               Manage your event ticket products
             </p>
           </div>
-          <Button onClick={() => navigate('/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+          <Button onClick={() => navigate('/app/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
             <Plus className="mr-2 h-4 w-4" />
             New Event
           </Button>
@@ -175,7 +191,7 @@ export default function EventsList() {
             {events.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">No events yet</p>
-                <Button onClick={() => navigate('/events/new')}>
+                <Button onClick={() => navigate('/app/events/new')}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Your First Event
                 </Button>
@@ -230,7 +246,7 @@ export default function EventsList() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(`/events/${event.id}/edit`)}
+                            onClick={() => navigate(`/app/events/${event.id}/edit`)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -277,7 +293,7 @@ export default function EventsList() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </Layout>
+    </div>
   );
 }
 

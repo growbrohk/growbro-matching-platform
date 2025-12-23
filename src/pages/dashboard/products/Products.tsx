@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -44,6 +43,7 @@ export default function Products() {
   const { toast } = useToast();
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -185,10 +185,13 @@ export default function Products() {
 
       // Fetch stock and variations for all products
       await fetchProductStocksAndVariations(allProductsData);
+      setError(null);
     } catch (error: any) {
+      const errorMessage = error.message || 'Failed to load products';
+      setError(errorMessage);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load products',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -286,7 +289,7 @@ export default function Products() {
   };
 
   const handleCreateProduct = () => {
-    navigate('/dashboard/products/select-type?owner_type=brand');
+    navigate('/app/products/select-type?owner_type=brand');
   };
 
   const simpleProducts = allProducts.filter(p => p.product_type === 'simple' || !p.product_type);
@@ -295,18 +298,31 @@ export default function Products() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={() => fetchProducts()}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   const currentProducts = getCurrentProducts();
 
   return (
-    <Layout>
+    <div>
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -343,7 +359,7 @@ export default function Products() {
                   {simpleProducts.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-muted-foreground mb-4">No simple products yet</p>
-                      <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
+                      <Button onClick={() => navigate('/app/products/select-type?owner_type=brand')}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Your First Product
                       </Button>
@@ -351,7 +367,7 @@ export default function Products() {
                   ) : (
                     <ProductTable
                       products={simpleProducts}
-                      onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
+                      onEdit={(product) => navigate(`/app/products/${product.id}/edit`)}
                       onDelete={(product) => {
                         setProductToDelete(product);
                         setDeleteDialogOpen(true);
@@ -374,7 +390,7 @@ export default function Products() {
                   {variableProducts.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-muted-foreground mb-4">No variable products yet</p>
-                      <Button onClick={() => navigate('/dashboard/products/select-type?owner_type=brand')}>
+                      <Button onClick={() => navigate('/app/products/select-type?owner_type=brand')}>
                         <Plus className="mr-2 h-4 w-4" />
                         Create Your First Variable Product
                       </Button>
@@ -382,7 +398,7 @@ export default function Products() {
                   ) : (
                     <ProductTable
                       products={variableProducts}
-                      onEdit={(product) => navigate(`/dashboard/products/${product.id}/edit`)}
+                      onEdit={(product) => navigate(`/app/products/${product.id}/edit`)}
                       onDelete={(product) => {
                         setProductToDelete(product);
                         setDeleteDialogOpen(true);
@@ -419,7 +435,7 @@ export default function Products() {
                         if (eventId) {
                           navigate(`/events/${eventId}/edit`);
                         } else {
-                          navigate(`/dashboard/products/${product.id}/edit`);
+                          navigate(`/app/products/${product.id}/edit`);
                         }
                       }}
                       onDelete={(product) => {
@@ -459,7 +475,7 @@ export default function Products() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </Layout>
+    </div>
   );
 }
 

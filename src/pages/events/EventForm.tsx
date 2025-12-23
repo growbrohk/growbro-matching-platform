@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
@@ -78,7 +77,7 @@ export default function EventForm() {
           description: 'Event not found',
           variant: 'destructive',
         });
-        navigate('/events');
+        navigate('/app/events');
         return;
       }
 
@@ -243,19 +242,17 @@ export default function EventForm() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div>
       <div className="container mx-auto py-8 px-4 max-w-5xl">
         <div className="mb-6">
-          <Button variant="ghost" onClick={() => navigate('/events')} className="mb-4">
+          <Button variant="ghost" onClick={() => navigate('/app/events')} className="mb-4">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Events
           </Button>
@@ -297,7 +294,7 @@ export default function EventForm() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => navigate('/events')}
+                onClick={() => navigate('/app/events')}
                 disabled={saving}
               >
                 Cancel

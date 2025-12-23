@@ -104,7 +104,7 @@ export default function Dashboard() {
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.productsCount}
                   </div>
-                  <Link to="/dashboard/products">
+                  <Link to="/app/products">
                     <Button variant="ghost" size="sm" className="gap-2">
                       View all
                       <ArrowRight className="h-4 w-4" />
@@ -136,7 +136,7 @@ export default function Dashboard() {
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.bookingsCount}
                   </div>
-                  <Link to="/dashboard/bookings">
+                  <Link to="/app/bookings">
                     <Button variant="ghost" size="sm" className="gap-2">
                       View all
                       <ArrowRight className="h-4 w-4" />
@@ -168,7 +168,7 @@ export default function Dashboard() {
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.upcomingEventsCount}
                   </div>
-                  <Link to="/dashboard/events">
+                  <Link to="/app/events">
                     <Button variant="ghost" size="sm" className="gap-2">
                       View all
                       <ArrowRight className="h-4 w-4" />
@@ -186,7 +186,7 @@ export default function Dashboard() {
             Quick Actions
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Link to="/dashboard/products/new">
+            <Link to="/app/products/new">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
                 <CardHeader>
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
@@ -201,7 +201,7 @@ export default function Dashboard() {
               </Card>
             </Link>
 
-            <Link to="/dashboard/events/new">
+            <Link to="/app/events/new">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
                 <CardHeader>
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
@@ -216,7 +216,7 @@ export default function Dashboard() {
               </Card>
             </Link>
 
-            <Link to="/dashboard/inventory">
+            <Link to="/app/inventory">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
                 <CardHeader>
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>

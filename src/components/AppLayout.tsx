@@ -40,32 +40,32 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/dashboard/products', label: 'Products', icon: Package },
-    { path: '/dashboard/inventory', label: 'Inventory', icon: Warehouse },
-    { path: '/dashboard/bookings', label: 'Bookings', icon: Calendar },
-    { path: '/dashboard/events', label: 'Events & Tickets', icon: Ticket },
-    { path: '/dashboard/settings', label: 'Settings', icon: Settings },
+    { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/app/products', label: 'Products', icon: Package },
+    { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
+    { path: '/app/bookings', label: 'Bookings', icon: Calendar },
+    { path: '/app/events', label: 'Events & Tickets', icon: Ticket },
+    { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
   const isActive = (path: string) => {
-    if (path === '/dashboard') {
-      return location.pathname === '/dashboard';
+    if (path === '/app/dashboard') {
+      return location.pathname === '/app/dashboard';
     }
-    if (path === '/dashboard/products') {
-      return location.pathname.startsWith('/dashboard/products');
+    if (path === '/app/products') {
+      return location.pathname.startsWith('/app/products');
     }
-    if (path === '/dashboard/inventory') {
-      return location.pathname.startsWith('/dashboard/inventory');
+    if (path === '/app/inventory') {
+      return location.pathname.startsWith('/app/inventory');
     }
-    if (path === '/dashboard/bookings') {
-      return location.pathname.startsWith('/dashboard/bookings');
+    if (path === '/app/bookings') {
+      return location.pathname.startsWith('/app/bookings');
     }
-    if (path === '/dashboard/events') {
-      return location.pathname.startsWith('/dashboard/events');
+    if (path === '/app/events') {
+      return location.pathname.startsWith('/app/events');
     }
-    if (path === '/dashboard/settings') {
-      return location.pathname.startsWith('/dashboard/settings');
+    if (path === '/app/settings') {
+      return location.pathname.startsWith('/app/settings');
     }
     return false;
   };
@@ -95,7 +95,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             {/* Logo */}
-            <Link to="/dashboard" className="flex items-center gap-3">
+            <Link to="/app/dashboard" className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
                 <Handshake className="h-5 w-5 text-white" />
               </div>
