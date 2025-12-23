@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Handshake, Mail, Lock, Loader2 } from 'lucide-react';
 import { z } from 'zod';
@@ -21,28 +22,20 @@ export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [formLoading, setFormLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const { signIn, signUp, user, profile, loading: authLoading } = useAuth();
+  const [showSignInBanner, setShowSignInBanner] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Don't redirect while auth state is still loading
-    if (authLoading) return;
-    
-    if (user) {
-      if (profile) {
-        navigate('/home');
-      } else {
-        navigate('/onboarding');
-      }
-    }
-  }, [user, profile, authLoading, navigate]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isSubmitting) return;
+    
     setErrors({});
+    setShowSignInBanner(false);
 
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
@@ -55,11 +48,15 @@ export default function Auth() {
       return;
     }
 
-    setFormLoading(true);
+    setIsSubmitting(true);
 
     try {
       if (isLogin) {
-        const { error } = await signIn(email, password);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
         if (error) {
           let errorTitle = 'Sign in failed';
           let errorDescription = error.message;
@@ -75,9 +72,16 @@ export default function Auth() {
             description: errorDescription,
             variant: 'destructive',
           });
+        } else if (data.session) {
+          // Successfully signed in
+          navigate('/onboarding');
         }
       } else {
-        const { error } = await signUp(email, password);
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+        
         if (error) {
           let errorTitle = 'Sign up failed';
           let errorDescription = error.message;
@@ -100,14 +104,18 @@ export default function Auth() {
             variant: 'destructive',
           });
         } else {
-          toast({
-            title: 'Welcome to Growbro!',
-            description: 'Your account has been created. Let\'s set up your profile!',
-          });
+          // Check signup response
+          if (data.session) {
+            // Session exists, navigate to onboarding
+            navigate('/onboarding');
+          } else if (data.user) {
+            // User created but no session (rare with email confirm OFF)
+            setShowSignInBanner(true);
+          }
         }
       }
     } finally {
-      setFormLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -151,6 +159,13 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {showSignInBanner && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Account created. Please sign in.
+              </AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email" style={{ color: '#0F1F17' }}>Email</Label>
@@ -202,10 +217,10 @@ export default function Auth() {
               type="submit" 
               className="w-full font-bold rounded-2xl" 
               size="lg" 
-              disabled={formLoading}
+              disabled={isSubmitting}
               style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             >
-              {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLogin ? 'Sign In' : 'Create Account'}
             </Button>
           </form>

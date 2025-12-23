@@ -73,11 +73,36 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function AuthRoute({ children }: { children: React.ReactNode }) {
+  const { user, orgMemberships, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      </div>
+    );
+  }
+
+  // If signed in and has org membership -> redirect to dashboard
+  if (user && orgMemberships.length > 0) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If signed in and no org membership -> redirect to onboarding
+  if (user && orgMemberships.length === 0) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // If signed out -> show auth page
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
-      <Route path="/auth" element={<Auth />} />
+      <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<ProtectedRoute><OnboardingNew /></ProtectedRoute>} />
       {/* Dashboard Routes - Dashboard includes AppLayout */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
