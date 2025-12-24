@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type OrgProductType = 'physical' | 'venue_asset';
 
@@ -82,6 +83,54 @@ function generateVariantCombinations(options: VariantOption[], basePrice: string
   });
 }
 
+/**
+ * Helper functions for variant option management
+ */
+function normalizeValue(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function dedupeValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter(v => {
+    const normalized = normalizeValue(v);
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function isOptionsValid(options: VariantOption[]): { ok: boolean; message?: string } {
+  if (options.length === 0) return { ok: true };
+
+  for (const opt of options) {
+    if (!opt.name.trim()) {
+      return { ok: false, message: 'All option names must be non-empty' };
+    }
+    if (opt.values.length === 0) {
+      return { ok: false, message: `Option "${opt.name}" must have at least one value` };
+    }
+    const normalized = opt.values.map(normalizeValue);
+    const unique = new Set(normalized);
+    if (normalized.length !== unique.size) {
+      return { ok: false, message: `Option "${opt.name}" has duplicate values` };
+    }
+  }
+  return { ok: true };
+}
+
+function optionsEqual(a: VariantOption[], b: VariantOption[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name) return false;
+    if (a[i].values.length !== b[i].values.length) return false;
+    for (let j = 0; j < a[i].values.length; j++) {
+      if (normalizeValue(a[i].values[j]) !== normalizeValue(b[i].values[j])) return false;
+    }
+  }
+  return true;
+}
+
 export default function ProductForm() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -101,8 +150,16 @@ export default function ProductForm() {
   const [basePrice, setBasePrice] = useState('');
   
   // New variant system: options → combinations
-  const [variantOptions, setVariantOptions] = useState<VariantOption[]>([]);
+  // Draft options are editable; applied options are the last ones used to generate variants
+  const [variantOptionsDraft, setVariantOptionsDraft] = useState<VariantOption[]>([]);
+  const [variantOptionsApplied, setVariantOptionsApplied] = useState<VariantOption[]>([]);
   const [variants, setVariants] = useState<VariantCombination[]>([]);
+
+  // Computed: check if there are pending option changes
+  const hasPendingOptionChanges = useMemo(() => {
+    if (variantOptionsDraft.length === 0 && variantOptionsApplied.length === 0) return false;
+    return !optionsEqual(variantOptionsDraft, variantOptionsApplied);
+  }, [variantOptionsDraft, variantOptionsApplied]);
 
   const canSubmit = useMemo(() => {
     if (!currentOrg?.id) return false;
@@ -118,7 +175,7 @@ export default function ProductForm() {
     const load = async () => {
     setLoading(true);
     try {
-        const { data: product, error: productError } = await supabase
+        const { data: product, error: productError } = await (supabase as any)
           .from('products')
           .select('id, org_id, type, title, description, base_price')
           .eq('id', id)
@@ -133,7 +190,7 @@ export default function ProductForm() {
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
 
-        const { data: variantsData, error: variantsError } = await supabase
+        const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
           .select('id, name, sku, price, active, archived_at, created_at')
           .eq('product_id', p.id)
@@ -171,49 +228,118 @@ export default function ProductForm() {
 
   // Variant Option Management
   const addOption = () => {
-    if (variantOptions.length >= 2) {
+    if (variantOptionsDraft.length >= 2) {
       toast({ title: 'Limit reached', description: 'Maximum 2 variant options allowed', variant: 'destructive' });
       return;
     }
-    setVariantOptions((prev) => [...prev, { name: '', values: [] }]);
+    setVariantOptionsDraft((prev) => [...prev, { name: '', values: [] }]);
   };
 
   const removeOption = (idx: number) => {
-    setVariantOptions((prev) => prev.filter((_, i) => i !== idx));
+    setVariantOptionsDraft((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const updateOptionName = (idx: number, name: string) => {
-    setVariantOptions((prev) => prev.map((opt, i) => (i === idx ? { ...opt, name } : opt)));
+    setVariantOptionsDraft((prev) => prev.map((opt, i) => (i === idx ? { ...opt, name } : opt)));
   };
 
   const addOptionValue = (idx: number, value: string) => {
-    if (!value.trim()) return;
-    setVariantOptions((prev) =>
-      prev.map((opt, i) => (i === idx ? { ...opt, values: [...opt.values, value.trim()] } : opt))
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    setVariantOptionsDraft((prev) =>
+      prev.map((opt, i) => {
+        if (i !== idx) return opt;
+        // Check for duplicates (case-insensitive)
+        const normalized = normalizeValue(trimmed);
+        const exists = opt.values.some(v => normalizeValue(v) === normalized);
+        if (exists) {
+          toast({ title: 'Duplicate value', description: `"${trimmed}" already exists`, variant: 'destructive' });
+          return opt;
+        }
+        return { ...opt, values: [...opt.values, trimmed] };
+      })
+    );
+  };
+
+  const updateOptionValue = (optIdx: number, valIdx: number, newValue: string) => {
+    const trimmed = newValue.trim();
+    if (!trimmed) return;
+
+    setVariantOptionsDraft((prev) =>
+      prev.map((opt, i) => {
+        if (i !== optIdx) return opt;
+        // Check for duplicates excluding the current value
+        const normalized = normalizeValue(trimmed);
+        const exists = opt.values.some((v, j) => j !== valIdx && normalizeValue(v) === normalized);
+        if (exists) {
+          toast({ title: 'Duplicate value', description: `"${trimmed}" already exists`, variant: 'destructive' });
+          return opt;
+        }
+        return {
+          ...opt,
+          values: opt.values.map((v, j) => (j === valIdx ? trimmed : v)),
+        };
+      })
     );
   };
 
   const removeOptionValue = (optIdx: number, valIdx: number) => {
-    setVariantOptions((prev) =>
+    setVariantOptionsDraft((prev) =>
       prev.map((opt, i) => (i === optIdx ? { ...opt, values: opt.values.filter((_, j) => j !== valIdx) } : opt))
     );
   };
 
-  const generateVariants = () => {
-    const generated = generateVariantCombinations(variantOptions, basePrice);
+  const regenerateVariants = () => {
+    // Validate draft options
+    const validation = isOptionsValid(variantOptionsDraft);
+    if (!validation.ok) {
+      toast({ title: 'Invalid options', description: validation.message, variant: 'destructive' });
+      return;
+    }
+
+    // Generate new combinations
+    const generated = generateVariantCombinations(variantOptionsDraft, basePrice);
     if (generated.length === 0) {
       toast({ title: 'No variants', description: 'Add at least one option with values first', variant: 'destructive' });
       return;
     }
-    
-    // Merge with existing variants (keep IDs for existing ones)
+
+    // Create a map of existing variants by name
+    const existingByName = new Map<string, VariantCombination>();
+    variants.forEach(v => existingByName.set(v.name, v));
+
+    // Create a set of new variant names
+    const generatedNames = new Set(generated.map(g => g.name));
+
+    // Merge: prefer existing data (SKU/price/active/id) if name matches
     const merged = generated.map(gen => {
-      const existing = variants.find(v => v.name === gen.name);
-      return existing || gen;
+      const existing = existingByName.get(gen.name);
+      return existing ? { ...existing, name: gen.name } : gen;
     });
-    
+
+    // Determine which variants will be archived
+    const toArchive = variants.filter(v => !generatedNames.has(v.name));
+
+    // Calculate counts
+    const addedCount = generated.filter(g => !existingByName.has(g.name)).length;
+    const archivedCount = toArchive.length;
+    const keptCount = generated.filter(g => existingByName.has(g.name)).length;
+
+    // Apply changes
     setVariants(merged);
-    toast({ title: 'Variants generated', description: `${generated.length} variant(s) created` });
+    setVariantOptionsApplied(JSON.parse(JSON.stringify(variantOptionsDraft))); // deep clone
+
+    // Show summary
+    const parts: string[] = [];
+    if (addedCount > 0) parts.push(`${addedCount} added`);
+    if (keptCount > 0) parts.push(`${keptCount} kept`);
+    if (archivedCount > 0) parts.push(`${archivedCount} will be archived on save`);
+
+    toast({
+      title: 'Variants regenerated',
+      description: parts.length > 0 ? parts.join(', ') : 'No changes',
+    });
   };
 
   const onSave = async (e: FormEvent) => {
@@ -230,7 +356,7 @@ export default function ProductForm() {
 
       let productId = id;
       if (!isEditMode) {
-        const { data: created, error: createError } = await supabase
+        const { data: created, error: createError } = await (supabase as any)
           .from('products')
           .insert({
             org_id: currentOrg.id,
@@ -245,7 +371,7 @@ export default function ProductForm() {
         if (createError) throw createError;
         productId = (created as any).id as string;
       } else {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as any)
           .from('products')
           .update({
             type,
@@ -273,7 +399,7 @@ export default function ProductForm() {
           }));
 
         // Fetch all existing variants (including archived) for comparison
-        const { data: existingVariants, error: fetchErr } = await supabase
+        const { data: existingVariants, error: fetchErr } = await (supabase as any)
           .from('product_variants')
           .select('id, name')
           .eq('product_id', productId!)
@@ -281,13 +407,13 @@ export default function ProductForm() {
 
         if (fetchErr) throw fetchErr;
 
-        const existingMap = new Map((existingVariants || []).map((v: any) => [v.name, v.id]));
+        const existingMap = new Map<string, string>((existingVariants || []).map((v: any) => [v.name, v.id]));
         const currentNames = new Set(currentVariants.map((v) => v.name));
 
         // 1. Archive variants that no longer exist in current list
         for (const [name, id] of existingMap) {
           if (!currentNames.has(name)) {
-            const { error: archiveErr } = await supabase
+            const { error: archiveErr } = await (supabase as any)
               .from('product_variants')
               .update({ archived_at: new Date().toISOString() })
               .eq('id', id);
@@ -298,7 +424,7 @@ export default function ProductForm() {
         // 2. Update existing variants
         const toUpdate = currentVariants.filter((v) => !!v.id);
         for (const v of toUpdate) {
-          const { error: updateErr } = await supabase
+          const { error: updateErr } = await (supabase as any)
             .from('product_variants')
             .update({ name: v.name, sku: v.sku, price: v.price, active: v.active })
             .eq('id', v.id);
@@ -308,7 +434,7 @@ export default function ProductForm() {
         // 3. Insert new variants
         const toInsert = currentVariants.filter((v) => !v.id);
         if (toInsert.length > 0) {
-          const { error: insertErr } = await supabase.from('product_variants').insert(
+          const { error: insertErr } = await (supabase as any).from('product_variants').insert(
             toInsert.map((v) => ({
               product_id: productId,
               name: v.name,
@@ -395,27 +521,45 @@ export default function ProductForm() {
                       type="button"
                       variant="outline"
                       onClick={addOption}
-                      disabled={variantOptions.length >= 2}
+                      disabled={variantOptionsDraft.length >= 2}
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       Add Option
                     </Button>
                   </div>
 
-                  {variantOptions.map((option, optIdx) => (
+                  {variantOptionsDraft.map((option, optIdx) => (
                     <VariantOptionInput
                       key={optIdx}
                       option={option}
                       onUpdateName={(name) => updateOptionName(optIdx, name)}
                       onAddValue={(value) => addOptionValue(optIdx, value)}
+                      onUpdateValue={(valIdx, newValue) => updateOptionValue(optIdx, valIdx, newValue)}
                       onRemoveValue={(valIdx) => removeOptionValue(optIdx, valIdx)}
                       onRemove={() => removeOption(optIdx)}
                     />
                   ))}
 
-                  {variantOptions.length > 0 && (
-                    <Button type="button" onClick={generateVariants} variant="secondary">
-                      Generate Variants
+                  {/* Pending changes banner */}
+                  {hasPendingOptionChanges && variantOptionsDraft.length > 0 && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Variant options changed. Regenerate variants to update combinations.
+                        This may add new variants and archive removed variants. Existing SKU/price will be kept when possible.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {variantOptionsDraft.length > 0 && (
+                    <Button
+                      type="button"
+                      onClick={regenerateVariants}
+                      variant="secondary"
+                      disabled={!isOptionsValid(variantOptionsDraft).ok}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Regenerate Variants
                     </Button>
                   )}
                 </div>
@@ -496,16 +640,20 @@ function VariantOptionInput({
   option,
   onUpdateName,
   onAddValue,
+  onUpdateValue,
   onRemoveValue,
   onRemove,
 }: {
   option: VariantOption;
   onUpdateName: (name: string) => void;
   onAddValue: (value: string) => void;
+  onUpdateValue: (valIdx: number, newValue: string) => void;
   onRemoveValue: (valIdx: number) => void;
   onRemove: () => void;
 }) {
   const [inputValue, setInputValue] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const handleAddValue = () => {
     if (inputValue.trim()) {
@@ -518,6 +666,29 @@ function VariantOptionInput({
     if (e.key === 'Enter') {
       e.preventDefault();
       handleAddValue();
+    }
+  };
+
+  const startEditing = (idx: number, currentValue: string) => {
+    setEditingIdx(idx);
+    setEditValue(currentValue);
+  };
+
+  const finishEditing = () => {
+    if (editingIdx !== null && editValue.trim() && editValue.trim() !== option.values[editingIdx]) {
+      onUpdateValue(editingIdx, editValue);
+    }
+    setEditingIdx(null);
+    setEditValue('');
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishEditing();
+    } else if (e.key === 'Escape') {
+      setEditingIdx(null);
+      setEditValue('');
     }
   };
 
@@ -558,16 +729,34 @@ function VariantOptionInput({
         {option.values.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {option.values.map((value, idx) => (
-              <Badge key={idx} variant="secondary" className="gap-1">
-                {value}
-                <button
-                  type="button"
-                  onClick={() => onRemoveValue(idx)}
-                  className="ml-1 hover:text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
+              <div key={idx}>
+                {editingIdx === idx ? (
+                  <div className="inline-flex items-center gap-1">
+                    <Input
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      onBlur={finishEditing}
+                      autoFocus
+                      className="h-7 w-32 text-sm"
+                    />
+                  </div>
+                ) : (
+                  <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => startEditing(idx, value)}>
+                    {value}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveValue(idx);
+                      }}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+              </div>
             ))}
           </div>
         )}
