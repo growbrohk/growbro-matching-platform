@@ -150,8 +150,9 @@ export default function Products() {
               </Button>
             </div>
           ) : (
-            {/* Mobile: Card-based layout */}
-            <div className="sm:hidden divide-y" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+            <>
+              {/* Mobile: Card-based layout */}
+              <div className="sm:hidden divide-y" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
               {products.map((p) => (
                 <div key={p.id} className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -239,6 +240,7 @@ export default function Products() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
