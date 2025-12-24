@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Edit, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,6 +63,10 @@ export default function CatalogSettings() {
   // Tags state
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
+  
+  // Variant options state
+  const [variantOptions, setVariantOptions] = useState<string[]>([]);
+  const [allVariantNames, setAllVariantNames] = useState<string[]>([]);
   
   // Edit dialogs
   const [editCategoryDialog, setEditCategoryDialog] = useState<{ 
@@ -129,6 +135,7 @@ export default function CatalogSettings() {
       await Promise.all([
         loadCategories(),
         loadTags(),
+        loadVariantOptions(),
       ]);
     } catch (error: any) {
       console.error('Error loading catalog settings:', error);
@@ -158,6 +165,65 @@ export default function CatalogSettings() {
       setTags(data);
     } catch (error: any) {
       console.error('Error loading tags:', error);
+      throw error;
+    }
+  };
+
+  const loadVariantOptions = async () => {
+    if (!currentOrg) return;
+    
+    try {
+      // Fetch all product variants for this org
+      const { data: products, error: productsErr } = await (supabase as any)
+        .from('products')
+        .select('id')
+        .eq('org_id', currentOrg.id);
+      
+      if (productsErr) throw productsErr;
+      
+      const productIds = (products || []).map(p => p.id);
+      
+      if (productIds.length === 0) {
+        setAllVariantNames([]);
+        setVariantOptions([]);
+        return;
+      }
+      
+      const { data: variants, error: variantsErr } = await (supabase as any)
+        .from('product_variants')
+        .select('name')
+        .in('product_id', productIds);
+      
+      if (variantsErr) throw variantsErr;
+      
+      const variantNames = (variants || []).map((v: any) => v.name);
+      setAllVariantNames(variantNames);
+      
+      // Extract unique option names
+      const uniqueOptions = getUniqueVariantOptionNames(variantNames);
+      
+      // Load saved order from org metadata
+      const { data: orgData, error: orgErr } = await (supabase as any)
+        .from('orgs')
+        .select('metadata')
+        .eq('id', currentOrg.id)
+        .single();
+      
+      if (orgErr) throw orgErr;
+      
+      const savedOrder = (orgData?.metadata as any)?.variant_option_order || [];
+      
+      // Merge saved order with discovered options
+      const orderedOptions = [...savedOrder];
+      for (const option of uniqueOptions) {
+        if (!orderedOptions.includes(option)) {
+          orderedOptions.push(option);
+        }
+      }
+      
+      setVariantOptions(orderedOptions);
+    } catch (error: any) {
+      console.error('Error loading variant options:', error);
       throw error;
     }
   };
@@ -383,6 +449,69 @@ export default function CatalogSettings() {
   };
 
   // ============================================================================
+  // VARIANT OPTIONS FUNCTIONS
+  // ============================================================================
+
+  const moveVariantOptionUp = async (index: number) => {
+    if (index === 0) return;
+    
+    setSaving(true);
+    try {
+      const newOptions = [...variantOptions];
+      [newOptions[index - 1], newOptions[index]] = [newOptions[index], newOptions[index - 1]];
+      
+      await saveVariantOptionOrder(newOptions);
+      setVariantOptions(newOptions);
+      toast.success('Variant option order updated');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveVariantOptionDown = async (index: number) => {
+    if (index === variantOptions.length - 1) return;
+    
+    setSaving(true);
+    try {
+      const newOptions = [...variantOptions];
+      [newOptions[index], newOptions[index + 1]] = [newOptions[index + 1], newOptions[index]];
+      
+      await saveVariantOptionOrder(newOptions);
+      setVariantOptions(newOptions);
+      toast.success('Variant option order updated');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveVariantOptionOrder = async (order: string[]) => {
+    if (!currentOrg) return;
+    
+    // Update org metadata with variant option order
+    const { data: orgData, error: fetchErr } = await (supabase as any)
+      .from('orgs')
+      .select('metadata')
+      .eq('id', currentOrg.id)
+      .single();
+    
+    if (fetchErr) throw fetchErr;
+    
+    const metadata = (orgData?.metadata || {}) as any;
+    metadata.variant_option_order = order;
+    
+    const { error: updateErr } = await (supabase as any)
+      .from('orgs')
+      .update({ metadata })
+      .eq('id', currentOrg.id);
+    
+    if (updateErr) throw updateErr;
+  };
+
+  // ============================================================================
   // RENDER
   // ============================================================================
 
@@ -414,9 +543,10 @@ export default function CatalogSettings() {
       </div>
 
       <Tabs defaultValue="categories" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="tags">Tags</TabsTrigger>
+          <TabsTrigger value="variants">Variants</TabsTrigger>
         </TabsList>
 
         {/* Categories Tab */}
@@ -631,6 +761,99 @@ export default function CatalogSettings() {
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Variants Tab */}
+        <TabsContent value="variants" className="space-y-4">
+          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+                Variant Option Order
+              </CardTitle>
+              <CardDescription>
+                Control the order of variant options (e.g., Color, Size) for inventory hierarchy display.
+                This order determines how variants are grouped in the inventory page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4 md:p-6 pt-0">
+              {allVariantNames.length === 0 ? (
+                <div className="text-center py-8 px-4">
+                  <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                    No product variants found. Create products with variants to manage their display order.
+                  </p>
+                </div>
+              ) : variantOptions.length === 0 ? (
+                <div className="text-center py-8 px-4">
+                  <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                    No variant options detected. Make sure your variants follow the format: "Option: Value / Option: Value"
+                  </p>
+                  <p className="text-xs mt-2" style={{ color: 'rgba(15,31,23,0.5)' }}>
+                    Example: "Color: Orange / Size: M"
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+                    <p className="font-medium text-blue-900 mb-1">How this works:</p>
+                    <ul className="text-blue-800 space-y-1 ml-4 list-disc">
+                      <li>Rank 1 options appear first in inventory hierarchy</li>
+                      <li>Rank 2 options appear nested under Rank 1</li>
+                      <li>Drag to reorder using the up/down arrows</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    {variantOptions.map((option, index) => (
+                      <div
+                        key={option}
+                        className="flex items-center justify-between p-3 rounded-lg border"
+                        style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <GripVertical className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium" style={{ color: '#0F1F17' }}>
+                              {option}
+                            </p>
+                            <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                              Rank {index + 1}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveVariantOptionUp(index)}
+                            disabled={saving || index === 0}
+                            title="Move up"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => moveVariantOptionDown(index)}
+                            disabled={saving || index === variantOptions.length - 1}
+                            title="Move down"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground mt-4 p-3 bg-muted/30 rounded-lg">
+                    <p className="font-medium mb-1">Detected from your products:</p>
+                    <p>
+                      Found {variantOptions.length} unique variant option{variantOptions.length !== 1 ? 's' : ''} across {allVariantNames.length} variant{allVariantNames.length !== 1 ? 's' : ''}.
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
