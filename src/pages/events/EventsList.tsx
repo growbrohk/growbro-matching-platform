@@ -1,21 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getEventsForBrand, deleteEvent } from '@/lib/api/ticketing';
-import { EventRecord } from '@/lib/types/ticketing';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, Loader2, Calendar, MapPin } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,122 +18,120 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { supabase } from '@/integrations/supabase/client';
 
-interface EventWithStats extends EventRecord {
-  ticket_types_count: number;
-  total_capacity: number;
-  tickets_sold: number;
-}
+type EventRow = {
+  id: string;
+  org_id: string;
+  venue_org_id: string | null;
+  title: string;
+  description: string | null;
+  start_at: string;
+  end_at: string;
+  status: 'draft' | 'published' | 'cancelled' | 'completed';
+  created_at: string;
+};
+
+type TicketTypeRow = {
+  id: string;
+  event_id: string;
+  quota: number;
+};
 
 export default function EventsList() {
-  const { profile } = useAuth();
+  const { currentOrg } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [events, setEvents] = useState<EventWithStats[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [events, setEvents] = useState<EventRow[]>([]);
+  const [ticketTypesByEvent, setTicketTypesByEvent] = useState<Record<string, TicketTypeRow[]>>({});
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [eventToDelete, setEventToDelete] = useState<EventRecord | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<EventRow | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const statsByEvent = useMemo(() => {
+    const map: Record<string, { ticketTypesCount: number; totalQuota: number }> = {};
+    for (const [eventId, types] of Object.entries(ticketTypesByEvent)) {
+      map[eventId] = {
+        ticketTypesCount: types.length,
+        totalQuota: types.reduce((sum, t) => sum + (t.quota || 0), 0),
+      };
+    }
+    return map;
+  }, [ticketTypesByEvent]);
 
   useEffect(() => {
-    if (profile) {
-      fetchEvents();
-    }
-  }, [profile]);
+    if (!currentOrg) return;
 
-  const fetchEvents = async () => {
-    if (!profile) return;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: eventsData, error: eventsErr } = await supabase
+          .from('events')
+          .select('id, org_id, venue_org_id, title, description, start_at, end_at, status, created_at')
+          .eq('org_id', currentOrg.id)
+          .order('start_at', { ascending: false });
 
-    setLoading(true);
-    try {
-      const { data: eventsData, error: eventsError } = await getEventsForBrand(profile.id);
-      if (eventsError) throw eventsError;
+        if (eventsErr) throw eventsErr;
+        const evts = ((eventsData as any) as EventRow[]) || [];
+        setEvents(evts);
 
-      // Fetch ticket product stats for each event
-      const eventsWithStats = await Promise.all(
-        (eventsData || []).map(async (event) => {
-          const { data: ticketProducts, error: ticketProductsError } = await supabase
-            .from('ticket_products')
-            .select('capacity_total, capacity_remaining')
-            .eq('event_id', event.id);
+        const eventIds = evts.map((e) => e.id);
+        if (eventIds.length === 0) {
+          setTicketTypesByEvent({});
+          setError(null);
+          return;
+        }
 
-          if (ticketProductsError) {
-            console.error('Error fetching ticket products:', ticketProductsError);
-            return {
-              ...event,
-              ticket_types_count: 0,
-              total_capacity: 0,
-              tickets_sold: 0,
-            };
-          }
+        const { data: ticketTypesData, error: ttErr } = await supabase
+          .from('ticket_types')
+          .select('id, event_id, quota')
+          .in('event_id', eventIds);
 
-          const totalCapacity =
-            ticketProducts?.reduce((sum, tp) => sum + (tp.capacity_total || 0), 0) || 0;
-          const totalRemaining =
-            ticketProducts?.reduce((sum, tp) => sum + (tp.capacity_remaining || 0), 0) || 0;
-          const ticketsSold = totalCapacity - totalRemaining;
+        if (ttErr) throw ttErr;
+        const tts = ((ticketTypesData as any) as TicketTypeRow[]) || [];
+        const grouped: Record<string, TicketTypeRow[]> = {};
+        for (const t of tts) {
+          if (!grouped[t.event_id]) grouped[t.event_id] = [];
+          grouped[t.event_id].push(t);
+        }
+        setTicketTypesByEvent(grouped);
+        setError(null);
+      } catch (e: any) {
+        const msg = e?.message || 'Failed to load events';
+        setError(msg);
+        toast({ title: 'Error', description: msg, variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+    };
 
-          return {
-            ...event,
-            ticket_types_count: ticketProducts?.length || 0,
-            total_capacity: totalCapacity,
-            tickets_sold: ticketsSold,
-          };
-        })
-      );
+    load();
+  }, [currentOrg, toast]);
 
-      setEvents(eventsWithStats);
-      setError(null);
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to load events';
-      setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  const formatDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString();
   };
 
   const handleDelete = async () => {
-    if (!eventToDelete || !profile) return;
-
+    if (!eventToDelete) return;
     setDeletingId(eventToDelete.id);
     try {
-      const { error } = await deleteEvent(eventToDelete.id, profile);
-      if (error) throw error;
+      const { error: delErr } = await supabase.from('events').delete().eq('id', eventToDelete.id);
+      if (delErr) throw delErr;
 
-      toast({
-        title: 'Success',
-        description: 'Event deleted successfully',
-      });
+      setEvents((prev) => prev.filter((e) => e.id !== eventToDelete.id));
+      toast({ title: 'Deleted', description: 'Event deleted successfully' });
       setDeleteDialogOpen(false);
       setEventToDelete(null);
-      fetchEvents();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete event',
-        variant: 'destructive',
-      });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to delete event', variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   if (loading) {
@@ -158,9 +148,7 @@ export default function EventsList() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={() => fetchEvents()}>
-              Try Again
-            </Button>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
           </CardContent>
         </Card>
       </div>
@@ -168,132 +156,106 @@ export default function EventsList() {
   }
 
   return (
-    <div>
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>Events</h1>
-            <p className="mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Manage your event ticket products
-            </p>
-          </div>
-          <Button onClick={() => navigate('/app/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Event
-          </Button>
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+            Events
+          </h1>
+          <p className="mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            Events in {currentOrg?.name || 'your org'}
+          </p>
         </div>
+        <Button onClick={() => navigate('/app/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Event
+        </Button>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Events ({events.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {events.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground mb-4">No events yet</p>
-                <Button onClick={() => navigate('/app/events/new')}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Your First Event
-                </Button>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Event Name</TableHead>
-                    <TableHead>Date Range</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Ticket Types</TableHead>
-                    <TableHead>Capacity</TableHead>
-                    <TableHead>Tickets Sold</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell className="font-medium">{event.name}</TableCell>
+      <Card>
+        <CardHeader>
+          <CardTitle>Events ({events.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {events.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No events yet</p>
+              <Button onClick={() => navigate('/app/events/new')}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Your First Event
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Ticket Types</TableHead>
+                  <TableHead>Quota</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {events.map((e) => {
+                  const stats = statsByEvent[e.id] || { ticketTypesCount: 0, totalQuota: 0 };
+                  return (
+                    <TableRow key={e.id}>
+                      <TableCell className="font-medium">{e.title}</TableCell>
+                      <TableCell>{formatDateTime(e.start_at)}</TableCell>
+                      <TableCell>{formatDateTime(e.end_at)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>{formatDate(event.date_start)}</span>
-                          <span className="text-muted-foreground">-</span>
-                          <span>{formatDate(event.date_end)}</span>
-                        </div>
+                        <Badge variant="outline">{e.status}</Badge>
                       </TableCell>
-                      <TableCell>
-                        {event.location_name ? (
-                          <div className="flex items-center gap-1 text-sm">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            <span>{event.location_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{event.ticket_types_count}</Badge>
-                      </TableCell>
-                      <TableCell>{event.total_capacity}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">{event.tickets_sold}</span>
-                        <span className="text-muted-foreground text-sm ml-1">
-                          / {event.total_capacity}
-                        </span>
-                      </TableCell>
+                      <TableCell>{stats.ticketTypesCount}</TableCell>
+                      <TableCell>{stats.totalQuota}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/app/events/${event.id}/edit`)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/app/events/${e.id}/edit`)}>
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setEventToDelete(event);
+                              setEventToDelete(e);
                               setDeleteDialogOpen(true);
                             }}
-                            disabled={deletingId === event.id}
+                            disabled={deletingId === e.id}
                           >
-                            {deletingId === event.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            )}
+                            {deletingId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Event</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete "{eventToDelete?.name}"? This action cannot be undone
-                and will delete all associated ticket types and tickets.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{eventToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive" disabled={deletingId !== null}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
 

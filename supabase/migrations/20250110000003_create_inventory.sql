@@ -144,3 +144,4 @@ CREATE TRIGGER update_inventory_items_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+
