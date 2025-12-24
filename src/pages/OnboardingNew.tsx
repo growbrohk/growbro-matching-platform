@@ -268,12 +268,12 @@ export default function OnboardingNew() {
 
   // Always render the shell UI immediately
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-6" style={{ backgroundColor: '#FBF8F4' }}>
       <div className="w-full max-w-2xl">
         {/* Loading state overlay */}
         {(authLoading || membershipsLoading) && (
           <Card className="rounded-3xl border shadow-xl mb-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardContent className="pt-6 pb-6 text-center">
+            <CardContent className="pt-6 pb-6 text-center p-4 md:p-6">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3" style={{ color: '#0E7A3A' }} />
               <p style={{ color: '#0F1F17', fontSize: '14px' }}>
                 {authLoading ? 'Loading your account...' : 'Checking your workspace...'}
@@ -284,7 +284,7 @@ export default function OnboardingNew() {
 
         {/* Main content shell - always visible */}
         <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-          <CardHeader>
+          <CardHeader className="p-4 md:p-6">
             <CardTitle className="text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
               Set up your Growbro workspace
             </CardTitle>
@@ -302,15 +302,15 @@ export default function OnboardingNew() {
                   : 'You\'re all set!'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 md:p-6 pt-0">
             {/* Progress indicator - only show when not loading */}
             {!authLoading && !membershipsLoading && (
-              <div className="mb-8">
+              <div className="mb-6 md:mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
               Step {step === 'org' ? 1 : step === 'type' ? 2 : step === 'product' ? 3 : step === 'inventory' ? 4 : 5} of 5
             </span>
-            <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+            <span className="text-xs sm:text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
               {step === 'org' && 'Organization'}
               {step === 'type' && 'Organization Type'}
               {step === 'product' && 'First Product'}
@@ -336,14 +336,14 @@ export default function OnboardingNew() {
                 {/* Step 1: Create Organization */}
                 {step === 'org' && (
                   <div className="space-y-4">
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="orgName" style={{ color: '#0F1F17' }}>Organization Name</Label>
                       <Input
                         id="orgName"
                         value={orgName}
                         onChange={(e) => setOrgName(e.target.value)}
                         placeholder="My Company"
-                        className="mt-1"
+                        className="h-10"
                         style={{ backgroundColor: '#FBF8F4', color: '#0F1F17' }}
                         onKeyDown={(e) => e.key === 'Enter' && handleCreateOrg()}
                       />
@@ -351,7 +351,7 @@ export default function OnboardingNew() {
                     <Button
                       onClick={handleCreateOrg}
                       disabled={loading || !orgName.trim()}
-                      className="w-full"
+                      className="w-full h-10"
                       style={{ backgroundColor: '#0E7A3A', color: 'white' }}
                     >
                       {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -398,7 +398,7 @@ export default function OnboardingNew() {
               <Button
                 onClick={handleSetOrgType}
                 disabled={loading || !orgType}
-                className="w-full"
+                className="w-full h-10"
                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -507,7 +507,7 @@ export default function OnboardingNew() {
               <Button
                 onClick={handleCreateProduct}
                 disabled={loading || !productTitle.trim()}
-                className="w-full"
+                className="w-full h-10"
                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -570,7 +570,7 @@ export default function OnboardingNew() {
                     </div>
                     <Button
                       onClick={handleComplete}
-                      className="w-full"
+                      className="w-full h-10"
                       style={{ backgroundColor: '#0E7A3A', color: 'white' }}
                     >
                       Go to Dashboard

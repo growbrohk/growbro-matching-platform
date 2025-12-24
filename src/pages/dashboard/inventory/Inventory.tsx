@@ -688,8 +688,8 @@ export default function Inventory() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl space-y-6 md:space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Inventory
@@ -698,20 +698,20 @@ export default function Inventory() {
             Warehouses & stock for {currentOrg?.name || 'your org'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={reload}>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={reload} className="w-full sm:w-auto">
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+              <Button style={{ backgroundColor: '#0E7A3A', color: 'white' }} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Products to Warehouse
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl max-h-[80vh]">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-2xl max-h-[80vh] p-4 md:p-6">
+              <DialogHeader className="space-y-4">
                 <DialogTitle>Add Products to Warehouse</DialogTitle>
               </DialogHeader>
 
@@ -719,7 +719,7 @@ export default function Inventory() {
                 <div className="space-y-2">
                   <Label>Warehouse *</Label>
                   <Select value={createWarehouseId} onValueChange={setCreateWarehouseId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10">
                       <SelectValue placeholder="Select warehouse" />
                     </SelectTrigger>
                     <SelectContent>
@@ -738,6 +738,7 @@ export default function Inventory() {
                     placeholder="Search by product, variant, or SKU..."
                     value={createSearchQuery}
                     onChange={(e) => setCreateSearchQuery(e.target.value)}
+                    className="h-10"
                   />
                 </div>
 
@@ -806,17 +807,18 @@ export default function Inventory() {
                     value={createInitialStock}
                     onChange={(e) => setCreateInitialStock(e.target.value)}
                     placeholder="0"
+                    className="h-10"
                   />
                   <p className="text-xs text-muted-foreground">
                     Set initial quantity for all selected variants. Existing items will be skipped.
                   </p>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={saving}>
+                <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={saving} className="w-full sm:w-auto">
                     Cancel
                   </Button>
-                  <Button onClick={createInventoryBulk} disabled={saving || selectedVariantIds.size === 0} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+                  <Button onClick={createInventoryBulk} disabled={saving || selectedVariantIds.size === 0} style={{ backgroundColor: '#0E7A3A', color: 'white' }} className="w-full sm:w-auto">
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Create for {selectedVariantIds.size} variant{selectedVariantIds.size !== 1 ? 's' : ''}
                   </Button>
@@ -827,51 +829,54 @@ export default function Inventory() {
         </div>
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
+      <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader className="p-4 md:p-6">
           <CardTitle>Warehouses ({warehouses.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {warehouses.length === 0 ? (
-            <p className="text-muted-foreground">No warehouses found. (A default warehouse is created when the org is created.)</p>
+            <p className="text-muted-foreground p-4 md:p-6">No warehouses found. (A default warehouse is created when the org is created.)</p>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
+                  <TableHead className="p-3 md:p-4">Name</TableHead>
+                  <TableHead className="p-3 md:p-4">Address</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {warehouses.map((w) => (
                   <TableRow key={w.id}>
-                    <TableCell className="font-medium">{w.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{w.address || '-'}</TableCell>
+                    <TableCell className="font-medium p-3 md:p-4">{w.name}</TableCell>
+                    <TableCell className="text-muted-foreground p-3 md:p-4">{w.address || '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader className="p-4 md:p-6">
           <CardTitle>Stock ({inventory.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 md:p-6 pt-0">
           {/* Filters */}
-          <div className="flex gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1">
               <Input
                 placeholder="Search by product, variant, or SKU..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10"
               />
             </div>
-            <div className="w-64">
+            <div className="w-full sm:w-64">
               <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10">
                   <SelectValue placeholder="All warehouses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -897,31 +902,31 @@ export default function Inventory() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12">
+                    <TableHead className="w-12 p-2 md:p-3">
                       <Checkbox
                         checked={allVisibleSelected}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Select all"
                       />
                     </TableHead>
-                    <TableHead>Product / Variant</TableHead>
-                    <TableHead>Warehouse</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="p-2 md:p-3">Product / Variant</TableHead>
+                    <TableHead className="p-2 md:p-3 hidden sm:table-cell">Warehouse</TableHead>
+                    <TableHead className="text-right p-2 md:p-3">Quantity</TableHead>
+                    <TableHead className="text-right p-2 md:p-3">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredInventory.map((row) => (
                     <TableRow key={row.id} className={selectedIds.has(row.id) ? 'bg-muted/50' : ''}>
-                      <TableCell>
+                      <TableCell className="p-2 md:p-3">
                         <Checkbox
                           checked={selectedIds.has(row.id)}
                           onCheckedChange={() => toggleSelectRow(row.id)}
                           aria-label={`Select ${row.product?.title}`}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div>
+                      <TableCell className="p-2 md:p-3">
+                        <div className="space-y-1">
                           <div className="font-medium">{row.product?.title || '—'}</div>
                           <div className="text-sm text-muted-foreground">
                             {row.variant?.name || '—'}
@@ -933,9 +938,9 @@ export default function Inventory() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{row.warehouse?.name || '—'}</TableCell>
-                      <TableCell className="text-right font-semibold">{row.quantity}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="p-2 md:p-3 hidden sm:table-cell">{row.warehouse?.name || '—'}</TableCell>
+                      <TableCell className="text-right font-semibold p-2 md:p-3">{row.quantity}</TableCell>
+                      <TableCell className="text-right p-2 md:p-3">
                         <Button variant="outline" size="sm" onClick={() => setAdjustOpenFor(row)}>
                           Adjust
                         </Button>
@@ -951,26 +956,24 @@ export default function Inventory() {
 
       {/* Sticky bulk action bar */}
       {someSelected && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between max-w-7xl mx-auto">
-              <div className="flex items-center gap-3">
-                <span className="font-semibold">
-                  {selectedIds.size} selected
-                </span>
-                <Button onClick={() => setBulkAdjustOpen(true)} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50 px-4 py-3 md:py-4" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 max-w-7xl mx-auto">
+              <span className="font-semibold text-center sm:text-left">
+                {selectedIds.size} selected
+              </span>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <Button onClick={() => setBulkAdjustOpen(true)} style={{ backgroundColor: '#0E7A3A', color: 'white' }} className="w-full sm:w-auto">
                   Adjust Stock
                 </Button>
-                <Button onClick={() => setBulkSetOpen(true)} variant="default">
+                <Button onClick={() => setBulkSetOpen(true)} variant="default" className="w-full sm:w-auto">
                   Set Stock
                 </Button>
-                <Button variant="outline" onClick={() => setSelectedIds(new Set())}>
+                <Button variant="outline" onClick={() => setSelectedIds(new Set())} className="w-full sm:w-auto">
                   <X className="mr-2 h-4 w-4" />
                   Clear
                 </Button>
               </div>
             </div>
-          </div>
         </div>
       )}
 

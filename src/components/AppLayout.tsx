@@ -206,15 +206,15 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 md:pl-64">
-          <div className="px-4 sm:px-6 lg:px-8 py-6 relative">
+          <div className="px-4 py-6 md:px-6 md:py-8 relative">
             {children}
           </div>
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t backdrop-blur-xl" style={{ borderColor: "rgba(14,122,58,0.12)", backgroundColor: "rgba(251,248,244,0.95)" }}>
-        <div className="grid grid-cols-4 gap-1 px-2 py-2">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t backdrop-blur-xl" style={{ borderColor: "rgba(14,122,58,0.12)", backgroundColor: "rgba(251,248,244,0.95)", paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="grid grid-cols-4 gap-1 px-4 py-3">
           {navItems.slice(0, 4).map((item) => (
             <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
               <Button
@@ -289,8 +289,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
       )}
 
-      {/* Mobile content padding bottom */}
-      <div className="md:hidden h-20" />
+      {/* Mobile content padding bottom - safe area for bottom nav */}
+      <div className="md:hidden h-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
     </div>
   );
 }

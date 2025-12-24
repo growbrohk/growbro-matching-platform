@@ -125,7 +125,7 @@ export default function Bookings() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl space-y-6 md:space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
@@ -143,7 +143,7 @@ export default function Bookings() {
           </div>
         ) : error ? (
           <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardContent className="flex flex-col items-center justify-center py-12">
+            <CardContent className="flex flex-col items-center justify-center py-12 p-4 md:p-6">
               <p className="text-destructive mb-4">{error}</p>
               <Button onClick={() => window.location.reload()}>
                 Try Again
@@ -152,7 +152,7 @@ export default function Bookings() {
           </Card>
         ) : bookings.length === 0 ? (
           <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardContent className="flex flex-col items-center justify-center py-12">
+            <CardContent className="flex flex-col items-center justify-center py-12 p-4 md:p-6">
               <Calendar className="h-12 w-12 mb-4" style={{ color: 'rgba(15,31,23,0.4)' }} />
               <h3 className="text-lg font-semibold mb-2">No bookings yet</h3>
               <p className="text-sm text-center" style={{ color: 'rgba(15,31,23,0.72)' }}>
@@ -161,7 +161,7 @@ export default function Bookings() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:gap-6">
             {bookings.map((booking) => {
               const statusInfo = getStatusBadge(booking.status);
               const entitlement = booking.booking_entitlements?.[0];
@@ -169,8 +169,8 @@ export default function Bookings() {
 
               return (
                 <Card key={booking.id} className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
+                  <CardHeader className="p-4 md:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div>
                         <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                           {(booking.products as any)?.title || 'Venue Asset'}
@@ -183,21 +183,21 @@ export default function Bookings() {
                           )}
                         </CardDescription>
                       </div>
-                      <Badge variant={statusInfo.variant}>
+                      <Badge variant={statusInfo.variant} className="w-fit">
                         <statusInfo.icon className="h-3 w-3 mr-1" />
                         {statusInfo.label}
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
+                  <CardContent className="space-y-4 p-4 md:p-6 pt-0">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-1">
                         <span style={{ color: 'rgba(15,31,23,0.6)' }}>Start:</span>
                         <div className="font-medium">
                           {format(new Date(booking.start_at), 'MMM d, yyyy h:mm a')}
                         </div>
                       </div>
-                      <div>
+                      <div className="space-y-1">
                         <span style={{ color: 'rgba(15,31,23,0.6)' }}>End:</span>
                         <div className="font-medium">
                           {format(new Date(booking.end_at), 'MMM d, yyyy h:mm a')}
@@ -207,12 +207,12 @@ export default function Bookings() {
 
                     {entitlement && (
                       <div className="p-4 rounded-2xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                           <div>
                             <div className="text-sm font-medium mb-1">QR Code</div>
-                            <div className="font-mono text-lg">{entitlement.code}</div>
+                            <div className="font-mono text-base sm:text-lg break-all">{entitlement.code}</div>
                           </div>
-                          <div>
+                          <div className="sm:ml-4">
                             {entitlement.redeemed_at ? (
                               <Badge variant="outline" className="gap-1">
                                 <CheckCircle2 className="h-3 w-3" />
@@ -223,6 +223,7 @@ export default function Bookings() {
                                 size="sm"
                                 onClick={() => handleRedeem(entitlement.code)}
                                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                                className="w-full sm:w-auto"
                               >
                                 <QrCode className="h-4 w-4 mr-2" />
                                 Redeem

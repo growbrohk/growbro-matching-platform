@@ -120,7 +120,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-6" style={{ backgroundColor: '#FBF8F4' }}>
       {/* Subtle grid background */}
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.35]"
@@ -150,7 +150,7 @@ export default function Auth() {
 
       {/* Auth Card */}
       <Card className="w-full max-w-md relative shadow-xl rounded-3xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-        <CardHeader className="text-center pb-4">
+        <CardHeader className="text-center p-4 md:p-6 pb-4">
           <CardTitle className="text-2xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             {isLogin ? 'Welcome back' : 'Create your account'}
           </CardTitle>
@@ -160,7 +160,7 @@ export default function Auth() {
               : 'Join Growbro and start collaborating'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 md:p-6 pt-0">
           {showSignInBanner && (
             <Alert className="mb-4">
               <AlertDescription>
@@ -217,8 +217,7 @@ export default function Auth() {
 
             <Button 
               type="submit" 
-              className="w-full font-bold rounded-2xl" 
-              size="lg" 
+              className="w-full font-bold rounded-2xl h-10" 
               disabled={isSubmitting}
               style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             >
@@ -231,7 +230,7 @@ export default function Auth() {
             <button
               type="button"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm transition-colors"
+              className="text-sm transition-colors py-2"
               style={{ color: 'rgba(15,31,23,0.72)' }}
               onMouseEnter={(e) => e.currentTarget.style.color = '#0E7A3A'}
               onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(15,31,23,0.72)'}

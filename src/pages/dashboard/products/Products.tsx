@@ -120,8 +120,8 @@ export default function Products() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl space-y-6 md:space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Products
@@ -130,19 +130,19 @@ export default function Products() {
             Products in {currentOrg?.name || 'your org'}
           </p>
         </div>
-        <Button onClick={() => navigate('/app/products/new')} disabled={!canCreate} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+        <Button onClick={() => navigate('/app/products/new')} disabled={!canCreate} style={{ backgroundColor: '#0E7A3A', color: 'white' }} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Product
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader className="p-4 md:p-6">
           <CardTitle>Products ({products.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {products.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-4">
               <p className="text-muted-foreground mb-4">No products yet</p>
               <Button onClick={() => navigate('/app/products/new')}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -150,60 +150,62 @@ export default function Products() {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Base Price</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {products.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.title}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{productTypeLabel[p.type] ?? p.type}</Badge>
-                    </TableCell>
-                    <TableCell>{p.base_price === null ? '-' : `HK$${Number(p.base_price).toFixed(2)}`}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/app/products/${p.id}/edit`)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setProductToDelete(p);
-                            setDeleteDialogOpen(true);
-                          }}
-                          disabled={deletingId === p.id}
-                        >
-                          {deletingId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="p-3 md:p-4">Title</TableHead>
+                    <TableHead className="p-3 md:p-4">Type</TableHead>
+                    <TableHead className="p-3 md:p-4">Base Price</TableHead>
+                    <TableHead className="text-right p-3 md:p-4">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {products.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium p-3 md:p-4">{p.title}</TableCell>
+                      <TableCell className="p-3 md:p-4">
+                        <Badge variant="outline">{productTypeLabel[p.type] ?? p.type}</Badge>
+                      </TableCell>
+                      <TableCell className="p-3 md:p-4">{p.base_price === null ? '-' : `HK$${Number(p.base_price).toFixed(2)}`}</TableCell>
+                      <TableCell className="text-right p-3 md:p-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/app/products/${p.id}/edit`)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setProductToDelete(p);
+                              setDeleteDialogOpen(true);
+                            }}
+                            disabled={deletingId === p.id}
+                          >
+                            {deletingId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="p-4 md:p-6">
+          <AlertDialogHeader className="space-y-4">
             <AlertDialogTitle>Delete Product</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{productToDelete?.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive" disabled={deletingId !== null}>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={deletingId !== null} className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive w-full sm:w-auto" disabled={deletingId !== null}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

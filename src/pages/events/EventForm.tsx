@@ -237,37 +237,37 @@ export default function EventForm() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <Button variant="ghost" onClick={() => navigate('/app/events')} className="mb-4">
+    <div className="max-w-3xl space-y-6 md:space-y-8">
+      <Button variant="ghost" onClick={() => navigate('/app/events')} className="w-full sm:w-auto">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Events
       </Button>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader className="p-4 md:p-6">
           <CardTitle>{isEditMode ? 'Edit Event' : 'Create Event'}</CardTitle>
           <CardDescription>Create ticket types under this event.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={onSave} className="space-y-6">
+        <CardContent className="p-4 md:p-6 pt-0">
+          <form onSubmit={onSave} className="space-y-6 md:space-y-8">
             <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title" />
+              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event title" className="h-10" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" className="min-h-24" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start</Label>
-                <Input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
+                <Input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className="h-10" />
               </div>
               <div className="space-y-2">
                 <Label>End</Label>
-                <Input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
+                <Input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} className="h-10" />
               </div>
             </div>
 
@@ -275,7 +275,7 @@ export default function EventForm() {
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={status} onValueChange={(v) => setStatus(v as EventStatus)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -289,17 +289,17 @@ export default function EventForm() {
 
               <div className="space-y-2">
                 <Label>Venue Org ID (optional)</Label>
-                <Input value={venueOrgId} onChange={(e) => setVenueOrgId(e.target.value)} placeholder="UUID" />
+                <Input value={venueOrgId} onChange={(e) => setVenueOrgId(e.target.value)} placeholder="UUID" className="h-10" />
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <Label>Ticket Types</Label>
                   <p className="text-sm text-muted-foreground">At least one ticket type is required.</p>
                 </div>
-                <Button type="button" variant="outline" onClick={addTicketType}>
+                <Button type="button" variant="outline" onClick={addTicketType} className="w-full sm:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
                   Add
                 </Button>
@@ -307,20 +307,20 @@ export default function EventForm() {
 
               <div className="space-y-3">
                 {ticketTypes.map((t, idx) => (
-                  <div key={t.id ?? idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-lg p-3">
-                    <div className="md:col-span-6 space-y-1">
+                  <div key={t.id ?? idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-2xl p-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                    <div className="md:col-span-6 space-y-2">
                       <Label>Name</Label>
-                      <Input value={t.name} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
+                      <Input value={t.name} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} className="h-10" />
                     </div>
-                    <div className="md:col-span-3 space-y-1">
+                    <div className="md:col-span-3 space-y-2">
                       <Label>Price</Label>
-                      <Input value={t.price} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} />
+                      <Input value={t.price} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} className="h-10" />
                     </div>
-                    <div className="md:col-span-2 space-y-1">
+                    <div className="md:col-span-2 space-y-2">
                       <Label>Quota</Label>
-                      <Input value={t.quota} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, quota: e.target.value } : x)))} />
+                      <Input value={t.quota} onChange={(e) => setTicketTypes((prev) => prev.map((x, i) => (i === idx ? { ...x, quota: e.target.value } : x)))} className="h-10" />
                     </div>
-                    <div className="md:col-span-1 flex justify-end">
+                    <div className="md:col-span-1 flex justify-end md:pb-1">
                       <Button type="button" variant="ghost" onClick={() => removeTicketType(idx)} disabled={!!t.id && ticketTypes.length === 1}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -330,11 +330,11 @@ export default function EventForm() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => navigate('/app/events')} disabled={saving}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => navigate('/app/events')} disabled={saving} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="submit" disabled={!canSubmit || saving}>
+              <Button type="submit" disabled={!canSubmit || saving} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isEditMode ? 'Save Changes' : 'Create Event'}
               </Button>

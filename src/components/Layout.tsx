@@ -194,7 +194,7 @@ export function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 py-6 relative">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 py-6 md:px-6 md:py-8 relative">{children}</main>
     </div>
   );
 }

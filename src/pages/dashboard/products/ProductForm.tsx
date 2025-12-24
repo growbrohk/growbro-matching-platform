@@ -933,19 +933,19 @@ export default function ProductForm() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <Button variant="ghost" onClick={() => navigate('/app/products')} className="mb-4">
+    <div className="max-w-3xl space-y-6 md:space-y-8">
+      <Button variant="ghost" onClick={() => navigate('/app/products')} className="w-full sm:w-auto">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Products
           </Button>
 
-            <Card>
-              <CardHeader>
+            <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+              <CardHeader className="p-4 md:p-6">
           <CardTitle>{isEditMode ? 'Edit Product' : 'Create Product'}</CardTitle>
           <CardDescription>Products are scoped to your organization.</CardDescription>
               </CardHeader>
-        <CardContent>
-          <form onSubmit={onSave} className="space-y-6">
+        <CardContent className="p-4 md:p-6 pt-0">
+          <form onSubmit={onSave} className="space-y-6 md:space-y-8">
                 <div className="space-y-2">
               <Label>Type</Label>
               <div className="flex gap-2">
@@ -960,17 +960,17 @@ export default function ProductForm() {
 
                 <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" />
+              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" className="h-10" />
                 </div>
 
                 <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+              <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" className="min-h-24" />
                 </div>
 
                 <div className="space-y-2">
               <Label htmlFor="basePrice">Base Price (decimal)</Label>
-              <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" />
+              <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" className="h-10" />
                       </div>
 
                 <div className="space-y-2">
@@ -983,7 +983,7 @@ export default function ProductForm() {
                 }
                 setCategory(value);
               }}>
-                <SelectTrigger id="category">
+                <SelectTrigger id="category" className="h-10">
                   <SelectValue placeholder="Select or create category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1018,8 +1018,9 @@ export default function ProductForm() {
                       addTag();
                     }
                   }}
+                  className="h-10"
                 />
-                <Button type="button" variant="outline" onClick={addTag}>
+                <Button type="button" variant="outline" onClick={addTag} className="h-10">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
@@ -1238,11 +1239,11 @@ export default function ProductForm() {
               </div>
             )}
 
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => navigate('/app/products')} disabled={saving}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+              <Button type="button" variant="outline" onClick={() => navigate('/app/products')} disabled={saving} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="submit" disabled={!canSubmit || saving}>
+              <Button type="submit" disabled={!canSubmit || saving} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isEditMode ? 'Save Changes' : 'Create Product'}
               </Button>
@@ -1253,8 +1254,8 @@ export default function ProductForm() {
 
       {/* Create Category Modal */}
       <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="p-4 md:p-6">
+          <DialogHeader className="space-y-4">
             <DialogTitle>Create Category</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -1272,16 +1273,17 @@ export default function ProductForm() {
                 }}
                 placeholder="e.g. Apparel, Electronics"
                 autoFocus
+                className="h-10"
               />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => {
                 setCreateCategoryOpen(false);
                 setNewCategoryName('');
-              }}>
+              }} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="button" onClick={createCategory} disabled={!newCategoryName.trim()}>
+              <Button type="button" onClick={createCategory} disabled={!newCategoryName.trim()} className="w-full sm:w-auto">
                 Create
               </Button>
             </div>
@@ -1291,8 +1293,8 @@ export default function ProductForm() {
 
       {/* Create Warehouse Modal */}
       <Dialog open={createWarehouseOpen} onOpenChange={setCreateWarehouseOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="p-4 md:p-6">
+          <DialogHeader className="space-y-4">
             <DialogTitle>Create New Warehouse</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -1303,6 +1305,7 @@ export default function ProductForm() {
                 value={newWarehouseName}
                 onChange={(e) => setNewWarehouseName(e.target.value)}
                 placeholder="e.g. East Coast Warehouse"
+                className="h-10"
               />
             </div>
             <div className="space-y-2">
@@ -1312,13 +1315,14 @@ export default function ProductForm() {
                 value={newWarehouseAddress}
                 onChange={(e) => setNewWarehouseAddress(e.target.value)}
                 placeholder="e.g. 123 Main St, City"
+                className="h-10"
               />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setCreateWarehouseOpen(false)} disabled={saving}>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateWarehouseOpen(false)} disabled={saving} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button type="button" onClick={createWarehouse} disabled={saving || !newWarehouseName.trim()}>
+              <Button type="button" onClick={createWarehouse} disabled={saving || !newWarehouseName.trim()} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Create
               </Button>

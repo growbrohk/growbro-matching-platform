@@ -62,7 +62,7 @@ export default function Dashboard() {
   }, [currentOrg]);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl space-y-6 md:space-y-8">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
@@ -79,10 +79,10 @@ export default function Dashboard() {
             <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             {/* Products Card */}
             <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-              <CardHeader>
+              <CardHeader className="p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
@@ -97,7 +97,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6 pt-0">
                 <div className="flex items-end justify-between">
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.productsCount}
@@ -114,7 +114,7 @@ export default function Dashboard() {
 
             {/* Bookings Card */}
             <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-              <CardHeader>
+              <CardHeader className="p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
@@ -129,7 +129,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6 pt-0">
                 <div className="flex items-end justify-between">
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.bookingsCount}
@@ -146,7 +146,7 @@ export default function Dashboard() {
 
             {/* Events Card */}
             <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-              <CardHeader>
+              <CardHeader className="p-4 md:p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
@@ -161,7 +161,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6 pt-0">
                 <div className="flex items-end justify-between">
                   <div className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
                     {stats.upcomingEventsCount}
@@ -179,19 +179,19 @@ export default function Dashboard() {
         )}
 
         {/* Quick Actions */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Quick Actions
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <Link to="/app/products/new">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-                <CardHeader>
+                <CardHeader className="p-4 md:p-6">
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                     Create Product
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 md:p-6 pt-0">
                   <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                     Add a new product to your catalog
                   </p>
@@ -201,12 +201,12 @@ export default function Dashboard() {
 
             <Link to="/app/events/new">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-                <CardHeader>
+                <CardHeader className="p-4 md:p-6">
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                     Create Event
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 md:p-6 pt-0">
                   <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                     Set up a new event with tickets
                   </p>
@@ -216,12 +216,12 @@ export default function Dashboard() {
 
             <Link to="/app/inventory">
               <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1 cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-                <CardHeader>
+                <CardHeader className="p-4 md:p-6">
                   <CardTitle className="text-base" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                     Manage Inventory
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 md:p-6 pt-0">
                   <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                     View and adjust stock levels
                   </p>

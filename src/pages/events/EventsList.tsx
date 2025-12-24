@@ -156,8 +156,8 @@ export default function EventsList() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl space-y-6 md:space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Events
@@ -166,19 +166,19 @@ export default function EventsList() {
             Events in {currentOrg?.name || 'your org'}
           </p>
         </div>
-        <Button onClick={() => navigate('/app/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+        <Button onClick={() => navigate('/app/events/new')} style={{ backgroundColor: '#0E7A3A', color: 'white' }} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           New Event
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader className="p-4 md:p-6">
           <CardTitle>Events ({events.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {events.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-4">
               <p className="text-muted-foreground mb-4">No events yet</p>
               <Button onClick={() => navigate('/app/events/new')}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -186,69 +186,71 @@ export default function EventsList() {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead>End</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Ticket Types</TableHead>
-                  <TableHead>Quota</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {events.map((e) => {
-                  const stats = statsByEvent[e.id] || { ticketTypesCount: 0, totalQuota: 0 };
-                  return (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-medium">{e.title}</TableCell>
-                      <TableCell>{formatDateTime(e.start_at)}</TableCell>
-                      <TableCell>{formatDateTime(e.end_at)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{e.status}</Badge>
-                      </TableCell>
-                      <TableCell>{stats.ticketTypesCount}</TableCell>
-                      <TableCell>{stats.totalQuota}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => navigate(`/app/events/${e.id}/edit`)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEventToDelete(e);
-                              setDeleteDialogOpen(true);
-                            }}
-                            disabled={deletingId === e.id}
-                          >
-                            {deletingId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="p-3 md:p-4">Title</TableHead>
+                    <TableHead className="p-3 md:p-4 hidden sm:table-cell">Start</TableHead>
+                    <TableHead className="p-3 md:p-4 hidden sm:table-cell">End</TableHead>
+                    <TableHead className="p-3 md:p-4">Status</TableHead>
+                    <TableHead className="p-3 md:p-4 hidden md:table-cell">Ticket Types</TableHead>
+                    <TableHead className="p-3 md:p-4 hidden md:table-cell">Quota</TableHead>
+                    <TableHead className="text-right p-3 md:p-4">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {events.map((e) => {
+                    const stats = statsByEvent[e.id] || { ticketTypesCount: 0, totalQuota: 0 };
+                    return (
+                      <TableRow key={e.id}>
+                        <TableCell className="font-medium p-3 md:p-4">{e.title}</TableCell>
+                        <TableCell className="p-3 md:p-4 hidden sm:table-cell text-sm">{formatDateTime(e.start_at)}</TableCell>
+                        <TableCell className="p-3 md:p-4 hidden sm:table-cell text-sm">{formatDateTime(e.end_at)}</TableCell>
+                        <TableCell className="p-3 md:p-4">
+                          <Badge variant="outline">{e.status}</Badge>
+                        </TableCell>
+                        <TableCell className="p-3 md:p-4 hidden md:table-cell">{stats.ticketTypesCount}</TableCell>
+                        <TableCell className="p-3 md:p-4 hidden md:table-cell">{stats.totalQuota}</TableCell>
+                        <TableCell className="text-right p-3 md:p-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => navigate(`/app/events/${e.id}/edit`)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEventToDelete(e);
+                                setDeleteDialogOpen(true);
+                              }}
+                              disabled={deletingId === e.id}
+                            >
+                              {deletingId === e.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
+        <AlertDialogContent className="p-4 md:p-6">
+          <AlertDialogHeader className="space-y-4">
             <AlertDialogTitle>Delete Event</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{eventToDelete?.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive" disabled={deletingId !== null}>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel disabled={deletingId !== null} className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive w-full sm:w-auto" disabled={deletingId !== null}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

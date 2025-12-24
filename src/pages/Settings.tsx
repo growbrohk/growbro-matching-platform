@@ -56,7 +56,7 @@ export default function Settings() {
   const orgType = (currentOrg.metadata as any)?.org_type || 'unknown';
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-3xl space-y-6 md:space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Settings
@@ -67,7 +67,7 @@ export default function Settings() {
         </div>
 
         <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-          <CardHeader>
+          <CardHeader className="p-4 md:p-6">
             <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
               Organization Profile
             </CardTitle>
@@ -75,24 +75,24 @@ export default function Settings() {
               Update your organization's basic information
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
+          <CardContent className="space-y-4 p-4 md:p-6 pt-0">
+            <div className="space-y-2">
               <Label htmlFor="orgName">Organization Name</Label>
               <Input
                 id="orgName"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
-                className="mt-1"
+                className="h-10"
                 disabled={saving}
               />
             </div>
 
-            <div>
+            <div className="space-y-2">
               <Label>Organization Type</Label>
-              <div className="mt-1 px-3 py-2 rounded-lg text-sm" style={{ backgroundColor: 'rgba(14,122,58,0.08)', color: 'rgba(15,31,23,0.75)' }}>
+              <div className="px-3 py-2.5 rounded-lg text-sm" style={{ backgroundColor: 'rgba(14,122,58,0.08)', color: 'rgba(15,31,23,0.75)' }}>
                 {orgType === 'brand' ? 'Brand' : orgType === 'venue' ? 'Venue' : 'Not set'}
               </div>
-              <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
                 Organization type cannot be changed
               </p>
             </div>
@@ -102,6 +102,7 @@ export default function Settings() {
                 onClick={handleSave}
                 disabled={saving || !orgName.trim() || orgName === currentOrg.name}
                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                className="w-full sm:w-auto"
               >
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Changes
