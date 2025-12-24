@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, X } from 'lucide-react';
 
 type Warehouse = { id: string; org_id: string; name: string; address: string | null };
 type Product = { id: string; org_id: string; title: string; type: string };
@@ -46,9 +47,83 @@ export default function Inventory() {
   const [adjustNote, setAdjustNote] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false);
+  const [bulkWarehouseId, setBulkWarehouseId] = useState<string>('');
+  const [bulkDelta, setBulkDelta] = useState<string>('0');
+  const [bulkReason, setBulkReason] = useState<string>('Restock');
+  const [bulkNote, setBulkNote] = useState<string>('');
+
+  // Filtering state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+
   const variantOptions = useMemo(() => {
     return variants.filter((v) => v.product_id === selectedProductId);
   }, [selectedProductId, variants]);
+
+  // Filtered inventory based on search and warehouse filter
+  const filteredInventory = useMemo(() => {
+    let filtered = inventory;
+
+    // Apply warehouse filter
+    if (warehouseFilter !== 'all') {
+      filtered = filtered.filter((row) => row.warehouse_id === warehouseFilter);
+    }
+
+    // Apply search filter (search in product title, variant name, sku)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((row) => {
+        const productTitle = row.product?.title?.toLowerCase() || '';
+        const variantName = row.variant?.name?.toLowerCase() || '';
+        const sku = row.variant?.sku?.toLowerCase() || '';
+        return productTitle.includes(query) || variantName.includes(query) || sku.includes(query);
+      });
+    }
+
+    return filtered;
+  }, [inventory, warehouseFilter, searchQuery]);
+
+  // Selection helpers
+  const allVisibleSelected = filteredInventory.length > 0 && filteredInventory.every((row) => selectedIds.has(row.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      // Deselect all visible
+      setSelectedIds(new Set());
+    } else {
+      // Select all visible
+      setSelectedIds(new Set(filteredInventory.map((row) => row.id)));
+    }
+  };
+
+  const toggleSelectRow = (rowId: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(rowId)) {
+      newSet.delete(rowId);
+    } else {
+      newSet.add(rowId);
+    }
+    setSelectedIds(newSet);
+  };
+
+  // Clear selection when filters change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [warehouseFilter, searchQuery]);
+
+  // Auto-select default warehouse when bulk adjust modal opens
+  useEffect(() => {
+    if (bulkAdjustOpen && !bulkWarehouseId && warehouses.length > 0) {
+      // Prefer "Main Warehouse" or first warehouse
+      const mainWarehouse = warehouses.find((w) => w.name.toLowerCase().includes('main'));
+      const defaultWarehouse = mainWarehouse || warehouses[0];
+      setBulkWarehouseId(defaultWarehouse.id);
+    }
+  }, [bulkAdjustOpen, bulkWarehouseId, warehouses]);
 
   const reload = async () => {
     if (!currentOrg) return;
@@ -187,6 +262,125 @@ export default function Inventory() {
       await reload();
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Failed to adjust stock', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Bulk stock adjustment
+  const applyBulkAdjustment = async () => {
+    if (!currentOrg || selectedIds.size === 0) return;
+    if (!bulkWarehouseId) {
+      toast({ title: 'Validation', description: 'Please select a warehouse', variant: 'destructive' });
+      return;
+    }
+
+    const delta = Number(bulkDelta);
+    if (!Number.isFinite(delta)) {
+      toast({ title: 'Validation', description: 'Delta must be a number', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    try {
+      // Get all selected rows
+      const selectedRows = inventory.filter((row) => selectedIds.has(row.id));
+
+      for (const row of selectedRows) {
+        try {
+          // Step 1: Ensure inventory_item exists for this variant + warehouse combo
+          // First check if an inventory item already exists for this variant + warehouse
+          const { data: existingItems, error: fetchErr } = await supabase
+            .from('inventory_items')
+            .select('id, quantity')
+            .eq('org_id', currentOrg.id)
+            .eq('warehouse_id', bulkWarehouseId)
+            .eq('variant_id', row.variant_id)
+            .maybeSingle();
+
+          if (fetchErr) {
+            console.error('Error fetching inventory item:', fetchErr);
+            throw fetchErr;
+          }
+
+          let inventoryItemId: string;
+
+          if (existingItems) {
+            // Item exists, use its ID
+            inventoryItemId = existingItems.id;
+          } else {
+            // Step 2: Create new inventory_item with quantity 0
+            const { data: newItem, error: insertErr } = await supabase
+              .from('inventory_items')
+              .insert({
+                org_id: currentOrg.id,
+                warehouse_id: bulkWarehouseId,
+                variant_id: row.variant_id,
+                quantity: 0,
+              })
+              .select('id')
+              .single();
+
+            if (insertErr) {
+              console.error('Error creating inventory item:', insertErr);
+              throw insertErr;
+            }
+
+            inventoryItemId = newItem.id;
+          }
+
+          // Step 3: Apply stock adjustment using RPC function
+          const { error: rpcErr } = await (supabase as any).rpc('adjust_stock', {
+            p_inventory_item_id: inventoryItemId,
+            p_delta: delta,
+            p_reason: bulkReason.toLowerCase().replace(' ', '_'),
+            p_note: bulkNote.trim() || null,
+          });
+
+          if (rpcErr) throw rpcErr;
+
+          successCount++;
+        } catch (err: any) {
+          errorCount++;
+          const errMsg = err?.message || 'Unknown error';
+          errors.push(`${row.product?.title} - ${row.variant?.name}: ${errMsg}`);
+          console.error('Bulk adjust error for row:', row, err);
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: 'Success',
+          description: `Adjusted stock for ${successCount} item${successCount > 1 ? 's' : ''}`,
+        });
+      }
+
+      if (errorCount > 0) {
+        toast({
+          title: 'Errors',
+          description: `Failed to adjust ${errorCount} item${errorCount > 1 ? 's' : ''}. Check console for details.`,
+          variant: 'destructive',
+        });
+      }
+
+      // Reset and reload
+      setBulkAdjustOpen(false);
+      setSelectedIds(new Set());
+      setBulkDelta('0');
+      setBulkReason('Restock');
+      setBulkNote('');
+      await reload();
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to apply bulk adjustment',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -350,38 +544,116 @@ export default function Inventory() {
           <CardTitle>Stock ({inventory.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {inventory.length === 0 ? (
-            <p className="text-muted-foreground">No inventory yet. Use “Add Inventory” to set initial stock for a variant.</p>
+          {/* Filters */}
+          <div className="flex gap-4 mb-6">
+            <div className="flex-1">
+              <Input
+                placeholder="Search by product, variant, or SKU..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="w-64">
+              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All warehouses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All warehouses</SelectItem>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {filteredInventory.length === 0 ? (
+            <p className="text-muted-foreground py-8 text-center">
+              {inventory.length === 0
+                ? 'No inventory yet. Use "Add Inventory" to set initial stock for a variant.'
+                : 'No items match your filters.'}
+            </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Variant</TableHead>
-                  <TableHead>Warehouse</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {inventory.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.product?.title || '—'}</TableCell>
-                    <TableCell>{row.variant?.name || '—'}</TableCell>
-                    <TableCell>{row.warehouse?.name || '—'}</TableCell>
-                    <TableCell className="text-right font-semibold">{row.quantity}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => setAdjustOpenFor(row)}>
-                        Adjust
-                      </Button>
-                    </TableCell>
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allVisibleSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead>Product / Variant</TableHead>
+                    <TableHead>Warehouse</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredInventory.map((row) => (
+                    <TableRow key={row.id} className={selectedIds.has(row.id) ? 'bg-muted/50' : ''}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(row.id)}
+                          onCheckedChange={() => toggleSelectRow(row.id)}
+                          aria-label={`Select ${row.product?.title}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{row.product?.title || '—'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {row.variant?.name || '—'}
+                            {row.variant?.sku && (
+                              <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded">
+                                {row.variant.sku}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{row.warehouse?.name || '—'}</TableCell>
+                      <TableCell className="text-right font-semibold">{row.quantity}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" onClick={() => setAdjustOpenFor(row)}>
+                          Adjust
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Sticky bulk action bar */}
+      {someSelected && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-4">
+                <span className="font-semibold">
+                  {selectedIds.size} selected
+                </span>
+                <Button onClick={() => setBulkAdjustOpen(true)} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+                  Adjust Stock
+                </Button>
+                <Button variant="outline" onClick={() => setSelectedIds(new Set())}>
+                  <X className="mr-2 h-4 w-4" />
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={!!adjustOpenFor} onOpenChange={(open) => !open && setAdjustOpenFor(null)}>
         <DialogContent>
@@ -427,6 +699,91 @@ export default function Inventory() {
               <Button onClick={adjustStock} disabled={saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Apply
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk adjust stock modal */}
+      <Dialog open={bulkAdjustOpen} onOpenChange={(open) => !open && setBulkAdjustOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Adjust Stock</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+              <div className="font-medium mb-1">Adjusting {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}</div>
+              <div className="text-xs">
+                The adjustment will be applied to each selected variant at the chosen warehouse.
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Warehouse *</Label>
+              <Select value={bulkWarehouseId} onValueChange={setBulkWarehouseId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Stock will be adjusted at this warehouse for all selected variants.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Adjust By *</Label>
+              <Input
+                type="number"
+                value={bulkDelta}
+                onChange={(e) => setBulkDelta(e.target.value)}
+                placeholder="e.g. 10 or -5"
+              />
+              <p className="text-xs text-muted-foreground">
+                Positive to increase, negative to decrease. Final quantity will not go below 0.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Reason *</Label>
+              <Select value={bulkReason} onValueChange={setBulkReason}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Restock">Restock</SelectItem>
+                  <SelectItem value="Sale">Sale</SelectItem>
+                  <SelectItem value="Damage">Damage</SelectItem>
+                  <SelectItem value="Transfer">Transfer</SelectItem>
+                  <SelectItem value="Correction">Correction</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Input
+                value={bulkNote}
+                onChange={(e) => setBulkNote(e.target.value)}
+                placeholder="Add a note about this adjustment"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBulkAdjustOpen(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={applyBulkAdjustment} disabled={saving} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Apply to {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}
               </Button>
             </div>
           </div>
