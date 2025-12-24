@@ -17,6 +17,7 @@ import EventForm from "./pages/events/EventForm";
 import Dashboard from "./pages/Dashboard";
 import Bookings from "./pages/Bookings";
 import Settings from "./pages/Settings";
+import CatalogSettings from "./pages/settings/CatalogSettings";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 
@@ -138,6 +139,7 @@ function AppRoutes() {
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/settings/catalog" element={<ProtectedRoute><AppLayout><CatalogSettings /></AppLayout></ProtectedRoute>} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

@@ -215,6 +215,7 @@ export default function ProductForm() {
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [tagOptions, setTagOptions] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   
   // Warehouses & Stock
@@ -260,17 +261,20 @@ export default function ProductForm() {
       const whs = (whData as any[] || []) as Warehouse[];
       setWarehouses(whs);
       
-      // Collect unique categories from all products (for dropdown)
-      const { data: allProds } = await (supabase as any)
-        .from('products')
+      // Load categories and tags from org metadata
+      const { data: orgData } = await (supabase as any)
+        .from('orgs')
         .select('metadata')
-        .eq('org_id', currentOrg.id);
+        .eq('id', currentOrg.id)
+        .single();
       
-      const cats = new Set<string>();
-      (allProds || []).forEach((p: any) => {
-        if (p.metadata?.category) cats.add(p.metadata.category);
-      });
-      setCategoryOptions(Array.from(cats).sort());
+      const metadata = (orgData?.metadata as any) || {};
+      const catalogMeta = metadata.catalog || {};
+      const orgCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
+      const orgTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
+      
+      setCategoryOptions(orgCategories);
+      setTagOptions(orgTags);
       
       if (whs.length === 0) return;
       
@@ -411,17 +415,20 @@ export default function ProductForm() {
           setSelectedWarehouseId(mainWh.id);
         }
         
-        // Load categories
-        const { data: allProds } = await (supabase as any)
-          .from('products')
+        // Load categories and tags from org metadata
+        const { data: orgData } = await (supabase as any)
+          .from('orgs')
           .select('metadata')
-          .eq('org_id', currentOrg.id);
+          .eq('id', currentOrg.id)
+          .single();
         
-        const cats = new Set<string>();
-        (allProds || []).forEach((p: any) => {
-          if (p.metadata?.category) cats.add(p.metadata.category);
-        });
-        setCategoryOptions(Array.from(cats).sort());
+        const metadata = (orgData?.metadata as any) || {};
+        const catalogMeta = metadata.catalog || {};
+        const orgCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
+        const orgTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
+        
+        setCategoryOptions(orgCategories);
+        setTagOptions(orgTags);
       } catch (e: any) {
         console.error('Failed to load warehouses:', e);
       }
@@ -506,18 +513,66 @@ export default function ProductForm() {
   };
 
   // Category management
-  const createCategory = () => {
+  const createCategory = async () => {
+    if (!currentOrg) return;
+    
     const cat = newCategoryName.trim();
     if (!cat) {
       toast({ title: 'Validation', description: 'Category name is required', variant: 'destructive' });
       return;
     }
     
-    // Add to options (dedupe and sort)
-    setCategoryOptions(prev => Array.from(new Set([...prev, cat])).sort());
-    setCategory(cat);
-    setCreateCategoryOpen(false);
-    setNewCategoryName('');
+    if (categoryOptions.includes(cat)) {
+      toast({ title: 'Duplicate', description: 'Category already exists', variant: 'destructive' });
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      // Load current org metadata
+      const { data: orgData, error: fetchError } = await (supabase as any)
+        .from('orgs')
+        .select('metadata')
+        .eq('id', currentOrg.id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      const existingMetadata = (orgData.metadata as any) || {};
+      const catalogMeta = existingMetadata.catalog || {};
+      const currentCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
+      const currentTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
+      
+      // Add new category
+      const updatedCategories = [...currentCategories, cat].sort();
+      
+      const updatedMetadata = {
+        ...existingMetadata,
+        catalog: {
+          categories: updatedCategories,
+          tags: currentTags,
+        },
+      };
+      
+      // Update org metadata
+      const { error: updateError } = await (supabase as any)
+        .from('orgs')
+        .update({ metadata: updatedMetadata })
+        .eq('id', currentOrg.id);
+      
+      if (updateError) throw updateError;
+      
+      // Update local state
+      setCategoryOptions(updatedCategories);
+      setCategory(cat);
+      setCreateCategoryOpen(false);
+      setNewCategoryName('');
+      toast({ title: 'Success', description: 'Category created' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to create category', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Tag management
@@ -975,26 +1030,39 @@ export default function ProductForm() {
 
                 <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(value) => {
-                if (value === '__new__') {
-                  setCreateCategoryOpen(true);
-                  setNewCategoryName('');
-                  return;
-                }
-                setCategory(value);
-              }}>
-                <SelectTrigger id="category" className="h-10">
-                  <SelectValue placeholder="Select or create category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__new__">+ Create new category...</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger id="category" className="h-10">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.length === 0 ? (
+                      <SelectItem value="__empty__" disabled>
+                        No categories yet
+                      </SelectItem>
+                    ) : (
+                      categoryOptions.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setCreateCategoryOpen(true);
+                    setNewCategoryName('');
+                  }}
+                  className="h-10 whitespace-nowrap"
+                  disabled={saving}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1019,11 +1087,23 @@ export default function ProductForm() {
                     }
                   }}
                   className="h-10"
+                  list="tag-suggestions"
                 />
+                <datalist id="tag-suggestions">
+                  {tagOptions.map((tag) => (
+                    <option key={tag} value={tag} />
+                  ))}
+                </datalist>
                 <Button type="button" variant="outline" onClick={addTag} className="h-10">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {tagOptions.length > 0 && (
+                <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                  Suggestions: {tagOptions.filter(t => !tags.includes(t)).slice(0, 5).join(', ')}
+                  {tagOptions.filter(t => !tags.includes(t)).length > 5 ? '...' : ''}
+                </p>
+              )}
                       </div>
 
             {/* Hide variants section for venue assets */}
@@ -1253,10 +1333,13 @@ export default function ProductForm() {
       </Card>
 
       {/* Create Category Modal */}
-      <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
+      <Dialog open={createCategoryOpen} onOpenChange={(open) => !saving && setCreateCategoryOpen(open)}>
         <DialogContent className="p-4 md:p-6">
           <DialogHeader className="space-y-4">
             <DialogTitle>Create Category</DialogTitle>
+            <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              This category will be saved to your organization and available for all products.
+            </p>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -1266,7 +1349,7 @@ export default function ProductForm() {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !saving) {
                     e.preventDefault();
                     createCategory();
                   }
@@ -1274,16 +1357,29 @@ export default function ProductForm() {
                 placeholder="e.g. Apparel, Electronics"
                 autoFocus
                 className="h-10"
+                disabled={saving}
               />
             </div>
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => {
-                setCreateCategoryOpen(false);
-                setNewCategoryName('');
-              }} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCreateCategoryOpen(false);
+                  setNewCategoryName('');
+                }}
+                className="w-full sm:w-auto"
+                disabled={saving}
+              >
                 Cancel
               </Button>
-              <Button type="button" onClick={createCategory} disabled={!newCategoryName.trim()} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                onClick={createCategory}
+                disabled={saving || !newCategoryName.trim()}
+                className="w-full sm:w-auto"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create
               </Button>
             </div>
