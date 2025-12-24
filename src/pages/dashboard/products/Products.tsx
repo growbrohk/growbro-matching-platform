@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -19,18 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
-
-type OrgProduct = {
-  id: string;
-  org_id: string;
-  type: 'physical' | 'venue_asset';
-  title: string;
-  description: string | null;
-  base_price: number | null;
-  category_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
+import { getProducts, deleteProduct, type Product } from '@/lib/api/products';
 
 export default function Products() {
   const { currentOrg } = useAuth();
@@ -39,13 +27,13 @@ export default function Products() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [products, setProducts] = useState<OrgProduct[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [productToDelete, setProductToDelete] = useState<OrgProduct | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const canCreate = !!currentOrg?.id;
 
@@ -71,15 +59,9 @@ export default function Products() {
         allCategoryIds.add('uncategorized');
         setExpandedCategories(allCategoryIds);
 
-        // Fetch products
-        const { data, error: fetchError } = await supabase
-          .from('products')
-          .select('id, org_id, type, title, description, base_price, category_id, created_at, updated_at')
-          .eq('org_id', currentOrg.id)
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-        setProducts((data as any as OrgProduct[]) || []);
+        // Fetch products using the products API
+        const productsData = await getProducts(currentOrg.id);
+        setProducts(productsData);
         setError(null);
       } catch (e: any) {
         const msg = e?.message || 'Failed to load products';
@@ -95,7 +77,7 @@ export default function Products() {
 
   // Group products by category
   const groupedProducts = useMemo(() => {
-    const groups = new Map<string, { category: ProductCategory | null; products: OrgProduct[] }>();
+    const groups = new Map<string, { category: ProductCategory | null; products: Product[] }>();
 
     // Group products by category
     products.forEach((product) => {
@@ -144,9 +126,7 @@ export default function Products() {
     if (!productToDelete) return;
     setDeletingId(productToDelete.id);
     try {
-      const { error: deleteError } = await supabase.from('products').delete().eq('id', productToDelete.id);
-      if (deleteError) throw deleteError;
-
+      await deleteProduct(productToDelete.id);
       setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
       toast({ title: 'Deleted', description: 'Product deleted successfully' });
       setDeleteDialogOpen(false);

@@ -7,406 +7,294 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
   public: {
     Tables: {
-      collab_listings: {
+      booking_entitlements: {
         Row: {
-          budget_max: number | null
-          budget_min: number | null
-          city: string | null
-          collab_type: Database["public"]["Enums"]["collab_type"]
-          created_at: string | null
-          description: string | null
           id: string
-          is_active: boolean | null
-          owner_user_id: string
-          target_role: Database["public"]["Enums"]["user_role"] | null
-          title: string
-          updated_at: string | null
+          booking_id: string
+          code: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          created_at: string
         }
         Insert: {
-          budget_max?: number | null
-          budget_min?: number | null
-          city?: string | null
-          collab_type: Database["public"]["Enums"]["collab_type"]
-          created_at?: string | null
-          description?: string | null
           id?: string
-          is_active?: boolean | null
-          owner_user_id: string
-          target_role?: Database["public"]["Enums"]["user_role"] | null
-          title: string
-          updated_at?: string | null
+          booking_id: string
+          code: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          created_at?: string
         }
         Update: {
-          budget_max?: number | null
-          budget_min?: number | null
-          city?: string | null
-          collab_type?: Database["public"]["Enums"]["collab_type"]
-          created_at?: string | null
-          description?: string | null
           id?: string
-          is_active?: boolean | null
-          owner_user_id?: string
-          target_role?: Database["public"]["Enums"]["user_role"] | null
-          title?: string
-          updated_at?: string | null
+          booking_id?: string
+          code?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "collab_listings_owner_user_id_fkey"
-            columns: ["owner_user_id"]
+            foreignKeyName: "booking_entitlements_booking_id_fkey"
+            columns: ["booking_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "booking_entitlements_redeemed_by_fkey"
+            columns: ["redeemed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
         ]
       }
-      collab_request_products: {
+      bookings: {
         Row: {
-          collab_request_id: string
-          created_at: string | null
           id: string
-          note: string | null
-          product_id: string
+          brand_org_id: string
+          venue_org_id: string
+          resource_product_id: string
+          start_at: string
+          end_at: string
+          status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+          metadata: Json
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          collab_request_id: string
-          created_at?: string | null
           id?: string
-          note?: string | null
-          product_id: string
+          brand_org_id: string
+          venue_org_id: string
+          resource_product_id: string
+          start_at: string
+          end_at: string
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          collab_request_id?: string
-          created_at?: string | null
           id?: string
-          note?: string | null
-          product_id?: string
+          brand_org_id?: string
+          venue_org_id?: string
+          resource_product_id?: string
+          start_at?: string
+          end_at?: string
+          status?: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "collab_request_products_collab_request_id_fkey"
-            columns: ["collab_request_id"]
+            foreignKeyName: "bookings_brand_org_id_fkey"
+            columns: ["brand_org_id"]
             isOneToOne: false
-            referencedRelation: "collab_requests"
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "collab_request_products_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "bookings_venue_org_id_fkey"
+            columns: ["venue_org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_resource_product_id_fkey"
+            columns: ["resource_product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
-      collab_request_venue_options: {
+      events: {
         Row: {
-          collab_request_id: string
-          created_at: string | null
           id: string
+          org_id: string
+          venue_org_id: string | null
+          title: string
+          description: string | null
+          start_at: string
+          end_at: string
+          status: 'draft' | 'published' | 'cancelled' | 'completed'
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          venue_org_id?: string | null
+          title: string
+          description?: string | null
+          start_at: string
+          end_at: string
+          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          venue_org_id?: string | null
+          title?: string
+          description?: string | null
+          start_at?: string
+          end_at?: string
+          status?: 'draft' | 'published' | 'cancelled' | 'completed'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_venue_org_id_fkey"
+            columns: ["venue_org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      inventory_items: {
+        Row: {
+          id: string
+          org_id: string
+          warehouse_id: string
+          variant_id: string
+          quantity: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          warehouse_id: string
+          variant_id: string
+          quantity?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          warehouse_id?: string
+          variant_id?: string
+          quantity?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variants"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      inventory_movements: {
+        Row: {
+          id: string
+          inventory_item_id: string
+          delta: number
+          reason: string
           note: string | null
-          venue_collab_option_id: string
+          created_by: string | null
+          created_at: string
         }
         Insert: {
-          collab_request_id: string
-          created_at?: string | null
           id?: string
+          inventory_item_id: string
+          delta: number
+          reason: string
           note?: string | null
-          venue_collab_option_id: string
+          created_by?: string | null
+          created_at?: string
         }
         Update: {
-          collab_request_id?: string
-          created_at?: string | null
           id?: string
+          inventory_item_id?: string
+          delta?: number
+          reason?: string
           note?: string | null
-          venue_collab_option_id?: string
-        }
-        Relationships: []
-      }
-      collab_requests: {
-        Row: {
-          budget_notes: string | null
-          collab_listing_id: string | null
-          collab_type: Database["public"]["Enums"]["collab_type"]
-          created_at: string | null
-          from_user_id: string
-          id: string
-          location_notes: string | null
-          message: string | null
-          proposed_end_date: string | null
-          proposed_start_date: string | null
-          status: Database["public"]["Enums"]["collab_status"] | null
-          to_user_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          budget_notes?: string | null
-          collab_listing_id?: string | null
-          collab_type: Database["public"]["Enums"]["collab_type"]
-          created_at?: string | null
-          from_user_id: string
-          id?: string
-          location_notes?: string | null
-          message?: string | null
-          proposed_end_date?: string | null
-          proposed_start_date?: string | null
-          status?: Database["public"]["Enums"]["collab_status"] | null
-          to_user_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          budget_notes?: string | null
-          collab_listing_id?: string | null
-          collab_type?: Database["public"]["Enums"]["collab_type"]
-          created_at?: string | null
-          from_user_id?: string
-          id?: string
-          location_notes?: string | null
-          message?: string | null
-          proposed_end_date?: string | null
-          proposed_start_date?: string | null
-          status?: Database["public"]["Enums"]["collab_status"] | null
-          to_user_id?: string
-          updated_at?: string | null
+          created_by?: string | null
+          created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "collab_requests_collab_listing_id_fkey"
-            columns: ["collab_listing_id"]
+            foreignKeyName: "inventory_movements_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
             isOneToOne: false
-            referencedRelation: "collab_listings"
+            referencedRelation: "inventory_items"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "collab_requests_from_user_id_fkey"
-            columns: ["from_user_id"]
+            foreignKeyName: "inventory_movements_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "collab_requests_to_user_id_fkey"
-            columns: ["to_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventory_locations: {
-        Row: {
-          address_line: string | null
-          area: string | null
-          city: string | null
-          created_at: string | null
-          id: string
-          is_active: boolean | null
-          name: string
-          type: Database["public"]["Enums"]["inventory_location_type"]
-          updated_at: string | null
-          venue_user_id: string | null
-        }
-        Insert: {
-          address_line?: string | null
-          area?: string | null
-          city?: string | null
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          name: string
-          type: Database["public"]["Enums"]["inventory_location_type"]
-          updated_at?: string | null
-          venue_user_id?: string | null
-        }
-        Update: {
-          address_line?: string | null
-          area?: string | null
-          city?: string | null
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          type?: Database["public"]["Enums"]["inventory_location_type"]
-          updated_at?: string | null
-          venue_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_locations_venue_user_id_fkey"
-            columns: ["venue_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      likes: {
-        Row: {
-          created_at: string | null
-          from_user_id: string
-          id: string
-          is_like: boolean
-          to_user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          from_user_id: string
-          id?: string
-          is_like: boolean
-          to_user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          from_user_id?: string
-          id?: string
-          is_like?: boolean
-          to_user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "likes_from_user_id_fkey"
-            columns: ["from_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "likes_to_user_id_fkey"
-            columns: ["to_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      matches: {
-        Row: {
-          created_at: string | null
-          id: string
-          user_one_id: string
-          user_two_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          user_one_id: string
-          user_two_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          user_one_id?: string
-          user_two_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "matches_user_one_id_fkey"
-            columns: ["user_one_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "matches_user_two_id_fkey"
-            columns: ["user_two_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      messages: {
-        Row: {
-          body: string
-          collab_request_id: string | null
-          created_at: string | null
-          id: string
-          match_id: string | null
-          sender_user_id: string
-        }
-        Insert: {
-          body: string
-          collab_request_id?: string | null
-          created_at?: string | null
-          id?: string
-          match_id?: string | null
-          sender_user_id: string
-        }
-        Update: {
-          body?: string
-          collab_request_id?: string | null
-          created_at?: string | null
-          id?: string
-          match_id?: string | null
-          sender_user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_collab_request_id_fkey"
-            columns: ["collab_request_id"]
-            isOneToOne: false
-            referencedRelation: "collab_requests"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_match_id_fkey"
-            columns: ["match_id"]
-            isOneToOne: false
-            referencedRelation: "matches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_sender_user_id_fkey"
-            columns: ["sender_user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
+          }
         ]
       }
       order_items: {
         Row: {
-          created_at: string | null
           id: string
-          inventory_location_id: string | null
           order_id: string
-          product_id: string
+          ticket_type_id: string
           quantity: number
-          unit_price_cents: number
+          unit_price: number
+          subtotal: number
+          created_at: string
         }
         Insert: {
-          created_at?: string | null
           id?: string
-          inventory_location_id?: string | null
           order_id: string
-          product_id: string
+          ticket_type_id: string
           quantity: number
-          unit_price_cents: number
+          unit_price: number
+          subtotal: number
+          created_at?: string
         }
         Update: {
-          created_at?: string | null
           id?: string
-          inventory_location_id?: string | null
           order_id?: string
-          product_id?: string
+          ticket_type_id?: string
           quantity?: number
-          unit_price_cents?: number
+          unit_price?: number
+          subtotal?: number
+          created_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "order_items_inventory_location_id_fkey"
-            columns: ["inventory_location_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_locations"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "order_items_order_id_fkey"
             columns: ["order_id"]
@@ -415,326 +303,624 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "order_items_product_id_fkey"
-            columns: ["product_id"]
+            foreignKeyName: "order_items_ticket_type_id_fkey"
+            columns: ["ticket_type_id"]
             isOneToOne: false
-            referencedRelation: "products"
+            referencedRelation: "ticket_types"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       orders: {
         Row: {
-          created_at: string | null
-          currency: string | null
-          customer_email: string
-          customer_name: string | null
           id: string
-          status: string | null
-          stripe_payment_intent_id: string | null
-          stripe_session_id: string | null
-          total_amount_cents: number
-          updated_at: string | null
+          event_id: string
+          buyer_user_id: string
+          total_amount: number
+          status: 'pending' | 'paid' | 'cancelled' | 'refunded'
+          metadata: Json
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          currency?: string | null
-          customer_email: string
-          customer_name?: string | null
           id?: string
-          status?: string | null
-          stripe_payment_intent_id?: string | null
-          stripe_session_id?: string | null
-          total_amount_cents: number
-          updated_at?: string | null
+          event_id: string
+          buyer_user_id: string
+          total_amount: number
+          status?: 'pending' | 'paid' | 'cancelled' | 'refunded'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          currency?: string | null
-          customer_email?: string
-          customer_name?: string | null
           id?: string
-          status?: string | null
-          stripe_payment_intent_id?: string | null
-          stripe_session_id?: string | null
-          total_amount_cents?: number
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      product_inventory: {
-        Row: {
-          created_at: string | null
-          id: string
-          inventory_location_id: string
-          product_id: string
-          reserved_quantity: number | null
-          stock_quantity: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          inventory_location_id: string
-          product_id: string
-          reserved_quantity?: number | null
-          stock_quantity?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          inventory_location_id?: string
-          product_id?: string
-          reserved_quantity?: number | null
-          stock_quantity?: number | null
-          updated_at?: string | null
+          event_id?: string
+          buyer_user_id?: string
+          total_amount?: number
+          status?: 'pending' | 'paid' | 'cancelled' | 'refunded'
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "product_inventory_inventory_location_id_fkey"
-            columns: ["inventory_location_id"]
+            foreignKeyName: "orders_event_id_fkey"
+            columns: ["event_id"]
             isOneToOne: false
-            referencedRelation: "inventory_locations"
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "product_inventory_product_id_fkey"
+            foreignKeyName: "orders_buyer_user_id_fkey"
+            columns: ["buyer_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      org_members: {
+        Row: {
+          id: string
+          org_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'member'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          user_id: string
+          role?: 'owner' | 'admin' | 'member'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          user_id?: string
+          role?: 'owner' | 'admin' | 'member'
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      orgs: {
+        Row: {
+          id: string
+          name: string
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_categories: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          slug: string
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          slug: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_categories_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      product_pricing: {
+        Row: {
+          id: string
+          product_id: string
+          pricing_model: 'fixed' | 'revenue_share'
+          rate: number
+          rate_unit: string | null
+          minimum_fee: number | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          pricing_model: 'fixed' | 'revenue_share'
+          rate: number
+          rate_unit?: string | null
+          minimum_fee?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          pricing_model?: 'fixed' | 'revenue_share'
+          rate?: number
+          rate_unit?: string | null
+          minimum_fee?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_pricing_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      product_tag_links: {
+        Row: {
+          id: string
+          product_id: string
+          tag_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          tag_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          tag_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_tag_links_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_tag_links_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "product_tags"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      product_tags: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          slug: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          slug: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          name?: string
+          slug?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_tags_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      product_variants: {
+        Row: {
+          id: string
+          product_id: string
+          name: string
+          sku: string | null
+          price: number | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+          archived_at: string | null
+          active: boolean
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          name: string
+          sku?: string | null
+          price?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          archived_at?: string | null
+          active?: boolean
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          name?: string
+          sku?: string | null
+          price?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          archived_at?: string | null
+          active?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
         ]
       }
       products: {
         Row: {
-          brand_user_id: string
-          category: string | null
-          created_at: string | null
-          currency: string | null
-          full_description: string | null
           id: string
-          inventory_notes: string | null
-          is_active: boolean | null
-          is_public: boolean | null
-          is_purchasable: boolean | null
-          margin_notes: string | null
-          name: string
-          price_in_cents: number | null
-          price_range_max: number | null
-          price_range_min: number | null
-          short_description: string | null
-          slug: string | null
-          suitable_collab_types:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          thumbnail_url: string | null
-          updated_at: string | null
+          org_id: string
+          type: 'physical' | 'venue_asset'
+          title: string
+          description: string | null
+          base_price: number | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+          category_id: string | null
         }
         Insert: {
-          brand_user_id: string
-          category?: string | null
-          created_at?: string | null
-          currency?: string | null
-          full_description?: string | null
           id?: string
-          inventory_notes?: string | null
-          is_active?: boolean | null
-          is_public?: boolean | null
-          is_purchasable?: boolean | null
-          margin_notes?: string | null
-          name: string
-          price_in_cents?: number | null
-          price_range_max?: number | null
-          price_range_min?: number | null
-          short_description?: string | null
-          slug?: string | null
-          suitable_collab_types?:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          thumbnail_url?: string | null
-          updated_at?: string | null
+          org_id: string
+          type: 'physical' | 'venue_asset'
+          title: string
+          description?: string | null
+          base_price?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          category_id?: string | null
         }
         Update: {
-          brand_user_id?: string
-          category?: string | null
-          created_at?: string | null
-          currency?: string | null
-          full_description?: string | null
           id?: string
-          inventory_notes?: string | null
-          is_active?: boolean | null
-          is_public?: boolean | null
-          is_purchasable?: boolean | null
-          margin_notes?: string | null
-          name?: string
-          price_in_cents?: number | null
-          price_range_max?: number | null
-          price_range_min?: number | null
-          short_description?: string | null
-          slug?: string | null
-          suitable_collab_types?:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          thumbnail_url?: string | null
-          updated_at?: string | null
+          org_id?: string
+          type?: 'physical' | 'venue_asset'
+          title?: string
+          description?: string | null
+          base_price?: number | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+          category_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "products_brand_user_id_fkey"
-            columns: ["brand_user_id"]
+            foreignKeyName: "products_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "orgs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          }
         ]
       }
-      profiles: {
+      ticket_types: {
         Row: {
-          avatar_url: string | null
-          city: string | null
-          country: string | null
-          cover_image_url: string | null
-          created_at: string | null
-          display_name: string
-          handle: string
           id: string
-          instagram_handle: string | null
-          preferred_collab_types:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          role: Database["public"]["Enums"]["user_role"]
-          short_bio: string | null
-          tags: string[] | null
-          typical_budget_max: number | null
-          typical_budget_min: number | null
-          updated_at: string | null
-          website_url: string | null
+          event_id: string
+          name: string
+          price: number
+          quota: number
+          metadata: Json
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          avatar_url?: string | null
-          city?: string | null
-          country?: string | null
-          cover_image_url?: string | null
-          created_at?: string | null
-          display_name: string
-          handle: string
-          id: string
-          instagram_handle?: string | null
-          preferred_collab_types?:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          role: Database["public"]["Enums"]["user_role"]
-          short_bio?: string | null
-          tags?: string[] | null
-          typical_budget_max?: number | null
-          typical_budget_min?: number | null
-          updated_at?: string | null
-          website_url?: string | null
+          id?: string
+          event_id: string
+          name: string
+          price: number
+          quota: number
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          avatar_url?: string | null
-          city?: string | null
-          country?: string | null
-          cover_image_url?: string | null
-          created_at?: string | null
-          display_name?: string
-          handle?: string
           id?: string
-          instagram_handle?: string | null
-          preferred_collab_types?:
-            | Database["public"]["Enums"]["collab_type"][]
-            | null
-          role?: Database["public"]["Enums"]["user_role"]
-          short_bio?: string | null
-          tags?: string[] | null
-          typical_budget_max?: number | null
-          typical_budget_min?: number | null
-          updated_at?: string | null
-          website_url?: string | null
-        }
-        Relationships: []
-      }
-      venue_collab_options: {
-        Row: {
-          available_from: string | null
-          available_to: string | null
-          capacity_note: string | null
-          collab_types: Database["public"]["Enums"]["collab_type"][] | null
-          created_at: string | null
-          full_description: string | null
-          id: string
-          is_active: boolean | null
-          location_note: string | null
-          name: string
-          pricing_note: string | null
-          recurring_pattern: string | null
-          short_description: string | null
-          type: Database["public"]["Enums"]["venue_option_type"]
-          updated_at: string | null
-          venue_user_id: string
-        }
-        Insert: {
-          available_from?: string | null
-          available_to?: string | null
-          capacity_note?: string | null
-          collab_types?: Database["public"]["Enums"]["collab_type"][] | null
-          created_at?: string | null
-          full_description?: string | null
-          id?: string
-          is_active?: boolean | null
-          location_note?: string | null
-          name: string
-          pricing_note?: string | null
-          recurring_pattern?: string | null
-          short_description?: string | null
-          type: Database["public"]["Enums"]["venue_option_type"]
-          updated_at?: string | null
-          venue_user_id: string
-        }
-        Update: {
-          available_from?: string | null
-          available_to?: string | null
-          capacity_note?: string | null
-          collab_types?: Database["public"]["Enums"]["collab_type"][] | null
-          created_at?: string | null
-          full_description?: string | null
-          id?: string
-          is_active?: boolean | null
-          location_note?: string | null
+          event_id?: string
           name?: string
-          pricing_note?: string | null
-          recurring_pattern?: string | null
-          short_description?: string | null
-          type?: Database["public"]["Enums"]["venue_option_type"]
-          updated_at?: string | null
-          venue_user_id?: string
+          price?: number
+          quota?: number
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ticket_types_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      tickets: {
+        Row: {
+          id: string
+          order_id: string
+          order_item_id: string
+          ticket_type_id: string
+          qr_code: string
+          status: 'valid' | 'scanned' | 'cancelled'
+          scanned_at: string | null
+          scanned_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          order_item_id: string
+          ticket_type_id: string
+          qr_code: string
+          status?: 'valid' | 'scanned' | 'cancelled'
+          scanned_at?: string | null
+          scanned_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          order_item_id?: string
+          ticket_type_id?: string
+          qr_code?: string
+          status?: 'valid' | 'scanned' | 'cancelled'
+          scanned_at?: string | null
+          scanned_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_ticket_type_id_fkey"
+            columns: ["ticket_type_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_scanned_by_fkey"
+            columns: ["scanned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      warehouses: {
+        Row: {
+          id: string
+          org_id: string
+          name: string
+          address: string | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          name: string
+          address?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          name?: string
+          address?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_org: {
+        Args: {
+          p_name: string
+        }
+        Returns: string
+      }
+      create_product_with_variants: {
+        Args: {
+          p_org_id: string
+          p_type: 'physical' | 'venue_asset'
+          p_title: string
+          p_base_price: number
+          p_variant_names: string[] | null
+          p_variant_skus: string[] | null
+          p_variant_prices: number[] | null
+        }
+        Returns: string
+      }
+      create_inventory_for_variant: {
+        Args: {
+          p_org_id: string
+          p_warehouse_id: string
+          p_variant_id: string
+          p_initial_stock: number
+        }
+        Returns: string
+      }
+      adjust_stock: {
+        Args: {
+          p_inventory_item_id: string
+          p_delta: number
+          p_reason: string
+          p_note: string | null
+        }
+        Returns: string
+      }
+      generate_unique_code: {
+        Args: {
+          p_prefix: string
+        }
+        Returns: string
+      }
+      create_booking: {
+        Args: {
+          p_brand_org_id: string
+          p_venue_org_id: string
+          p_resource_product_id: string
+          p_start_at: string
+          p_end_at: string
+        }
+        Returns: string
+      }
+      redeem_booking: {
+        Args: {
+          p_code: string
+        }
+        Returns: string
+      }
+      create_event: {
+        Args: {
+          p_org_id: string
+          p_venue_org_id: string | null
+          p_title: string
+          p_start_at: string
+          p_end_at: string
+          p_metadata: Json
+        }
+        Returns: string
+      }
+      create_ticket_type: {
+        Args: {
+          p_event_id: string
+          p_name: string
+          p_price: number
+          p_quota: number
+        }
+        Returns: string
+      }
+      create_ticket_order: {
+        Args: {
+          p_event_id: string
+          p_ticket_type_id: string
+          p_qty: number
+          p_buyer_user_id: string
+        }
+        Returns: string
+      }
+      scan_ticket: {
+        Args: {
+          p_qr_code: string
+        }
+        Returns: string
+      }
     }
     Enums: {
-      collab_status: "pending" | "accepted" | "declined" | "closed"
-      collab_type:
-        | "consignment"
-        | "event"
-        | "collab_product"
-        | "cup_sleeve_marketing"
-      inventory_location_type: "warehouse" | "venue"
-      user_role: "brand" | "venue"
-      venue_option_type:
-        | "event_slot"
-        | "shelf_space"
-        | "exhibition_period"
-        | "wall_space"
-        | "other"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -742,33 +928,27 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type PublicSchema = Database[keyof Database & 'public']
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema['Tables'] & PublicSchema['Views'])
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions['schema']]['Tables'] &
+        Database[PublicTableNameOrOptions['schema']]['Views'])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions['schema']]['Tables'] &
+      Database[PublicTableNameOrOptions['schema']]['Views'])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof (PublicSchema['Tables'] &
+        PublicSchema['Views'])
+    ? (PublicSchema['Tables'] &
+        PublicSchema['Views'])[PublicTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -776,24 +956,20 @@ export type Tables<
     : never
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema['Tables']
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions['schema']]['Tables']
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema['Tables']
+    ? PublicSchema['Tables'][PublicTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -801,24 +977,20 @@ export type TablesInsert<
     : never
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema['Tables']
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions['schema']]['Tables']
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions['schema']]['Tables'][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+  : PublicTableNameOrOptions extends keyof PublicSchema['Tables']
+    ? PublicSchema['Tables'][PublicTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -826,58 +998,14 @@ export type TablesUpdate<
     : never
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema['Enums']
+    | { schema: keyof Database },
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions['schema']]['Enums']
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions['schema']]['Enums'][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema['Enums']
+    ? PublicSchema['Enums'][PublicEnumNameOrOptions]
     : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      collab_status: ["pending", "accepted", "declined", "closed"],
-      collab_type: [
-        "consignment",
-        "event",
-        "collab_product",
-        "cup_sleeve_marketing",
-      ],
-      inventory_location_type: ["warehouse", "venue"],
-      user_role: ["brand", "venue"],
-      venue_option_type: [
-        "event_slot",
-        "shelf_space",
-        "exhibition_period",
-        "wall_space",
-        "other",
-      ],
-    },
-  },
-} as const

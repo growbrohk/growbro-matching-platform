@@ -1,3 +1,8 @@
+/**
+ * Categories and Tags API Layer
+ * Handles product categories and tags for org-based multi-tenant system
+ */
+
 import { supabase } from '@/integrations/supabase/client';
 import type { ProductCategory, ProductTag, ProductTagLink } from '@/lib/types';
 

@@ -1,34 +1,73 @@
-export type UserRole = 'brand' | 'venue';
-export type CollabType = 'consignment' | 'event' | 'collab_product' | 'cup_sleeve_marketing';
-export type CollabStatus = 'pending' | 'accepted' | 'declined' | 'closed';
-export type VenueOptionType = 'event_slot' | 'shelf_space' | 'exhibition_period' | 'wall_space' | 'other';
-export type ProductOwnerType = 'brand' | 'venue';
-// ProductClass is deprecated - use product_type instead
-// Keeping for backward compatibility during migration
-export type ProductClass = 'physical' | 'ticket' | 'booking' | 'service' | 'space' | 'event_ticket';
+/**
+ * Type Definitions for GrowBro Matching Platform
+ * Organization-based multi-tenant system
+ */
 
-export type ProductType = 'simple' | 'variable' | 'event' | 'workshop' | 'space' | 'booking' | 'service' | 'ticket';
+// ============================================================================
+// ENUMS AND TYPES
+// ============================================================================
 
-export interface Profile {
+export type OrgMemberRole = 'owner' | 'admin' | 'member';
+export type ProductType = 'physical' | 'venue_asset';
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type EventStatus = 'draft' | 'published' | 'cancelled' | 'completed';
+export type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
+export type TicketStatus = 'valid' | 'scanned' | 'cancelled';
+export type PricingModel = 'fixed' | 'revenue_share';
+
+// ============================================================================
+// ORGANIZATION & MEMBERS
+// ============================================================================
+
+export interface Org {
   id: string;
-  role: UserRole;
-  is_venue: boolean; // If true, user is also a venue (in addition to being a brand)
-  display_name: string;
-  handle: string;
-  avatar_url?: string;
-  cover_image_url?: string;
-  short_bio?: string;
-  city?: string;
-  country?: string;
-  website_url?: string;
-  instagram_handle?: string;
-  tags: string[];
-  preferred_collab_types: CollabType[];
-  typical_budget_min?: number;
-  typical_budget_max?: number;
+  name: string;
+  metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
+
+export interface OrgMember {
+  id: string;
+  org_id: string;
+  user_id: string;
+  role: OrgMemberRole;
+  created_at: string;
+}
+
+// ============================================================================
+// PRODUCTS & VARIANTS
+// ============================================================================
+
+export interface Product {
+  id: string;
+  org_id: string;
+  type: ProductType;
+  title: string;
+  description?: string;
+  base_price?: number;
+  metadata: Record<string, any>;
+  category_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  name: string;
+  sku?: string;
+  price?: number;
+  metadata: Record<string, any>;
+  archived_at?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// CATEGORIES & TAGS
+// ============================================================================
 
 export interface ProductCategory {
   id: string;
@@ -56,168 +95,203 @@ export interface ProductTagLink {
   created_at: string;
 }
 
-export interface Product {
+// ============================================================================
+// PRICING
+// ============================================================================
+
+export interface ProductPricing {
   id: string;
-  // Legacy field (kept for backward compatibility)
-  brand_user_id?: string;
-  // New unified ownership fields
-  owner_type: ProductOwnerType;
-  owner_user_id: string;
-  product_class?: ProductClass; // Deprecated - use product_type instead
-  product_type: ProductType; // Product type: simple, variable, event, workshop, etc.
-  name: string;
-  slug?: string;
-  short_description?: string;
-  full_description?: string;
-  category?: string; // Deprecated - use category_id instead
-  category_id?: string; // Foreign key to product_categories
-  thumbnail_url?: string;
-  price_range_min?: number;
-  price_range_max?: number;
-  price_in_cents?: number;
-  currency?: string;
-  suitable_collab_types: CollabType[];
-  margin_notes?: string;
-  inventory_notes?: string;
-  is_active: boolean;
-  is_public?: boolean;
-  is_purchasable?: boolean;
+  product_id: string;
+  pricing_model: PricingModel;
+  rate: number;
+  rate_unit?: string;
+  minimum_fee?: number;
+  metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
 
-export interface CollabListing {
+// ============================================================================
+// INVENTORY
+// ============================================================================
+
+export interface Warehouse {
   id: string;
-  owner_user_id: string;
+  org_id: string;
+  name: string;
+  address?: string;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  org_id: string;
+  warehouse_id: string;
+  variant_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  inventory_item_id: string;
+  delta: number;
+  reason: string;
+  note?: string;
+  created_by?: string;
+  created_at: string;
+}
+
+// ============================================================================
+// BOOKINGS (for venue_asset products)
+// ============================================================================
+
+export interface Booking {
+  id: string;
+  brand_org_id: string;
+  venue_org_id: string;
+  resource_product_id: string;
+  start_at: string;
+  end_at: string;
+  status: BookingStatus;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookingEntitlement {
+  id: string;
+  booking_id: string;
+  code: string;
+  redeemed_at?: string;
+  redeemed_by?: string;
+  created_at: string;
+}
+
+// ============================================================================
+// EVENTS & TICKETS
+// ============================================================================
+
+export interface Event {
+  id: string;
+  org_id: string;
+  venue_org_id?: string;
   title: string;
   description?: string;
-  collab_type: CollabType;
-  target_role?: UserRole;
-  city?: string;
-  budget_min?: number;
-  budget_max?: number;
-  is_active: boolean;
+  start_at: string;
+  end_at: string;
+  status: EventStatus;
+  metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
 
-export interface Like {
+export interface TicketType {
   id: string;
-  from_user_id: string;
-  to_user_id: string;
-  is_like: boolean;
-  created_at: string;
-}
-
-export interface Match {
-  id: string;
-  user_one_id: string;
-  user_two_id: string;
-  created_at: string;
-}
-
-export interface CollabRequest {
-  id: string;
-  from_user_id: string;
-  to_user_id: string;
-  collab_type: CollabType;
-  collab_listing_id?: string;
-  message?: string;
-  status: CollabStatus;
-  proposed_start_date?: string;
-  proposed_end_date?: string;
-  location_notes?: string;
-  budget_notes?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CollabRequestProduct {
-  id: string;
-  collab_request_id: string;
-  product_id: string;
-  note?: string;
-  created_at: string;
-}
-
-export interface Message {
-  id: string;
-  match_id?: string;
-  collab_request_id?: string;
-  sender_user_id: string;
-  body: string;
-  created_at: string;
-}
-
-export interface VenueCollabOption {
-  id: string;
-  venue_user_id: string;
+  event_id: string;
   name: string;
-  type: VenueOptionType;
-  short_description?: string;
-  full_description?: string;
-  collab_types: CollabType[];
-  available_from?: string;
-  available_to?: string;
-  recurring_pattern?: string;
-  capacity_note?: string;
-  location_note?: string;
-  pricing_note?: string;
-  is_active: boolean;
+  price: number;
+  quota: number;
+  metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
 
-export interface CollabRequestVenueOption {
+export interface Order {
   id: string;
-  collab_request_id: string;
-  venue_collab_option_id: string;
-  note?: string;
+  event_id: string;
+  buyer_user_id: string;
+  total_amount: number;
+  status: OrderStatus;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  ticket_type_id: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
   created_at: string;
 }
 
-export const COLLAB_TYPE_LABELS: Record<CollabType, string> = {
-  consignment: 'Consignment',
-  event: 'Event',
-  collab_product: 'Collab Product',
-  cup_sleeve_marketing: 'Cup Sleeve',
+export interface Ticket {
+  id: string;
+  order_id: string;
+  order_item_id: string;
+  ticket_type_id: string;
+  qr_code: string;
+  status: TicketStatus;
+  scanned_at?: string;
+  scanned_by?: string;
+  created_at: string;
+}
+
+// ============================================================================
+// UI LABELS & CONSTANTS
+// ============================================================================
+
+export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
+  physical: 'Physical Product',
+  venue_asset: 'Venue Asset',
 };
 
-export const COLLAB_TYPE_COLORS: Record<CollabType, string> = {
-  consignment: 'collab-chip-consignment',
-  event: 'collab-chip-event',
-  collab_product: 'collab-chip-collab-product',
-  cup_sleeve_marketing: 'collab-chip-cup-sleeve',
-};
-
-export const VENUE_OPTION_TYPE_LABELS: Record<VenueOptionType, string> = {
-  event_slot: 'Event Slot',
-  shelf_space: 'Shelf Space',
-  exhibition_period: 'Exhibition',
-  wall_space: 'Wall Space',
-  other: 'Other',
-};
-
-export const VENUE_OPTION_TYPE_COLORS: Record<VenueOptionType, string> = {
-  event_slot: 'bg-purple-100 text-purple-700',
-  shelf_space: 'bg-blue-100 text-blue-700',
-  exhibition_period: 'bg-emerald-100 text-emerald-700',
-  wall_space: 'bg-amber-100 text-amber-700',
-  other: 'bg-gray-100 text-gray-700',
-};
-
-export const PRODUCT_CLASS_LABELS: Record<ProductClass, string> = {
-  physical: 'Physical',
-  ticket: 'Ticket',
-  booking: 'Booking',
-  service: 'Service',
-  space: 'Space',
-};
-
-export const PRODUCT_CLASS_COLORS: Record<ProductClass, string> = {
+export const PRODUCT_TYPE_COLORS: Record<ProductType, string> = {
   physical: 'bg-blue-100 text-blue-700',
-  ticket: 'bg-purple-100 text-purple-700',
-  booking: 'bg-green-100 text-green-700',
-  service: 'bg-orange-100 text-orange-700',
-  space: 'bg-pink-100 text-pink-700',
+  venue_asset: 'bg-purple-100 text-purple-700',
 };
+
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  cancelled: 'Cancelled',
+  completed: 'Completed',
+};
+
+export const EVENT_STATUS_LABELS: Record<EventStatus, string> = {
+  draft: 'Draft',
+  published: 'Published',
+  cancelled: 'Cancelled',
+  completed: 'Completed',
+};
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: 'Pending',
+  paid: 'Paid',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+};
+
+export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
+  valid: 'Valid',
+  scanned: 'Scanned',
+  cancelled: 'Cancelled',
+};
+
+export const PRICING_MODEL_LABELS: Record<PricingModel, string> = {
+  fixed: 'Fixed Price',
+  revenue_share: 'Revenue Share',
+};
+
+// ============================================================================
+// HELPER TYPES
+// ============================================================================
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface ApiResponse<T> {
+  data: T | null;
+  error: Error | null;
+}

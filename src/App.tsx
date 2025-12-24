@@ -12,8 +12,9 @@ import DashboardProducts from "./pages/dashboard/products/Products";
 import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
 import Inventory from "./pages/dashboard/inventory/Inventory";
-import EventsList from "./pages/events/EventsList";
-import EventForm from "./pages/events/EventForm";
+// Old events system deprecated - using new placeholder pages
+import EventsList from "./pages/events/EventsList.new";
+import EventForm from "./pages/events/EventForm.new";
 import Dashboard from "./pages/Dashboard";
 import Bookings from "./pages/Bookings";
 import Settings from "./pages/Settings";
