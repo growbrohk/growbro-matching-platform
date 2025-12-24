@@ -133,9 +133,11 @@ export default function Auth() {
 
       {/* Logo */}
       <div className="flex items-center gap-3 mb-8 relative">
-        <div className="h-14 w-14 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
-          <Handshake className="h-8 w-8 text-white" />
-        </div>
+        <img 
+          src="/growbro-logo.jpg" 
+          alt="GrowBro Logo" 
+          className="h-14 w-14 rounded-2xl object-cover"
+        />
         <div className="leading-none">
           <div className="font-bold tracking-tight text-2xl" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
             Growbro

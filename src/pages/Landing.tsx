@@ -238,9 +238,11 @@ export default function Landing() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10">
           <div className="h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND.green }}>
-                <Handshake className="h-5 w-5 text-white" />
-              </div>
+              <img 
+                src="/growbro-logo.jpg" 
+                alt="GrowBro Logo" 
+                className="h-9 w-9 rounded-xl object-cover"
+              />
               <div className="leading-none">
                 <div className="font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                   Growbro
@@ -734,9 +736,11 @@ export default function Landing() {
         <div className="mt-10 border-t" style={{ borderColor: "rgba(244,239,233,0.12)" }}>
           <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-10 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: BRAND.green }}>
-                <Handshake className="h-5 w-5 text-white" />
-              </div>
+              <img 
+                src="/growbro-logo.jpg" 
+                alt="GrowBro Logo" 
+                className="h-9 w-9 rounded-xl object-cover"
+              />
               <div className="text-sm" style={{ color: "rgba(244,239,233,0.75)" }}>
                 Growbro • Online ↔ Offline Collaboration
               </div>

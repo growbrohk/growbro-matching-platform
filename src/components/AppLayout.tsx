@@ -96,9 +96,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="h-16 flex items-center justify-between">
             {/* Logo */}
             <Link to="/app/dashboard" className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#0E7A3A' }}>
-                <Handshake className="h-5 w-5 text-white" />
-              </div>
+              <img 
+                src="/growbro-logo.jpg" 
+                alt="GrowBro Logo" 
+                className="h-9 w-9 rounded-xl object-cover"
+              />
               <div className="leading-none">
                 <div className="font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                   Growbro
