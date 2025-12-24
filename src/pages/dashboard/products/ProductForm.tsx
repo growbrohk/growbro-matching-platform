@@ -36,6 +36,7 @@ type VariantCombination = {
   price: string;
   active: boolean;
   isNew?: boolean; // not yet saved
+  sig?: string; // stable signature based on values (e.g., "m|black")
 };
 
 function toDecimalOrNull(input: string): number | null {
@@ -73,12 +74,14 @@ function generateVariantCombinations(options: VariantOption[], basePrice: string
   // Format combinations
   return combinations.map(combo => {
     const parts = validOptions.map((opt, idx) => `${opt.name}: ${combo[idx]}`);
+    const sig = combo.map(normalizeValue).join('|');
     return {
       name: parts.join(' / '),
       sku: '',
       price: basePrice,
       active: true,
       isNew: true,
+      sig,
     };
   });
 }
@@ -88,6 +91,24 @@ function generateVariantCombinations(options: VariantOption[], basePrice: string
  */
 function normalizeValue(s: string): string {
   return s.trim().toLowerCase();
+}
+
+/**
+ * Extract values from variant name and create a stable signature
+ * E.g., "Size: M / Color: Black" -> "m|black"
+ * This allows matching variants even when option names change
+ */
+function signatureFromVariantName(name: string): string {
+  // Split by " / " to get each "Option: Value" pair
+  const parts = name.split(' / ');
+  // Extract values (after ':') and normalize
+  const values = parts
+    .map(part => {
+      const colonIdx = part.indexOf(':');
+      return colonIdx >= 0 ? part.substring(colonIdx + 1).trim() : part.trim();
+    })
+    .map(normalizeValue);
+  return values.join('|');
 }
 
 function dedupeValues(values: string[]): string[] {
@@ -305,26 +326,33 @@ export default function ProductForm() {
       return;
     }
 
-    // Create a map of existing variants by name
-    const existingByName = new Map<string, VariantCombination>();
-    variants.forEach(v => existingByName.set(v.name, v));
-
-    // Create a set of new variant names
-    const generatedNames = new Set(generated.map(g => g.name));
-
-    // Merge: prefer existing data (SKU/price/active/id) if name matches
-    const merged = generated.map(gen => {
-      const existing = existingByName.get(gen.name);
-      return existing ? { ...existing, name: gen.name } : gen;
+    // Create a map of existing variants by signature (not name)
+    // This allows matching even when option names change
+    const existingBySig = new Map<string, VariantCombination>();
+    variants.forEach(v => {
+      const sig = v.sig || signatureFromVariantName(v.name);
+      existingBySig.set(sig, v);
     });
 
-    // Determine which variants will be archived
-    const toArchive = variants.filter(v => !generatedNames.has(v.name));
+    // Create a set of new variant signatures
+    const generatedSigs = new Set(generated.map(g => g.sig!));
+
+    // Merge: prefer existing data (SKU/price/active/id) if signature matches
+    const merged = generated.map(gen => {
+      const existing = existingBySig.get(gen.sig!);
+      return existing ? { ...existing, name: gen.name, sig: gen.sig } : gen;
+    });
+
+    // Determine which variants will be archived (by signature)
+    const toArchive = variants.filter(v => {
+      const sig = v.sig || signatureFromVariantName(v.name);
+      return !generatedSigs.has(sig);
+    });
 
     // Calculate counts
-    const addedCount = generated.filter(g => !existingByName.has(g.name)).length;
+    const addedCount = generated.filter(g => !existingBySig.has(g.sig!)).length;
     const archivedCount = toArchive.length;
-    const keptCount = generated.filter(g => existingByName.has(g.name)).length;
+    const keptCount = generated.filter(g => existingBySig.has(g.sig!)).length;
 
     // Apply changes
     setVariants(merged);
@@ -556,7 +584,7 @@ export default function ProductForm() {
                       type="button"
                       onClick={regenerateVariants}
                       variant="secondary"
-                      disabled={!isOptionsValid(variantOptionsDraft).ok}
+                      disabled={!hasPendingOptionChanges || !isOptionsValid(variantOptionsDraft).ok}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Regenerate Variants
@@ -570,7 +598,7 @@ export default function ProductForm() {
                     <div>
                       <Label>Variant Combinations</Label>
                       <p className="text-sm text-muted-foreground">
-                        Edit SKU, price, and active status for each variant.
+                        Edit SKU, price, and active status for each variant. Leave SKU blank to auto-generate on save.
                       </p>
                     </div>
 
