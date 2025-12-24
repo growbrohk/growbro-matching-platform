@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
 
 type OrgProductType = 'physical' | 'venue_asset';
 
@@ -21,11 +23,18 @@ type OrgProduct = {
   base_price: number | null;
 };
 
-type Variant = {
+type VariantOption = {
+  name: string;
+  values: string[];
+};
+
+type VariantCombination = {
   id?: string;
   name: string;
-  sku?: string;
-  price?: string; // user input (decimal)
+  sku: string;
+  price: string;
+  active: boolean;
+  isNew?: boolean; // not yet saved
 };
 
 function toDecimalOrNull(input: string): number | null {
@@ -33,6 +42,44 @@ function toDecimalOrNull(input: string): number | null {
   if (!trimmed) return null;
   const num = Number(trimmed);
   return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Generate cartesian product of variant option values
+ */
+function generateVariantCombinations(options: VariantOption[], basePrice: string): VariantCombination[] {
+  if (options.length === 0 || options.every(opt => opt.values.length === 0)) {
+    return [];
+  }
+
+  // Filter out options with no values
+  const validOptions = options.filter(opt => opt.values.length > 0);
+  if (validOptions.length === 0) return [];
+
+  // Generate cartesian product
+  const combinations: string[][] = [[]];
+  for (const option of validOptions) {
+    const newCombinations: string[][] = [];
+    for (const combination of combinations) {
+      for (const value of option.values) {
+        newCombinations.push([...combination, value]);
+      }
+    }
+    combinations.length = 0;
+    combinations.push(...newCombinations);
+  }
+
+  // Format combinations
+  return combinations.map(combo => {
+    const parts = validOptions.map((opt, idx) => `${opt.name}: ${combo[idx]}`);
+    return {
+      name: parts.join(' / '),
+      sku: '',
+      price: basePrice,
+      active: true,
+      isNew: true,
+    };
+  });
 }
 
 export default function ProductForm() {
@@ -52,7 +99,10 @@ export default function ProductForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
-  const [variants, setVariants] = useState<Variant[]>([{ name: 'Default', sku: '', price: '' }]);
+  
+  // New variant system: options → combinations
+  const [variantOptions, setVariantOptions] = useState<VariantOption[]>([]);
+  const [variants, setVariants] = useState<VariantCombination[]>([]);
 
   const canSubmit = useMemo(() => {
     if (!currentOrg?.id) return false;
@@ -85,22 +135,29 @@ export default function ProductForm() {
 
         const { data: variantsData, error: variantsError } = await supabase
           .from('product_variants')
-          .select('id, name, sku, price, created_at')
+          .select('id, name, sku, price, active, archived_at, created_at')
           .eq('product_id', p.id)
+          .is('archived_at', null) // Only load non-archived variants
           .order('created_at', { ascending: true });
 
         if (variantsError) throw variantsError;
         const v = (variantsData as any[] | null) || [];
-        setVariants(
-          v.length > 0
-            ? v.map((row) => ({
-                id: row.id,
-                name: row.name || '',
-                sku: row.sku || '',
-                price: row.price === null || row.price === undefined ? '' : String(row.price),
-              }))
-            : [{ name: 'Default', sku: '', price: p.base_price === null ? '' : String(p.base_price) }]
-        );
+        
+        // Load existing variants (edit mode shows existing combinations, not options)
+        if (v.length > 0) {
+          setVariants(
+            v.map((row) => ({
+              id: row.id,
+              name: row.name || '',
+              sku: row.sku || '',
+              price: row.price === null || row.price === undefined ? '' : String(row.price),
+              active: row.active ?? true,
+              isNew: false,
+            }))
+          );
+          // Note: We don't reverse-engineer options from existing variants
+          // User must manually set options if they want to regenerate
+        }
       } catch (e: any) {
         toast({ title: 'Error', description: e?.message || 'Failed to load product', variant: 'destructive' });
         navigate('/app/products');
@@ -112,8 +169,52 @@ export default function ProductForm() {
     load();
   }, [currentOrg, id, isEditMode, navigate, toast]);
 
-  const addVariant = () => setVariants((prev) => [...prev, { name: '', sku: '', price: '' }]);
-  const removeVariant = (idx: number) => setVariants((prev) => prev.filter((_, i) => i !== idx));
+  // Variant Option Management
+  const addOption = () => {
+    if (variantOptions.length >= 2) {
+      toast({ title: 'Limit reached', description: 'Maximum 2 variant options allowed', variant: 'destructive' });
+      return;
+    }
+    setVariantOptions((prev) => [...prev, { name: '', values: [] }]);
+  };
+
+  const removeOption = (idx: number) => {
+    setVariantOptions((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateOptionName = (idx: number, name: string) => {
+    setVariantOptions((prev) => prev.map((opt, i) => (i === idx ? { ...opt, name } : opt)));
+  };
+
+  const addOptionValue = (idx: number, value: string) => {
+    if (!value.trim()) return;
+    setVariantOptions((prev) =>
+      prev.map((opt, i) => (i === idx ? { ...opt, values: [...opt.values, value.trim()] } : opt))
+    );
+  };
+
+  const removeOptionValue = (optIdx: number, valIdx: number) => {
+    setVariantOptions((prev) =>
+      prev.map((opt, i) => (i === optIdx ? { ...opt, values: opt.values.filter((_, j) => j !== valIdx) } : opt))
+    );
+  };
+
+  const generateVariants = () => {
+    const generated = generateVariantCombinations(variantOptions, basePrice);
+    if (generated.length === 0) {
+      toast({ title: 'No variants', description: 'Add at least one option with values first', variant: 'destructive' });
+      return;
+    }
+    
+    // Merge with existing variants (keep IDs for existing ones)
+    const merged = generated.map(gen => {
+      const existing = variants.find(v => v.name === gen.name);
+      return existing || gen;
+    });
+    
+    setVariants(merged);
+    toast({ title: 'Variants generated', description: `${generated.length} variant(s) created` });
+  };
 
   const onSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -158,41 +259,66 @@ export default function ProductForm() {
         if (updateError) throw updateError;
       }
 
-      // Variants: update existing by id, insert new ones. Avoid deleting existing IDs (may be referenced by inventory).
-      const cleaned = variants
-        .map((v) => ({
-          id: v.id,
-          name: v.name.trim(),
-          sku: v.sku?.trim() || null,
-          price: toDecimalOrNull(v.price || ''),
-        }))
-        .filter((v) => v.name.length > 0);
+      // Variant save logic with archival
+      if (variants.length > 0) {
+        // Prepare current variants
+        const currentVariants = variants
+          .filter((v) => v.name.trim().length > 0)
+          .map((v) => ({
+            id: v.id,
+            name: v.name.trim(),
+            sku: v.sku?.trim() || null,
+            price: toDecimalOrNull(v.price || ''),
+            active: v.active,
+          }));
 
-      if (cleaned.length === 0) {
-        cleaned.push({ id: undefined, name: 'Default', sku: null, price: base_price });
-      }
-
-      const existing = cleaned.filter((v) => !!v.id);
-      const fresh = cleaned.filter((v) => !v.id);
-
-      for (const v of existing) {
-        const { error: vErr } = await supabase
+        // Fetch all existing variants (including archived) for comparison
+        const { data: existingVariants, error: fetchErr } = await supabase
           .from('product_variants')
-          .update({ name: v.name, sku: v.sku, price: v.price })
-          .eq('id', v.id);
-        if (vErr) throw vErr;
-      }
+          .select('id, name')
+          .eq('product_id', productId!)
+          .is('archived_at', null);
 
-      if (fresh.length > 0) {
-        const { error: insertErr } = await supabase.from('product_variants').insert(
-          fresh.map((v) => ({
-            product_id: productId,
-            name: v.name,
-            sku: v.sku,
-            price: v.price,
-          }))
-        );
-        if (insertErr) throw insertErr;
+        if (fetchErr) throw fetchErr;
+
+        const existingMap = new Map((existingVariants || []).map((v: any) => [v.name, v.id]));
+        const currentNames = new Set(currentVariants.map((v) => v.name));
+
+        // 1. Archive variants that no longer exist in current list
+        for (const [name, id] of existingMap) {
+          if (!currentNames.has(name)) {
+            const { error: archiveErr } = await supabase
+              .from('product_variants')
+              .update({ archived_at: new Date().toISOString() })
+              .eq('id', id);
+            if (archiveErr) throw archiveErr;
+          }
+        }
+
+        // 2. Update existing variants
+        const toUpdate = currentVariants.filter((v) => !!v.id);
+        for (const v of toUpdate) {
+          const { error: updateErr } = await supabase
+            .from('product_variants')
+            .update({ name: v.name, sku: v.sku, price: v.price, active: v.active })
+            .eq('id', v.id);
+          if (updateErr) throw updateErr;
+        }
+
+        // 3. Insert new variants
+        const toInsert = currentVariants.filter((v) => !v.id);
+        if (toInsert.length > 0) {
+          const { error: insertErr } = await supabase.from('product_variants').insert(
+            toInsert.map((v) => ({
+              product_id: productId,
+              name: v.name,
+              sku: v.sku,
+              price: v.price,
+              active: v.active,
+            }))
+          );
+          if (insertErr) throw insertErr;
+        }
       }
 
       toast({ title: 'Success', description: isEditMode ? 'Product updated' : 'Product created' });
@@ -253,44 +379,99 @@ export default function ProductForm() {
               <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" />
                       </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Variants</Label>
-                  <p className="text-sm text-muted-foreground">
-                    You can add more variants later. We won’t delete existing variants to avoid breaking inventory.
-                  </p>
-                </div>
-                <Button type="button" variant="outline" onClick={addVariant}>
-                        <Plus className="mr-2 h-4 w-4" />
-                  Add Variant
-                      </Button>
-              </div>
+            {/* Hide variants section for venue assets */}
+            {type !== 'venue_asset' && (
+              <div className="space-y-6">
+                {/* Variant Options Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Variant Options</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Define options (e.g., Size, Color) and their values. Max 2 options.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addOption}
+                      disabled={variantOptions.length >= 2}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Option
+                    </Button>
+                  </div>
 
-              <div className="space-y-3">
-                {variants.map((v, idx) => (
-                  <div key={v.id ?? idx} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-lg p-3">
-                    <div className="md:col-span-5 space-y-1">
-                      <Label>Name</Label>
-                      <Input value={v.name} onChange={(e) => setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
-                    </div>
-                    <div className="md:col-span-4 space-y-1">
-                      <Label>SKU</Label>
-                      <Input value={v.sku || ''} onChange={(e) => setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, sku: e.target.value } : x)))} />
-                    </div>
-                    <div className="md:col-span-2 space-y-1">
-                      <Label>Price</Label>
-                      <Input value={v.price || ''} onChange={(e) => setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} />
-                    </div>
-                    <div className="md:col-span-1 flex justify-end">
-                      <Button type="button" variant="ghost" onClick={() => removeVariant(idx)} disabled={variants.length <= 1 && !v.id}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                    ))}
-                  </div>
+                  {variantOptions.map((option, optIdx) => (
+                    <VariantOptionInput
+                      key={optIdx}
+                      option={option}
+                      onUpdateName={(name) => updateOptionName(optIdx, name)}
+                      onAddValue={(value) => addOptionValue(optIdx, value)}
+                      onRemoveValue={(valIdx) => removeOptionValue(optIdx, valIdx)}
+                      onRemove={() => removeOption(optIdx)}
+                    />
+                  ))}
+
+                  {variantOptions.length > 0 && (
+                    <Button type="button" onClick={generateVariants} variant="secondary">
+                      Generate Variants
+                    </Button>
+                  )}
                 </div>
+
+                {/* Variant Combinations Table */}
+                {variants.length > 0 && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label>Variant Combinations</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Edit SKU, price, and active status for each variant.
+                      </p>
+                    </div>
+
+                    <div className="border rounded-lg divide-y">
+                      {variants.map((v, idx) => (
+                        <div key={v.id ?? idx} className="grid grid-cols-12 gap-3 items-center p-3">
+                          <div className="col-span-4">
+                            <p className="text-sm font-medium">{v.name}</p>
+                          </div>
+                          <div className="col-span-3">
+                            <Input
+                              placeholder="SKU"
+                              value={v.sku}
+                              onChange={(e) =>
+                                setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, sku: e.target.value } : x)))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-3">
+                            <Input
+                              placeholder="Price"
+                              value={v.price}
+                              onChange={(e) =>
+                                setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))
+                              }
+                            />
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end gap-2">
+                            <div className="flex items-center gap-1">
+                              <Switch
+                                checked={v.active}
+                                onCheckedChange={(checked) =>
+                                  setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, active: checked } : x)))
+                                }
+                              />
+                              <span className="text-xs text-muted-foreground">Active</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => navigate('/app/products')} disabled={saving}>
@@ -308,4 +489,90 @@ export default function ProductForm() {
   );
 }
 
+/**
+ * Component for entering a single variant option (name + values)
+ */
+function VariantOptionInput({
+  option,
+  onUpdateName,
+  onAddValue,
+  onRemoveValue,
+  onRemove,
+}: {
+  option: VariantOption;
+  onUpdateName: (name: string) => void;
+  onAddValue: (value: string) => void;
+  onRemoveValue: (valIdx: number) => void;
+  onRemove: () => void;
+}) {
+  const [inputValue, setInputValue] = useState('');
+
+  const handleAddValue = () => {
+    if (inputValue.trim()) {
+      onAddValue(inputValue);
+      setInputValue('');
+    }
+  };
+
+  const handleKeyDown = (e: any) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddValue();
+    }
+  };
+
+  return (
+    <div className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <Input
+          placeholder="Option name (e.g., Size, Color)"
+          value={option.name}
+          onChange={(e) => onUpdateName(e.target.value)}
+          className="max-w-xs"
+        />
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-sm">Values</Label>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Add value and press Enter"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={!option.name.trim()}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleAddValue}
+            disabled={!option.name.trim() || !inputValue.trim()}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {option.values.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {option.values.map((value, idx) => (
+              <Badge key={idx} variant="secondary" className="gap-1">
+                {value}
+                <button
+                  type="button"
+                  onClick={() => onRemoveValue(idx)}
+                  className="ml-1 hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
