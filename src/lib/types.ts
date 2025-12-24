@@ -30,6 +30,32 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface ProductCategory {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductTag {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductTagLink {
+  id: string;
+  product_id: string;
+  tag_id: string;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   // Legacy field (kept for backward compatibility)
@@ -43,7 +69,8 @@ export interface Product {
   slug?: string;
   short_description?: string;
   full_description?: string;
-  category?: string;
+  category?: string; // Deprecated - use category_id instead
+  category_id?: string; // Foreign key to product_categories
   thumbnail_url?: string;
   price_range_min?: number;
   price_range_max?: number;

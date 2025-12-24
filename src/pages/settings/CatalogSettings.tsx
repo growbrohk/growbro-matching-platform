@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Edit, Trash2, X } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -33,42 +32,57 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-interface CategoryUsage {
-  name: string;
-  count: number;
-}
-
-interface TagUsage {
-  name: string;
-  count: number;
-}
+import {
+  getCategoriesWithCounts,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  reassignProductsCategory,
+  updateCategoriesSortOrder,
+  getTagsWithCounts,
+  createTag,
+  updateTag,
+  deleteTag,
+  type CategoryWithCount,
+  type TagWithCount,
+} from '@/lib/api/categories-and-tags';
 
 type DeleteCategoryAction = 'cancel' | 'delete' | 'merge';
 
 export default function CatalogSettings() {
-  const { currentOrg, refreshOrgMemberships } = useAuth();
+  const { currentOrg } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
   // Categories state
-  const [categories, setCategories] = useState<string[]>([]);
-  const [categoryUsage, setCategoryUsage] = useState<CategoryUsage[]>([]);
+  const [categories, setCategories] = useState<CategoryWithCount[]>([]);
   const [newCategoryInput, setNewCategoryInput] = useState('');
   
   // Tags state
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
+  const [tags, setTags] = useState<TagWithCount[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   
   // Edit dialogs
-  const [editCategoryDialog, setEditCategoryDialog] = useState<{ open: boolean; oldName: string; newName: string }>({
+  const [editCategoryDialog, setEditCategoryDialog] = useState<{ 
+    open: boolean; 
+    categoryId: string;
+    oldName: string; 
+    newName: string;
+  }>({
     open: false,
+    categoryId: '',
     oldName: '',
     newName: '',
   });
-  const [editTagDialog, setEditTagDialog] = useState<{ open: boolean; oldName: string; newName: string }>({
+  
+  const [editTagDialog, setEditTagDialog] = useState<{ 
+    open: boolean; 
+    tagId: string;
+    oldName: string; 
+    newName: string;
+  }>({
     open: false,
+    tagId: '',
     oldName: '',
     newName: '',
   });
@@ -76,19 +90,28 @@ export default function CatalogSettings() {
   // Delete dialogs
   const [deleteCategoryDialog, setDeleteCategoryDialog] = useState<{
     open: boolean;
+    categoryId: string;
     categoryName: string;
     usageCount: number;
     action: DeleteCategoryAction;
-    mergeTarget: string;
+    mergeTargetId: string;
   }>({
     open: false,
+    categoryId: '',
     categoryName: '',
     usageCount: 0,
     action: 'cancel',
-    mergeTarget: '',
+    mergeTargetId: '',
   });
-  const [deleteTagDialog, setDeleteTagDialog] = useState<{ open: boolean; tagName: string; usageCount: number }>({
+  
+  const [deleteTagDialog, setDeleteTagDialog] = useState<{ 
+    open: boolean; 
+    tagId: string;
+    tagName: string; 
+    usageCount: number;
+  }>({
     open: false,
+    tagId: '',
     tagName: '',
     usageCount: 0,
   });
@@ -103,23 +126,10 @@ export default function CatalogSettings() {
     
     setLoading(true);
     try {
-      // Load org metadata
-      const { data: orgData, error: orgError } = await supabase
-        .from('orgs')
-        .select('metadata')
-        .eq('id', currentOrg.id)
-        .single();
-      
-      if (orgError) throw orgError;
-      
-      const metadata = (orgData.metadata as any) || {};
-      const catalogMeta = metadata.catalog || {};
-      
-      setCategories(Array.isArray(catalogMeta.categories) ? catalogMeta.categories : []);
-      setTags(Array.isArray(catalogMeta.tags) ? catalogMeta.tags : []);
-      
-      // Load usage counts
-      await loadUsageCounts();
+      await Promise.all([
+        loadCategories(),
+        loadTags(),
+      ]);
     } catch (error: any) {
       console.error('Error loading catalog settings:', error);
       toast.error(error.message || 'Failed to load catalog settings');
@@ -128,73 +138,47 @@ export default function CatalogSettings() {
     }
   };
 
-  const loadUsageCounts = async () => {
+  const loadCategories = async () => {
     if (!currentOrg) return;
     
     try {
-      // Get all products for this org
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('metadata')
-        .eq('org_id', currentOrg.id);
-      
-      if (error) throw error;
-      
-      // Count category usage
-      const catCounts = new Map<string, number>();
-      const tagCounts = new Map<string, number>();
-      
-      products?.forEach((p: any) => {
-        const meta = p.metadata || {};
-        
-        // Count categories
-        if (meta.category && typeof meta.category === 'string') {
-          catCounts.set(meta.category, (catCounts.get(meta.category) || 0) + 1);
-        }
-        
-        // Count tags
-        if (Array.isArray(meta.tags)) {
-          meta.tags.forEach((tag: string) => {
-            tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-          });
-        }
-      });
-      
-      // Convert to arrays with usage counts
-      const catUsage: CategoryUsage[] = categories.map(cat => ({
-        name: cat,
-        count: catCounts.get(cat) || 0,
-      }));
-      
-      const tagUsageArr: TagUsage[] = tags.map(tag => ({
-        name: tag,
-        count: tagCounts.get(tag) || 0,
-      }));
-      
-      setCategoryUsage(catUsage);
-      setTagUsage(tagUsageArr);
+      const data = await getCategoriesWithCounts(currentOrg.id);
+      setCategories(data);
     } catch (error: any) {
-      console.error('Error loading usage counts:', error);
+      console.error('Error loading categories:', error);
+      throw error;
     }
   };
 
-  // Category functions
+  const loadTags = async () => {
+    if (!currentOrg) return;
+    
+    try {
+      const data = await getTagsWithCounts(currentOrg.id);
+      setTags(data);
+    } catch (error: any) {
+      console.error('Error loading tags:', error);
+      throw error;
+    }
+  };
+
+  // ============================================================================
+  // CATEGORY FUNCTIONS
+  // ============================================================================
+
   const addCategory = async () => {
     if (!currentOrg || !newCategoryInput.trim()) return;
     
-    const newCat = newCategoryInput.trim();
-    if (categories.includes(newCat)) {
+    const newCatName = newCategoryInput.trim();
+    if (categories.some(c => c.name.toLowerCase() === newCatName.toLowerCase())) {
       toast.error('Category already exists');
       return;
     }
     
     setSaving(true);
     try {
-      const updatedCategories = [...categories, newCat].sort();
-      await updateOrgMetadata({ categories: updatedCategories, tags });
-      
-      setCategories(updatedCategories);
-      setCategoryUsage([...categoryUsage, { name: newCat, count: 0 }].sort((a, b) => a.name.localeCompare(b.name)));
+      await createCategory(currentOrg.id, newCatName);
+      await loadCategories();
       setNewCategoryInput('');
       toast.success('Category added');
     } catch (error: any) {
@@ -205,57 +189,26 @@ export default function CatalogSettings() {
   };
 
   const renameCategory = async () => {
-    if (!currentOrg || !editCategoryDialog.newName.trim()) return;
+    if (!currentOrg || !editCategoryDialog.categoryId || !editCategoryDialog.newName.trim()) return;
     
-    const oldName = editCategoryDialog.oldName;
     const newName = editCategoryDialog.newName.trim();
     
-    if (oldName === newName) {
-      setEditCategoryDialog({ open: false, oldName: '', newName: '' });
+    if (editCategoryDialog.oldName === newName) {
+      setEditCategoryDialog({ open: false, categoryId: '', oldName: '', newName: '' });
       return;
     }
     
-    if (categories.includes(newName)) {
+    if (categories.some(c => c.name.toLowerCase() === newName.toLowerCase() && c.id !== editCategoryDialog.categoryId)) {
       toast.error('Category already exists');
       return;
     }
     
     setSaving(true);
     try {
-      // Update org metadata
-      const updatedCategories = categories.map(c => c === oldName ? newName : c).sort();
-      await updateOrgMetadata({ categories: updatedCategories, tags });
-      
-      // Bulk update products
-      const { data: productsToUpdate, error: fetchError } = await supabase
-        .from('products')
-        .select('id, metadata')
-        .eq('org_id', currentOrg.id);
-      
-      if (fetchError) throw fetchError;
-      
-      const updates = productsToUpdate
-        ?.filter((p: any) => p.metadata?.category === oldName)
-        .map((p: any) => ({
-          id: p.id,
-          metadata: { ...p.metadata, category: newName },
-        })) || [];
-      
-      if (updates.length > 0) {
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ metadata: update.metadata })
-            .eq('id', update.id);
-          
-          if (updateError) throw updateError;
-        }
-      }
-      
-      setCategories(updatedCategories);
-      setEditCategoryDialog({ open: false, oldName: '', newName: '' });
-      await loadUsageCounts();
-      toast.success(`Category renamed (${updates.length} products updated)`);
+      await updateCategory(editCategoryDialog.categoryId, { name: newName });
+      await loadCategories();
+      setEditCategoryDialog({ open: false, categoryId: '', oldName: '', newName: '' });
+      toast.success('Category renamed');
     } catch (error: any) {
       toast.error(error.message || 'Failed to rename category');
     } finally {
@@ -263,57 +216,47 @@ export default function CatalogSettings() {
     }
   };
 
-  const deleteCategory = async () => {
-    if (!currentOrg || !deleteCategoryDialog.categoryName) return;
+  const handleDeleteCategory = async () => {
+    if (!currentOrg || !deleteCategoryDialog.categoryId) return;
     
-    const { categoryName, action, mergeTarget } = deleteCategoryDialog;
+    const { categoryId, action, mergeTargetId } = deleteCategoryDialog;
     
     if (action === 'cancel') {
-      setDeleteCategoryDialog({ open: false, categoryName: '', usageCount: 0, action: 'cancel', mergeTarget: '' });
+      setDeleteCategoryDialog({ 
+        open: false, 
+        categoryId: '',
+        categoryName: '', 
+        usageCount: 0, 
+        action: 'cancel', 
+        mergeTargetId: '' 
+      });
       return;
     }
     
     setSaving(true);
     try {
-      // Update org metadata
-      const updatedCategories = categories.filter(c => c !== categoryName);
-      await updateOrgMetadata({ categories: updatedCategories, tags });
-      
-      // Bulk update products
-      const { data: productsToUpdate, error: fetchError } = await supabase
-        .from('products')
-        .select('id, metadata')
-        .eq('org_id', currentOrg.id);
-      
-      if (fetchError) throw fetchError;
-      
-      const updates = productsToUpdate
-        ?.filter((p: any) => p.metadata?.category === categoryName)
-        .map((p: any) => ({
-          id: p.id,
-          metadata: {
-            ...p.metadata,
-            category: action === 'merge' ? mergeTarget : null,
-          },
-        })) || [];
-      
-      if (updates.length > 0) {
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ metadata: update.metadata })
-            .eq('id', update.id);
-          
-          if (updateError) throw updateError;
-        }
+      // Reassign products if merging
+      if (action === 'merge' && mergeTargetId) {
+        const count = await reassignProductsCategory(categoryId, mergeTargetId);
+        await deleteCategory(categoryId);
+        await loadCategories();
+        toast.success(`Category deleted (${count} products merged)`);
+      } else {
+        // Delete and remove category from products
+        const count = await reassignProductsCategory(categoryId, null);
+        await deleteCategory(categoryId);
+        await loadCategories();
+        toast.success(`Category deleted (${count} products updated)`);
       }
       
-      setCategories(updatedCategories);
-      setDeleteCategoryDialog({ open: false, categoryName: '', usageCount: 0, action: 'cancel', mergeTarget: '' });
-      await loadUsageCounts();
-      
-      const actionText = action === 'merge' ? `merged into "${mergeTarget}"` : 'removed from products';
-      toast.success(`Category deleted (${updates.length} products ${actionText})`);
+      setDeleteCategoryDialog({ 
+        open: false, 
+        categoryId: '',
+        categoryName: '', 
+        usageCount: 0, 
+        action: 'cancel', 
+        mergeTargetId: '' 
+      });
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete category');
     } finally {
@@ -321,23 +264,71 @@ export default function CatalogSettings() {
     }
   };
 
-  // Tag functions
+  const moveCategoryUp = async (index: number) => {
+    if (index === 0) return;
+    
+    setSaving(true);
+    try {
+      const newCategories = [...categories];
+      [newCategories[index - 1], newCategories[index]] = [newCategories[index], newCategories[index - 1]];
+      
+      // Update sort orders
+      const updates = newCategories.map((cat, idx) => ({
+        id: cat.id,
+        sort_order: idx,
+      }));
+      
+      await updateCategoriesSortOrder(updates);
+      await loadCategories();
+      toast.success('Category order updated');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveCategoryDown = async (index: number) => {
+    if (index === categories.length - 1) return;
+    
+    setSaving(true);
+    try {
+      const newCategories = [...categories];
+      [newCategories[index], newCategories[index + 1]] = [newCategories[index + 1], newCategories[index]];
+      
+      // Update sort orders
+      const updates = newCategories.map((cat, idx) => ({
+        id: cat.id,
+        sort_order: idx,
+      }));
+      
+      await updateCategoriesSortOrder(updates);
+      await loadCategories();
+      toast.success('Category order updated');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================================
+  // TAG FUNCTIONS
+  // ============================================================================
+
   const addTag = async () => {
     if (!currentOrg || !newTagInput.trim()) return;
     
-    const newTag = newTagInput.trim();
-    if (tags.includes(newTag)) {
+    const newTagName = newTagInput.trim();
+    if (tags.some(t => t.name.toLowerCase() === newTagName.toLowerCase())) {
       toast.error('Tag already exists');
       return;
     }
     
     setSaving(true);
     try {
-      const updatedTags = [...tags, newTag].sort();
-      await updateOrgMetadata({ categories, tags: updatedTags });
-      
-      setTags(updatedTags);
-      setTagUsage([...tagUsage, { name: newTag, count: 0 }].sort((a, b) => a.name.localeCompare(b.name)));
+      await createTag(currentOrg.id, newTagName);
+      await loadTags();
       setNewTagInput('');
       toast.success('Tag added');
     } catch (error: any) {
@@ -348,60 +339,26 @@ export default function CatalogSettings() {
   };
 
   const renameTag = async () => {
-    if (!currentOrg || !editTagDialog.newName.trim()) return;
+    if (!currentOrg || !editTagDialog.tagId || !editTagDialog.newName.trim()) return;
     
-    const oldName = editTagDialog.oldName;
     const newName = editTagDialog.newName.trim();
     
-    if (oldName === newName) {
-      setEditTagDialog({ open: false, oldName: '', newName: '' });
+    if (editTagDialog.oldName === newName) {
+      setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' });
       return;
     }
     
-    if (tags.includes(newName)) {
+    if (tags.some(t => t.name.toLowerCase() === newName.toLowerCase() && t.id !== editTagDialog.tagId)) {
       toast.error('Tag already exists');
       return;
     }
     
     setSaving(true);
     try {
-      // Update org metadata
-      const updatedTags = tags.map(t => t === oldName ? newName : t).sort();
-      await updateOrgMetadata({ categories, tags: updatedTags });
-      
-      // Bulk update products
-      const { data: productsToUpdate, error: fetchError } = await supabase
-        .from('products')
-        .select('id, metadata')
-        .eq('org_id', currentOrg.id);
-      
-      if (fetchError) throw fetchError;
-      
-      const updates = productsToUpdate
-        ?.filter((p: any) => Array.isArray(p.metadata?.tags) && p.metadata.tags.includes(oldName))
-        .map((p: any) => ({
-          id: p.id,
-          metadata: {
-            ...p.metadata,
-            tags: p.metadata.tags.map((t: string) => t === oldName ? newName : t),
-          },
-        })) || [];
-      
-      if (updates.length > 0) {
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ metadata: update.metadata })
-            .eq('id', update.id);
-          
-          if (updateError) throw updateError;
-        }
-      }
-      
-      setTags(updatedTags);
-      setEditTagDialog({ open: false, oldName: '', newName: '' });
-      await loadUsageCounts();
-      toast.success(`Tag renamed (${updates.length} products updated)`);
+      await updateTag(editTagDialog.tagId, { name: newName });
+      await loadTags();
+      setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' });
+      toast.success('Tag renamed');
     } catch (error: any) {
       toast.error(error.message || 'Failed to rename tag');
     } finally {
@@ -409,50 +366,15 @@ export default function CatalogSettings() {
     }
   };
 
-  const deleteTag = async () => {
-    if (!currentOrg || !deleteTagDialog.tagName) return;
-    
-    const tagName = deleteTagDialog.tagName;
+  const handleDeleteTag = async () => {
+    if (!currentOrg || !deleteTagDialog.tagId) return;
     
     setSaving(true);
     try {
-      // Update org metadata
-      const updatedTags = tags.filter(t => t !== tagName);
-      await updateOrgMetadata({ categories, tags: updatedTags });
-      
-      // Bulk update products
-      const { data: productsToUpdate, error: fetchError } = await supabase
-        .from('products')
-        .select('id, metadata')
-        .eq('org_id', currentOrg.id);
-      
-      if (fetchError) throw fetchError;
-      
-      const updates = productsToUpdate
-        ?.filter((p: any) => Array.isArray(p.metadata?.tags) && p.metadata.tags.includes(tagName))
-        .map((p: any) => ({
-          id: p.id,
-          metadata: {
-            ...p.metadata,
-            tags: p.metadata.tags.filter((t: string) => t !== tagName),
-          },
-        })) || [];
-      
-      if (updates.length > 0) {
-        for (const update of updates) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ metadata: update.metadata })
-            .eq('id', update.id);
-          
-          if (updateError) throw updateError;
-        }
-      }
-      
-      setTags(updatedTags);
-      setDeleteTagDialog({ open: false, tagName: '', usageCount: 0 });
-      await loadUsageCounts();
-      toast.success(`Tag deleted (removed from ${updates.length} products)`);
+      await deleteTag(deleteTagDialog.tagId);
+      await loadTags();
+      setDeleteTagDialog({ open: false, tagId: '', tagName: '', usageCount: 0 });
+      toast.success('Tag deleted');
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete tag');
     } finally {
@@ -460,32 +382,9 @@ export default function CatalogSettings() {
     }
   };
 
-  const updateOrgMetadata = async (catalog: { categories: string[]; tags: string[] }) => {
-    if (!currentOrg) return;
-    
-    const { data: orgData, error: fetchError } = await supabase
-      .from('orgs')
-      .select('metadata')
-      .eq('id', currentOrg.id)
-      .single();
-    
-    if (fetchError) throw fetchError;
-    
-    const existingMetadata = (orgData.metadata as any) || {};
-    const updatedMetadata = {
-      ...existingMetadata,
-      catalog,
-    };
-    
-    const { error: updateError } = await supabase
-      .from('orgs')
-      .update({ metadata: updatedMetadata })
-      .eq('id', currentOrg.id);
-    
-    if (updateError) throw updateError;
-    
-    await refreshOrgMemberships();
-  };
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   if (!currentOrg) {
     return (
@@ -528,7 +427,7 @@ export default function CatalogSettings() {
                 Product Categories
               </CardTitle>
               <CardDescription>
-                Add categories to organize your products. You can rename or delete categories.
+                Add categories to organize your products. You can rename, reorder, or delete categories.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 p-4 md:p-6 pt-0">
@@ -559,14 +458,14 @@ export default function CatalogSettings() {
 
               {/* Categories list */}
               <div className="space-y-2">
-                {categoryUsage.length === 0 ? (
+                {categories.length === 0 ? (
                   <p className="text-sm text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
                     No categories yet. Add your first category above.
                   </p>
                 ) : (
-                  categoryUsage.map((cat) => (
+                  categories.map((cat, index) => (
                     <div
-                      key={cat.name}
+                      key={cat.id}
                       className="flex items-center justify-between p-3 rounded-lg border"
                       style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                     >
@@ -575,15 +474,39 @@ export default function CatalogSettings() {
                           {cat.name}
                         </p>
                         <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                          Used by {cat.count} product{cat.count !== 1 ? 's' : ''}
+                          Used by {cat.product_count || 0} product{cat.product_count !== 1 ? 's' : ''}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setEditCategoryDialog({ open: true, oldName: cat.name, newName: cat.name })}
+                          onClick={() => moveCategoryUp(index)}
+                          disabled={saving || index === 0}
+                          title="Move up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveCategoryDown(index)}
+                          disabled={saving || index === categories.length - 1}
+                          title="Move down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setEditCategoryDialog({ 
+                            open: true, 
+                            categoryId: cat.id,
+                            oldName: cat.name, 
+                            newName: cat.name 
+                          })}
                           disabled={saving}
+                          title="Rename"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -593,13 +516,15 @@ export default function CatalogSettings() {
                           onClick={() =>
                             setDeleteCategoryDialog({
                               open: true,
+                              categoryId: cat.id,
                               categoryName: cat.name,
-                              usageCount: cat.count,
+                              usageCount: cat.product_count || 0,
                               action: 'cancel',
-                              mergeTarget: '',
+                              mergeTargetId: '',
                             })
                           }
                           disabled={saving}
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -651,14 +576,14 @@ export default function CatalogSettings() {
 
               {/* Tags list */}
               <div className="space-y-2">
-                {tagUsage.length === 0 ? (
+                {tags.length === 0 ? (
                   <p className="text-sm text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
                     No tags yet. Add your first tag above.
                   </p>
                 ) : (
-                  tagUsage.map((tag) => (
+                  tags.map((tag) => (
                     <div
-                      key={tag.name}
+                      key={tag.id}
                       className="flex items-center justify-between p-3 rounded-lg border"
                       style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                     >
@@ -667,15 +592,21 @@ export default function CatalogSettings() {
                           {tag.name}
                         </p>
                         <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                          Used by {tag.count} product{tag.count !== 1 ? 's' : ''}
+                          Used by {tag.product_count || 0} product{tag.product_count !== 1 ? 's' : ''}
                         </p>
                       </div>
                       <div className="flex gap-2">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setEditTagDialog({ open: true, oldName: tag.name, newName: tag.name })}
+                          onClick={() => setEditTagDialog({ 
+                            open: true, 
+                            tagId: tag.id,
+                            oldName: tag.name, 
+                            newName: tag.name 
+                          })}
                           disabled={saving}
+                          title="Rename"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -685,11 +616,13 @@ export default function CatalogSettings() {
                           onClick={() =>
                             setDeleteTagDialog({
                               open: true,
+                              tagId: tag.id,
                               tagName: tag.name,
-                              usageCount: tag.count,
+                              usageCount: tag.product_count || 0,
                             })
                           }
                           disabled={saving}
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -726,7 +659,7 @@ export default function CatalogSettings() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setEditCategoryDialog({ open: false, oldName: '', newName: '' })}
+              onClick={() => setEditCategoryDialog({ open: false, categoryId: '', oldName: '', newName: '' })}
               disabled={saving}
             >
               Cancel
@@ -782,9 +715,9 @@ export default function CatalogSettings() {
                 <div className="space-y-2">
                   <Label>Select target category:</Label>
                   <Select
-                    value={deleteCategoryDialog.mergeTarget}
+                    value={deleteCategoryDialog.mergeTargetId}
                     onValueChange={(value) =>
-                      setDeleteCategoryDialog({ ...deleteCategoryDialog, mergeTarget: value })
+                      setDeleteCategoryDialog({ ...deleteCategoryDialog, mergeTargetId: value })
                     }
                     disabled={saving}
                   >
@@ -793,10 +726,10 @@ export default function CatalogSettings() {
                     </SelectTrigger>
                     <SelectContent>
                       {categories
-                        .filter(c => c !== deleteCategoryDialog.categoryName)
+                        .filter(c => c.id !== deleteCategoryDialog.categoryId)
                         .map(cat => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -811,12 +744,12 @@ export default function CatalogSettings() {
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                deleteCategory();
+                handleDeleteCategory();
               }}
               disabled={
                 saving ||
                 deleteCategoryDialog.action === 'cancel' ||
-                (deleteCategoryDialog.action === 'merge' && !deleteCategoryDialog.mergeTarget)
+                (deleteCategoryDialog.action === 'merge' && !deleteCategoryDialog.mergeTargetId)
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -850,7 +783,7 @@ export default function CatalogSettings() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setEditTagDialog({ open: false, oldName: '', newName: '' })}
+              onClick={() => setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' })}
               disabled={saving}
             >
               Cancel
@@ -884,7 +817,7 @@ export default function CatalogSettings() {
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                deleteTag();
+                handleDeleteTag();
               }}
               disabled={saving}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -898,4 +831,3 @@ export default function CatalogSettings() {
     </div>
   );
 }
-

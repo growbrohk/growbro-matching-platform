@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 
 type Warehouse = { id: string; org_id: string; name: string; address: string | null };
-type Product = { id: string; org_id: string; title: string; type: string };
+type Product = { id: string; org_id: string; title: string; type: string; category_id?: string | null };
 type Variant = { id: string; product_id: string; name: string; sku: string | null; price: number | null };
 type InventoryItem = { id: string; org_id: string; warehouse_id: string; variant_id: string; quantity: number };
 
@@ -21,6 +22,7 @@ type EnrichedInventoryRow = InventoryItem & {
   warehouse?: Warehouse;
   product?: Product;
   variant?: Variant;
+  category?: ProductCategory;
 };
 
 export default function Inventory() {
@@ -34,6 +36,7 @@ export default function Inventory() {
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [inventory, setInventory] = useState<EnrichedInventoryRow[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createWarehouseId, setCreateWarehouseId] = useState<string>('');
@@ -65,6 +68,7 @@ export default function Inventory() {
   // Filtering state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   // Filtered products/variants for the create modal
   const filteredProductsForCreate = useMemo(() => {
@@ -79,7 +83,7 @@ export default function Inventory() {
     );
   }, [products, variants, createSearchQuery]);
 
-  // Filtered inventory based on search and warehouse filter
+  // Filtered inventory based on search, warehouse, and category filters
   const filteredInventory = useMemo(() => {
     let filtered = inventory;
 
@@ -88,19 +92,69 @@ export default function Inventory() {
       filtered = filtered.filter((row) => row.warehouse_id === warehouseFilter);
     }
 
-    // Apply search filter (search in product title, variant name, sku)
+    // Apply category filter
+    if (categoryFilter !== 'all') {
+      if (categoryFilter === 'uncategorized') {
+        filtered = filtered.filter((row) => !row.product?.category_id);
+      } else {
+        filtered = filtered.filter((row) => row.product?.category_id === categoryFilter);
+      }
+    }
+
+    // Apply search filter (search in product title, variant name, sku, category name)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((row) => {
         const productTitle = row.product?.title?.toLowerCase() || '';
         const variantName = row.variant?.name?.toLowerCase() || '';
         const sku = row.variant?.sku?.toLowerCase() || '';
-        return productTitle.includes(query) || variantName.includes(query) || sku.includes(query);
+        const categoryName = row.category?.name?.toLowerCase() || '';
+        return productTitle.includes(query) || variantName.includes(query) || sku.includes(query) || categoryName.includes(query);
       });
     }
 
     return filtered;
-  }, [inventory, warehouseFilter, searchQuery]);
+  }, [inventory, warehouseFilter, categoryFilter, searchQuery]);
+
+  // Group inventory by category → product → variant
+  const groupedInventory = useMemo(() => {
+    const groups = new Map<string, Map<string, EnrichedInventoryRow[]>>();
+    
+    filteredInventory.forEach((row) => {
+      const categoryKey = row.category?.name || 'Uncategorized';
+      const productKey = row.product?.id || 'unknown';
+      
+      if (!groups.has(categoryKey)) {
+        groups.set(categoryKey, new Map());
+      }
+      
+      const categoryGroup = groups.get(categoryKey)!;
+      if (!categoryGroup.has(productKey)) {
+        categoryGroup.set(productKey, []);
+      }
+      
+      categoryGroup.get(productKey)!.push(row);
+    });
+    
+    // Convert to sorted array
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => {
+        // "Uncategorized" goes last
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([categoryName, productMap]) => ({
+        categoryName,
+        products: Array.from(productMap.entries())
+          .map(([productId, rows]) => ({
+            productId,
+            productTitle: rows[0]?.product?.title || 'Unknown Product',
+            rows,
+          }))
+          .sort((a, b) => a.productTitle.localeCompare(b.productTitle)),
+      }));
+  }, [filteredInventory]);
 
   // Selection helpers
   const allVisibleSelected = filteredInventory.length > 0 && filteredInventory.every((row) => selectedIds.has(row.id));
@@ -129,7 +183,7 @@ export default function Inventory() {
   // Clear selection when filters change
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [warehouseFilter, searchQuery]);
+  }, [warehouseFilter, categoryFilter, searchQuery]);
 
   // Auto-select default warehouse when bulk adjust modal opens
   useEffect(() => {
@@ -210,7 +264,7 @@ export default function Inventory() {
 
       const { data: productsData, error: productsErr } = await (supabase as any)
         .from('products')
-        .select('id, org_id, title, type')
+        .select('id, org_id, title, type, category_id')
         .eq('org_id', currentOrg.id)
         .order('created_at', { ascending: false });
       if (productsErr) throw productsErr;
@@ -231,6 +285,9 @@ export default function Inventory() {
         .order('updated_at', { ascending: false });
       if (invErr) throw invErr;
 
+      // Load categories
+      const categoriesData = await getCategories(currentOrg.id);
+
       const wh = (whData as any as Warehouse[]) || [];
       const prods = (productsData as any as Product[]) || [];
       const vars = (variantsData as any as Variant[]) || [];
@@ -239,15 +296,18 @@ export default function Inventory() {
       const whMap = new Map(wh.map((w) => [w.id, w]));
       const prodMap = new Map(prods.map((p) => [p.id, p]));
       const varMap = new Map(vars.map((v) => [v.id, v]));
+      const catMap = new Map(categoriesData.map((c) => [c.id, c]));
 
       const enriched: EnrichedInventoryRow[] = inv.map((row) => {
         const v = varMap.get(row.variant_id);
         const p = v ? prodMap.get(v.product_id) : undefined;
+        const cat = p?.category_id ? catMap.get(p.category_id) : undefined;
         return {
           ...row,
           warehouse: whMap.get(row.warehouse_id),
           variant: v,
           product: p,
+          category: cat,
         };
       });
 
@@ -255,6 +315,7 @@ export default function Inventory() {
       setProducts(prods);
       setVariants(vars);
       setInventory(enriched);
+      setCategories(categoriesData);
       setError(null);
     } catch (e: any) {
       const msg = e?.message || 'Failed to load inventory';
@@ -868,13 +929,29 @@ export default function Inventory() {
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1">
               <Input
-                placeholder="Search by product, variant, or SKU..."
+                placeholder="Search by product, variant, SKU, or category..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-10"
               />
             </div>
-            <div className="w-full sm:w-64">
+            <div className="w-full sm:w-48">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-48">
               <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
                 <SelectTrigger className="h-10">
                   <SelectValue placeholder="All warehouses" />
@@ -916,36 +993,54 @@ export default function Inventory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventory.map((row) => (
-                    <TableRow key={row.id} className={selectedIds.has(row.id) ? 'bg-muted/50' : ''}>
-                      <TableCell className="p-2 md:p-3">
-                        <Checkbox
-                          checked={selectedIds.has(row.id)}
-                          onCheckedChange={() => toggleSelectRow(row.id)}
-                          aria-label={`Select ${row.product?.title}`}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 md:p-3">
-                        <div className="space-y-1">
-                          <div className="font-medium">{row.product?.title || '—'}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {row.variant?.name || '—'}
-                            {row.variant?.sku && (
-                              <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded">
-                                {row.variant.sku}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-2 md:p-3 hidden sm:table-cell">{row.warehouse?.name || '—'}</TableCell>
-                      <TableCell className="text-right font-semibold p-2 md:p-3">{row.quantity}</TableCell>
-                      <TableCell className="text-right p-2 md:p-3">
-                        <Button variant="outline" size="sm" onClick={() => setAdjustOpenFor(row)}>
-                          Adjust
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                  {groupedInventory.map((categoryGroup) => (
+                    <>
+                      {/* Category header row */}
+                      <TableRow key={`cat-${categoryGroup.categoryName}`} className="bg-muted/30">
+                        <TableCell colSpan={5} className="p-2 md:p-3 font-semibold text-sm">
+                          {categoryGroup.categoryName}
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Product and variant rows */}
+                      {categoryGroup.products.map((productGroup) => (
+                        <>
+                          {productGroup.rows.map((row, idx) => (
+                            <TableRow key={row.id} className={selectedIds.has(row.id) ? 'bg-muted/50' : ''}>
+                              <TableCell className="p-2 md:p-3">
+                                <Checkbox
+                                  checked={selectedIds.has(row.id)}
+                                  onCheckedChange={() => toggleSelectRow(row.id)}
+                                  aria-label={`Select ${row.product?.title}`}
+                                />
+                              </TableCell>
+                              <TableCell className="p-2 md:p-3">
+                                <div className="space-y-1">
+                                  {idx === 0 && (
+                                    <div className="font-medium">{row.product?.title || '—'}</div>
+                                  )}
+                                  <div className={`text-sm ${idx === 0 ? 'text-muted-foreground' : 'ml-4 text-muted-foreground'}`}>
+                                    {row.variant?.name || '—'}
+                                    {row.variant?.sku && (
+                                      <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded">
+                                        {row.variant.sku}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="p-2 md:p-3 hidden sm:table-cell">{row.warehouse?.name || '—'}</TableCell>
+                              <TableCell className="text-right font-semibold p-2 md:p-3">{row.quantity}</TableCell>
+                              <TableCell className="text-right p-2 md:p-3">
+                                <Button variant="outline" size="sm" onClick={() => setAdjustOpenFor(row)}>
+                                  Adjust
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </>
+                      ))}
+                    </>
                   ))}
                 </TableBody>
               </Table>

@@ -14,6 +14,16 @@ import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Ware
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { 
+  getCategories, 
+  createCategory as apiCreateCategory, 
+  getTags, 
+  createTag as apiCreateTag,
+  syncProductTags,
+  getProductTagIds,
+  type ProductCategory,
+  type ProductTag,
+} from '@/lib/api/categories-and-tags';
 
 type OrgProductType = 'physical' | 'venue_asset';
 
@@ -24,6 +34,7 @@ type OrgProduct = {
   title: string;
   description: string | null;
   base_price: number | null;
+  category_id?: string | null;
 };
 
 type VariantOption = {
@@ -209,13 +220,13 @@ export default function ProductForm() {
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
   
-  // Category & Tags (stored in metadata)
-  const [category, setCategory] = useState('');
-  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  // Category & Tags (using database tables)
+  const [categoryId, setCategoryId] = useState('');
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagOptions, setTagOptions] = useState<string[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<ProductTag[]>([]);
   const [tagInput, setTagInput] = useState('');
   
   // Warehouses & Stock
@@ -261,20 +272,14 @@ export default function ProductForm() {
       const whs = (whData as any[] || []) as Warehouse[];
       setWarehouses(whs);
       
-      // Load categories and tags from org metadata
-      const { data: orgData } = await (supabase as any)
-        .from('orgs')
-        .select('metadata')
-        .eq('id', currentOrg.id)
-        .single();
+      // Load categories and tags from database tables
+      const [categoriesData, tagsData] = await Promise.all([
+        getCategories(currentOrg.id),
+        getTags(currentOrg.id),
+      ]);
       
-      const metadata = (orgData?.metadata as any) || {};
-      const catalogMeta = metadata.catalog || {};
-      const orgCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
-      const orgTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
-      
-      setCategoryOptions(orgCategories);
-      setTagOptions(orgTags);
+      setCategories(categoriesData);
+      setAvailableTags(tagsData);
       
       if (whs.length === 0) return;
       
@@ -347,11 +352,12 @@ export default function ProductForm() {
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
         
-        // Load category and tags from metadata
-        if (p.metadata) {
-          setCategory(p.metadata.category || '');
-          setTags(Array.isArray(p.metadata.tags) ? p.metadata.tags : []);
-        }
+        // Load category_id
+        setCategoryId(p.category_id || '');
+        
+        // Load tags from product_tag_links
+        const tagIds = await getProductTagIds(p.id);
+        setSelectedTagIds(tagIds);
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -415,20 +421,14 @@ export default function ProductForm() {
           setSelectedWarehouseId(mainWh.id);
         }
         
-        // Load categories and tags from org metadata
-        const { data: orgData } = await (supabase as any)
-          .from('orgs')
-          .select('metadata')
-          .eq('id', currentOrg.id)
-          .single();
+        // Load categories and tags from database tables
+        const [categoriesData, tagsData] = await Promise.all([
+          getCategories(currentOrg.id),
+          getTags(currentOrg.id),
+        ]);
         
-        const metadata = (orgData?.metadata as any) || {};
-        const catalogMeta = metadata.catalog || {};
-        const orgCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
-        const orgTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
-        
-        setCategoryOptions(orgCategories);
-        setTagOptions(orgTags);
+        setCategories(categoriesData);
+        setAvailableTags(tagsData);
       } catch (e: any) {
         console.error('Failed to load warehouses:', e);
       }
@@ -522,49 +522,18 @@ export default function ProductForm() {
       return;
     }
     
-    if (categoryOptions.includes(cat)) {
+    if (categories.some(c => c.name.toLowerCase() === cat.toLowerCase())) {
       toast({ title: 'Duplicate', description: 'Category already exists', variant: 'destructive' });
       return;
     }
     
     setSaving(true);
     try {
-      // Load current org metadata
-      const { data: orgData, error: fetchError } = await (supabase as any)
-        .from('orgs')
-        .select('metadata')
-        .eq('id', currentOrg.id)
-        .single();
-      
-      if (fetchError) throw fetchError;
-      
-      const existingMetadata = (orgData.metadata as any) || {};
-      const catalogMeta = existingMetadata.catalog || {};
-      const currentCategories = Array.isArray(catalogMeta.categories) ? catalogMeta.categories : [];
-      const currentTags = Array.isArray(catalogMeta.tags) ? catalogMeta.tags : [];
-      
-      // Add new category
-      const updatedCategories = [...currentCategories, cat].sort();
-      
-      const updatedMetadata = {
-        ...existingMetadata,
-        catalog: {
-          categories: updatedCategories,
-          tags: currentTags,
-        },
-      };
-      
-      // Update org metadata
-      const { error: updateError } = await (supabase as any)
-        .from('orgs')
-        .update({ metadata: updatedMetadata })
-        .eq('id', currentOrg.id);
-      
-      if (updateError) throw updateError;
+      const newCategory = await apiCreateCategory(currentOrg.id, cat);
       
       // Update local state
-      setCategoryOptions(updatedCategories);
-      setCategory(cat);
+      setCategories([...categories, newCategory]);
+      setCategoryId(newCategory.id);
       setCreateCategoryOpen(false);
       setNewCategoryName('');
       toast({ title: 'Success', description: 'Category created' });
@@ -576,19 +545,36 @@ export default function ProductForm() {
   };
 
   // Tag management
-  const addTag = () => {
+  const addTag = async () => {
+    if (!currentOrg) return;
+    
     const trimmed = tagInput.trim();
     if (!trimmed) return;
-    if (tags.includes(trimmed)) {
-      toast({ title: 'Duplicate tag', description: `"${trimmed}" already exists`, variant: 'destructive' });
-      return;
+    
+    // Check if tag already exists
+    let existingTag = availableTags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
+    
+    if (!existingTag) {
+      // Create new tag
+      try {
+        existingTag = await apiCreateTag(currentOrg.id, trimmed);
+        setAvailableTags([...availableTags, existingTag]);
+      } catch (error: any) {
+        toast({ title: 'Error', description: error.message || 'Failed to create tag', variant: 'destructive' });
+        return;
+      }
     }
-    setTags(prev => [...prev, trimmed]);
+    
+    // Add to selected tags if not already selected
+    if (!selectedTagIds.includes(existingTag.id)) {
+      setSelectedTagIds([...selectedTagIds, existingTag.id]);
+    }
+    
     setTagInput('');
   };
 
-  const removeTag = (tag: string) => {
-    setTags(prev => prev.filter(t => t !== tag));
+  const removeTag = (tagId: string) => {
+    setSelectedTagIds(prev => prev.filter(id => id !== tagId));
   };
 
   // Create warehouse handler
@@ -702,11 +688,6 @@ export default function ProductForm() {
     setSaving(true);
     try {
       const base_price = toDecimalOrNull(basePrice);
-      
-      // Build metadata
-      const metadata: any = {};
-      if (category) metadata.category = category;
-      if (tags.length > 0) metadata.tags = tags;
 
       let productId = id;
       if (!isEditMode) {
@@ -718,7 +699,7 @@ export default function ProductForm() {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
-            metadata,
+            category_id: categoryId || null,
           })
           .select('id')
           .single();
@@ -733,13 +714,16 @@ export default function ProductForm() {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
-            metadata,
+            category_id: categoryId || null,
           })
           .eq('id', id!)
           .eq('org_id', currentOrg.id);
 
         if (updateError) throw updateError;
       }
+      
+      // Sync product tags
+      await syncProductTags(productId, selectedTagIds);
 
       // Variant save logic with archival
       if (variants.length > 0) {
@@ -1031,19 +1015,20 @@ export default function ProductForm() {
                 <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
               <div className="flex gap-2">
-                <Select value={category} onValueChange={setCategory}>
+                <Select value={categoryId} onValueChange={setCategoryId}>
                   <SelectTrigger id="category" className="h-10">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categoryOptions.length === 0 ? (
+                    <SelectItem value="">No category</SelectItem>
+                    {categories.length === 0 ? (
                       <SelectItem value="__empty__" disabled>
                         No categories yet
                       </SelectItem>
                     ) : (
-                      categoryOptions.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
+                      categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
                         </SelectItem>
                       ))
                     )}
@@ -1068,12 +1053,16 @@ export default function ProductForm() {
             <div className="space-y-2">
               <Label>Tags</Label>
               <div className="flex flex-wrap gap-2 mb-2">
-                {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1">
-                    {tag}
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tag)} />
-                  </Badge>
-                ))}
+                {selectedTagIds.map((tagId) => {
+                  const tag = availableTags.find(t => t.id === tagId);
+                  if (!tag) return null;
+                  return (
+                    <Badge key={tagId} variant="secondary" className="gap-1">
+                      {tag.name}
+                      <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tagId)} />
+                    </Badge>
+                  );
+                })}
               </div>
               <div className="flex gap-2">
                 <Input
@@ -1090,21 +1079,23 @@ export default function ProductForm() {
                   list="tag-suggestions"
                 />
                 <datalist id="tag-suggestions">
-                  {tagOptions.map((tag) => (
-                    <option key={tag} value={tag} />
-                  ))}
+                  {availableTags
+                    .filter(t => !selectedTagIds.includes(t.id))
+                    .map((tag) => (
+                      <option key={tag.id} value={tag.name} />
+                    ))}
                 </datalist>
                 <Button type="button" variant="outline" onClick={addTag} className="h-10">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
-              {tagOptions.length > 0 && (
+              {availableTags.length > 0 && (
                 <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                  Suggestions: {tagOptions.filter(t => !tags.includes(t)).slice(0, 5).join(', ')}
-                  {tagOptions.filter(t => !tags.includes(t)).length > 5 ? '...' : ''}
+                  Suggestions: {availableTags.filter(t => !selectedTagIds.includes(t.id)).slice(0, 5).map(t => t.name).join(', ')}
+                  {availableTags.filter(t => !selectedTagIds.includes(t.id)).length > 5 ? '...' : ''}
                 </p>
               )}
-                      </div>
+            </div>
 
             {/* Hide variants section for venue assets */}
             {type !== 'venue_asset' && (
