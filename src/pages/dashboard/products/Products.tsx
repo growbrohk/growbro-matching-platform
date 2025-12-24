@@ -108,9 +108,9 @@ export default function Products() {
 
   if (error) {
     return (
-      <div className="container mx-auto py-8 px-4">
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
+      <div className="max-w-7xl">
+        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardContent className="flex flex-col items-center justify-center py-12 p-4 md:p-6">
             <p className="text-destructive mb-4">{error}</p>
             <Button onClick={() => window.location.reload()}>Try Again</Button>
           </CardContent>
@@ -152,54 +152,54 @@ export default function Products() {
           ) : (
             <>
               {/* Mobile: Card-based layout */}
-              <div className="sm:hidden divide-y" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-              {products.map((p) => (
-                <div key={p.id} className="p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{p.title}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className="text-xs">{productTypeLabel[p.type] ?? p.type}</Badge>
-                        {p.base_price !== null && (
-                          <span className="text-sm text-muted-foreground">HK${Number(p.base_price).toFixed(2)}</span>
-                        )}
+              <div className="md:hidden divide-y" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                {products.map((p) => (
+                  <div key={p.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium truncate">{p.title}</h3>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge variant="outline" className="text-xs">{productTypeLabel[p.type] ?? p.type}</Badge>
+                          {p.base_price !== null && (
+                            <span className="text-sm text-muted-foreground">HK${Number(p.base_price).toFixed(2)}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => navigate(`/app/products/${p.id}/edit`)}
+                        className="flex-1"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setProductToDelete(p);
+                          setDeleteDialogOpen(true);
+                        }}
+                        disabled={deletingId === p.id}
+                        className="flex-1"
+                      >
+                        {deletingId === p.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-2 text-destructive" />
+                        )}
+                        Delete
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => navigate(`/app/products/${p.id}/edit`)}
-                      className="flex-1"
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setProductToDelete(p);
-                        setDeleteDialogOpen(true);
-                      }}
-                      disabled={deletingId === p.id}
-                      className="flex-1"
-                    >
-                      {deletingId === p.id ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4 mr-2 text-destructive" />
-                      )}
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            {/* Desktop: Table layout */}
-            <div className="hidden sm:block overflow-x-auto">
+              {/* Desktop: Table layout */}
+              <div className="hidden md:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
