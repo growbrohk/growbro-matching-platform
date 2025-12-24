@@ -107,7 +107,8 @@ function signatureFromVariantName(name: string): string {
       const colonIdx = part.indexOf(':');
       return colonIdx >= 0 ? part.substring(colonIdx + 1).trim() : part.trim();
     })
-    .map(normalizeValue);
+    .map(normalizeValue)
+    .filter(v => v.length > 0); // Filter out empty values
   return values.join('|');
 }
 
@@ -231,6 +232,7 @@ export default function ProductForm() {
               price: row.price === null || row.price === undefined ? '' : String(row.price),
               active: row.active ?? true,
               isNew: false,
+              sig: signatureFromVariantName(row.name || ''),
             }))
           );
           // Note: We don't reverse-engineer options from existing variants
@@ -435,12 +437,17 @@ export default function ProductForm() {
 
         if (fetchErr) throw fetchErr;
 
-        const existingMap = new Map<string, string>((existingVariants || []).map((v: any) => [v.name, v.id]));
-        const currentNames = new Set(currentVariants.map((v) => v.name));
+        // Build signature-based maps for comparison (not name-based)
+        const existingSigToId = new Map<string, string>(
+          (existingVariants || []).map((v: any) => [signatureFromVariantName(v.name), v.id])
+        );
+        const currentSigSet = new Set(
+          currentVariants.map((v) => signatureFromVariantName(v.name))
+        );
 
-        // 1. Archive variants that no longer exist in current list
-        for (const [name, id] of existingMap) {
-          if (!currentNames.has(name)) {
+        // 1. Archive variants whose signature no longer exists in current list
+        for (const [sig, id] of existingSigToId) {
+          if (!currentSigSet.has(sig)) {
             const { error: archiveErr } = await (supabase as any)
               .from('product_variants')
               .update({ archived_at: new Date().toISOString() })
