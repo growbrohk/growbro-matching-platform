@@ -11,7 +11,7 @@ import { Loader2, Plus, RefreshCw, ChevronDown, ChevronRight, ChevronsDown } fro
 import { getVariantHierarchy, parseVariantName, getVariantOptionValue } from '@/lib/utils/variant-parser';
 
 type Warehouse = { id: string; org_id: string; name: string; address: string | null };
-type Product = { id: string; org_id: string; title: string; sku: string | null };
+type Product = { id: string; org_id: string; title: string };
 type Variant = { id: string; product_id: string; name: string; sku: string | null };
 type InventoryItem = { id: string; org_id: string; warehouse_id: string; variant_id: string; quantity: number };
 
@@ -52,7 +52,7 @@ export default function InventoryNew() {
       // Fetch products
       const { data: productsData, error: productsErr } = await supabase
         .from('products')
-        .select('id, org_id, title, sku')
+        .select('id, org_id, title')
         .eq('org_id', currentOrg.id)
         .order('title', { ascending: true });
       if (productsErr) throw productsErr;
@@ -288,7 +288,7 @@ export default function InventoryNew() {
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold truncate" style={{ color: '#0F1F17' }}>
-                            {productData.product.sku ? `${productData.product.sku} ` : ''}{productData.product.title}
+                            {productData.product.title}
                           </div>
                           <div className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
                             Total: {totalStock}
