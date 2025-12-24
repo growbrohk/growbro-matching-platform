@@ -212,6 +212,8 @@ export default function ProductForm() {
   // Category & Tags (stored in metadata)
   const [category, setCategory] = useState('');
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   
@@ -501,6 +503,21 @@ export default function ProductForm() {
     setVariantOptionsDraft((prev) =>
       prev.map((opt, i) => (i === optIdx ? { ...opt, values: opt.values.filter((_, j) => j !== valIdx) } : opt))
     );
+  };
+
+  // Category management
+  const createCategory = () => {
+    const cat = newCategoryName.trim();
+    if (!cat) {
+      toast({ title: 'Validation', description: 'Category name is required', variant: 'destructive' });
+      return;
+    }
+    
+    // Add to options (dedupe and sort)
+    setCategoryOptions(prev => Array.from(new Set([...prev, cat])).sort());
+    setCategory(cat);
+    setCreateCategoryOpen(false);
+    setNewCategoryName('');
   };
 
   // Tag management
@@ -958,7 +975,14 @@ export default function ProductForm() {
 
                 <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={(value) => {
+                if (value === '__new__') {
+                  setCreateCategoryOpen(true);
+                  setNewCategoryName('');
+                  return;
+                }
+                setCategory(value);
+              }}>
                 <SelectTrigger id="category">
                   <SelectValue placeholder="Select or create category" />
                 </SelectTrigger>
@@ -971,21 +995,6 @@ export default function ProductForm() {
                   <SelectItem value="__new__">+ Create new category...</SelectItem>
                 </SelectContent>
               </Select>
-              {category === '__new__' && (
-                <Input
-                  placeholder="Enter new category name"
-                  onBlur={(e) => {
-                    const newCat = e.target.value.trim();
-                    if (newCat) {
-                      setCategoryOptions(prev => [...prev, newCat].sort());
-                      setCategory(newCat);
-                    } else {
-                      setCategory('');
-                    }
-                  }}
-                  autoFocus
-                />
-              )}
             </div>
 
             <div className="space-y-2">
@@ -1241,6 +1250,44 @@ export default function ProductForm() {
         </form>
         </CardContent>
       </Card>
+
+      {/* Create Category Modal */}
+      <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="catName">Category Name *</Label>
+              <Input
+                id="catName"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    createCategory();
+                  }
+                }}
+                placeholder="e.g. Apparel, Electronics"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => {
+                setCreateCategoryOpen(false);
+                setNewCategoryName('');
+              }}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={createCategory} disabled={!newCategoryName.trim()}>
+                Create
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Warehouse Modal */}
       <Dialog open={createWarehouseOpen} onOpenChange={setCreateWarehouseOpen}>
