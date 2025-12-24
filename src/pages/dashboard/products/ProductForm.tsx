@@ -1013,14 +1013,14 @@ export default function ProductForm() {
                       </div>
 
                 <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">Category (optional)</Label>
               <div className="flex gap-2">
-                <Select value={categoryId} onValueChange={setCategoryId}>
+                <Select value={categoryId || '__none__'} onValueChange={(val) => setCategoryId(val === '__none__' ? '' : val)}>
                   <SelectTrigger id="category" className="h-10">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No category</SelectItem>
+                    <SelectItem value="__none__">No category</SelectItem>
                     {categories.length === 0 ? (
                       <SelectItem value="__empty__" disabled>
                         No categories yet
