@@ -482,6 +482,67 @@ export default function ProductForm() {
         }
       }
 
+      // Auto-create inventory items at Main warehouse for all variants
+      try {
+        // Fetch all active variants for this product
+        const { data: allVariants, error: variantsErr } = await (supabase as any)
+          .from('product_variants')
+          .select('id')
+          .eq('product_id', productId!)
+          .is('archived_at', null);
+
+        if (variantsErr) throw variantsErr;
+
+        if (allVariants && allVariants.length > 0) {
+          // Get default warehouse (prefer "Main" or first)
+          const { data: warehouses, error: whErr } = await (supabase as any)
+            .from('warehouses')
+            .select('id, name')
+            .eq('org_id', currentOrg.id)
+            .order('created_at', { ascending: true });
+
+          if (whErr) throw whErr;
+
+          if (warehouses && warehouses.length > 0) {
+            const mainWarehouse = warehouses.find((w: any) => 
+              w.name.toLowerCase().includes('main')
+            ) || warehouses[0];
+
+            // For each variant, ensure inventory_item exists
+            for (const variant of allVariants) {
+              // Check if inventory item already exists
+              const { data: existingItem } = await (supabase as any)
+                .from('inventory_items')
+                .select('id')
+                .eq('org_id', currentOrg.id)
+                .eq('warehouse_id', mainWarehouse.id)
+                .eq('variant_id', variant.id)
+                .maybeSingle();
+
+              // If doesn't exist, create with quantity 0
+              if (!existingItem) {
+                const { error: invErr } = await (supabase as any)
+                  .from('inventory_items')
+                  .insert({
+                    org_id: currentOrg.id,
+                    warehouse_id: mainWarehouse.id,
+                    variant_id: variant.id,
+                    quantity: 0,
+                  });
+
+                // Don't fail product save if inventory creation fails
+                if (invErr) {
+                  console.error('Failed to auto-create inventory item:', invErr);
+                }
+              }
+            }
+          }
+        }
+      } catch (invError: any) {
+        // Log but don't fail the product save
+        console.error('Error auto-creating inventory items:', invError);
+      }
+
       toast({ title: 'Success', description: isEditMode ? 'Product updated' : 'Product created' });
       navigate('/app/products');
     } catch (e: any) {

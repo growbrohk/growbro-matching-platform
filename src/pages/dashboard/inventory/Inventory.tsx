@@ -36,10 +36,10 @@ export default function Inventory() {
   const [inventory, setInventory] = useState<EnrichedInventoryRow[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [selectedVariantId, setSelectedVariantId] = useState<string>('');
-  const [initialStock, setInitialStock] = useState<string>('0');
+  const [createWarehouseId, setCreateWarehouseId] = useState<string>('');
+  const [createSearchQuery, setCreateSearchQuery] = useState<string>('');
+  const [createInitialStock, setCreateInitialStock] = useState<string>('0');
+  const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
 
   const [adjustOpenFor, setAdjustOpenFor] = useState<EnrichedInventoryRow | null>(null);
   const [adjustDelta, setAdjustDelta] = useState<string>('0');
@@ -55,13 +55,29 @@ export default function Inventory() {
   const [bulkReason, setBulkReason] = useState<string>('Restock');
   const [bulkNote, setBulkNote] = useState<string>('');
 
+  // Bulk set stock state
+  const [bulkSetOpen, setBulkSetOpen] = useState(false);
+  const [bulkSetWarehouseId, setBulkSetWarehouseId] = useState<string>('');
+  const [bulkSetQuantity, setBulkSetQuantity] = useState<string>('0');
+  const [bulkSetReason, setBulkSetReason] = useState<string>('Correction');
+  const [bulkSetNote, setBulkSetNote] = useState<string>('');
+
   // Filtering state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
 
-  const variantOptions = useMemo(() => {
-    return variants.filter((v) => v.product_id === selectedProductId);
-  }, [selectedProductId, variants]);
+  // Filtered products/variants for the create modal
+  const filteredProductsForCreate = useMemo(() => {
+    if (!createSearchQuery.trim()) return products;
+    const query = createSearchQuery.toLowerCase();
+    return products.filter((p) => 
+      p.title.toLowerCase().includes(query) ||
+      variants.some((v) => 
+        v.product_id === p.id && 
+        (v.name.toLowerCase().includes(query) || v.sku?.toLowerCase().includes(query))
+      )
+    );
+  }, [products, variants, createSearchQuery]);
 
   // Filtered inventory based on search and warehouse filter
   const filteredInventory = useMemo(() => {
@@ -125,18 +141,74 @@ export default function Inventory() {
     }
   }, [bulkAdjustOpen, bulkWarehouseId, warehouses]);
 
+  // Auto-select default warehouse when bulk set modal opens
+  useEffect(() => {
+    if (bulkSetOpen && !bulkSetWarehouseId && warehouses.length > 0) {
+      const mainWarehouse = warehouses.find((w) => w.name.toLowerCase().includes('main'));
+      const defaultWarehouse = mainWarehouse || warehouses[0];
+      setBulkSetWarehouseId(defaultWarehouse.id);
+    }
+  }, [bulkSetOpen, bulkSetWarehouseId, warehouses]);
+
+  // Auto-select default warehouse when create modal opens
+  useEffect(() => {
+    if (createOpen && !createWarehouseId && warehouses.length > 0) {
+      const mainWarehouse = warehouses.find((w) => w.name.toLowerCase().includes('main'));
+      const defaultWarehouse = mainWarehouse || warehouses[0];
+      setCreateWarehouseId(defaultWarehouse.id);
+    }
+  }, [createOpen, createWarehouseId, warehouses]);
+
+  // Helpers for create modal variant selection
+  const toggleVariantSelection = (variantId: string) => {
+    const newSet = new Set(selectedVariantIds);
+    if (newSet.has(variantId)) {
+      newSet.delete(variantId);
+    } else {
+      newSet.add(variantId);
+    }
+    setSelectedVariantIds(newSet);
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    const productVariants = variants.filter((v) => v.product_id === productId);
+    const variantIds = productVariants.map((v) => v.id);
+    const allSelected = variantIds.every((id) => selectedVariantIds.has(id));
+
+    const newSet = new Set(selectedVariantIds);
+    if (allSelected) {
+      // Deselect all variants of this product
+      variantIds.forEach((id) => newSet.delete(id));
+    } else {
+      // Select all variants of this product
+      variantIds.forEach((id) => newSet.add(id));
+    }
+    setSelectedVariantIds(newSet);
+  };
+
+  const isProductSelected = (productId: string) => {
+    const productVariants = variants.filter((v) => v.product_id === productId);
+    return productVariants.length > 0 && productVariants.every((v) => selectedVariantIds.has(v.id));
+  };
+
+  const isProductPartiallySelected = (productId: string) => {
+    const productVariants = variants.filter((v) => v.product_id === productId);
+    const selectedCount = productVariants.filter((v) => selectedVariantIds.has(v.id)).length;
+    return selectedCount > 0 && selectedCount < productVariants.length;
+  };
+
   const reload = async () => {
     if (!currentOrg) return;
     setLoading(true);
     try {
-      const { data: whData, error: whErr } = await supabase
+      const { data: whData, error: whErr } = await (supabase as any)
         .from('warehouses')
         .select('id, org_id, name, address')
         .eq('org_id', currentOrg.id)
         .order('created_at', { ascending: true });
       if (whErr) throw whErr;
 
-      const { data: productsData, error: productsErr } = await supabase
+      const { data: productsData, error: productsErr } = await (supabase as any)
         .from('products')
         .select('id, org_id, title, type')
         .eq('org_id', currentOrg.id)
@@ -145,14 +217,14 @@ export default function Inventory() {
 
       const productIds = ((productsData as any[]) || []).map((p) => p.id);
 
-      const { data: variantsData, error: variantsErr } = await supabase
+      const { data: variantsData, error: variantsErr } = await (supabase as any)
         .from('product_variants')
         .select('id, product_id, name, sku, price')
         .in('product_id', productIds.length > 0 ? productIds : ['00000000-0000-0000-0000-000000000000'])
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true});
       if (variantsErr) throw variantsErr;
 
-      const { data: invData, error: invErr } = await supabase
+      const { data: invData, error: invErr } = await (supabase as any)
         .from('inventory_items')
         .select('id, org_id, warehouse_id, variant_id, quantity')
         .eq('org_id', currentOrg.id)
@@ -199,35 +271,110 @@ export default function Inventory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrg?.id]);
 
-  const createInventory = async () => {
+  // Bulk create inventory items for selected variants
+  const createInventoryBulk = async () => {
     if (!currentOrg) return;
-    if (!selectedWarehouseId || !selectedVariantId) {
-      toast({ title: 'Validation', description: 'Select a warehouse and variant', variant: 'destructive' });
+    if (!createWarehouseId) {
+      toast({ title: 'Validation', description: 'Please select a warehouse', variant: 'destructive' });
+      return;
+    }
+    if (selectedVariantIds.size === 0) {
+      toast({ title: 'Validation', description: 'Please select at least one variant', variant: 'destructive' });
       return;
     }
 
-    const qty = Number(initialStock);
+    const qty = Number(createInitialStock);
     if (!Number.isFinite(qty) || qty < 0) {
       toast({ title: 'Validation', description: 'Initial stock must be a number >= 0', variant: 'destructive' });
       return;
     }
 
     setSaving(true);
-    try {
-      const { error: rpcErr } = await (supabase as any).rpc('create_inventory_for_variant', {
-        p_org_id: currentOrg.id,
-        p_warehouse_id: selectedWarehouseId,
-        p_variant_id: selectedVariantId,
-        p_initial_stock: qty,
-      });
-      if (rpcErr) throw rpcErr;
+    let successCount = 0;
+    let errorCount = 0;
 
-      toast({ title: 'Success', description: 'Inventory item created' });
+    try {
+      for (const variantId of selectedVariantIds) {
+        try {
+          // Check if inventory item already exists
+          const { data: existingItem } = await (supabase as any)
+            .from('inventory_items')
+            .select('id, quantity')
+            .eq('org_id', currentOrg.id)
+            .eq('warehouse_id', createWarehouseId)
+            .eq('variant_id', variantId)
+            .maybeSingle();
+
+          if (existingItem) {
+            // Already exists, skip (MVP: don't overwrite)
+            successCount++;
+            continue;
+          }
+
+          // Create new inventory item with initial stock
+          const { error: createErr } = await (supabase as any)
+            .from('inventory_items')
+            .insert({
+              org_id: currentOrg.id,
+              warehouse_id: createWarehouseId,
+              variant_id: variantId,
+              quantity: qty,
+            });
+
+          if (createErr) throw createErr;
+
+          // If initial stock > 0, create movement record
+          if (qty > 0) {
+            // Get the created inventory item ID
+            const { data: createdItem } = await (supabase as any)
+              .from('inventory_items')
+              .select('id')
+              .eq('org_id', currentOrg.id)
+              .eq('warehouse_id', createWarehouseId)
+              .eq('variant_id', variantId)
+              .single();
+
+            if (createdItem) {
+              await (supabase as any)
+                .from('inventory_movements')
+                .insert({
+                  inventory_item_id: createdItem.id,
+                  delta: qty,
+                  reason: 'initial_stock',
+                  note: 'Initial stock setup',
+                  created_by: currentOrg.id, // Use user ID if available from auth
+                });
+            }
+          }
+
+          successCount++;
+        } catch (err: any) {
+          errorCount++;
+          console.error('Error creating inventory for variant:', variantId, err);
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: 'Success',
+          description: `Created inventory for ${successCount} variant${successCount > 1 ? 's' : ''}`,
+        });
+      }
+
+      if (errorCount > 0) {
+        toast({
+          title: 'Warning',
+          description: `${errorCount} item${errorCount > 1 ? 's' : ''} failed. Check console for details.`,
+          variant: 'destructive',
+        });
+      }
+
+      // Reset and close
       setCreateOpen(false);
-      setSelectedWarehouseId('');
-      setSelectedProductId('');
-      setSelectedVariantId('');
-      setInitialStock('0');
+      setSelectedVariantIds(new Set());
+      setCreateWarehouseId('');
+      setCreateSearchQuery('');
+      setCreateInitialStock('0');
       await reload();
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Failed to create inventory', variant: 'destructive' });
@@ -294,7 +441,7 @@ export default function Inventory() {
         try {
           // Step 1: Ensure inventory_item exists for this variant + warehouse combo
           // First check if an inventory item already exists for this variant + warehouse
-          const { data: existingItems, error: fetchErr } = await supabase
+          const { data: existingItems, error: fetchErr } = await (supabase as any)
             .from('inventory_items')
             .select('id, quantity')
             .eq('org_id', currentOrg.id)
@@ -314,7 +461,7 @@ export default function Inventory() {
             inventoryItemId = existingItems.id;
           } else {
             // Step 2: Create new inventory_item with quantity 0
-            const { data: newItem, error: insertErr } = await supabase
+            const { data: newItem, error: insertErr } = await (supabase as any)
               .from('inventory_items')
               .insert({
                 org_id: currentOrg.id,
@@ -386,6 +533,139 @@ export default function Inventory() {
     }
   };
 
+  // Bulk set stock (absolute quantity)
+  const applyBulkSetStock = async () => {
+    if (!currentOrg || selectedIds.size === 0) return;
+    if (!bulkSetWarehouseId) {
+      toast({ title: 'Validation', description: 'Please select a warehouse', variant: 'destructive' });
+      return;
+    }
+
+    const newQty = Number(bulkSetQuantity);
+    if (!Number.isFinite(newQty) || newQty < 0) {
+      toast({ title: 'Validation', description: 'Quantity must be a number >= 0', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Get all selected rows
+      const selectedRows = inventory.filter((row) => selectedIds.has(row.id));
+
+      for (const row of selectedRows) {
+        try {
+          // Step 1: Ensure inventory_item exists for this variant + warehouse combo
+          const { data: existingItems, error: fetchErr } = await (supabase as any)
+            .from('inventory_items')
+            .select('id, quantity')
+            .eq('org_id', currentOrg.id)
+            .eq('warehouse_id', bulkSetWarehouseId)
+            .eq('variant_id', row.variant_id)
+            .maybeSingle();
+
+          if (fetchErr) {
+            console.error('Error fetching inventory item:', fetchErr);
+            throw fetchErr;
+          }
+
+          let inventoryItemId: string;
+          let oldQty = 0;
+
+          if (existingItems) {
+            // Item exists, use its ID and old quantity
+            inventoryItemId = existingItems.id;
+            oldQty = existingItems.quantity;
+          } else {
+            // Step 2: Create new inventory_item with quantity 0
+            const { data: newItem, error: insertErr } = await (supabase as any)
+              .from('inventory_items')
+              .insert({
+                org_id: currentOrg.id,
+                warehouse_id: bulkSetWarehouseId,
+                variant_id: row.variant_id,
+                quantity: 0,
+              })
+              .select('id')
+              .single();
+
+            if (insertErr) {
+              console.error('Error creating inventory item:', insertErr);
+              throw insertErr;
+            }
+
+            inventoryItemId = newItem.id;
+            oldQty = 0;
+          }
+
+          // Step 3: Calculate delta and update quantity
+          const delta = newQty - oldQty;
+
+          // Update inventory_items quantity
+          const { error: updateErr } = await (supabase as any)
+            .from('inventory_items')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('id', inventoryItemId);
+
+          if (updateErr) throw updateErr;
+
+          // Step 4: Create inventory movement record
+          const { error: movementErr } = await (supabase as any)
+            .from('inventory_movements')
+            .insert({
+              inventory_item_id: inventoryItemId,
+              delta: delta,
+              reason: bulkSetReason.toLowerCase().replace(' ', '_'),
+              note: bulkSetNote.trim() || `Set stock to ${newQty}`,
+              created_by: currentOrg.id, // Use user ID if available from auth
+            });
+
+          if (movementErr) throw movementErr;
+
+          successCount++;
+        } catch (err: any) {
+          errorCount++;
+          const errMsg = err?.message || 'Unknown error';
+          console.error('Bulk set stock error for row:', row, err);
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: 'Success',
+          description: `Set stock for ${successCount} item${successCount > 1 ? 's' : ''}`,
+        });
+      }
+
+      if (errorCount > 0) {
+        toast({
+          title: 'Errors',
+          description: `Failed to set stock for ${errorCount} item${errorCount > 1 ? 's' : ''}. Check console for details.`,
+          variant: 'destructive',
+        });
+      }
+
+      // Reset and reload
+      setBulkSetOpen(false);
+      setSelectedIds(new Set());
+      setBulkSetQuantity('0');
+      setBulkSetReason('Correction');
+      setBulkSetNote('');
+      await reload();
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to set stock',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -427,18 +707,18 @@ export default function Inventory() {
             <DialogTrigger asChild>
               <Button style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
                 <Plus className="mr-2 h-4 w-4" />
-                Add Inventory
+                Add Products to Warehouse
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-2xl max-h-[80vh]">
               <DialogHeader>
-                <DialogTitle>Create inventory for a variant</DialogTitle>
+                <DialogTitle>Add Products to Warehouse</DialogTitle>
               </DialogHeader>
 
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Warehouse</Label>
-                  <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                  <Label>Warehouse *</Label>
+                  <Select value={createWarehouseId} onValueChange={setCreateWarehouseId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select warehouse" />
                     </SelectTrigger>
@@ -453,56 +733,92 @@ export default function Inventory() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Product</Label>
-                  <Select
-                    value={selectedProductId}
-                    onValueChange={(v) => {
-                      setSelectedProductId(v);
-                      setSelectedVariantId('');
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Search Products</Label>
+                  <Input
+                    placeholder="Search by product, variant, or SKU..."
+                    value={createSearchQuery}
+                    onChange={(e) => setCreateSearchQuery(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Variant</Label>
-                  <Select value={selectedVariantId} onValueChange={setSelectedVariantId} disabled={!selectedProductId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={selectedProductId ? 'Select variant' : 'Select product first'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {variantOptions.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.name}
-                          {v.sku ? ` (${v.sku})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Select Products & Variants</Label>
+                  <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                    {filteredProductsForCreate.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground text-sm">
+                        {products.length === 0 ? 'No products found. Create products first.' : 'No products match your search.'}
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {filteredProductsForCreate.map((product) => {
+                          const productVariants = variants.filter((v) => v.product_id === product.id);
+                          const isSelected = isProductSelected(product.id);
+                          const isPartial = isProductPartiallySelected(product.id);
+                          
+                          return (
+                            <div key={product.id} className="p-3">
+                              {/* Product checkbox */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <Checkbox
+                                  checked={isSelected || (isPartial ? 'indeterminate' : false) as any}
+                                  onCheckedChange={() => toggleProductSelection(product.id)}
+                                  aria-label={`Select ${product.title}`}
+                                />
+                                <span className="font-medium">{product.title}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({productVariants.length} variant{productVariants.length > 1 ? 's' : ''})
+                                </span>
+                              </div>
+
+                              {/* Variant checkboxes (indented) */}
+                              <div className="ml-8 space-y-1.5">
+                                {productVariants.map((variant) => (
+                                  <div key={variant.id} className="flex items-center gap-2">
+                                    <Checkbox
+                                      checked={selectedVariantIds.has(variant.id)}
+                                      onCheckedChange={() => toggleVariantSelection(variant.id)}
+                                      aria-label={`Select ${variant.name}`}
+                                    />
+                                    <span className="text-sm">{variant.name}</span>
+                                    {variant.sku && (
+                                      <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                                        {variant.sku}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedVariantIds.size} variant{selectedVariantIds.size !== 1 ? 's' : ''} selected
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Initial stock</Label>
-                  <Input value={initialStock} onChange={(e) => setInitialStock(e.target.value)} />
+                  <Label>Initial Stock (for all selected)</Label>
+                  <Input
+                    type="number"
+                    value={createInitialStock}
+                    onChange={(e) => setCreateInitialStock(e.target.value)}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Set initial quantity for all selected variants. Existing items will be skipped.
+                  </p>
                 </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={saving}>
                     Cancel
                   </Button>
-                  <Button onClick={createInventory} disabled={saving}>
+                  <Button onClick={createInventoryBulk} disabled={saving || selectedVariantIds.size === 0} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Create
+                    Create for {selectedVariantIds.size} variant{selectedVariantIds.size !== 1 ? 's' : ''}
                   </Button>
                 </div>
               </div>
@@ -638,12 +954,15 @@ export default function Inventory() {
         <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between max-w-7xl mx-auto">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <span className="font-semibold">
                   {selectedIds.size} selected
                 </span>
                 <Button onClick={() => setBulkAdjustOpen(true)} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
                   Adjust Stock
+                </Button>
+                <Button onClick={() => setBulkSetOpen(true)} variant="default">
+                  Set Stock
                 </Button>
                 <Button variant="outline" onClick={() => setSelectedIds(new Set())}>
                   <X className="mr-2 h-4 w-4" />
@@ -784,6 +1103,91 @@ export default function Inventory() {
               <Button onClick={applyBulkAdjustment} disabled={saving} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Apply to {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk set stock modal */}
+      <Dialog open={bulkSetOpen} onOpenChange={(open) => !open && setBulkSetOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Set Stock</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+              <div className="font-medium mb-1">Setting stock for {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}</div>
+              <div className="text-xs">
+                Set absolute quantity for each selected variant at the chosen warehouse.
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Warehouse *</Label>
+              <Select value={bulkSetWarehouseId} onValueChange={setBulkSetWarehouseId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Stock will be set at this warehouse for all selected variants.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Set Quantity To *</Label>
+              <Input
+                type="number"
+                value={bulkSetQuantity}
+                onChange={(e) => setBulkSetQuantity(e.target.value)}
+                placeholder="e.g. 100"
+              />
+              <p className="text-xs text-muted-foreground">
+                Absolute quantity (e.g., 100 will set stock to exactly 100 units).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Reason *</Label>
+              <Select value={bulkSetReason} onValueChange={setBulkSetReason}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Correction">Correction</SelectItem>
+                  <SelectItem value="Restock">Restock</SelectItem>
+                  <SelectItem value="Physical Count">Physical Count</SelectItem>
+                  <SelectItem value="Transfer">Transfer</SelectItem>
+                  <SelectItem value="Reset">Reset</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Input
+                value={bulkSetNote}
+                onChange={(e) => setBulkSetNote(e.target.value)}
+                placeholder="Add a note about this change"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBulkSetOpen(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button onClick={applyBulkSetStock} disabled={saving} style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Set Stock for {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}
               </Button>
             </div>
           </div>
