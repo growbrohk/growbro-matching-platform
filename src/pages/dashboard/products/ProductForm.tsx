@@ -10,8 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type OrgProductType = 'physical' | 'venue_asset';
 
@@ -35,8 +37,16 @@ type VariantCombination = {
   sku: string;
   price: string;
   active: boolean;
+  stock?: string; // stock at selected warehouse
   isNew?: boolean; // not yet saved
   sig?: string; // stable signature based on values (e.g., "m|black")
+};
+
+type Warehouse = {
+  id: string;
+  org_id: string;
+  name: string;
+  address: string | null;
 };
 
 function toDecimalOrNull(input: string): number | null {
@@ -153,6 +163,34 @@ function optionsEqual(a: VariantOption[], b: VariantOption[]): boolean {
   return true;
 }
 
+/**
+ * Generate SKU from product title and variant signature
+ * Format: PRODUCTTITLE-SIG (e.g., TOTEBAG-M-BLACK)
+ */
+function generateSKU(productTitle: string, sig: string, existingSkus: string[]): string {
+  // Create base: product title slug + sig
+  const titleSlug = productTitle
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .substring(0, 20); // Max 20 chars for title part
+  
+  const sigPart = sig
+    .toUpperCase()
+    .replace(/\|/g, '-');
+  
+  let baseSku = `${titleSlug}-${sigPart}`;
+  
+  // If this SKU already exists, append -2, -3, etc.
+  let finalSku = baseSku;
+  let counter = 2;
+  while (existingSkus.includes(finalSku)) {
+    finalSku = `${baseSku}-${counter}`;
+    counter++;
+  }
+  
+  return finalSku;
+}
+
 export default function ProductForm() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -170,6 +208,20 @@ export default function ProductForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
+  
+  // Category & Tags (stored in metadata)
+  const [category, setCategory] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  
+  // Warehouses & Stock
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [stockMap, setStockMap] = useState<Map<string, number>>(new Map()); // variant_id -> quantity
+  const [createWarehouseOpen, setCreateWarehouseOpen] = useState(false);
+  const [newWarehouseName, setNewWarehouseName] = useState('');
+  const [newWarehouseAddress, setNewWarehouseAddress] = useState('');
   
   // New variant system: options → combinations
   // Draft options are editable; applied options are the last ones used to generate variants
@@ -189,6 +241,83 @@ export default function ProductForm() {
     return true;
   }, [currentOrg?.id, title]);
 
+  // Load warehouses and stock for selected warehouse
+  const loadWarehouses = async (variantsList: VariantCombination[]) => {
+    if (!currentOrg) return;
+    
+    try {
+      // Fetch warehouses
+      const { data: whData, error: whErr } = await (supabase as any)
+        .from('warehouses')
+        .select('id, org_id, name, address')
+        .eq('org_id', currentOrg.id)
+        .order('created_at', { ascending: true });
+      
+      if (whErr) throw whErr;
+      
+      const whs = (whData as any[] || []) as Warehouse[];
+      setWarehouses(whs);
+      
+      // Collect unique categories from all products (for dropdown)
+      const { data: allProds } = await (supabase as any)
+        .from('products')
+        .select('metadata')
+        .eq('org_id', currentOrg.id);
+      
+      const cats = new Set<string>();
+      (allProds || []).forEach((p: any) => {
+        if (p.metadata?.category) cats.add(p.metadata.category);
+      });
+      setCategoryOptions(Array.from(cats).sort());
+      
+      if (whs.length === 0) return;
+      
+      // Select default warehouse: prefer "Main" (case-insensitive), else first
+      const mainWh = whs.find(w => w.name.toLowerCase().includes('main')) || whs[0];
+      setSelectedWarehouseId(mainWh.id);
+      
+      // Load stock for this warehouse and these variants
+      if (variantsList.length > 0) {
+        await loadStockForWarehouse(mainWh.id, variantsList);
+      }
+    } catch (e: any) {
+      console.error('Failed to load warehouses:', e);
+    }
+  };
+
+  // Load stock for given warehouse and variants
+  const loadStockForWarehouse = async (warehouseId: string, variantsList: VariantCombination[]) => {
+    if (!currentOrg || variantsList.length === 0) return;
+    
+    try {
+      const variantIds = variantsList.map(v => v.id).filter(Boolean) as string[];
+      if (variantIds.length === 0) return;
+      
+      const { data: invData, error: invErr } = await (supabase as any)
+        .from('inventory_items')
+        .select('id, variant_id, quantity')
+        .eq('org_id', currentOrg.id)
+        .eq('warehouse_id', warehouseId)
+        .in('variant_id', variantIds);
+      
+      if (invErr) throw invErr;
+      
+      const map = new Map<string, number>();
+      (invData || []).forEach((item: any) => {
+        map.set(item.variant_id, item.quantity);
+      });
+      setStockMap(map);
+      
+      // Update variants with stock values
+      setVariants(prev => prev.map(v => ({
+        ...v,
+        stock: v.id ? String(map.get(v.id) || 0) : '0',
+      })));
+    } catch (e: any) {
+      console.error('Failed to load stock:', e);
+    }
+  };
+
   useEffect(() => {
     if (!isEditMode) return;
     if (!id) return;
@@ -199,18 +328,24 @@ export default function ProductForm() {
     try {
         const { data: product, error: productError } = await (supabase as any)
           .from('products')
-          .select('id, org_id, type, title, description, base_price')
+          .select('id, org_id, type, title, description, base_price, metadata')
           .eq('id', id)
           .eq('org_id', currentOrg.id)
           .single();
 
         if (productError) throw productError;
-        const p = product as any as OrgProduct;
+        const p = product as any as (OrgProduct & { metadata?: any });
 
         setType(p.type);
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
+        
+        // Load category and tags from metadata
+        if (p.metadata) {
+          setCategory(p.metadata.category || '');
+          setTags(Array.isArray(p.metadata.tags) ? p.metadata.tags : []);
+        }
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -223,21 +358,23 @@ export default function ProductForm() {
         const v = (variantsData as any[] | null) || [];
         
         // Load existing variants (edit mode shows existing combinations, not options)
-        if (v.length > 0) {
-          setVariants(
-            v.map((row) => ({
+        const variantsList = v.map((row: any) => ({
               id: row.id,
               name: row.name || '',
               sku: row.sku || '',
               price: row.price === null || row.price === undefined ? '' : String(row.price),
               active: row.active ?? true,
+          stock: '0',
               isNew: false,
               sig: signatureFromVariantName(row.name || ''),
-            }))
-          );
-          // Note: We don't reverse-engineer options from existing variants
-          // User must manually set options if they want to regenerate
+        }));
+        
+        if (variantsList.length > 0) {
+          setVariants(variantsList);
         }
+        
+        // Load warehouses
+        await loadWarehouses(variantsList);
       } catch (e: any) {
         toast({ title: 'Error', description: e?.message || 'Failed to load product', variant: 'destructive' });
         navigate('/app/products');
@@ -248,6 +385,59 @@ export default function ProductForm() {
 
     load();
   }, [currentOrg, id, isEditMode, navigate, toast]);
+
+  // Load warehouses for new products
+  useEffect(() => {
+    if (isEditMode) return; // Already loaded in load()
+    if (!currentOrg) return;
+    
+    const loadWhs = async () => {
+      try {
+        const { data: whData, error: whErr } = await (supabase as any)
+          .from('warehouses')
+          .select('id, org_id, name, address')
+          .eq('org_id', currentOrg.id)
+          .order('created_at', { ascending: true });
+        
+        if (whErr) throw whErr;
+        
+        const whs = (whData as any[] || []) as Warehouse[];
+        setWarehouses(whs);
+        
+        if (whs.length > 0) {
+          const mainWh = whs.find(w => w.name.toLowerCase().includes('main')) || whs[0];
+          setSelectedWarehouseId(mainWh.id);
+        }
+        
+        // Load categories
+        const { data: allProds } = await (supabase as any)
+          .from('products')
+          .select('metadata')
+          .eq('org_id', currentOrg.id);
+        
+        const cats = new Set<string>();
+        (allProds || []).forEach((p: any) => {
+          if (p.metadata?.category) cats.add(p.metadata.category);
+        });
+        setCategoryOptions(Array.from(cats).sort());
+      } catch (e: any) {
+        console.error('Failed to load warehouses:', e);
+      }
+    };
+    
+    loadWhs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, currentOrg?.id]);
+
+  // Reload stock when warehouse changes (only in edit mode with existing variants)
+  useEffect(() => {
+    if (!isEditMode) return;
+    if (!selectedWarehouseId) return;
+    if (variants.length === 0) return;
+    
+    loadStockForWarehouse(selectedWarehouseId, variants);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWarehouseId]);
 
   // Variant Option Management
   const addOption = () => {
@@ -313,6 +503,63 @@ export default function ProductForm() {
     );
   };
 
+  // Tag management
+  const addTag = () => {
+    const trimmed = tagInput.trim();
+    if (!trimmed) return;
+    if (tags.includes(trimmed)) {
+      toast({ title: 'Duplicate tag', description: `"${trimmed}" already exists`, variant: 'destructive' });
+      return;
+    }
+    setTags(prev => [...prev, trimmed]);
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => {
+    setTags(prev => prev.filter(t => t !== tag));
+  };
+
+  // Create warehouse handler
+  const createWarehouse = async () => {
+    if (!currentOrg) return;
+    if (!newWarehouseName.trim()) {
+      toast({ title: 'Validation', description: 'Warehouse name is required', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { data: newWh, error: whErr } = await (supabase as any)
+        .from('warehouses')
+        .insert({
+          org_id: currentOrg.id,
+          name: newWarehouseName.trim(),
+          address: newWarehouseAddress.trim() || null,
+        })
+        .select('id, org_id, name, address')
+        .single();
+
+      if (whErr) throw whErr;
+
+      const warehouse = newWh as Warehouse;
+      setWarehouses(prev => [...prev, warehouse]);
+      setSelectedWarehouseId(warehouse.id);
+      setCreateWarehouseOpen(false);
+      setNewWarehouseName('');
+      setNewWarehouseAddress('');
+      toast({ title: 'Success', description: 'Warehouse created' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to create warehouse', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Variant field updates
+  const updateVariantField = (idx: number, field: keyof VariantCombination, value: any) => {
+    setVariants(prev => prev.map((v, i) => i === idx ? { ...v, [field]: value } : v));
+  };
+
   const regenerateVariants = () => {
     // Validate draft options
     const validation = isOptionsValid(variantOptionsDraft);
@@ -339,10 +586,10 @@ export default function ProductForm() {
     // Create a set of new variant signatures
     const generatedSigs = new Set(generated.map(g => g.sig!));
 
-    // Merge: prefer existing data (SKU/price/active/id) if signature matches
+    // Merge: prefer existing data (SKU/price/active/stock/id) if signature matches
     const merged = generated.map(gen => {
       const existing = existingBySig.get(gen.sig!);
-      return existing ? { ...existing, name: gen.name, sig: gen.sig } : gen;
+      return existing ? { ...existing, name: gen.name, sig: gen.sig } : { ...gen, stock: '0' };
     });
 
     // Determine which variants will be archived (by signature)
@@ -383,6 +630,11 @@ export default function ProductForm() {
     setSaving(true);
     try {
       const base_price = toDecimalOrNull(basePrice);
+      
+      // Build metadata
+      const metadata: any = {};
+      if (category) metadata.category = category;
+      if (tags.length > 0) metadata.tags = tags;
 
       let productId = id;
       if (!isEditMode) {
@@ -394,6 +646,7 @@ export default function ProductForm() {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
+            metadata,
           })
           .select('id')
           .single();
@@ -408,6 +661,7 @@ export default function ProductForm() {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
+            metadata,
           })
           .eq('id', id!)
           .eq('org_id', currentOrg.id);
@@ -417,16 +671,30 @@ export default function ProductForm() {
 
       // Variant save logic with archival
       if (variants.length > 0) {
-        // Prepare current variants
+        // Collect existing SKUs for auto-generation
+        const existingSkus = variants
+          .map(v => v.sku?.trim())
+          .filter(Boolean) as string[];
+        
+        // Prepare current variants with SKU auto-generation
         const currentVariants = variants
           .filter((v) => v.name.trim().length > 0)
-          .map((v) => ({
+          .map((v) => {
+            let sku = v.sku?.trim();
+            // Auto-generate SKU if blank
+            if (!sku) {
+              const sig = v.sig || signatureFromVariantName(v.name);
+              sku = generateSKU(title, sig, existingSkus);
+              existingSkus.push(sku); // Add to list to avoid duplicates in this batch
+            }
+            return {
             id: v.id,
             name: v.name.trim(),
-            sku: v.sku?.trim() || null,
+              sku,
             price: toDecimalOrNull(v.price || ''),
             active: v.active,
-          }));
+            };
+          });
 
         // Fetch all existing variants (including archived) for comparison
         const { data: existingVariants, error: fetchErr } = await (supabase as any)
@@ -469,7 +737,9 @@ export default function ProductForm() {
         // 3. Insert new variants
         const toInsert = currentVariants.filter((v) => !v.id);
         if (toInsert.length > 0) {
-          const { error: insertErr } = await (supabase as any).from('product_variants').insert(
+          const { error: insertErr, data: insertedData } = await (supabase as any)
+            .from('product_variants')
+            .insert(
             toInsert.map((v) => ({
               product_id: productId,
               name: v.name,
@@ -477,8 +747,93 @@ export default function ProductForm() {
               price: v.price,
               active: v.active,
             }))
-          );
+            )
+            .select('id');
           if (insertErr) throw insertErr;
+          
+          // Update variants state with new IDs for stock saving
+          const insertedIds = (insertedData || []).map((d: any) => d.id);
+          let idIdx = 0;
+          setVariants(prev => prev.map(v => {
+            if (!v.id && idIdx < insertedIds.length) {
+              return { ...v, id: insertedIds[idIdx++] };
+            }
+            return v;
+          }));
+        }
+      }
+
+      // Save stock changes (only for edit mode with selected warehouse)
+      if (isEditMode && selectedWarehouseId && variants.length > 0) {
+        try {
+          for (const variant of variants) {
+            if (!variant.id) continue; // Skip unsaved variants
+            
+            const newStock = Number(variant.stock || 0);
+            if (!Number.isFinite(newStock) || newStock < 0) continue;
+            
+            // Check if inventory_item exists
+            const { data: invItem, error: fetchErr } = await (supabase as any)
+              .from('inventory_items')
+              .select('id, quantity')
+              .eq('org_id', currentOrg.id)
+              .eq('warehouse_id', selectedWarehouseId)
+              .eq('variant_id', variant.id)
+              .maybeSingle();
+            
+            if (fetchErr) throw fetchErr;
+            
+            let inventoryItemId: string;
+            let oldQty = 0;
+            
+            if (invItem) {
+              inventoryItemId = invItem.id;
+              oldQty = invItem.quantity;
+            } else {
+              // Create inventory_item with quantity 0
+              const { data: newInvItem, error: createErr } = await (supabase as any)
+                .from('inventory_items')
+                .insert({
+                  org_id: currentOrg.id,
+                  warehouse_id: selectedWarehouseId,
+                  variant_id: variant.id,
+                  quantity: 0,
+                })
+                .select('id')
+                .single();
+              
+              if (createErr) throw createErr;
+              inventoryItemId = newInvItem.id;
+            }
+            
+            // Only update if stock changed
+            const delta = newStock - oldQty;
+            if (delta !== 0) {
+              // Update inventory_items quantity
+              const { error: updateErr } = await (supabase as any)
+                .from('inventory_items')
+                .update({ quantity: newStock, updated_at: new Date().toISOString() })
+                .eq('id', inventoryItemId);
+              
+              if (updateErr) throw updateErr;
+              
+              // Create inventory_movement
+              const { error: movementErr } = await (supabase as any)
+                .from('inventory_movements')
+                .insert({
+                  inventory_item_id: inventoryItemId,
+                  delta,
+                  reason: 'correction',
+                  note: 'Edited in product form',
+                  created_by: currentOrg.id, // Use user ID if available
+                });
+              
+              if (movementErr) throw movementErr;
+            }
+          }
+        } catch (stockErr: any) {
+          console.error('Error saving stock:', stockErr);
+          // Don't fail the save, but log it
         }
       }
 
@@ -601,6 +956,66 @@ export default function ProductForm() {
               <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" />
                       </div>
 
+                <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger id="category">
+                  <SelectValue placeholder="Select or create category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoryOptions.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">+ Create new category...</SelectItem>
+                </SelectContent>
+              </Select>
+              {category === '__new__' && (
+                <Input
+                  placeholder="Enter new category name"
+                  onBlur={(e) => {
+                    const newCat = e.target.value.trim();
+                    if (newCat) {
+                      setCategoryOptions(prev => [...prev, newCat].sort());
+                      setCategory(newCat);
+                    } else {
+                      setCategory('');
+                    }
+                  }}
+                  autoFocus
+                />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="gap-1">
+                    {tag}
+                    <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tag)} />
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Add a tag"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={addTag}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+                      </div>
+
             {/* Hide variants section for venue assets */}
             {type !== 'venue_asset' && (
               <div className="space-y-6">
@@ -660,52 +1075,153 @@ export default function ProductForm() {
                   )}
                 </div>
 
-                {/* Variant Combinations Table */}
+                {/* Warehouse Selector */}
+                {isEditMode && warehouses.length > 0 && variants.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <WarehouseIcon className="h-4 w-4" />
+                      Warehouse (for stock)
+                    </Label>
+                    <Select value={selectedWarehouseId} onValueChange={(val) => {
+                      if (val === '__new__') {
+                        setCreateWarehouseOpen(true);
+                      } else {
+                        setSelectedWarehouseId(val);
+                      }
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((wh) => (
+                          <SelectItem key={wh.id} value={wh.id}>
+                            {wh.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__new__">+ Add new warehouse</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Variant Combinations Table/Cards */}
                 {variants.length > 0 && (
                   <div className="space-y-3">
                     <div>
                       <Label>Variant Combinations</Label>
                       <p className="text-sm text-muted-foreground">
-                        Edit SKU, price, and active status for each variant. Leave SKU blank to auto-generate on save.
+                        Edit SKU, price, stock{isEditMode && ` @ ${warehouses.find(w => w.id === selectedWarehouseId)?.name || 'warehouse'}`}, and status. SKU auto-generates if left blank.
                       </p>
                     </div>
 
-                    <div className="border rounded-lg divide-y">
+                    {/* Desktop Table (md and up) */}
+                    <div className="hidden md:block border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-3 text-sm font-medium">Variant</th>
+                            <th className="text-left p-3 text-sm font-medium">SKU</th>
+                            <th className="text-left p-3 text-sm font-medium">Price</th>
+                            {isEditMode && <th className="text-left p-3 text-sm font-medium">Stock</th>}
+                            <th className="text-left p-3 text-sm font-medium">Active</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                       {variants.map((v, idx) => (
-                        <div key={v.id ?? idx} className="grid grid-cols-12 gap-3 items-center p-3">
-                          <div className="col-span-4">
+                            <tr key={v.id ?? idx} className="border-t">
+                              <td className="p-3">
                             <p className="text-sm font-medium">{v.name}</p>
+                              </td>
+                              <td className="p-3">
+                                <Input
+                                  placeholder="Auto"
+                                  value={v.sku}
+                                  onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
+                                  className="h-8"
+                                />
+                              </td>
+                              <td className="p-3">
+                                <Input
+                                  placeholder="0.00"
+                                  value={v.price}
+                                  onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
+                                  className="h-8"
+                                />
+                              </td>
+                              {isEditMode && (
+                                <td className="p-3">
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={v.stock}
+                                    onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
+                                    className="h-8"
+                                    min="0"
+                                  />
+                                </td>
+                              )}
+                              <td className="p-3">
+                                <Switch
+                                  checked={v.active}
+                                  onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                           </div>
-                          <div className="col-span-3">
+
+                    {/* Mobile Cards (sm and below) */}
+                    <div className="md:hidden space-y-3">
+                      {variants.map((v, idx) => (
+                        <Card key={v.id ?? idx}>
+                          <CardContent className="p-4 space-y-3">
+                            <div className="font-medium text-sm">{v.name}</div>
+                            <div className="space-y-2">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">SKU</Label>
                             <Input
-                              placeholder="SKU"
+                                  placeholder="Auto-generate"
                               value={v.sku}
-                              onChange={(e) =>
-                                setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, sku: e.target.value } : x)))
-                              }
+                                  onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
+                                  className="h-8 mt-1"
                             />
                           </div>
-                          <div className="col-span-3">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">Price</Label>
                             <Input
-                              placeholder="Price"
+                                  placeholder="0.00"
                               value={v.price}
-                              onChange={(e) =>
-                                setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))
-                              }
+                                  onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
+                                  className="h-8 mt-1"
                             />
                           </div>
-                          <div className="col-span-2 flex items-center justify-end gap-2">
-                            <div className="flex items-center gap-1">
+                              {isEditMode && (
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    Stock @ {warehouses.find(w => w.id === selectedWarehouseId)?.name || 'warehouse'}
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={v.stock}
+                                    onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
+                                    className="h-8 mt-1"
+                                    min="0"
+                                  />
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
                               <Switch
                                 checked={v.active}
-                                onCheckedChange={(checked) =>
-                                  setVariants((prev) => prev.map((x, i) => (i === idx ? { ...x, active: checked } : x)))
-                                }
+                                  onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
                               />
-                              <span className="text-xs text-muted-foreground">Active</span>
+                                <Label className="text-xs">Active</Label>
                             </div>
                           </div>
-                        </div>
+                          </CardContent>
+                        </Card>
                       ))}
                     </div>
                   </div>
@@ -725,6 +1241,44 @@ export default function ProductForm() {
         </form>
         </CardContent>
       </Card>
+
+      {/* Create Warehouse Modal */}
+      <Dialog open={createWarehouseOpen} onOpenChange={setCreateWarehouseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Warehouse</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="whName">Warehouse Name *</Label>
+              <Input
+                id="whName"
+                value={newWarehouseName}
+                onChange={(e) => setNewWarehouseName(e.target.value)}
+                placeholder="e.g. East Coast Warehouse"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="whAddress">Address (optional)</Label>
+              <Input
+                id="whAddress"
+                value={newWarehouseAddress}
+                onChange={(e) => setNewWarehouseAddress(e.target.value)}
+                placeholder="e.g. 123 Main St, City"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setCreateWarehouseOpen(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={createWarehouse} disabled={saving || !newWarehouseName.trim()}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Create
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
