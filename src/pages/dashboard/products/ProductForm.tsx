@@ -206,7 +206,7 @@ export default function ProductForm() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentOrg } = useAuth();
+  const { currentOrg, user } = useAuth();
   const { toast } = useToast();
 
   const isEditMode = !!id;
@@ -881,7 +881,7 @@ export default function ProductForm() {
                   delta,
                   reason: 'correction',
                   note: 'Edited in product form',
-                  created_by: currentOrg.id, // Use user ID if available
+                  created_by: user?.id || null, // Use authenticated user ID
                 });
               
               if (movementErr) throw movementErr;

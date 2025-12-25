@@ -9,6 +9,7 @@ import { Loader2, Plus, Edit, Trash2, ArrowUp, ArrowDown, GripVertical } from 'l
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
+import { getVariantConfig, upsertVariantConfig, type VariantConfig } from '@/lib/api/variant-config';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +68,7 @@ export default function CatalogSettings() {
   // Variant options state
   const [variantOptions, setVariantOptions] = useState<string[]>([]);
   const [allVariantNames, setAllVariantNames] = useState<string[]>([]);
+  const [variantConfig, setVariantConfig] = useState<VariantConfig | null>(null);
   
   // Edit dialogs
   const [editCategoryDialog, setEditCategoryDialog] = useState<{ 
@@ -202,19 +204,22 @@ export default function CatalogSettings() {
       // Extract unique option names
       const uniqueOptions = getUniqueVariantOptionNames(variantNames);
       
-      // Load saved order from org metadata
-      const { data: orgData, error: orgErr } = await (supabase as any)
-        .from('orgs')
-        .select('metadata')
-        .eq('id', currentOrg.id)
-        .single();
+      // Load saved order from org_variant_config table
+      const config = await getVariantConfig(currentOrg.id);
+      setVariantConfig(config);
       
-      if (orgErr) throw orgErr;
+      // Build ordered options list from config
+      const orderedOptions: string[] = [];
       
-      const savedOrder = (orgData?.metadata as any)?.variant_option_order || [];
+      // Add rank1 and rank2 from config if they exist in discovered options
+      if (uniqueOptions.includes(config.rank1)) {
+        orderedOptions.push(config.rank1);
+      }
+      if (uniqueOptions.includes(config.rank2) && config.rank2 !== config.rank1) {
+        orderedOptions.push(config.rank2);
+      }
       
-      // Merge saved order with discovered options
-      const orderedOptions = [...savedOrder];
+      // Add any other discovered options that aren't in the config
       for (const option of uniqueOptions) {
         if (!orderedOptions.includes(option)) {
           orderedOptions.push(option);
@@ -491,24 +496,12 @@ export default function CatalogSettings() {
   const saveVariantOptionOrder = async (order: string[]) => {
     if (!currentOrg) return;
     
-    // Update org metadata with variant option order
-    const { data: orgData, error: fetchErr } = await (supabase as any)
-      .from('orgs')
-      .select('metadata')
-      .eq('id', currentOrg.id)
-      .single();
+    // Update org_variant_config table with new rank order
+    const rank1 = order[0] || 'Color';
+    const rank2 = order[1] || 'Size';
     
-    if (fetchErr) throw fetchErr;
-    
-    const metadata = (orgData?.metadata || {}) as any;
-    metadata.variant_option_order = order;
-    
-    const { error: updateErr } = await (supabase as any)
-      .from('orgs')
-      .update({ metadata })
-      .eq('id', currentOrg.id);
-    
-    if (updateErr) throw updateErr;
+    const config = await upsertVariantConfig(currentOrg.id, { rank1, rank2 });
+    setVariantConfig(config);
   };
 
   // ============================================================================

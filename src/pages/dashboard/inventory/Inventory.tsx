@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, RefreshCw, ChevronDown, ChevronRight, ChevronsDown } from 'lucide-react';
 import { getVariantHierarchy, parseVariantName, getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { getVariantConfig } from '@/lib/api/variant-config';
 
 type Warehouse = { id: string; org_id: string; name: string; address: string | null };
 type Product = { id: string; org_id: string; title: string };
@@ -79,15 +80,9 @@ export default function InventoryNew() {
 
       const inventoryItems = (invData as any as InventoryItem[]) || [];
 
-      // Load variant option order from org metadata
-      const { data: orgData, error: orgErr } = await supabase
-        .from('orgs')
-        .select('metadata')
-        .eq('id', currentOrg.id)
-        .single();
-      if (orgErr) throw orgErr;
-
-      const savedOrder = (orgData?.metadata as any)?.variant_option_order || [];
+      // Load variant option order from org_variant_config table
+      const config = await getVariantConfig(currentOrg.id);
+      const savedOrder = [config.rank1, config.rank2].filter(Boolean);
       setVariantOptionOrder(savedOrder);
 
       // Group data by product
