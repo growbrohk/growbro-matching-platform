@@ -310,18 +310,18 @@ export default function Products() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Products
           </h1>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
+        <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => navigate('/app/settings/catalog')}
-            className="h-9 text-sm"
+            className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
           >
             Edit
           </Button>
@@ -330,11 +330,10 @@ export default function Products() {
             disabled={!canCreate} 
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             size="sm"
-            className="h-9 text-sm"
+            className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
           >
-            <Plus className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
             <span className="hidden sm:inline">Add new</span>
-            <span className="sm:hidden">Add</span>
           </Button>
         </div>
       </div>
