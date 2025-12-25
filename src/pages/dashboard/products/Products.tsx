@@ -141,7 +141,7 @@ export default function Products() {
         const productsWithDetails = await Promise.all(
           productsData.map(async (product) => {
             const tagIds = await getProductTagIds(product.id);
-            const productTags = allTags.filter(t => tagIds.includes(t.id));
+            const productTags = tagsData.filter(t => tagIds.includes(t.id));
             const productVariants = allVariants.filter(v => v.product_id === product.id);
             const variantIds = productVariants.map(v => v.id);
             const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
@@ -167,7 +167,7 @@ export default function Products() {
     };
 
     fetchData();
-  }, [currentOrg, toast, allTags]);
+  }, [currentOrg, toast]);
 
   // Filter products by selected category and tab
   const filteredProducts = useMemo(() => {
