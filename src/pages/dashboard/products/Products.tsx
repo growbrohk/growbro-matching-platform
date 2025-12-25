@@ -308,20 +308,20 @@ export default function Products() {
   }
 
   return (
-    <div className="max-w-7xl space-y-4 md:space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             Products
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => navigate('/app/settings/catalog')}
-            className="h-9"
+            className="h-9 text-sm"
           >
             Edit
           </Button>
@@ -330,10 +330,11 @@ export default function Products() {
             disabled={!canCreate} 
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             size="sm"
-            className="h-9"
+            className="h-9 text-sm"
           >
-            <Plus className="mr-1 h-4 w-4" />
-            Add new
+            <Plus className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Add new</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </div>
       </div>
@@ -451,13 +452,13 @@ function ProductsContent({
   navigate,
 }: ProductsContentProps) {
   return (
-    <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-      <CardHeader className="p-4 md:p-6 pb-0">
+    <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+      <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
         {/* Category Pills */}
-        <div className="flex gap-2 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-3 sm:pb-4 -mx-1 px-1 scrollbar-hide">
           <button
             onClick={() => setSelectedCategoryId('all')}
-            className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
               selectedCategoryId === 'all'
                 ? 'bg-[#0E7A3A] text-white'
                 : 'bg-white border border-gray-300 hover:bg-gray-50'
@@ -471,7 +472,7 @@ function ProductsContent({
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategoryId(cat.id)}
-                className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
                   selectedCategoryId === cat.id
                     ? 'bg-[#0E7A3A] text-white'
                     : 'bg-white border border-gray-300 hover:bg-gray-50'
@@ -483,7 +484,7 @@ function ProductsContent({
           {(categoryCounts.get('uncategorized') || 0) > 0 && (
             <button
               onClick={() => setSelectedCategoryId('uncategorized')}
-              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
                 selectedCategoryId === 'uncategorized'
                   ? 'bg-[#0E7A3A] text-white'
                   : 'bg-white border border-gray-300 hover:bg-gray-50'
@@ -496,10 +497,10 @@ function ProductsContent({
 
         {/* Warehouse Selector */}
         {warehouses.length > 0 && (
-          <div className="flex items-center gap-3 pt-4">
-            <span className="text-sm font-medium text-muted-foreground">Warehouse:</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pt-3 sm:pt-4">
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground flex-shrink-0">Warehouse:</span>
             <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-              <SelectTrigger className="w-48 h-9">
+              <SelectTrigger className="w-full sm:w-48 h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -512,13 +513,13 @@ function ProductsContent({
         )}
       </CardHeader>
 
-      <CardContent className="p-4 md:p-6">
+      <CardContent className="p-3 sm:p-4 md:p-6">
         {products.length === 0 ? (
-          <div className="text-center py-12 px-4">
-            <p className="text-muted-foreground mb-4">No products in this category</p>
+          <div className="text-center py-8 sm:py-12 px-4">
+            <p className="text-sm sm:text-base text-muted-foreground mb-4">No products in this category</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {products.map((product) => {
               const isExpanded = expandedProducts.has(product.id);
               const totalQty = getProductQuantity(product);
@@ -529,26 +530,26 @@ function ProductsContent({
               return (
                 <div key={product.id} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                   {/* Product Header */}
-                  <div className="p-3 md:p-4 bg-white">
-                    <div className="flex items-start justify-between gap-3">
+                  <div className="p-2.5 sm:p-3 md:p-4 bg-white">
+                    <div className="flex items-start justify-between gap-2 sm:gap-3">
                       <button
                         onClick={() => toggleProduct(product.id)}
-                        className="flex items-start gap-2 flex-1 text-left min-w-0"
+                        className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
                       >
                         {product.variants.length > 1 ? (
                           isExpanded ? (
-                            <ChevronDown className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
+                            <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
                           ) : (
-                            <ChevronRight className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
+                            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
                           )
                         ) : (
-                          <div className="h-5 w-5 flex-shrink-0" />
+                          <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold truncate" style={{ color: '#0F1F17' }}>
+                          <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
                             {product.title}
                           </h3>
-                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                             {product.tags.map(tag => (
                               <Badge key={tag.id} variant="secondary" className="text-xs">
                                 {tag.name}
@@ -560,18 +561,18 @@ function ProductsContent({
                           </div>
                         </div>
                       </button>
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                         <div className="text-right">
-                          <div className="font-semibold" style={{ color: '#0F1F17' }}>
+                          <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
                             HK${minPrice.toFixed(2)}
                           </div>
                           {warehouses.length > 0 && (
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                               Qty: {totalQty}
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-0.5 sm:gap-1">
                           {!isExpanded && product.variants.length > 1 && (
                             <Button
                               variant="ghost"
@@ -581,16 +582,18 @@ function ProductsContent({
                                 expandAllVariants(product.id, product.variants);
                               }}
                               title="Expand all variants"
+                              className="h-8 w-8 p-0"
                             >
-                              <ChevronsDown className="h-4 w-4" />
+                              <ChevronsDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </Button>
                           )}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                            className="h-8 w-8 p-0"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </Button>
                         </div>
                       </div>
@@ -599,7 +602,7 @@ function ProductsContent({
 
                   {/* Expanded Variants */}
                   {isExpanded && product.variants.length > 0 && (
-                    <div className="border-t px-3 md:px-8 py-2" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
+                    <div className="border-t px-2.5 sm:px-3 md:px-8 py-2" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
                       <VariantHierarchy
                         productId={product.id}
                         variants={product.variants}
@@ -675,18 +678,18 @@ function VariantHierarchy({
     const variant = variants[0];
     const qty = getVariantQuantity(variant.id, inventoryItems);
     return (
-      <div className="py-2 flex items-center justify-between">
-        <span className="text-sm">{variant.name}</span>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">HK${(variant.price || 0).toFixed(2)}</span>
-          {showQuantity && <span className="text-sm text-muted-foreground">Qty: {qty}</span>}
+      <div className="py-2 flex items-center justify-between gap-2">
+        <span className="text-xs sm:text-sm min-w-0 truncate">{variant.name}</span>
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
+          {showQuantity && <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">Qty: {qty}</span>}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2 py-2">
+    <div className="space-y-1.5 sm:space-y-2 py-2">
       {rank1Groups.map(([rank1Value, groupVariants]) => {
         const groupKey = `${productId}:${rank1Value}`;
         const isExpanded = expandedRank1Groups.has(groupKey);
@@ -697,24 +700,24 @@ function VariantHierarchy({
             {/* Rank1 Header */}
             <button
               onClick={() => toggleRank1Group(groupKey)}
-              className="w-full flex items-center justify-between p-2 hover:bg-muted/30 transition-colors"
+              className="w-full flex items-center justify-between p-1.5 sm:p-2 hover:bg-muted/30 transition-colors"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" style={{ color: '#0E7A3A' }} />
+                  <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: '#0E7A3A' }} />
                 ) : (
-                  <ChevronRight className="h-4 w-4" style={{ color: '#0E7A3A' }} />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: '#0E7A3A' }} />
                 )}
-                <span className="text-sm font-medium">
+                <span className="text-xs sm:text-sm font-medium truncate">
                   {rank1}: {rank1Value}
                 </span>
               </div>
-              {showQuantity && <span className="text-sm font-semibold">({groupTotal})</span>}
+              {showQuantity && <span className="text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap">({groupTotal})</span>}
             </button>
 
             {/* Rank2 or Leaf Variants */}
             {isExpanded && (
-              <div className="border-t px-6 py-2 space-y-1" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+              <div className="border-t px-3 sm:px-6 py-1.5 sm:py-2 space-y-1" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                 {(() => {
                   // Group by rank2
                   const rank2Groups = new Map<string, ProductVariant[]>();
@@ -733,13 +736,13 @@ function VariantHierarchy({
                       const avgPrice = rank2Variants.reduce((sum, v) => sum + (v.price || 0), 0) / rank2Variants.length;
                       
                       return (
-                        <div key={rank2Value} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/20">
-                          <span className="text-sm">
+                        <div key={rank2Value} className="flex items-center justify-between py-1 sm:py-1.5 px-1.5 sm:px-2 rounded hover:bg-muted/20 gap-2">
+                          <span className="text-xs sm:text-sm min-w-0 truncate">
                             {rank2}: {rank2Value}
                           </span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium">HK${avgPrice.toFixed(2)}</span>
-                            {showQuantity && <span className="text-sm text-muted-foreground">({rank2Total})</span>}
+                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${avgPrice.toFixed(2)}</span>
+                            {showQuantity && <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">({rank2Total})</span>}
                           </div>
                         </div>
                       );
