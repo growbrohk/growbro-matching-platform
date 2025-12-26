@@ -21,6 +21,15 @@ import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
 import Collab from "./pages/Collab";
 import Orders from "./pages/Orders";
+// Booking V2 pages
+import BookingV2Settings from "./pages/booking-v2/Settings";
+import ResourcesList from "./pages/booking-v2/ResourcesList";
+import ResourceDetail from "./pages/booking-v2/ResourceDetail";
+import ReservationsList from "./pages/booking-v2/ReservationsList";
+import ReservationDetail from "./pages/booking-v2/ReservationDetail";
+// Public booking pages
+import PublicBook from "./pages/public/PublicBook";
+import PublicReservation from "./pages/public/PublicReservation";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 
@@ -130,6 +139,10 @@ function AppRoutes() {
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
       
+      {/* Public Booking Pages */}
+      <Route path="/book/:orgSlug/:resourceSlug" element={<PublicBook />} />
+      <Route path="/r/:qrToken" element={<PublicReservation />} />
+      
       {/* 
         Protected Routes - Use /app prefix
         
@@ -175,6 +188,13 @@ function AppRoutes() {
       
       {/* Account route - alias for settings (new preferred route) */}
       <Route path="/app/account" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+      
+      {/* Booking V2 routes */}
+      <Route path="/app/booking-v2/settings" element={<ProtectedRoute><AppLayout><BookingV2Settings /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking-v2/resources" element={<ProtectedRoute><AppLayout><ResourcesList /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking-v2/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking-v2/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking-v2/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

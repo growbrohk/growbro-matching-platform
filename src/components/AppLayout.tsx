@@ -75,7 +75,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/products', label: 'Products', icon: Package },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
-    { path: '/app/bookings', label: 'Bookings', icon: Calendar },
+    { path: '/app/bookings', label: 'Bookings (Legacy)', icon: Calendar },
+    { path: '/app/booking-v2/resources', label: 'Booking V2', icon: Calendar },
     { path: '/app/events', label: 'Events & Tickets', icon: Ticket },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
@@ -107,7 +108,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       return location.pathname.startsWith('/app/inventory');
     }
     if (path === '/app/bookings') {
-      return location.pathname.startsWith('/app/bookings');
+      return location.pathname === '/app/bookings'; // Exact match to avoid matching booking-v2
+    }
+    if (path === '/app/booking-v2/resources') {
+      return location.pathname.startsWith('/app/booking-v2');
     }
     if (path === '/app/events') {
       return location.pathname.startsWith('/app/events');
