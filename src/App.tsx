@@ -19,6 +19,8 @@ import Dashboard from "./pages/Dashboard";
 import Bookings from "./pages/Bookings";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
+import Collab from "./pages/Collab";
+import Orders from "./pages/Orders";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 
@@ -128,19 +130,51 @@ function AppRoutes() {
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
       
-      {/* Protected Routes - Use /app prefix */}
+      {/* 
+        Protected Routes - Use /app prefix
+        
+        BOTTOM TAB MIGRATION NOTES:
+        - Old routes maintained for backwards compatibility (no 404s)
+        - New routes added as aliases where appropriate
+        - Bottom nav shows: Dashboard | Catalog | Collab | Orders | Account
+        - Inventory & Bookings removed from bottom nav but routes still accessible
+      */}
       <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+      
+      {/* Products routes - kept for backwards compatibility */}
+      {/* /app/products remains accessible but /app/catalog is now the preferred route */}
       <Route path="/app/products" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
       <Route path="/app/products/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
       <Route path="/app/products/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/products/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
+      
+      {/* Catalog routes - aliases for products (new preferred route) */}
+      <Route path="/app/catalog" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/catalog/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/catalog/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/catalog/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
+      
+      {/* Inventory & Bookings - removed from bottom nav but routes still work */}
       <Route path="/app/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
       <Route path="/app/bookings" element={<ProtectedRoute><AppLayout><Bookings /></AppLayout></ProtectedRoute>} />
+      
+      {/* Events */}
       <Route path="/app/events" element={<ProtectedRoute><AppLayout><EventsList /></AppLayout></ProtectedRoute>} />
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
+      
+      {/* New: Collab page */}
+      <Route path="/app/collab" element={<ProtectedRoute><AppLayout><Collab /></AppLayout></ProtectedRoute>} />
+      
+      {/* New: Orders page */}
+      <Route path="/app/orders" element={<ProtectedRoute><AppLayout><Orders /></AppLayout></ProtectedRoute>} />
+      
+      {/* Settings routes */}
       <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings/catalog" element={<ProtectedRoute><AppLayout><CatalogSettings /></AppLayout></ProtectedRoute>} />
+      
+      {/* Account route - alias for settings (new preferred route) */}
+      <Route path="/app/account" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

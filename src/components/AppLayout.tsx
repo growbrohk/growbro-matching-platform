@@ -20,6 +20,9 @@ import {
   Menu,
   X,
   Handshake,
+  ShoppingBag,
+  Receipt,
+  User,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -28,6 +31,34 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+/**
+ * AppLayout - Main application layout with navigation
+ * 
+ * BOTTOM TAB BAR MIGRATION (Safe, Non-Breaking):
+ * ================================================
+ * 
+ * OLD TABS: Dashboard | Product | Inventory | Booking
+ * NEW TABS: Dashboard | Catalog | Collab | Orders | Account
+ * 
+ * MIGRATION STRATEGY:
+ * 1. Desktop sidebar keeps all original nav items (backwards compatible)
+ * 2. Mobile bottom nav shows new 5-tab layout
+ * 3. Route aliases ensure old URLs still work:
+ *    - /app/products → still works (also accessible via /app/catalog)
+ *    - /app/inventory → still works (not in bottom nav)
+ *    - /app/bookings → still works (not in bottom nav)
+ * 4. New routes added:
+ *    - /app/catalog (alias for /app/products)
+ *    - /app/collab (new Collab page)
+ *    - /app/orders (new Orders page)
+ *    - /app/account (alias for /app/settings)
+ * 
+ * WHY THIS APPROACH:
+ * - No breaking changes to existing deep links
+ * - No database or API changes needed
+ * - Frontend-only migration
+ * - Easy rollback if needed
+ */
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, currentOrg, signOut } = useAuth();
   const location = useLocation();
@@ -39,6 +70,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
+  // Desktop sidebar: Keep all existing navigation items for backwards compatibility
   const navItems = [
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/products', label: 'Products', icon: Package },
@@ -48,12 +80,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
-  const isActive = (path: string) => {
+  // Mobile bottom tabs: New 5-tab layout (Dashboard, Catalog, Collab, Orders, Account)
+  // Note: /app/catalog is an alias for /app/products (kept for backwards compatibility)
+  // Note: /app/account is an alias for /app/settings
+  // Old routes (/app/inventory, /app/bookings) still work but not shown in bottom nav
+  const bottomTabItems = [
+    { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag, activePath: '/app/products' },
+    { path: '/app/collab', label: 'Collab', icon: Handshake },
+    { path: '/app/orders', label: 'Orders', icon: Receipt },
+    { path: '/app/account', label: 'Account', icon: User, activePath: '/app/settings' },
+  ];
+
+  const isActive = (path: string, activePath?: string) => {
+    // If activePath is provided, check both the path and activePath
+    // This allows aliases like /app/catalog to highlight when on /app/products
+    const checkPath = activePath || path;
+    
     if (path === '/app/dashboard') {
       return location.pathname === '/app/dashboard';
     }
-    if (path === '/app/products') {
-      return location.pathname.startsWith('/app/products');
+    if (checkPath === '/app/products' || path === '/app/catalog') {
+      return location.pathname.startsWith('/app/products') || location.pathname.startsWith('/app/catalog');
     }
     if (path === '/app/inventory') {
       return location.pathname.startsWith('/app/inventory');
@@ -64,8 +112,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (path === '/app/events') {
       return location.pathname.startsWith('/app/events');
     }
-    if (path === '/app/settings') {
-      return location.pathname.startsWith('/app/settings');
+    if (checkPath === '/app/settings' || path === '/app/account') {
+      return location.pathname.startsWith('/app/settings') || location.pathname.startsWith('/app/account');
+    }
+    if (path === '/app/collab') {
+      return location.pathname.startsWith('/app/collab');
+    }
+    if (path === '/app/orders') {
+      return location.pathname.startsWith('/app/orders');
     }
     return false;
   };
@@ -212,24 +266,27 @@ export function AppLayout({ children }: AppLayoutProps) {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation - New 5-tab layout */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t backdrop-blur-xl" style={{ borderColor: "rgba(14,122,58,0.12)", backgroundColor: "rgba(251,248,244,0.95)", paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="grid grid-cols-4 gap-1 px-4 py-3">
-          {navItems.slice(0, 4).map((item) => (
-            <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
-              <Button
-                variant={isActive(item.path) ? 'secondary' : 'ghost'}
-                className={cn(
-                  'flex flex-col h-auto py-2 gap-1',
-                  isActive(item.path) && 'bg-primary/10 text-primary'
-                )}
-                style={!isActive(item.path) ? { color: 'rgba(15,31,23,0.75)' } : {}}
-              >
-                <item.icon className="h-5 w-5" />
-                <span className="text-xs">{item.label}</span>
-              </Button>
-            </Link>
-          ))}
+        <div className="grid grid-cols-5 gap-0.5 px-2 py-2.5">
+          {bottomTabItems.map((item) => {
+            const active = isActive(item.path, item.activePath);
+            return (
+              <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
+                <Button
+                  variant={active ? 'secondary' : 'ghost'}
+                  className={cn(
+                    'flex flex-col h-auto py-1.5 gap-0.5 w-full',
+                    active && 'bg-primary/10 text-primary'
+                  )}
+                  style={!active ? { color: 'rgba(15,31,23,0.75)' } : {}}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span className="text-[10px] leading-tight">{item.label}</span>
+                </Button>
+              </Link>
+            );
+          })}
         </div>
       </nav>
 
