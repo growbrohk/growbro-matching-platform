@@ -22,7 +22,7 @@ interface ProductInventoryData {
   inventoryItems: InventoryItem[];
 }
 
-export default function InventoryNew() {
+export default function Inventory() {
   const { currentOrg } = useAuth();
   const { toast } = useToast();
 
