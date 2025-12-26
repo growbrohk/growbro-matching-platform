@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCategories, getTags, getProductTagIds, type ProductCategory, type ProductTag } from '@/lib/api/categories-and-tags';
-import { getProducts, type Product } from '@/lib/api/products';
+import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+import type { Product } from '@/lib/types';
 
 type ProductVariant = {
   id: string;
@@ -57,6 +58,7 @@ export default function Products() {
   // Filters
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [selectedTab, setSelectedTab] = useState<'physical' | 'event_tickets' | 'space_booking'>('physical');
+  const [selectedPillar, setSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
   
   // Variant rank config
   const [rank1, setRank1] = useState('Color');
@@ -319,21 +321,24 @@ export default function Products() {
         <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
           <Button 
             variant="outline" 
-            size="sm"
+            size="icon"
             onClick={() => navigate('/app/settings/catalog')}
-            className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+            title="Edit catalog settings"
           >
-            Edit
+            <Pencil className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">Edit</span>
           </Button>
           <Button 
             onClick={() => navigate('/app/products/new')} 
             disabled={!canCreate} 
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-            size="sm"
-            className="h-8 sm:h-9 text-xs sm:text-sm px-2 sm:px-3"
+            size="icon"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+            title="Add new product"
           >
-            <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-            <span className="hidden sm:inline">Add new</span>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">Add Product</span>
           </Button>
         </div>
       </div>
@@ -353,6 +358,8 @@ export default function Products() {
             categoryCounts={categoryCounts}
             selectedCategoryId={selectedCategoryId}
             setSelectedCategoryId={setSelectedCategoryId}
+            selectedPillar={selectedPillar}
+            setSelectedPillar={setSelectedPillar}
             warehouses={warehouses}
             selectedWarehouseId={selectedWarehouseId}
             setSelectedWarehouseId={setSelectedWarehouseId}
@@ -385,6 +392,8 @@ export default function Products() {
             categoryCounts={categoryCounts}
             selectedCategoryId={selectedCategoryId}
             setSelectedCategoryId={setSelectedCategoryId}
+            selectedPillar={selectedPillar}
+            setSelectedPillar={setSelectedPillar}
             warehouses={warehouses}
             selectedWarehouseId={selectedWarehouseId}
             setSelectedWarehouseId={setSelectedWarehouseId}
@@ -413,6 +422,8 @@ interface ProductsContentProps {
   categoryCounts: Map<string, number>;
   selectedCategoryId: string;
   setSelectedCategoryId: (id: string) => void;
+  selectedPillar: 'catalog' | 'inventory';
+  setSelectedPillar: (pillar: 'catalog' | 'inventory') => void;
   warehouses: Warehouse[];
   selectedWarehouseId: string;
   setSelectedWarehouseId: (id: string) => void;
@@ -435,6 +446,8 @@ function ProductsContent({
   categoryCounts,
   selectedCategoryId,
   setSelectedCategoryId,
+  selectedPillar,
+  setSelectedPillar,
   warehouses,
   selectedWarehouseId,
   setSelectedWarehouseId,
@@ -453,7 +466,16 @@ function ProductsContent({
   return (
     <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
       <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
+        {/* Pillar Tabs (Catalog / Inventory) */}
+        <Tabs value={selectedPillar} onValueChange={(v) => setSelectedPillar(v as 'catalog' | 'inventory')} className="w-full">
+          <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-grid mb-4">
+            <TabsTrigger value="catalog">Catalog</TabsTrigger>
+            <TabsTrigger value="inventory">Inventory</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Category Pills */}
+        {/* TODO: Wire up real-time category counts from database aggregation */}
         <div className="flex gap-2 overflow-x-auto pb-3 sm:pb-4 -mx-1 px-1 scrollbar-hide">
           <button
             onClick={() => setSelectedCategoryId('all')}
@@ -494,8 +516,9 @@ function ProductsContent({
           )}
         </div>
 
-        {/* Warehouse Selector */}
-        {warehouses.length > 0 && (
+        {/* Warehouse Selector (only in Inventory pillar) */}
+        {/* TODO: Connect to multi-warehouse inventory once warehouse management is fully implemented */}
+        {selectedPillar === 'inventory' && warehouses.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pt-3 sm:pt-4">
             <span className="text-xs sm:text-sm font-medium text-muted-foreground flex-shrink-0">Warehouse:</span>
             <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
@@ -562,13 +585,26 @@ function ProductsContent({
                       </button>
                       <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                         <div className="text-right">
-                          <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
-                            HK${minPrice.toFixed(2)}
-                          </div>
-                          {warehouses.length > 0 && (
-                            <div className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                              Qty: {totalQty}
-                            </div>
+                          {selectedPillar === 'catalog' ? (
+                            <>
+                              <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
+                                HK${minPrice.toFixed(2)}
+                              </div>
+                              {product.variants.length > 1 && (
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {product.variants.length} variants
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
+                                ({totalQty})
+                              </div>
+                              <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                Stock
+                              </div>
+                            </>
                           )}
                         </div>
                         <div className="flex gap-0.5 sm:gap-1">
@@ -612,6 +648,7 @@ function ProductsContent({
                         toggleRank1Group={toggleRank1Group}
                         getVariantQuantity={getVariantQuantity}
                         showQuantity={warehouses.length > 0}
+                        selectedPillar={selectedPillar}
                       />
                     </div>
                   )}
@@ -636,6 +673,7 @@ interface VariantHierarchyProps {
   toggleRank1Group: (key: string) => void;
   getVariantQuantity: (variantId: string, inventoryItems: InventoryItem[]) => number;
   showQuantity: boolean;
+  selectedPillar: 'catalog' | 'inventory';
 }
 
 function VariantHierarchy({
@@ -648,7 +686,10 @@ function VariantHierarchy({
   toggleRank1Group,
   getVariantQuantity,
   showQuantity,
+  selectedPillar,
 }: VariantHierarchyProps) {
+  // TODO: Use variant ordering from catalog settings when fully implemented
+  // TODO: Support custom variant rank names beyond Color/Size
   // Group variants by rank1
   const rank1Groups = useMemo(() => {
     const groups = new Map<string, ProductVariant[]>();
@@ -680,8 +721,11 @@ function VariantHierarchy({
       <div className="py-2 flex items-center justify-between gap-2">
         <span className="text-xs sm:text-sm min-w-0 truncate">{variant.name}</span>
         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
-          {showQuantity && <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">Qty: {qty}</span>}
+          {selectedPillar === 'catalog' ? (
+            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
+          ) : (
+            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({qty})</span>
+          )}
         </div>
       </div>
     );
@@ -740,8 +784,11 @@ function VariantHierarchy({
                             {rank2}: {rank2Value}
                           </span>
                           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${avgPrice.toFixed(2)}</span>
-                            {showQuantity && <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">({rank2Total})</span>}
+                            {selectedPillar === 'catalog' ? (
+                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${avgPrice.toFixed(2)}</span>
+                            ) : (
+                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({rank2Total})</span>
+                            )}
                           </div>
                         </div>
                       );

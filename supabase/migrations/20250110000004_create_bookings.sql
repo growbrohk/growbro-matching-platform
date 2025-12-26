@@ -129,3 +129,4 @@ CREATE TRIGGER update_bookings_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 
+

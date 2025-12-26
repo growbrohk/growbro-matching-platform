@@ -127,3 +127,4 @@ CREATE TRIGGER update_ticket_types_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 
+
