@@ -46,7 +46,7 @@ export default function Catalog() {
 
         <div className="w-full">
           <TabsContent value="products" className="mt-0">
-            <DashboardProducts />
+            <DashboardProducts isEmbeddedInCatalog={true} />
           </TabsContent>
 
           <TabsContent value="events" className="mt-0">

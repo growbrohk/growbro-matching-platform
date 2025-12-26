@@ -42,7 +42,13 @@ interface ProductWithDetails extends Product {
   inventoryItems: InventoryItem[];
 }
 
-export default function Products() {
+interface ProductsProps {
+  // Products is a sub-view under Catalog.
+  // Do not render standalone page headers or pillar tabs when embedded.
+  isEmbeddedInCatalog?: boolean;
+}
+
+export default function Products({ isEmbeddedInCatalog = false }: ProductsProps = {}) {
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -311,47 +317,117 @@ export default function Products() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 md:space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 sm:gap-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-            Products
-          </h1>
-        </div>
-        <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => navigate('/app/settings/catalog')}
-            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-            title="Edit catalog settings"
-          >
-            <Pencil className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-2">Edit</span>
-          </Button>
-          <Button 
-            onClick={() => navigate('/app/products/new')} 
-            disabled={!canCreate} 
-            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-            size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-            title="Add new product"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-2">Add Product</span>
-          </Button>
-        </div>
-      </div>
+      {/* Header and Pillar Tabs - Only show when NOT embedded in Catalog */}
+      {!isEmbeddedInCatalog && (
+        <>
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+                Products
+              </h1>
+            </div>
+            <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => navigate('/app/settings/catalog')}
+                className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+                title="Edit catalog settings"
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Edit</span>
+              </Button>
+              <Button 
+                onClick={() => navigate('/app/products/new')} 
+                disabled={!canCreate} 
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+                title="Add new product"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Add Product</span>
+              </Button>
+            </div>
+          </div>
 
-      {/* Tabs */}
-      <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
-        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
-          <TabsTrigger value="physical">Products</TabsTrigger>
-          <TabsTrigger value="event_tickets">Event Tickets</TabsTrigger>
-          <TabsTrigger value="space_booking">Space Booking</TabsTrigger>
-        </TabsList>
+          <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
+            <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
+              <TabsTrigger value="physical">Products</TabsTrigger>
+              <TabsTrigger value="event_tickets">Event Tickets</TabsTrigger>
+              <TabsTrigger value="space_booking">Space Booking</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </>
+      )}
 
-        <TabsContent value="physical" className="mt-4 space-y-4">
+      {/* Content - Always show, but wrapped in Tabs only when NOT embedded */}
+      {!isEmbeddedInCatalog ? (
+        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
+
+          <TabsContent value="physical" className="mt-4 space-y-4">
+            <ProductsContent
+              products={filteredProducts}
+              categories={categories}
+              categoryCounts={categoryCounts}
+              selectedCategoryId={selectedCategoryId}
+              setSelectedCategoryId={setSelectedCategoryId}
+              selectedPillar={selectedPillar}
+              setSelectedPillar={setSelectedPillar}
+              warehouses={warehouses}
+              selectedWarehouseId={selectedWarehouseId}
+              setSelectedWarehouseId={setSelectedWarehouseId}
+              expandedProducts={expandedProducts}
+              expandedRank1Groups={expandedRank1Groups}
+              toggleProduct={toggleProduct}
+              toggleRank1Group={toggleRank1Group}
+              expandAllVariants={expandAllVariants}
+              getProductQuantity={getProductQuantity}
+              getVariantQuantity={getVariantQuantity}
+              productTypeLabel={productTypeLabel}
+              rank1={rank1}
+              rank2={rank2}
+              navigate={navigate}
+            />
+          </TabsContent>
+
+          <TabsContent value="event_tickets" className="mt-4">
+            <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+              <CardContent className="text-center py-12 px-4">
+                <p className="text-muted-foreground">Event Tickets coming soon</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="space_booking" className="mt-4">
+            <ProductsContent
+              products={filteredProducts}
+              categories={categories}
+              categoryCounts={categoryCounts}
+              selectedCategoryId={selectedCategoryId}
+              setSelectedCategoryId={setSelectedCategoryId}
+              selectedPillar={selectedPillar}
+              setSelectedPillar={setSelectedPillar}
+              warehouses={warehouses}
+              selectedWarehouseId={selectedWarehouseId}
+              setSelectedWarehouseId={setSelectedWarehouseId}
+              expandedProducts={expandedProducts}
+              expandedRank1Groups={expandedRank1Groups}
+              toggleProduct={toggleProduct}
+              toggleRank1Group={toggleRank1Group}
+              expandAllVariants={expandAllVariants}
+              getProductQuantity={getProductQuantity}
+              getVariantQuantity={getVariantQuantity}
+              productTypeLabel={productTypeLabel}
+              rank1={rank1}
+              rank2={rank2}
+              navigate={navigate}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        // When embedded in Catalog, render content directly without the Tabs wrapper
+        <div className="mt-0">
           <ProductsContent
             products={filteredProducts}
             categories={categories}
@@ -375,42 +451,8 @@ export default function Products() {
             rank2={rank2}
             navigate={navigate}
           />
-        </TabsContent>
-
-        <TabsContent value="event_tickets" className="mt-4">
-          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardContent className="text-center py-12 px-4">
-              <p className="text-muted-foreground">Event Tickets coming soon</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="space_booking" className="mt-4">
-          <ProductsContent
-            products={filteredProducts}
-            categories={categories}
-            categoryCounts={categoryCounts}
-            selectedCategoryId={selectedCategoryId}
-            setSelectedCategoryId={setSelectedCategoryId}
-            selectedPillar={selectedPillar}
-            setSelectedPillar={setSelectedPillar}
-            warehouses={warehouses}
-            selectedWarehouseId={selectedWarehouseId}
-            setSelectedWarehouseId={setSelectedWarehouseId}
-            expandedProducts={expandedProducts}
-            expandedRank1Groups={expandedRank1Groups}
-            toggleProduct={toggleProduct}
-            toggleRank1Group={toggleRank1Group}
-            expandAllVariants={expandAllVariants}
-            getProductQuantity={getProductQuantity}
-            getVariantQuantity={getVariantQuantity}
-            productTypeLabel={productTypeLabel}
-            rank1={rank1}
-            rank2={rank2}
-            navigate={navigate}
-          />
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }
