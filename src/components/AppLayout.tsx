@@ -73,18 +73,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Desktop sidebar: Top-level navigation
   const navItems = [
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/app/products', label: 'Products', icon: Package },
+    { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
+    { path: '/app/collab', label: 'Collab', icon: Handshake },
+    { path: '/app/orders', label: 'Orders', icon: Receipt },
     { path: '/app/booking/resources?type=event', label: 'Events & Workshops', icon: Calendar },
     { path: '/app/booking/resources?type=space', label: 'Spaces', icon: Warehouse },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
-  // Mobile bottom tabs: Products, Events, Spaces, Orders, Account
+  // Mobile bottom tabs: Dashboard | Catalog | Collab | Orders | Account
   const bottomTabItems = [
-    { path: '/app/products', label: 'Products', icon: Package },
-    { path: '/app/booking/resources?type=event', label: 'Events', icon: Calendar },
-    { path: '/app/booking/resources?type=space', label: 'Spaces', icon: Warehouse },
+    { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
+    { path: '/app/collab', label: 'Collab', icon: Handshake },
     { path: '/app/orders', label: 'Orders', icon: Receipt },
     { path: '/app/account', label: 'Account', icon: User, activePath: '/app/settings' },
   ];
@@ -97,8 +99,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (path === '/app/dashboard') {
       return location.pathname === '/app/dashboard';
     }
-    if (checkPath === '/app/products' || path === '/app/catalog') {
-      return location.pathname.startsWith('/app/products') || location.pathname.startsWith('/app/catalog');
+    if (path === '/app/catalog') {
+      return location.pathname.startsWith('/app/catalog') || 
+             location.pathname.startsWith('/app/products');
     }
     if (path === '/app/inventory') {
       return location.pathname.startsWith('/app/inventory');

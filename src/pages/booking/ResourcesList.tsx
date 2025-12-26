@@ -42,11 +42,16 @@ interface BookingResource {
   created_at: string;
 }
 
-export default function BookingResourcesList() {
+interface BookingResourcesListProps {
+  typeFilter?: string;
+}
+
+export default function BookingResourcesList({ typeFilter: propTypeFilter }: BookingResourcesListProps = {}) {
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const typeFilter = searchParams.get('type') || 'event'; // Default to event
+  const urlTypeFilter = searchParams.get('type');
+  const typeFilter = propTypeFilter || urlTypeFilter || 'event'; // Prop takes priority, then URL, then default
   
   const [loading, setLoading] = useState(true);
   const [resources, setResources] = useState<BookingResource[]>([]);

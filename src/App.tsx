@@ -16,6 +16,7 @@ import Inventory from "./pages/dashboard/inventory/Inventory";
 import EventsList from "./pages/events/EventsList.new";
 import EventForm from "./pages/events/EventForm.new";
 import Dashboard from "./pages/Dashboard";
+import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
 import Collab from "./pages/Collab";
@@ -145,37 +146,37 @@ function AppRoutes() {
       {/* 
         Protected Routes - Use /app prefix
         
-        BOTTOM TAB MIGRATION NOTES:
-        - Old routes maintained for backwards compatibility (no 404s)
-        - New routes added as aliases where appropriate
-        - Bottom nav shows: Dashboard | Catalog | Collab | Orders | Account
-        - Inventory & Bookings removed from bottom nav but routes still accessible
+        BOTTOM TAB NAVIGATION:
+        - Dashboard | Catalog | Collab | Orders | Account
+        - Products/Events/Spaces are subtabs inside Catalog
+        - Old routes redirect to new Catalog structure
       */}
       <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
       
-      {/* Products routes - kept for backwards compatibility */}
-      {/* /app/products remains accessible but /app/catalog is now the preferred route */}
-      <Route path="/app/products" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
+      {/* Catalog page with subtabs (Products | Events | Spaces) */}
+      <Route path="/app/catalog" element={<ProtectedRoute><AppLayout><Catalog /></AppLayout></ProtectedRoute>} />
+      
+      {/* Product CRUD routes (outside Catalog container for full-page forms) */}
       <Route path="/app/products/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
       <Route path="/app/products/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/products/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
-      
-      {/* Catalog routes - aliases for products (new preferred route) */}
-      <Route path="/app/catalog" element={<ProtectedRoute><AppLayout><DashboardProducts /></AppLayout></ProtectedRoute>} />
       <Route path="/app/catalog/select-type" element={<ProtectedRoute><AppLayout><ProductTypeSelection /></AppLayout></ProtectedRoute>} />
       <Route path="/app/catalog/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/catalog/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       
+      {/* Redirect old routes to Catalog with appropriate tab */}
+      <Route path="/app/products" element={<Navigate to="/app/catalog?tab=products" replace />} />
+      
       {/* Inventory - removed from bottom nav but routes still work */}
       <Route path="/app/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
       
-      {/* Redirect legacy bookings to booking resources */}
-      <Route path="/app/bookings" element={<Navigate to="/app/booking/resources?type=event" replace />} />
-      
-      {/* Events */}
-      <Route path="/app/events" element={<ProtectedRoute><AppLayout><EventsList /></AppLayout></ProtectedRoute>} />
+      {/* Events CRUD routes */}
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
+      
+      {/* Redirect old list routes to Catalog with appropriate tabs */}
+      <Route path="/app/events" element={<Navigate to="/app/catalog?tab=events" replace />} />
+      <Route path="/app/bookings" element={<Navigate to="/app/catalog?tab=events" replace />} />
       
       {/* New: Collab page */}
       <Route path="/app/collab" element={<ProtectedRoute><AppLayout><Collab /></AppLayout></ProtectedRoute>} />
