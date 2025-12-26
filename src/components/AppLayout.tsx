@@ -70,25 +70,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     navigate('/auth');
   };
 
-  // Desktop sidebar: Keep all existing navigation items for backwards compatibility
+  // Desktop sidebar: Top-level navigation
   const navItems = [
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/products', label: 'Products', icon: Package },
+    { path: '/app/booking/resources?type=event', label: 'Events & Workshops', icon: Calendar },
+    { path: '/app/booking/resources?type=space', label: 'Spaces', icon: Warehouse },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
-    { path: '/app/bookings', label: 'Bookings (Legacy)', icon: Calendar },
-    { path: '/app/booking-v2/resources', label: 'Booking V2', icon: Calendar },
-    { path: '/app/events', label: 'Events & Tickets', icon: Ticket },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
-  // Mobile bottom tabs: New 5-tab layout (Dashboard, Catalog, Collab, Orders, Account)
-  // Note: /app/catalog is an alias for /app/products (kept for backwards compatibility)
-  // Note: /app/account is an alias for /app/settings
-  // Old routes (/app/inventory, /app/bookings) still work but not shown in bottom nav
+  // Mobile bottom tabs: Products, Events, Spaces, Orders, Account
   const bottomTabItems = [
-    { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag, activePath: '/app/products' },
-    { path: '/app/collab', label: 'Collab', icon: Handshake },
+    { path: '/app/products', label: 'Products', icon: Package },
+    { path: '/app/booking/resources?type=event', label: 'Events', icon: Calendar },
+    { path: '/app/booking/resources?type=space', label: 'Spaces', icon: Warehouse },
     { path: '/app/orders', label: 'Orders', icon: Receipt },
     { path: '/app/account', label: 'Account', icon: User, activePath: '/app/settings' },
   ];
@@ -107,14 +103,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (path === '/app/inventory') {
       return location.pathname.startsWith('/app/inventory');
     }
-    if (path === '/app/bookings') {
-      return location.pathname === '/app/bookings'; // Exact match to avoid matching booking-v2
+    // Events & Workshops - check if on booking resources with type=event or type=workshop
+    if (path === '/app/booking/resources?type=event') {
+      return location.pathname.startsWith('/app/booking') && 
+             (location.search.includes('type=event') || location.search.includes('type=workshop'));
     }
-    if (path === '/app/booking-v2/resources') {
-      return location.pathname.startsWith('/app/booking-v2');
-    }
-    if (path === '/app/events') {
-      return location.pathname.startsWith('/app/events');
+    // Spaces - check if on booking resources with type=space
+    if (path === '/app/booking/resources?type=space') {
+      return location.pathname.startsWith('/app/booking') && location.search.includes('type=space');
     }
     if (checkPath === '/app/settings' || path === '/app/account') {
       return location.pathname.startsWith('/app/settings') || location.pathname.startsWith('/app/account');

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +42,8 @@ export default function ResourceDetail() {
   const { id } = useParams<{ id: string }>();
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const typeFilter = searchParams.get('type') || 'event';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resource, setResource] = useState<BookingResource | null>(null);
@@ -59,18 +61,18 @@ export default function ResourceDetail() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('booking_resources')
+        .from('booking_resources' as any)
         .select('*')
         .eq('id', id)
         .eq('org_id', currentOrg.id)
         .single();
 
       if (error) throw error;
-      setResource(data);
+      setResource(data as any);
     } catch (error: any) {
       console.error('Error fetching resource:', error);
       toast.error('Failed to load resource');
-      navigate('/app/booking-v2/resources');
+      navigate(`/app/booking/resources?type=${typeFilter}`);
     } finally {
       setLoading(false);
     }
@@ -82,7 +84,7 @@ export default function ResourceDetail() {
     try {
       setSaving(true);
       const { error } = await supabase
-        .from('booking_resources')
+        .from('booking_resources' as any)
         .update({
           name: resource.name,
           type: resource.type,
@@ -124,7 +126,8 @@ export default function ResourceDetail() {
     );
   }
 
-  const publicUrl = `${window.location.origin}/book/${currentOrg?.slug}/${resource.slug}`;
+  // TODO: Update to use org slug once orgs table has slug field
+  const publicUrl = `${window.location.origin}/book/${currentOrg?.id}/${resource.slug}`;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -133,7 +136,7 @@ export default function ResourceDetail() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/app/booking-v2/resources')}
+            onClick={() => navigate(`/app/booking/resources?type=${typeFilter}`)}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>

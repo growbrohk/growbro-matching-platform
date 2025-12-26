@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +45,9 @@ interface BookingResource {
 export default function BookingResourcesList() {
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const typeFilter = searchParams.get('type') || 'event'; // Default to event
+  
   const [loading, setLoading] = useState(true);
   const [resources, setResources] = useState<BookingResource[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +55,7 @@ export default function BookingResourcesList() {
   const [creating, setCreating] = useState(false);
   const [newResource, setNewResource] = useState({
     name: '',
-    type: 'space' as 'space' | 'workshop' | 'event',
+    type: typeFilter as 'space' | 'workshop' | 'event',
     description: '',
     location_text: '',
     base_price_amount: '',
@@ -64,19 +67,24 @@ export default function BookingResourcesList() {
     }
   }, [currentOrg?.id]);
 
+  // Update newResource type when typeFilter changes
+  useEffect(() => {
+    setNewResource((prev) => ({ ...prev, type: typeFilter as 'space' | 'workshop' | 'event' }));
+  }, [typeFilter]);
+
   const fetchResources = async () => {
     if (!currentOrg?.id) return;
 
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('booking_resources')
+        .from('booking_resources' as any)
         .select('*')
         .eq('org_id', currentOrg.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setResources(data || []);
+      setResources(data as any || []);
     } catch (error: any) {
       console.error('Error fetching resources:', error);
       toast.error('Failed to load resources');
@@ -103,7 +111,7 @@ export default function BookingResourcesList() {
       const slug = generateSlug(newResource.name);
 
       const { data, error } = await supabase
-        .from('booking_resources')
+        .from('booking_resources' as any)
         .insert({
           org_id: currentOrg.id,
           name: newResource.name,
@@ -132,9 +140,9 @@ export default function BookingResourcesList() {
       });
       fetchResources();
       
-      // Navigate to the detail page
+      // Navigate to the detail page with type parameter
       if (data) {
-        navigate(`/app/booking-v2/resources/${data.id}`);
+        navigate(`/app/booking/resources/${(data as any).id}?type=${typeFilter}`);
       }
     } catch (error: any) {
       console.error('Error creating resource:', error);
@@ -144,10 +152,19 @@ export default function BookingResourcesList() {
     }
   };
 
-  const filteredResources = resources.filter((resource) =>
-    resource.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resource.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredResources = resources.filter((resource) => {
+    const matchesSearch =
+      resource.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      resource.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Filter by type: 'event' filter includes both 'event' and 'workshop'
+    const matchesType =
+      typeFilter === 'event'
+        ? resource.type === 'event' || resource.type === 'workshop'
+        : resource.type === typeFilter;
+    
+    return matchesSearch && matchesType;
+  });
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -174,14 +191,18 @@ export default function BookingResourcesList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Booking Resources</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {typeFilter === 'space' ? 'Spaces' : 'Events & Workshops'}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Manage spaces, workshops, and events available for booking
+            {typeFilter === 'space'
+              ? 'Manage your bookable spaces'
+              : 'Manage your events, workshops, and classes'}
           </p>
         </div>
         <Button onClick={() => setShowNewDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          New Resource
+          {typeFilter === 'space' ? 'New Space' : 'New Event'}
         </Button>
       </div>
 
@@ -201,13 +222,17 @@ export default function BookingResourcesList() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No resources yet</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              {typeFilter === 'space' ? 'No spaces yet' : 'No events yet'}
+            </h3>
             <p className="text-muted-foreground text-center mb-4">
-              Get started by creating your first booking resource
+              {typeFilter === 'space'
+                ? 'Get started by creating your first bookable space'
+                : 'Get started by creating your first event or workshop'}
             </p>
             <Button onClick={() => setShowNewDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Resource
+              {typeFilter === 'space' ? 'Create Space' : 'Create Event'}
             </Button>
           </CardContent>
         </Card>
@@ -217,7 +242,7 @@ export default function BookingResourcesList() {
             <Card
               key={resource.id}
               className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => navigate(`/app/booking-v2/resources/${resource.id}`)}
+              onClick={() => navigate(`/app/booking/resources/${resource.id}?type=${typeFilter}`)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">

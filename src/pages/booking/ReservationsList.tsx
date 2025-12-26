@@ -62,7 +62,7 @@ export default function ReservationsList() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('booking_reservations')
+        .from('booking_reservations' as any)
         .select(`
           *,
           booking_resources!inner(name, type, org_id),
@@ -73,7 +73,7 @@ export default function ReservationsList() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReservations(data || []);
+      setReservations(data as any || []);
     } catch (error: any) {
       console.error('Error fetching reservations:', error);
       toast.error('Failed to load reservations');
@@ -192,7 +192,7 @@ export default function ReservationsList() {
             <Card
               key={reservation.id}
               className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => navigate(`/app/booking-v2/reservations/${reservation.id}`)}
+              onClick={() => navigate(`/app/booking/reservations/${reservation.id}`)}
             >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">

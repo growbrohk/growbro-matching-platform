@@ -16,17 +16,16 @@ import Inventory from "./pages/dashboard/inventory/Inventory";
 import EventsList from "./pages/events/EventsList.new";
 import EventForm from "./pages/events/EventForm.new";
 import Dashboard from "./pages/Dashboard";
-import Bookings from "./pages/Bookings";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
 import Collab from "./pages/Collab";
 import Orders from "./pages/Orders";
-// Booking V2 pages
-import BookingV2Settings from "./pages/booking-v2/Settings";
-import ResourcesList from "./pages/booking-v2/ResourcesList";
-import ResourceDetail from "./pages/booking-v2/ResourceDetail";
-import ReservationsList from "./pages/booking-v2/ReservationsList";
-import ReservationDetail from "./pages/booking-v2/ReservationDetail";
+// Booking pages
+import BookingSettings from "./pages/booking/Settings";
+import ResourcesList from "./pages/booking/ResourcesList";
+import ResourceDetail from "./pages/booking/ResourceDetail";
+import ReservationsList from "./pages/booking/ReservationsList";
+import ReservationDetail from "./pages/booking/ReservationDetail";
 // Public booking pages
 import PublicBook from "./pages/public/PublicBook";
 import PublicReservation from "./pages/public/PublicReservation";
@@ -167,9 +166,11 @@ function AppRoutes() {
       <Route path="/app/catalog/new" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/catalog/:id/edit" element={<ProtectedRoute><AppLayout><ProductForm /></AppLayout></ProtectedRoute>} />
       
-      {/* Inventory & Bookings - removed from bottom nav but routes still work */}
+      {/* Inventory - removed from bottom nav but routes still work */}
       <Route path="/app/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/bookings" element={<ProtectedRoute><AppLayout><Bookings /></AppLayout></ProtectedRoute>} />
+      
+      {/* Redirect legacy bookings to booking resources */}
+      <Route path="/app/bookings" element={<Navigate to="/app/booking/resources?type=event" replace />} />
       
       {/* Events */}
       <Route path="/app/events" element={<ProtectedRoute><AppLayout><EventsList /></AppLayout></ProtectedRoute>} />
@@ -189,12 +190,19 @@ function AppRoutes() {
       {/* Account route - alias for settings (new preferred route) */}
       <Route path="/app/account" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       
-      {/* Booking V2 routes */}
-      <Route path="/app/booking-v2/settings" element={<ProtectedRoute><AppLayout><BookingV2Settings /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking-v2/resources" element={<ProtectedRoute><AppLayout><ResourcesList /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking-v2/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking-v2/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking-v2/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
+      {/* Booking routes */}
+      <Route path="/app/booking/settings" element={<ProtectedRoute><AppLayout><BookingSettings /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/resources" element={<ProtectedRoute><AppLayout><ResourcesList /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
+      
+      {/* Redirect old booking-v2 routes */}
+      <Route path="/app/booking-v2/settings" element={<Navigate to="/app/booking/settings" replace />} />
+      <Route path="/app/booking-v2/resources" element={<Navigate to="/app/booking/resources" replace />} />
+      <Route path="/app/booking-v2/resources/:id" element={<Navigate to="/app/booking/resources/:id" replace />} />
+      <Route path="/app/booking-v2/reservations" element={<Navigate to="/app/booking/reservations" replace />} />
+      <Route path="/app/booking-v2/reservations/:id" element={<Navigate to="/app/booking/reservations/:id" replace />} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

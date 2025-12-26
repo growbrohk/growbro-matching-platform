@@ -81,7 +81,7 @@ export default function ReservationDetail() {
     } catch (error: any) {
       console.error('Error fetching reservation:', error);
       toast.error('Failed to load reservation');
-      navigate('/app/booking-v2/reservations');
+      navigate('/app/booking/reservations');
     } finally {
       setLoading(false);
     }
@@ -185,7 +185,7 @@ export default function ReservationDetail() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/app/booking-v2/reservations')}
+            onClick={() => navigate('/app/booking/reservations')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
