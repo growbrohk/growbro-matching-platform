@@ -20,7 +20,7 @@ interface BookingContext {
 }
 
 export default function PublicBook() {
-  const { orgSlug, resourceSlug } = useParams<{ orgSlug: string; resourceSlug: string }>();
+  const params = useParams<{ orgSlug?: string; resourceSlug: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -35,29 +35,60 @@ export default function PublicBook() {
     answers: {} as any,
   });
 
+  // Handle both URL patterns: /book/:orgSlug/:resourceSlug and /book/:resourceSlug
+  const orgSlug = params.orgSlug;
+  const resourceSlug = params.resourceSlug || params.orgSlug; // If only one param, it's the resourceSlug
+
   useEffect(() => {
-    if (orgSlug && resourceSlug) {
+    if (resourceSlug) {
       fetchContext();
     }
   }, [orgSlug, resourceSlug, selectedDate]);
 
   const fetchContext = async () => {
-    if (!orgSlug || !resourceSlug) return;
+    if (!resourceSlug) return;
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('public_booking_get_context' as any, {
-        p_org_slug: orgSlug,
-        p_resource_slug: resourceSlug,
-        p_start_date: format(selectedDate, 'yyyy-MM-dd'),
-        p_days: 14,
-      });
+      
+      // If orgSlug is provided, use the RPC function
+      if (orgSlug) {
+        const { data, error } = await supabase.rpc('public_booking_get_context' as any, {
+          p_org_slug: orgSlug,
+          p_resource_slug: resourceSlug,
+          p_start_date: format(selectedDate, 'yyyy-MM-dd'),
+          p_days: 14,
+        });
 
-      if (error) throw error;
-      setContext(data as any);
+        if (error) throw error;
+        setContext(data as any);
+      } else {
+        // Fallback: fetch resource by slug only, then redirect to canonical URL
+        const { data: resource, error: resourceError } = await supabase
+          .from('booking_resources' as any)
+          .select('*, orgs!inner(slug)')
+          .eq('slug', resourceSlug)
+          .eq('active', true)
+          .single();
+
+        if (resourceError || !resource) {
+          throw new Error('Resource not found');
+        }
+
+        // Redirect to canonical URL with org slug
+        const orgSlugFromResource = (resource as any).orgs?.slug;
+        if (orgSlugFromResource) {
+          navigate(`/book/${orgSlugFromResource}/${resourceSlug}`, { replace: true });
+          return;
+        }
+
+        // If no org slug, fetch context without it (will fail gracefully)
+        throw new Error('Organization not found');
+      }
     } catch (error: any) {
       console.error('Error fetching booking context:', error);
-      toast.error('Failed to load booking page');
+      toast.error(error.message || 'Failed to load booking page');
+      setContext(null);
     } finally {
       setLoading(false);
     }

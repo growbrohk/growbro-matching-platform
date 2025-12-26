@@ -141,6 +141,7 @@ function AppRoutes() {
       
       {/* Public Booking Pages */}
       <Route path="/book/:orgSlug/:resourceSlug" element={<PublicBook />} />
+      <Route path="/book/:resourceSlug" element={<PublicBook />} />
       <Route path="/r/:qrToken" element={<PublicReservation />} />
       
       {/* 

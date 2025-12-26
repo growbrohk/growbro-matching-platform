@@ -126,52 +126,69 @@ export default function ResourceDetail() {
     );
   }
 
-  // TODO: Update to use org slug once orgs table has slug field
-  const publicUrl = `${window.location.origin}/book/${currentOrg?.id}/${resource.slug}`;
+  // Use org slug if available, otherwise fall back to resource slug only
+  const orgSlug = (currentOrg as any)?.slug;
+  const publicUrl = orgSlug 
+    ? `${window.location.origin}/book/${orgSlug}/${resource.slug}`
+    : `${window.location.origin}/book/${resource.slug}`;
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      {/* Mobile-optimized header */}
+      <div className="flex flex-col md:flex-row md:items-center gap-3">
+        {/* Left section: Back button + Title */}
+        <div className="flex items-start gap-3 md:gap-4 min-w-0 flex-1">
           <Button
             variant="ghost"
             size="icon"
+            className="shrink-0 mt-1"
             onClick={() => navigate(`/app/booking/resources?type=${typeFilter}`)}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{resource.name}</h1>
-              <Badge variant={resource.active ? 'default' : 'secondary'}>
-                {resource.active ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground mt-1">/{resource.slug}</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight break-words">
+              {resource.name}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">/book/{resource.slug}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.open(publicUrl, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Preview
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </>
-            )}
-          </Button>
+        
+        {/* Right section: Actions (mobile-friendly) */}
+        <div className="w-full md:w-auto flex flex-wrap items-center justify-between md:justify-end gap-2">
+          <Badge variant={resource.active ? 'default' : 'secondary'} className="shrink-0">
+            {resource.active ? 'Active' : 'Inactive'}
+          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3 text-sm"
+              onClick={() => window.open(publicUrl, '_blank')}
+              disabled={!resource.slug}
+            >
+              <ExternalLink className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Preview</span>
+            </Button>
+            <Button 
+              size="sm"
+              className="h-9 px-3 text-sm"
+              onClick={handleSave} 
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 md:mr-2 animate-spin" />
+                  <span className="hidden md:inline">Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Save</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
