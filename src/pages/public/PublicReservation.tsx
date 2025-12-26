@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Calendar, Loader2, MapPin, Clock, CheckCircle, Upload, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import QRCodeReact from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Reservation {
@@ -55,12 +55,12 @@ export default function PublicReservation() {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('public_booking_get_reservation', {
+      const { data, error } = await supabase.rpc('public_booking_get_reservation' as any, {
         p_qr_token: qrToken,
       });
 
       if (error) throw error;
-      setReservation(data);
+      setReservation(data as any);
     } catch (error: any) {
       console.error('Error fetching reservation:', error);
       toast.error('Failed to load reservation');
@@ -77,7 +77,7 @@ export default function PublicReservation() {
 
     try {
       setUploading(true);
-      const { error } = await supabase.rpc('public_booking_submit_proof', {
+      const { error } = await supabase.rpc('public_booking_submit_proof' as any, {
         p_qr_token: qrToken,
         p_proof_url: proofUrl,
       });
@@ -360,7 +360,7 @@ export default function PublicReservation() {
               </CardHeader>
               <CardContent className="flex flex-col items-center gap-4">
                 <div className="p-6 bg-white rounded-lg border">
-                  <QRCodeReact value={qrCodeUrl} size={200} />
+                  <QRCodeSVG value={qrCodeUrl} size={200} />
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground">Booking Reference</p>

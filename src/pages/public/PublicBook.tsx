@@ -46,7 +46,7 @@ export default function PublicBook() {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('public_booking_get_context', {
+      const { data, error } = await supabase.rpc('public_booking_get_context' as any, {
         p_org_slug: orgSlug,
         p_resource_slug: resourceSlug,
         p_start_date: format(selectedDate, 'yyyy-MM-dd'),
@@ -54,7 +54,7 @@ export default function PublicBook() {
       });
 
       if (error) throw error;
-      setContext(data);
+      setContext(data as any);
     } catch (error: any) {
       console.error('Error fetching booking context:', error);
       toast.error('Failed to load booking page');
@@ -78,7 +78,7 @@ export default function PublicBook() {
 
     try {
       setSubmitting(true);
-      const { data, error } = await supabase.rpc('public_booking_create_reservation', {
+      const { data, error } = await supabase.rpc('public_booking_create_reservation' as any, {
         p_org_slug: orgSlug,
         p_resource_slug: resourceSlug,
         p_slot_id: selectedSlot.id,

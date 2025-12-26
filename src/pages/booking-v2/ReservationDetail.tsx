@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { format } from 'date-fns';
-import QRCodeReact from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface ReservationDetail {
@@ -65,7 +65,7 @@ export default function ReservationDetail() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('booking_reservations')
+        .from('booking_reservations' as any)
         .select(`
           *,
           booking_resources!inner(id, name, type, location_text, org_id),
@@ -77,7 +77,7 @@ export default function ReservationDetail() {
         .single();
 
       if (error) throw error;
-      setReservation(data);
+      setReservation(data as any);
     } catch (error: any) {
       console.error('Error fetching reservation:', error);
       toast.error('Failed to load reservation');
@@ -92,7 +92,7 @@ export default function ReservationDetail() {
 
     try {
       setUpdating(true);
-      const { data, error } = await supabase.rpc('host_booking_mark_paid', {
+      const { data, error } = await supabase.rpc('host_booking_mark_paid' as any, {
         p_reservation_id: reservation.id,
       });
 
@@ -114,7 +114,7 @@ export default function ReservationDetail() {
     try {
       setUpdating(true);
       const { error } = await supabase
-        .from('booking_reservations')
+        .from('booking_reservations' as any)
         .update({ status: 'cancelled' })
         .eq('id', reservation.id);
 
@@ -353,12 +353,12 @@ export default function ReservationDetail() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <div
-              className="p-4 bg-white rounded-lg border cursor-pointer"
-              onClick={() => setShowQrDialog(true)}
-            >
-              <QRCodeReact value={publicUrl} size={120} />
-            </div>
+              <div
+                className="p-4 bg-white rounded-lg border cursor-pointer"
+                onClick={() => setShowQrDialog(true)}
+              >
+                <QRCodeSVG value={publicUrl} size={120} />
+              </div>
             <div className="flex-1">
               <p className="text-sm text-muted-foreground mb-2">Token</p>
               <code className="text-sm font-mono bg-muted px-3 py-2 rounded block break-all">
@@ -423,7 +423,7 @@ export default function ReservationDetail() {
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-6">
             <div className="p-6 bg-white rounded-lg border">
-              <QRCodeReact value={publicUrl} size={256} />
+              <QRCodeSVG value={publicUrl} size={256} />
             </div>
             <p className="text-sm text-muted-foreground text-center">
               Scan this code to view the booking
