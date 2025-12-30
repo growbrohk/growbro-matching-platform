@@ -782,6 +782,57 @@ export type Database = {
           }
         ]
       }
+      booking_form_fields: {
+        Row: {
+          id: string
+          resource_id: string
+          key: string
+          label: string
+          field_type: string
+          required: boolean
+          placeholder: string | null
+          help_text: string | null
+          options: Json | null
+          validation: Json | null
+          sort_order: number
+          active: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Insert: {
+          id?: string
+          resource_id: string
+          key: string
+          label: string
+          field_type: string
+          required?: boolean
+          placeholder?: string | null
+          help_text?: string | null
+          options?: Json | null
+          validation?: Json | null
+          sort_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          resource_id?: string
+          key?: string
+          label?: string
+          field_type?: string
+          required?: boolean
+          placeholder?: string | null
+          help_text?: string | null
+          options?: Json | null
+          validation?: Json | null
+          sort_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      },
       warehouses: {
         Row: {
           id: string
