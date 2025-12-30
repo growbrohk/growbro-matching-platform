@@ -74,6 +74,9 @@ export interface CreateTicketTypeData {
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
   is_active?: boolean;
+  availability_mode?: 'always' | 'scheduled';
+  available_start_at?: string | null;
+  available_end_at?: string | null;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -82,6 +85,9 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
   is_active?: boolean;
+  availability_mode?: 'always' | 'scheduled';
+  available_start_at?: string | null;
+  available_end_at?: string | null;
 }
 
 /**
@@ -252,6 +258,18 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   }
   if (data.allowed_affiliates !== undefined) {
     updateFields.allowed_affiliates = data.allowed_affiliates;
+  }
+  if (data.is_active !== undefined) {
+    updateFields.is_active = data.is_active;
+  }
+  if (data.availability_mode !== undefined) {
+    updateFields.availability_mode = data.availability_mode;
+  }
+  if (data.available_start_at !== undefined) {
+    updateFields.available_start_at = data.available_start_at;
+  }
+  if (data.available_end_at !== undefined) {
+    updateFields.available_end_at = data.available_end_at;
   }
 
   if (Object.keys(updateFields).length > 0) {

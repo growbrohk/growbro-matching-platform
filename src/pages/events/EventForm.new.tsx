@@ -39,6 +39,9 @@ interface TicketTypeForm {
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
   is_active?: boolean;
+  availability_mode?: 'always' | 'scheduled';
+  available_start_at?: string | null;
+  available_end_at?: string | null;
 }
 
 export default function EventForm() {
@@ -124,6 +127,9 @@ export default function EventForm() {
           access_code: t.access_code || null,
           allowed_affiliates: t.allowed_affiliates || null,
           is_active: t.is_active !== undefined ? t.is_active : true,
+          availability_mode: t.availability_mode || 'always',
+          available_start_at: t.available_start_at ? new Date(t.available_start_at).toISOString().slice(0, 16) : null,
+          available_end_at: t.available_end_at ? new Date(t.available_end_at).toISOString().slice(0, 16) : null,
         })));
 
         // Show sections if they have data
@@ -177,6 +183,9 @@ export default function EventForm() {
       access_code: null,
       allowed_affiliates: null,
       is_active: true,
+      availability_mode: 'always',
+      available_start_at: null,
+      available_end_at: null,
     }]);
     setShowTicketTypesSection(true);
   };
@@ -299,6 +308,32 @@ export default function EventForm() {
             }
           }
 
+          // Process availability fields
+          const availabilityMode = tt.availability_mode || 'always';
+          let availableStartAt: string | null = null;
+          let availableEndAt: string | null = null;
+
+          if (availabilityMode === 'scheduled') {
+            // Validate and process scheduled availability
+            if (tt.available_start_at) {
+              availableStartAt = new Date(tt.available_start_at).toISOString();
+            }
+            if (tt.available_end_at) {
+              const endDate = new Date(tt.available_end_at);
+              // Cap available_end_at to event.end_at
+              const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
+              availableEndAt = finalEndAt.toISOString();
+              
+              // Validate: start must be < end
+              if (availableStartAt && new Date(availableStartAt) >= finalEndAt) {
+                throw new Error(`Ticket "${tt.name}": Available start time must be before end time`);
+              }
+            } else if (availableStartAt) {
+              // If start is provided but end is not, require end
+              throw new Error(`Ticket "${tt.name}": Both start and end times are required for scheduled availability`);
+            }
+          }
+
           if (tt.id && !tt.isNew) {
             // Update existing
             await updateTicketType({
@@ -311,6 +346,9 @@ export default function EventForm() {
               access_code: tt.access_code || null,
               allowed_affiliates: tt.allowed_affiliates || null,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
+              availability_mode: availabilityMode,
+              available_start_at: availableStartAt,
+              available_end_at: availableEndAt,
             });
           } else {
             // Create new
@@ -324,6 +362,9 @@ export default function EventForm() {
               access_code: tt.access_code || null,
               allowed_affiliates: tt.allowed_affiliates || null,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
+              availability_mode: availabilityMode,
+              available_start_at: availableStartAt,
+              available_end_at: availableEndAt,
             });
           }
         }
@@ -360,6 +401,32 @@ export default function EventForm() {
             }
           }
 
+          // Process availability fields
+          const availabilityMode = tt.availability_mode || 'always';
+          let availableStartAt: string | null = null;
+          let availableEndAt: string | null = null;
+
+          if (availabilityMode === 'scheduled') {
+            // Validate and process scheduled availability
+            if (tt.available_start_at) {
+              availableStartAt = new Date(tt.available_start_at).toISOString();
+            }
+            if (tt.available_end_at) {
+              const endDate = new Date(tt.available_end_at);
+              // Cap available_end_at to event.end_at
+              const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
+              availableEndAt = finalEndAt.toISOString();
+              
+              // Validate: start must be < end
+              if (availableStartAt && new Date(availableStartAt) >= finalEndAt) {
+                throw new Error(`Ticket "${tt.name}": Available start time must be before end time`);
+              }
+            } else if (availableStartAt) {
+              // If start is provided but end is not, require end
+              throw new Error(`Ticket "${tt.name}": Both start and end times are required for scheduled availability`);
+            }
+          }
+
           await createTicketType({
             event_id: savedEventId,
             name: tt.name.trim(),
@@ -370,6 +437,9 @@ export default function EventForm() {
             access_code: tt.access_code || null,
             allowed_affiliates: tt.allowed_affiliates || null,
             is_active: tt.is_active !== undefined ? tt.is_active : true,
+            availability_mode: availabilityMode,
+            available_start_at: availableStartAt,
+            available_end_at: availableEndAt,
           });
         }
       }
@@ -692,6 +762,110 @@ export default function EventForm() {
                           onCheckedChange={(checked) => updateTicketTypeForm(index, 'is_active', checked)}
                         />
                       </div>
+                    </div>
+
+                    {/* Available Time Section */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <h3 className="text-sm font-medium mb-3" style={{ color: '#0F1F17' }}>
+                        Available time
+                      </h3>
+                      <div className="space-y-3">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`availability-${index}`}
+                            value="always"
+                            checked={tt.availability_mode === 'always' || !tt.availability_mode}
+                            onChange={(e) => updateTicketTypeForm(index, 'availability_mode', e.target.value as any)}
+                            disabled={tt.is_active === false}
+                            className="h-4 w-4"
+                          />
+                          <div>
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              Always
+                            </div>
+                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              Available until the event ends
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`availability-${index}`}
+                            value="scheduled"
+                            checked={tt.availability_mode === 'scheduled'}
+                            onChange={(e) => updateTicketTypeForm(index, 'availability_mode', e.target.value as any)}
+                            disabled={tt.is_active === false}
+                            className="h-4 w-4"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              Schedule time
+                            </div>
+                            <div className="text-xs mb-3" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              Set specific start and end times for ticket sales
+                            </div>
+                            {tt.availability_mode === 'scheduled' && (
+                              <div className="space-y-3 mt-2">
+                                <div>
+                                  <Label htmlFor={`available-start-${index}`} className="text-xs font-medium">
+                                    Available from
+                                  </Label>
+                                  <Input
+                                    id={`available-start-${index}`}
+                                    type="datetime-local"
+                                    value={tt.available_start_at || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value || null;
+                                      updateTicketTypeForm(index, 'available_start_at', value);
+                                      // Validate: if end exists and new start >= end, clear end
+                                      if (value && tt.available_end_at && value >= tt.available_end_at) {
+                                        updateTicketTypeForm(index, 'available_end_at', null);
+                                      }
+                                    }}
+                                    disabled={tt.is_active === false}
+                                    max={endAt ? endAt.slice(0, 16) : undefined}
+                                    className="mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`available-end-${index}`} className="text-xs font-medium">
+                                    Available until
+                                  </Label>
+                                  <Input
+                                    id={`available-end-${index}`}
+                                    type="datetime-local"
+                                    value={tt.available_end_at || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value || null;
+                                      // Cap to event.end_at if provided
+                                      if (value && endAt && value > endAt.slice(0, 16)) {
+                                        updateTicketTypeForm(index, 'available_end_at', endAt.slice(0, 16));
+                                      } else {
+                                        updateTicketTypeForm(index, 'available_end_at', value);
+                                      }
+                                    }}
+                                    disabled={tt.is_active === false}
+                                    min={tt.available_start_at || (startAt ? startAt.slice(0, 16) : undefined)}
+                                    max={endAt ? endAt.slice(0, 16) : undefined}
+                                    className="mt-1"
+                                  />
+                                  {tt.available_end_at && endAt && tt.available_end_at > endAt.slice(0, 16) && (
+                                    <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                                      Note: Tickets stop selling automatically when the event ends.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                      <p className="text-xs mt-3" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                        Tickets stop selling automatically when the event ends.
+                      </p>
                     </div>
 
                     {/* Access & Visibility Section */}

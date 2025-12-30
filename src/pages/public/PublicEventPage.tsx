@@ -94,7 +94,7 @@ export default function PublicEventPage() {
   const isTicketAvailable = (tt: TicketType): { available: boolean; reason?: string } => {
     if (!event) return { available: false, reason: 'Event not found' };
 
-    // Manual admin-controlled toggle: if is_active is false, ticket is not available
+    // Layer 1: Manual admin-controlled toggle: if is_active is false, ticket is not available
     if (tt.is_active === false) {
       return { available: false, reason: 'Not on sale' };
     }
@@ -107,22 +107,43 @@ export default function PublicEventPage() {
       return { available: false, reason: 'Event ended' };
     }
 
-    // For scheduled tickets: check sales_end_at if it exists (in metadata or as a field)
-    // Effective end time = min(ticket.sales_end_at, event.end_at)
-    const salesEndAt = (tt as any).sales_end_at 
-      ? new Date((tt as any).sales_end_at) 
-      : tt.metadata?.sales_end_at 
-        ? new Date(tt.metadata.sales_end_at) 
-        : null;
-
-    if (salesEndAt) {
-      const effectiveEndAt = salesEndAt < eventEndAt ? salesEndAt : eventEndAt;
+    // Layer 2: Time-based availability rules
+    const availabilityMode = tt.availability_mode || 'always';
+    
+    if (availabilityMode === 'always') {
+      // Always available (until event ends, which is already checked above)
+      return { available: true };
+    }
+    
+    if (availabilityMode === 'scheduled') {
+      // Check if we're within the scheduled availability window
+      const availableStartAt = tt.available_start_at ? new Date(tt.available_start_at) : null;
+      const availableEndAt = tt.available_end_at ? new Date(tt.available_end_at) : null;
+      
+      // If scheduled but no times set, treat as unavailable (validation should prevent this)
+      if (!availableStartAt && !availableEndAt) {
+        return { available: false, reason: 'Sales not scheduled' };
+      }
+      
+      // Check start time: if set and we're before it, not available yet
+      if (availableStartAt && now < availableStartAt) {
+        return { available: false, reason: 'Sales not started' };
+      }
+      
+      // Check end time: effective end = min(available_end_at, event.end_at)
+      const effectiveEndAt = availableEndAt 
+        ? (availableEndAt < eventEndAt ? availableEndAt : eventEndAt)
+        : eventEndAt;
+      
       if (now > effectiveEndAt) {
         return { available: false, reason: 'Sales closed' };
       }
+      
+      return { available: true };
     }
 
-    return { available: true };
+    // Fallback: if unknown mode, treat as unavailable
+    return { available: false, reason: 'Unknown availability mode' };
   };
 
   // Filter visible tickets

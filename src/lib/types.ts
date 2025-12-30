@@ -201,6 +201,9 @@ export interface TicketType {
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
   is_active?: boolean;
+  availability_mode?: 'always' | 'scheduled';
+  available_start_at?: string | null;
+  available_end_at?: string | null;
   created_at: string;
   updated_at: string;
 }
