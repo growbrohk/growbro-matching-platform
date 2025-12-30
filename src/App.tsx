@@ -27,6 +27,7 @@ import ResourcesList from "./pages/booking/ResourcesList";
 import ResourceDetail from "./pages/booking/ResourceDetail";
 import ReservationsList from "./pages/booking/ReservationsList";
 import ReservationDetail from "./pages/booking/ReservationDetail";
+import BookingFormPreviewPage from "./pages/booking/BookingFormPreviewPage";
 // Public booking pages
 import PublicBook from "./pages/public/PublicBook";
 import PublicReservation from "./pages/public/PublicReservation";
@@ -198,6 +199,7 @@ function AppRoutes() {
       <Route path="/app/booking/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/preview/:resourceId" element={<ProtectedRoute><AppLayout><BookingFormPreviewPage /></AppLayout></ProtectedRoute>} />
       
       {/* Redirect old booking-v2 routes */}
       <Route path="/app/booking-v2/settings" element={<Navigate to="/app/booking/settings" replace />} />
