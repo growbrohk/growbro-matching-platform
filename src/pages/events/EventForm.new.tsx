@@ -6,8 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Eye } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   createEvent, 
   updateEvent, 
@@ -55,6 +61,9 @@ export default function EventForm() {
   const [showVenueSection, setShowVenueSection] = useState(false);
   const [showTicketTypesSection, setShowTicketTypesSection] = useState(false);
   const [showPublishingSection, setShowPublishingSection] = useState(false);
+
+  // Preview dialog state
+  const [showPreview, setShowPreview] = useState(false);
 
   // Load event data if editing
   useEffect(() => {
@@ -276,19 +285,55 @@ export default function EventForm() {
     );
   }
 
+  const formatPreviewDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const formatPreviewTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const isQuotaUnlimited = (quota: string) => {
+    const num = parseInt(quota);
+    return isNaN(num) || num >= 999999;
+  };
+
   return (
     <div className="max-w-2xl mx-auto pb-12">
       {/* Header */}
       <div className="mb-8">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => navigate('/app/events')}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Events
-        </Button>
+        <div className="flex items-start justify-between mb-4">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate('/app/events')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Events
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPreview(true)}
+            disabled={!title.trim() || !startAt || !endAt}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            Preview
+          </Button>
+        </div>
         <h1 className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
           {isEditMode ? 'Edit Event' : 'Create New Event'}
         </h1>
@@ -629,6 +674,109 @@ export default function EventForm() {
           </div>
         </div>
       </form>
+
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Event Preview</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Title */}
+            <div>
+              <h2 className="text-3xl font-bold mb-2" style={{ color: '#0F1F17' }}>
+                {title.trim() || 'Event Title'}
+              </h2>
+            </div>
+
+            {/* Date & Time */}
+            {startAt && endAt && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Date & Time
+                </p>
+                <p className="text-lg" style={{ color: '#0F1F17' }}>
+                  {formatPreviewDate(startAt)}
+                </p>
+                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
+                </p>
+              </div>
+            )}
+
+            {/* Venue */}
+            {venueOrgId && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Venue
+                </p>
+                <p className="text-lg" style={{ color: '#0F1F17' }}>
+                  {venueOrgId}
+                </p>
+              </div>
+            )}
+
+            {/* Description */}
+            {description.trim() && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Description
+                </p>
+                <p className="text-base whitespace-pre-wrap" style={{ color: '#0F1F17' }}>
+                  {description.trim()}
+                </p>
+              </div>
+            )}
+
+            {/* Ticket Types */}
+            {ticketTypes.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Ticket Types
+                </p>
+                <div className="space-y-3">
+                  {ticketTypes.map((tt, index) => (
+                    <div
+                      key={index}
+                      className="border rounded-lg p-4"
+                      style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg mb-1" style={{ color: '#0F1F17' }}>
+                            {tt.name.trim() || `Ticket Type ${index + 1}`}
+                          </h3>
+                          <div className="flex items-center gap-4 mt-2">
+                            <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                              ${parseFloat(tt.price) || 0}.00
+                            </span>
+                            <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              {isQuotaUnlimited(tt.quota) ? 'Unlimited' : `${tt.quota || 0} available`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* CTA Button */}
+            <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+              <Button
+                type="button"
+                disabled
+                className="w-full"
+                style={{ backgroundColor: '#0E7A3A', opacity: 0.6 }}
+              >
+                Get Tickets
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
