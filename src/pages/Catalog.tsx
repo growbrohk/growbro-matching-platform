@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardProducts from './dashboard/products/Products';
 import ResourcesList from './booking/ResourcesList';
+import EventsList from './events/EventsList.new';
 
 type CatalogTab = 'products' | 'events' | 'spaces';
 
@@ -51,7 +52,7 @@ export default function Catalog() {
 
           <TabsContent value="events" className="mt-0">
             <div className="px-4 py-6">
-              <ResourcesList typeFilter="event" />
+              <EventsList isEmbeddedInCatalog={true} />
             </div>
           </TabsContent>
 
