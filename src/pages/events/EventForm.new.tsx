@@ -240,7 +240,29 @@ export default function EventForm() {
         }
 
         // Update or create ticket types
+        const eventEndAt = new Date(endAt);
         for (const tt of ticketTypes) {
+          // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
+          const ticketMetadata = (tt as any).metadata || {};
+          let finalMetadata = { ...ticketMetadata };
+          
+          // If sales_end_at exists and is after event.end_at, cap it to event.end_at
+          if (ticketMetadata.sales_end_at) {
+            const salesEndAt = new Date(ticketMetadata.sales_end_at);
+            if (salesEndAt > eventEndAt) {
+              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            }
+          }
+          
+          // Also check if sales_end_at is a direct field (for future schema changes)
+          const salesEndAtField = (tt as any).sales_end_at;
+          if (salesEndAtField) {
+            const salesEndAt = new Date(salesEndAtField);
+            if (salesEndAt > eventEndAt) {
+              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            }
+          }
+
           if (tt.id && !tt.isNew) {
             // Update existing
             await updateTicketType({
@@ -248,6 +270,7 @@ export default function EventForm() {
               name: tt.name.trim(),
               price: parseFloat(tt.price),
               quota: parseInt(tt.quota),
+              metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
             });
           } else {
             // Create new
@@ -256,6 +279,7 @@ export default function EventForm() {
               name: tt.name.trim(),
               price: parseFloat(tt.price),
               quota: parseInt(tt.quota),
+              metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
             });
           }
         }
@@ -269,12 +293,35 @@ export default function EventForm() {
         setEventSlug((newEvent as any).slug || '');
 
         // Create ticket types
+        const eventEndAt = new Date(endAt);
         for (const tt of ticketTypes) {
+          // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
+          const ticketMetadata = (tt as any).metadata || {};
+          let finalMetadata = { ...ticketMetadata };
+          
+          // If sales_end_at exists and is after event.end_at, cap it to event.end_at
+          if (ticketMetadata.sales_end_at) {
+            const salesEndAt = new Date(ticketMetadata.sales_end_at);
+            if (salesEndAt > eventEndAt) {
+              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            }
+          }
+          
+          // Also check if sales_end_at is a direct field (for future schema changes)
+          const salesEndAtField = (tt as any).sales_end_at;
+          if (salesEndAtField) {
+            const salesEndAt = new Date(salesEndAtField);
+            if (salesEndAt > eventEndAt) {
+              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            }
+          }
+
           await createTicketType({
             event_id: savedEventId,
             name: tt.name.trim(),
             price: parseFloat(tt.price),
             quota: parseInt(tt.quota),
+            metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
           });
         }
       }
@@ -485,6 +532,9 @@ export default function EventForm() {
               </h2>
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Add different ticket types with pricing and availability
+              </p>
+              <p className="text-xs mb-4" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                Even 'Always available' tickets stop selling when the event ends.
               </p>
             </div>
 

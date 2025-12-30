@@ -85,7 +85,75 @@ export default function PublicEventPage() {
     }
   };
 
+  // Check if a ticket type is available for purchase
+  const isTicketAvailable = (tt: TicketType): { available: boolean; reason?: string } => {
+    if (!event) return { available: false, reason: 'Event not found' };
+
+    const now = new Date();
+    const eventEndAt = new Date(event.end_at);
+
+    // Hard cutoff: if event has ended, all tickets are unavailable
+    if (now > eventEndAt) {
+      return { available: false, reason: 'Event ended' };
+    }
+
+    // For scheduled tickets: check sales_end_at if it exists (in metadata or as a field)
+    // Effective end time = min(ticket.sales_end_at, event.end_at)
+    const salesEndAt = (tt as any).sales_end_at 
+      ? new Date((tt as any).sales_end_at) 
+      : tt.metadata?.sales_end_at 
+        ? new Date(tt.metadata.sales_end_at) 
+        : null;
+
+    if (salesEndAt) {
+      const effectiveEndAt = salesEndAt < eventEndAt ? salesEndAt : eventEndAt;
+      if (now > effectiveEndAt) {
+        return { available: false, reason: 'Sales closed' };
+      }
+    }
+
+    return { available: true };
+  };
+
+  // Reset unavailable ticket quantities to 0
+  useEffect(() => {
+    if (!event || ticketTypes.length === 0) return;
+
+    const checkAndResetUnavailable = () => {
+      setSelections(prev => {
+        const updated = { ...prev };
+        let changed = false;
+
+        ticketTypes.forEach(tt => {
+          const availability = isTicketAvailable(tt);
+          if (!availability.available && (prev[tt.id] || 0) > 0) {
+            updated[tt.id] = 0;
+            changed = true;
+          }
+        });
+
+        return changed ? updated : prev;
+      });
+    };
+
+    checkAndResetUnavailable();
+    
+    // Check periodically (every minute) to catch tickets that become unavailable
+    const interval = setInterval(checkAndResetUnavailable, 60000);
+    
+    return () => clearInterval(interval);
+  }, [event, ticketTypes]);
+
   const updateQuantity = (ticketTypeId: string, quantity: number) => {
+    const ticketType = ticketTypes.find(tt => tt.id === ticketTypeId);
+    if (!ticketType) return;
+
+    const availability = isTicketAvailable(ticketType);
+    if (!availability.available) {
+      // Don't allow selection if ticket is unavailable
+      return;
+    }
+
     setSelections(prev => ({
       ...prev,
       [ticketTypeId]: Math.max(0, Math.min(4, quantity))
@@ -118,7 +186,11 @@ export default function PublicEventPage() {
   };
 
   const hasSelections = () => {
-    return Object.values(selections).some(qty => qty > 0);
+    // Only count selections for available tickets
+    return ticketTypes.some(tt => {
+      const availability = isTicketAvailable(tt);
+      return availability.available && (selections[tt.id] || 0) > 0;
+    });
   };
 
   if (loading) {
@@ -192,49 +264,60 @@ export default function PublicEventPage() {
                 <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
                   Tickets
                 </p>
-                {ticketTypes.map((tt) => (
-                  <div
-                    key={tt.id}
-                    className="border rounded-lg p-4 space-y-3"
-                    style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
-                          {tt.name}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                            ${tt.price.toFixed(2)}
-                          </span>
-                          {tt.quota < 999999 && (
-                            <span className="text-xs text-muted-foreground">
-                              {tt.quota} available
+                {ticketTypes.map((tt) => {
+                  const availability = isTicketAvailable(tt);
+                  const isUnavailable = !availability.available;
+                  
+                  return (
+                    <div
+                      key={tt.id}
+                      className={`border rounded-lg p-4 space-y-3 ${isUnavailable ? 'opacity-60' : ''}`}
+                      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
+                            {tt.name}
+                          </h3>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                              ${tt.price.toFixed(2)}
                             </span>
+                            {tt.quota < 999999 && (
+                              <span className="text-xs text-muted-foreground">
+                                {tt.quota} available
+                              </span>
+                            )}
+                          </div>
+                          {isUnavailable && (
+                            <p className="text-xs text-red-600 mt-1">
+                              {availability.reason || 'Unavailable'}
+                            </p>
                           )}
                         </div>
                       </div>
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm text-muted-foreground">Quantity:</label>
+                        <Select
+                          value={(selections[tt.id] || 0).toString()}
+                          onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
+                          disabled={isUnavailable}
+                        >
+                          <SelectTrigger className="w-24" disabled={isUnavailable}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[0, 1, 2, 3, 4].map((num) => (
+                              <SelectItem key={num} value={num.toString()}>
+                                {num}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <label className="text-sm text-muted-foreground">Quantity:</label>
-                      <Select
-                        value={(selections[tt.id] || 0).toString()}
-                        onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
-                      >
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[0, 1, 2, 3, 4].map((num) => (
-                            <SelectItem key={num} value={num.toString()}>
-                              {num}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
