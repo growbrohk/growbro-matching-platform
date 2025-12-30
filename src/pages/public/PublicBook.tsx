@@ -40,13 +40,20 @@ export default function PublicBook() {
   const resourceSlug = params.resourceSlug || params.orgSlug; // If only one param, it's the resourceSlug
 
   useEffect(() => {
-    if (resourceSlug) {
-      fetchContext();
-    }
+    if (!orgSlug || !resourceSlug) return;
+    fetchContext();
   }, [orgSlug, resourceSlug, selectedDate]);
 
   const fetchContext = async () => {
-    if (!resourceSlug) return;
+    if (!orgSlug || !resourceSlug) {
+      setLoading(false);
+      return;
+    }
+    console.debug('Public booking context params:', {
+      orgSlug,
+      resourceSlug,
+      selectedDate,
+    });
 
     try {
       setLoading(true);
