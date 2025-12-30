@@ -11,3 +11,4 @@ CREATE INDEX idx_product_variants_active ON product_variants(product_id, active)
 COMMENT ON COLUMN product_variants.archived_at IS 'Soft delete timestamp. Variants are archived instead of deleted to preserve inventory references.';
 
 
+

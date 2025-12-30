@@ -349,7 +349,7 @@ export default function ResourceDetail() {
         </TabsContent>
 
         <TabsContent value="form">
-          <FormBuilder resourceId={resource.id} />
+          <FormBuilder resourceId={resource.id} resourceType={resource.type} />
         </TabsContent>
       </Tabs>
     </div>

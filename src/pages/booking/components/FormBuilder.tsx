@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { TICKETING_EVENT_FORM_PRESET_FIELDS } from '@/pages/booking/presets/ticketingFormPreset';
 
 interface FormField {
   id: string;
@@ -41,14 +42,18 @@ interface FormField {
 
 interface FormBuilderProps {
   resourceId: string;
+  resourceType?: 'space' | 'workshop' | 'event';
 }
 
-export default function FormBuilder({ resourceId }: FormBuilderProps) {
+export default function FormBuilder({ resourceId, resourceType }: FormBuilderProps) {
   const [loading, setLoading] = useState(true);
   const [fields, setFields] = useState<FormField[]>([]);
   const [showDialog, setShowDialog] = useState(false);
   const [editingField, setEditingField] = useState<FormField | null>(null);
   const [saving, setSaving] = useState(false);
+  const [applyingPreset, setApplyingPreset] = useState(false);
+  const [showPresetDialog, setShowPresetDialog] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState('ticketing_basic');
   const [formData, setFormData] = useState({
     key: '',
     label: '',
@@ -57,6 +62,7 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
     placeholder: '',
     help_text: '',
     options: '',
+    validation: '',
   });
 
   useEffect(() => {
@@ -100,6 +106,7 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
         placeholder: field.placeholder || '',
         help_text: field.help_text || '',
         options: field.options ? JSON.stringify(field.options, null, 2) : '',
+        validation: field.validation ? JSON.stringify(field.validation, null, 2) : '',
       });
     } else {
       setEditingField(null);
@@ -111,6 +118,7 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
         placeholder: '',
         help_text: '',
         options: '',
+        validation: '',
       });
     }
     setShowDialog(true);
@@ -136,6 +144,16 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
         }
       }
 
+      let validation = null;
+      if (formData.validation) {
+        try {
+          validation = JSON.parse(formData.validation);
+        } catch {
+          toast.error('Invalid validation JSON format');
+          return;
+        }
+      }
+
       const fieldData = {
         resource_id: resourceId,
         key,
@@ -145,6 +163,7 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
         placeholder: formData.placeholder || null,
         help_text: formData.help_text || null,
         options,
+        validation,
         sort_order: editingField?.sort_order ?? fields.length,
         active: true,
       };
@@ -209,6 +228,39 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
 
   const needsOptions = ['dropdown', 'multiple_choice'].includes(formData.field_type);
 
+  const applyPreset = async () => {
+    if (resourceType !== 'event') return;
+    if (selectedPreset !== 'ticketing_basic') return;
+    try {
+      setApplyingPreset(true);
+
+      const { error: deleteError } = await supabase
+        .from('booking_form_fields')
+        .delete()
+        .eq('resource_id', resourceId);
+
+      if (deleteError) throw deleteError;
+
+      const { error: insertError } = await supabase.from('booking_form_fields').insert(
+        TICKETING_EVENT_FORM_PRESET_FIELDS.map((field) => ({
+          ...field,
+          resource_id: resourceId,
+        }))
+      );
+
+      if (insertError) throw insertError;
+
+      toast.success('Preset applied');
+      setShowPresetDialog(false);
+      fetchFields();
+    } catch (error: any) {
+      console.error('Error applying preset:', error);
+      toast.error(error.message || 'Failed to apply preset');
+    } finally {
+      setApplyingPreset(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
@@ -221,17 +273,49 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <CardTitle>Booking Form Fields</CardTitle>
               <CardDescription>
                 Customize the form customers fill when making a reservation
               </CardDescription>
             </div>
-            <Button onClick={() => openDialog()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Field
-            </Button>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+              {resourceType === 'event' && (
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Preset
+                    </Label>
+                    <Select
+                      value={selectedPreset}
+                      onValueChange={setSelectedPreset}
+                    >
+                      <SelectTrigger className="w-full md:w-64">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ticketing_basic">
+                          Ticketing / Event Registration (Basic)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPresetDialog(true)}
+                    disabled={applyingPreset}
+                  >
+                    Apply preset
+                  </Button>
+                </div>
+              )}
+              <Button onClick={() => openDialog()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Field
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -287,6 +371,37 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Preset confirmation dialog */}
+      <Dialog open={showPresetDialog} onOpenChange={setShowPresetDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply preset form?</DialogTitle>
+            <DialogDescription>
+              This will replace your current custom fields. Default contact fields (Name/Phone/Email) remain.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPresetDialog(false)}
+              disabled={applyingPreset}
+            >
+              Cancel
+            </Button>
+            <Button onClick={applyPreset} disabled={applyingPreset}>
+              {applyingPreset ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                'Apply'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Field Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -388,6 +503,22 @@ export default function FormBuilder({ resourceId }: FormBuilderProps) {
                 </p>
               </div>
             )}
+
+            {/* Validation textarea always shown for advanced users */}
+            <div className="space-y-2">
+              <Label htmlFor="validation">Validation (JSON)</Label>
+              <Textarea
+                id="validation"
+                value={formData.validation}
+                onChange={(e) => setFormData({ ...formData, validation: e.target.value })}
+                placeholder='{"min": 1, "max": 4}'
+                rows={4}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional validation rules (JSON). Example: {'{"min":1,"max":4}'}
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)} disabled={saving}>
