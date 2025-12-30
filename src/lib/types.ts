@@ -184,6 +184,7 @@ export interface Event {
   start_at: string;
   end_at: string;
   status: EventStatus;
+  slug?: string;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

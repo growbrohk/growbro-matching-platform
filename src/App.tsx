@@ -31,6 +31,7 @@ import BookingFormPreviewPage from "./pages/booking/BookingFormPreviewPage";
 // Public booking pages
 import PublicBook from "./pages/public/PublicBook";
 import PublicReservation from "./pages/public/PublicReservation";
+import PublicEventPage from "./pages/public/PublicEventPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 
@@ -207,6 +208,9 @@ function AppRoutes() {
       <Route path="/app/booking-v2/resources/:id" element={<Navigate to="/app/booking/resources/:id" replace />} />
       <Route path="/app/booking-v2/reservations" element={<Navigate to="/app/booking/reservations" replace />} />
       <Route path="/app/booking-v2/reservations/:id" element={<Navigate to="/app/booking/reservations/:id" replace />} />
+      
+      {/* Public Event Page - Must be after all reserved routes */}
+      <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />

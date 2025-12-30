@@ -1,6 +1,54 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Event, TicketType } from '@/lib/types';
 
+/**
+ * Convert a string to a URL-friendly slug
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove non-alphanumeric chars except spaces and hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+}
+
+/**
+ * Generate a unique slug for an event within an org
+ */
+async function generateUniqueEventSlug(orgId: string, title: string): Promise<string> {
+  const baseSlug = slugify(title) || 'event';
+  let finalSlug = baseSlug;
+  let counter = 0;
+
+  // Check for uniqueness and append counter if needed
+  while (true) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('slug', finalSlug)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // No existing event with this slug, we're good
+      break;
+    }
+
+    if (!error) {
+      // Slug exists, try next
+      counter++;
+      finalSlug = `${baseSlug}-${counter}`;
+    } else {
+      // Some other error, break and use current slug
+      break;
+    }
+  }
+
+  return finalSlug;
+}
+
 export interface CreateEventData {
   org_id: string;
   venue_org_id?: string | null;
@@ -77,6 +125,32 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     }
   }
 
+  // Generate and set slug if not already set
+  // Note: Using RPC or direct SQL since slug column may not be in types yet
+  try {
+    const { data: eventData } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .single();
+
+    const eventWithSlug = eventData as any;
+    if (!eventWithSlug?.slug) {
+      const generatedSlug = await generateUniqueEventSlug(data.org_id, data.title);
+      const { error: slugError } = await supabase
+        .from('events')
+        .update({ slug: generatedSlug } as any)
+        .eq('id', eventId);
+
+      if (slugError) {
+        console.warn('Failed to set event slug:', slugError);
+      }
+    }
+  } catch (err) {
+    // If slug column doesn't exist yet, skip (migration may not have run)
+    console.warn('Could not check/set slug:', err);
+  }
+
   // Fetch updated event
   const { data: updatedEvent, error: finalError } = await supabase
     .from('events')
@@ -88,7 +162,7 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     throw new Error(finalError.message || 'Failed to fetch updated event');
   }
 
-  return updatedEvent as Event;
+  return updatedEvent as Event & { slug?: string };
 }
 
 /**
@@ -233,5 +307,55 @@ export async function getTicketTypes(eventId: string): Promise<TicketType[]> {
   }
 
   return (data || []) as TicketType[];
+}
+
+/**
+ * Get organization by slug
+ */
+export async function getOrgBySlug(orgSlug: string) {
+  const { data, error } = await supabase
+    .from('orgs')
+    .select('*')
+    .eq('slug', orgSlug)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw new Error(error.message || 'Failed to fetch organization');
+  }
+
+  return data;
+}
+
+/**
+ * Get published event by org slug and event slug
+ * Used for public event pages
+ */
+export async function getPublicEventBySlugs(orgSlug: string, eventSlug: string): Promise<Event | null> {
+  // First, get the org by slug
+  const org = await getOrgBySlug(orgSlug);
+  if (!org) {
+    return null;
+  }
+
+  // Then, get the published event by org_id and slug
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('org_id', org.id)
+    .eq('slug', eventSlug)
+    .eq('status', 'published')
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw new Error(error.message || 'Failed to fetch event');
+  }
+
+  return data as Event;
 }
 

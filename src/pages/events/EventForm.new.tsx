@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Loader2, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -25,6 +25,7 @@ import {
   type CreateEventData,
   type CreateTicketTypeData 
 } from '@/lib/api/events';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Event, TicketType } from '@/lib/types';
 
 interface TicketTypeForm {
@@ -52,6 +53,8 @@ export default function EventForm() {
   const [endAt, setEndAt] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [venueOrgId, setVenueOrgId] = useState<string>('');
+  const [eventSlug, setEventSlug] = useState<string>('');
+  const [eventId, setEventId] = useState<string | null>(null);
 
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
@@ -100,6 +103,8 @@ export default function EventForm() {
         setEndAt(event.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '');
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setVenueOrgId(event.venue_org_id || '');
+        setEventSlug((event as any).slug || '');
+        setEventId(event.id);
 
         // Load ticket types
         const types = await getTicketTypes(id);
@@ -212,10 +217,19 @@ export default function EventForm() {
 
       let eventId: string;
 
+      let savedEventId: string;
+
       if (isEditMode && id) {
         // Update existing event
-        await updateEvent({ id, ...eventData });
-        eventId = id;
+        const updatedEvent = await updateEvent({ id, ...eventData });
+        savedEventId = id;
+        setEventId(id);
+        
+        // Fetch updated event to get slug
+        const refreshedEvent = await getEvent(id);
+        if (refreshedEvent) {
+          setEventSlug((refreshedEvent as any).slug || '');
+        }
 
         // Handle ticket types: delete removed ones, update existing, create new
         const currentIds = ticketTypes.filter(tt => tt.id).map(tt => tt.id!);
@@ -238,7 +252,7 @@ export default function EventForm() {
           } else {
             // Create new
             await createTicketType({
-              event_id: eventId,
+              event_id: savedEventId,
               name: tt.name.trim(),
               price: parseFloat(tt.price),
               quota: parseInt(tt.quota),
@@ -248,12 +262,16 @@ export default function EventForm() {
       } else {
         // Create new event
         const newEvent = await createEvent(eventData);
-        eventId = newEvent.id;
+        savedEventId = newEvent.id;
+        setEventId(newEvent.id);
+        
+        // Get slug from created event
+        setEventSlug((newEvent as any).slug || '');
 
         // Create ticket types
         for (const tt of ticketTypes) {
           await createTicketType({
-            event_id: eventId,
+            event_id: savedEventId,
             name: tt.name.trim(),
             price: parseFloat(tt.price),
             quota: parseInt(tt.quota),
@@ -594,7 +612,76 @@ export default function EventForm() {
 
         {showTicketTypesSection && <Separator />}
 
-        {/* Section 4: Publishing (Progressive Disclosure) */}
+        {/* Section 4: Share Link (shown if event has ID and slug) */}
+        {eventId && eventSlug && currentOrg?.slug && (
+          <>
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+                  Share Link
+                </h2>
+                <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Share this link to let customers purchase tickets
+                </p>
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}`}
+                        className="flex-1 font-mono text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                          try {
+                            await navigator.clipboard.writeText(url);
+                            toast({
+                              title: 'Copied!',
+                              description: 'Link copied to clipboard',
+                            });
+                          } catch (err) {
+                            toast({
+                              title: 'Error',
+                              description: 'Failed to copy link',
+                              variant: 'destructive',
+                            });
+                          }
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open
+                      </Button>
+                    </div>
+                    {status !== 'published' && (
+                      <p className="text-xs mt-3 text-muted-foreground">
+                        Note: This event is not public until it's published.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {/* Section 5: Publishing (Progressive Disclosure) */}
         {showPublishingSection ? (
           <div className="space-y-6">
             <div>
