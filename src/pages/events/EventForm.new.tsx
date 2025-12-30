@@ -34,6 +34,9 @@ interface TicketTypeForm {
   price: string;
   quota: string;
   isNew?: boolean;
+  visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
 }
 
 export default function EventForm() {
@@ -115,6 +118,9 @@ export default function EventForm() {
           price: t.price.toString(),
           quota: t.quota.toString(),
           isNew: false,
+          visibility_mode: t.visibility_mode || 'public',
+          access_code: t.access_code || null,
+          allowed_affiliates: t.allowed_affiliates || null,
         })));
 
         // Show sections if they have data
@@ -149,12 +155,24 @@ export default function EventForm() {
     }
   }, [ticketTypes.length]);
 
+  const generateAccessCode = (): string => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, {
       name: '',
       price: '',
       quota: '',
       isNew: true,
+      visibility_mode: 'public',
+      access_code: null,
+      allowed_affiliates: null,
     }]);
     setShowTicketTypesSection(true);
   };
@@ -170,10 +188,24 @@ export default function EventForm() {
     setTicketTypes(ticketTypes.filter((_, i) => i !== index));
   };
 
-  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string) => {
+  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null) => {
     setTicketTypes(ticketTypes.map((tt, i) => 
       i === index ? { ...tt, [field]: value } : tt
     ));
+  };
+
+  const handleGenerateCode = (index: number) => {
+    const code = generateAccessCode();
+    updateTicketTypeForm(index, 'access_code', code);
+  };
+
+  const handleAffiliatesChange = (index: number, value: string) => {
+    // Parse comma-separated values and trim whitespace
+    const affiliates = value
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    updateTicketTypeForm(index, 'allowed_affiliates', affiliates.length > 0 ? affiliates : null);
   };
 
   const canSubmit = () => {
@@ -271,6 +303,9 @@ export default function EventForm() {
               price: parseFloat(tt.price),
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
+              visibility_mode: tt.visibility_mode || 'public',
+              access_code: tt.access_code || null,
+              allowed_affiliates: tt.allowed_affiliates || null,
             });
           } else {
             // Create new
@@ -280,6 +315,9 @@ export default function EventForm() {
               price: parseFloat(tt.price),
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
+              visibility_mode: tt.visibility_mode || 'public',
+              access_code: tt.access_code || null,
+              allowed_affiliates: tt.allowed_affiliates || null,
             });
           }
         }
@@ -322,6 +360,9 @@ export default function EventForm() {
             price: parseFloat(tt.price),
             quota: parseInt(tt.quota),
             metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
+            visibility_mode: tt.visibility_mode || 'public',
+            access_code: tt.access_code || null,
+            allowed_affiliates: tt.allowed_affiliates || null,
           });
         }
       }
@@ -624,6 +665,127 @@ export default function EventForm() {
                           required
                           className="mt-1"
                         />
+                      </div>
+                    </div>
+
+                    {/* Access & Visibility Section */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <h3 className="text-sm font-medium mb-3" style={{ color: '#0F1F17' }}>
+                        Access & visibility
+                      </h3>
+                      <p className="text-xs mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        Who can see this ticket?
+                      </p>
+                      
+                      <div className="space-y-3">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`visibility-${index}`}
+                            value="public"
+                            checked={tt.visibility_mode === 'public' || !tt.visibility_mode}
+                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
+                            className="h-4 w-4"
+                          />
+                          <div>
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              Anyone (public)
+                            </div>
+                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              Visible to everyone on the public page
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`visibility-${index}`}
+                            value="code"
+                            checked={tt.visibility_mode === 'code'}
+                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
+                            className="h-4 w-4"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              People with link code
+                            </div>
+                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              Customers must open the link with ?code=XXXX
+                            </div>
+                            {tt.visibility_mode === 'code' && (
+                              <div className="mt-2 flex gap-2">
+                                <Input
+                                  type="text"
+                                  value={tt.access_code || ''}
+                                  onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
+                                  placeholder="Enter access code"
+                                  className="flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleGenerateCode(index)}
+                                >
+                                  Generate code
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`visibility-${index}`}
+                            value="affiliate"
+                            checked={tt.visibility_mode === 'affiliate'}
+                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
+                            className="h-4 w-4"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              Only via affiliate link
+                            </div>
+                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              Customers must open the link with ?ref=affiliateSlug
+                            </div>
+                            {tt.visibility_mode === 'affiliate' && (
+                              <div className="mt-2">
+                                <Textarea
+                                  value={tt.allowed_affiliates?.join(', ') || ''}
+                                  onChange={(e) => handleAffiliatesChange(index, e.target.value)}
+                                  placeholder="Enter allowed affiliate slugs (comma-separated, optional)"
+                                  rows={2}
+                                  className="text-sm"
+                                />
+                                <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                                  Leave blank to allow any affiliate. Enter specific slugs to restrict access.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </label>
+
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`visibility-${index}`}
+                            value="hidden"
+                            checked={tt.visibility_mode === 'hidden'}
+                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
+                            className="h-4 w-4"
+                          />
+                          <div>
+                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
+                              Hidden (not for sale)
+                            </div>
+                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                              This ticket won't appear on the public page
+                            </div>
+                          </div>
+                        </label>
                       </div>
                     </div>
                   </div>

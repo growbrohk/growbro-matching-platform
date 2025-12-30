@@ -197,6 +197,9 @@ export interface TicketType {
   price: number;
   quota: number;
   metadata: Record<string, any>;
+  visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
   created_at: string;
   updated_at: string;
 }

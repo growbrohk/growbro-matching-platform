@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -21,12 +21,17 @@ interface TicketSelection {
 
 export default function PublicEventPage() {
   const { orgSlug, eventSlug } = useParams<{ orgSlug: string; eventSlug: string }>();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
   const [org, setOrg] = useState<any>(null);
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [selections, setSelections] = useState<Record<string, number>>({});
   const [showContinueDialog, setShowContinueDialog] = useState(false);
+  
+  // Get query params
+  const codeParam = searchParams.get('code');
+  const refParam = searchParams.get('ref');
 
   // Reserved org slugs that should not be used
   const RESERVED_ORG_SLUGS = ['app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding', 'book', 'r'];
@@ -71,7 +76,7 @@ export default function PublicEventPage() {
       const types = await getTicketTypes(eventData.id);
       setTicketTypes(types);
 
-      // Initialize selections
+      // Initialize selections (will be filtered by visibility in render)
       const initialSelections: Record<string, number> = {};
       types.forEach(tt => {
         initialSelections[tt.id] = 0;
@@ -115,6 +120,45 @@ export default function PublicEventPage() {
     return { available: true };
   };
 
+  // Filter visible tickets
+  const visibleTicketTypes = ticketTypes.filter(tt => {
+    const visibilityMode = tt.visibility_mode || 'public';
+    
+    // Hidden tickets are never visible
+    if (visibilityMode === 'hidden') {
+      return false;
+    }
+    
+    // Public tickets are always visible
+    if (visibilityMode === 'public') {
+      return true;
+    }
+    
+    // Code-gated tickets require matching code
+    if (visibilityMode === 'code') {
+      return codeParam !== null && codeParam === tt.access_code;
+    }
+    
+    // Affiliate-gated tickets require ref param
+    if (visibilityMode === 'affiliate') {
+      if (!refParam) {
+        return false;
+      }
+      // If allowed_affiliates is set, ref must be in the list
+      if (tt.allowed_affiliates && tt.allowed_affiliates.length > 0) {
+        return tt.allowed_affiliates.includes(refParam);
+      }
+      // If allowed_affiliates is null/empty, any ref unlocks it
+      return true;
+    }
+    
+    return false;
+  });
+  
+  // Check if there are any code-only or affiliate-only tickets (for hint messages)
+  const hasCodeOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'code');
+  const hasAffiliateOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'affiliate');
+
   // Reset unavailable ticket quantities to 0
   useEffect(() => {
     if (!event || ticketTypes.length === 0) return;
@@ -125,10 +169,27 @@ export default function PublicEventPage() {
         let changed = false;
 
         ticketTypes.forEach(tt => {
-          const availability = isTicketAvailable(tt);
-          if (!availability.available && (prev[tt.id] || 0) > 0) {
-            updated[tt.id] = 0;
+          const visibilityMode = tt.visibility_mode || 'public';
+          const isVisible = visibilityMode === 'public' || 
+            (visibilityMode === 'code' && codeParam !== null && codeParam === tt.access_code) ||
+            (visibilityMode === 'affiliate' && refParam !== null && 
+              (!tt.allowed_affiliates || tt.allowed_affiliates.length === 0 || tt.allowed_affiliates.includes(refParam))) ||
+            (visibilityMode === 'hidden' && false);
+          
+          // Remove selections for invisible tickets
+          if (!isVisible && prev[tt.id] !== undefined) {
+            delete updated[tt.id];
             changed = true;
+            return;
+          }
+          
+          // Only check availability for visible tickets
+          if (isVisible) {
+            const availability = isTicketAvailable(tt);
+            if (!availability.available && (prev[tt.id] || 0) > 0) {
+              updated[tt.id] = 0;
+              changed = true;
+            }
           }
         });
 
@@ -142,7 +203,7 @@ export default function PublicEventPage() {
     const interval = setInterval(checkAndResetUnavailable, 60000);
     
     return () => clearInterval(interval);
-  }, [event, ticketTypes]);
+  }, [event, ticketTypes, codeParam, refParam]);
 
   const updateQuantity = (ticketTypeId: string, quantity: number) => {
     const ticketType = ticketTypes.find(tt => tt.id === ticketTypeId);
@@ -161,7 +222,7 @@ export default function PublicEventPage() {
   };
 
   const calculateSubtotal = (): number => {
-    return ticketTypes.reduce((total, tt) => {
+    return visibleTicketTypes.reduce((total, tt) => {
       const qty = selections[tt.id] || 0;
       return total + (tt.price * qty);
     }, 0);
@@ -186,8 +247,8 @@ export default function PublicEventPage() {
   };
 
   const hasSelections = () => {
-    // Only count selections for available tickets
-    return ticketTypes.some(tt => {
+    // Only count selections for visible and available tickets
+    return visibleTicketTypes.some(tt => {
       const availability = isTicketAvailable(tt);
       return availability.available && (selections[tt.id] || 0) > 0;
     });
@@ -264,60 +325,76 @@ export default function PublicEventPage() {
                 <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
                   Tickets
                 </p>
-                {ticketTypes.map((tt) => {
-                  const availability = isTicketAvailable(tt);
-                  const isUnavailable = !availability.available;
-                  
-                  return (
-                    <div
-                      key={tt.id}
-                      className={`border rounded-lg p-4 space-y-3 ${isUnavailable ? 'opacity-60' : ''}`}
-                      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
-                            {tt.name}
-                          </h3>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                              ${tt.price.toFixed(2)}
-                            </span>
-                            {tt.quota < 999999 && (
-                              <span className="text-xs text-muted-foreground">
-                                {tt.quota} available
+                {visibleTicketTypes.length > 0 ? (
+                  visibleTicketTypes.map((tt) => {
+                    const availability = isTicketAvailable(tt);
+                    const isUnavailable = !availability.available;
+                    
+                    return (
+                      <div
+                        key={tt.id}
+                        className={`border rounded-lg p-4 space-y-3 ${isUnavailable ? 'opacity-60' : ''}`}
+                        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
+                              {tt.name}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                                ${tt.price.toFixed(2)}
                               </span>
+                              {tt.quota < 999999 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {tt.quota} available
+                                </span>
+                              )}
+                            </div>
+                            {isUnavailable && (
+                              <p className="text-xs text-red-600 mt-1">
+                                {availability.reason || 'Unavailable'}
+                              </p>
                             )}
                           </div>
-                          {isUnavailable && (
-                            <p className="text-xs text-red-600 mt-1">
-                              {availability.reason || 'Unavailable'}
-                            </p>
-                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <label className="text-sm text-muted-foreground">Quantity:</label>
+                          <Select
+                            value={(selections[tt.id] || 0).toString()}
+                            onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
+                            disabled={isUnavailable}
+                          >
+                            <SelectTrigger className="w-24" disabled={isUnavailable}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[0, 1, 2, 3, 4].map((num) => (
+                                <SelectItem key={num} value={num.toString()}>
+                                  {num}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm text-muted-foreground">Quantity:</label>
-                        <Select
-                          value={(selections[tt.id] || 0).toString()}
-                          onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
-                          disabled={isUnavailable}
-                        >
-                          <SelectTrigger className="w-24" disabled={isUnavailable}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[0, 1, 2, 3, 4].map((num) => (
-                              <SelectItem key={num} value={num.toString()}>
-                                {num}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="border rounded-lg p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                    <p className="text-base font-medium mb-2" style={{ color: '#0F1F17' }}>
+                      No tickets available for this link.
+                    </p>
+                    <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      {!refParam && hasAffiliateOnlyTickets && (
+                        <p>Try an affiliate link (?ref=...)</p>
+                      )}
+                      {!codeParam && hasCodeOnlyTickets && (
+                        <p>Try a code (?code=...)</p>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -364,7 +441,7 @@ export default function PublicEventPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {ticketTypes
+            {visibleTicketTypes
               .filter(tt => (selections[tt.id] || 0) > 0)
               .map(tt => (
                 <div key={tt.id} className="flex justify-between items-center">

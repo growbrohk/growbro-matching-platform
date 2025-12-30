@@ -70,10 +70,16 @@ export interface CreateTicketTypeData {
   price: number;
   quota: number;
   metadata?: Record<string, any>;
+  visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
   id: string;
+  visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
 }
 
 /**
@@ -231,15 +237,29 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
     throw new Error(fetchError.message || 'Failed to fetch created ticket type');
   }
 
-  // Update metadata if provided
+  // Update metadata and visibility fields if provided
+  const updateFields: any = {};
   if (data.metadata && Object.keys(data.metadata).length > 0) {
+    updateFields.metadata = data.metadata;
+  }
+  if (data.visibility_mode !== undefined) {
+    updateFields.visibility_mode = data.visibility_mode;
+  }
+  if (data.access_code !== undefined) {
+    updateFields.access_code = data.access_code;
+  }
+  if (data.allowed_affiliates !== undefined) {
+    updateFields.allowed_affiliates = data.allowed_affiliates;
+  }
+
+  if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
       .from('ticket_types')
-      .update({ metadata: data.metadata })
+      .update(updateFields)
       .eq('id', ticketTypeId);
 
     if (updateError) {
-      console.warn('Failed to update ticket type metadata:', updateError);
+      console.warn('Failed to update ticket type fields:', updateError);
     }
 
     const { data: updatedTicketType, error: finalError } = await supabase
