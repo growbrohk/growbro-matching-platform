@@ -94,6 +94,11 @@ export default function PublicEventPage() {
   const isTicketAvailable = (tt: TicketType): { available: boolean; reason?: string } => {
     if (!event) return { available: false, reason: 'Event not found' };
 
+    // Manual admin-controlled toggle: if is_active is false, ticket is not available
+    if (tt.is_active === false) {
+      return { available: false, reason: 'Not on sale' };
+    }
+
     const now = new Date();
     const eventEndAt = new Date(event.end_at);
 
@@ -129,7 +134,7 @@ export default function PublicEventPage() {
       return false;
     }
     
-    // Public tickets are always visible
+    // Public tickets are always visible (even if inactive, they'll be shown as disabled)
     if (visibilityMode === 'public') {
       return true;
     }

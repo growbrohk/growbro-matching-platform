@@ -200,6 +200,7 @@ export interface TicketType {
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
 }

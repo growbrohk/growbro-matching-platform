@@ -73,6 +73,7 @@ export interface CreateTicketTypeData {
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  is_active?: boolean;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -80,6 +81,7 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  is_active?: boolean;
 }
 
 /**

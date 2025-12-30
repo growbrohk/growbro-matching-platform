@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
@@ -37,6 +38,7 @@ interface TicketTypeForm {
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  is_active?: boolean;
 }
 
 export default function EventForm() {
@@ -121,6 +123,7 @@ export default function EventForm() {
           visibility_mode: t.visibility_mode || 'public',
           access_code: t.access_code || null,
           allowed_affiliates: t.allowed_affiliates || null,
+          is_active: t.is_active !== undefined ? t.is_active : true,
         })));
 
         // Show sections if they have data
@@ -173,6 +176,7 @@ export default function EventForm() {
       visibility_mode: 'public',
       access_code: null,
       allowed_affiliates: null,
+      is_active: true,
     }]);
     setShowTicketTypesSection(true);
   };
@@ -188,7 +192,7 @@ export default function EventForm() {
     setTicketTypes(ticketTypes.filter((_, i) => i !== index));
   };
 
-  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null) => {
+  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean) => {
     setTicketTypes(ticketTypes.map((tt, i) => 
       i === index ? { ...tt, [field]: value } : tt
     ));
@@ -306,6 +310,7 @@ export default function EventForm() {
               visibility_mode: tt.visibility_mode || 'public',
               access_code: tt.access_code || null,
               allowed_affiliates: tt.allowed_affiliates || null,
+              is_active: tt.is_active !== undefined ? tt.is_active : true,
             });
           } else {
             // Create new
@@ -318,6 +323,7 @@ export default function EventForm() {
               visibility_mode: tt.visibility_mode || 'public',
               access_code: tt.access_code || null,
               allowed_affiliates: tt.allowed_affiliates || null,
+              is_active: tt.is_active !== undefined ? tt.is_active : true,
             });
           }
         }
@@ -363,6 +369,7 @@ export default function EventForm() {
             visibility_mode: tt.visibility_mode || 'public',
             access_code: tt.access_code || null,
             allowed_affiliates: tt.allowed_affiliates || null,
+            is_active: tt.is_active !== undefined ? tt.is_active : true,
           });
         }
       }
@@ -664,6 +671,25 @@ export default function EventForm() {
                           placeholder="100"
                           required
                           className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    {/* On Sale Toggle */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <Label htmlFor={`ticket-is-active-${index}`} className="text-sm font-medium">
+                            On sale
+                          </Label>
+                          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                            Turn off to hide this ticket from customers
+                          </p>
+                        </div>
+                        <Switch
+                          id={`ticket-is-active-${index}`}
+                          checked={tt.is_active !== undefined ? tt.is_active : true}
+                          onCheckedChange={(checked) => updateTicketTypeForm(index, 'is_active', checked)}
                         />
                       </div>
                     </div>
