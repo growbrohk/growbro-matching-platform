@@ -90,10 +90,10 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 md:space-y-6">
+    <div className={`w-full min-w-0 ${isEmbeddedInCatalog ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} space-y-4 md:space-y-6`}>
       {/* Header - Only show when NOT embedded in Catalog */}
       {!isEmbeddedInCatalog && (
-        <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
               Events & Ticketing
@@ -107,7 +107,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
             disabled={!canCreate}
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
             title="Create new event"
           >
             <Plus className="h-4 w-4" />
@@ -118,7 +118,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
 
       {/* Embedded header - Show when embedded in Catalog */}
       {isEmbeddedInCatalog && (
-        <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg sm:text-xl font-semibold truncate" style={{ color: '#0F1F17' }}>
               Events
@@ -129,7 +129,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
             disabled={!canCreate}
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             size="icon"
-            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
             title="Create new event"
           >
             <Plus className="h-4 w-4" />
@@ -160,11 +160,11 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full min-w-0">
           {events.map((event) => (
             <Card
               key={event.id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
+              className="cursor-pointer hover:shadow-md transition-shadow w-full min-w-0"
               onClick={() => navigate(`/app/events/${event.id}/edit`)}
             >
               <CardHeader>

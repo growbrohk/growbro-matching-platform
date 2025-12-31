@@ -30,7 +30,7 @@ export default function Catalog() {
   };
 
   return (
-    <div className="w-full max-w-full overflow-x-hidden">
+    <div className="w-full min-w-0 overflow-x-hidden">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <div className="sticky top-0 z-10 backdrop-blur-xl border-b" style={{
           borderColor: "rgba(14,122,58,0.12)",
@@ -45,19 +45,19 @@ export default function Catalog() {
           </div>
         </div>
 
-        <div className="w-full">
+        <div className="w-full min-w-0">
           <TabsContent value="products" className="mt-0">
             <DashboardProducts isEmbeddedInCatalog={true} />
           </TabsContent>
 
           <TabsContent value="events" className="mt-0">
-            <div className="px-4 py-6">
+            <div className="w-full min-w-0">
               <EventsList isEmbeddedInCatalog={true} />
             </div>
           </TabsContent>
 
           <TabsContent value="spaces" className="mt-0">
-            <div className="px-4 py-6">
+            <div className="w-full min-w-0">
               <ResourcesList typeFilter="space" />
             </div>
           </TabsContent>
