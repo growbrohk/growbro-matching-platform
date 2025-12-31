@@ -59,6 +59,7 @@ export default function EventForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instagramPostUrl, setInstagramPostUrl] = useState('');
+  const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
@@ -111,6 +112,7 @@ export default function EventForm() {
         setTitle(event.title || '');
         setDescription(event.description || '');
         setInstagramPostUrl(event.instagram_post_url || '');
+        setInstagramPreviewImageUrl(event.instagram_preview_image_url || '');
         setStartAt(event.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : '');
         setEndAt(event.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '');
         setStatus(event.status === 'published' ? 'published' : 'draft');
@@ -258,6 +260,7 @@ export default function EventForm() {
         title: title.trim(),
         description: description.trim() || undefined,
         instagram_post_url: instagramPostUrl.trim() || null,
+        instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
         start_at: new Date(startAt).toISOString(),
         end_at: new Date(endAt).toISOString(),
         venue_org_id: venueOrgId || null,
@@ -583,6 +586,22 @@ export default function EventForm() {
               value={instagramPostUrl}
               onChange={(e) => setInstagramPostUrl(e.target.value)}
               placeholder="https://www.instagram.com/p/..."
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Instagram preview photo (optional)
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Used for the small portrait preview in mobile header (4:5). Paste an image URL.
+            </p>
+            <Input
+              type="url"
+              value={instagramPreviewImageUrl}
+              onChange={(e) => setInstagramPreviewImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg"
               className="w-full"
             />
           </div>
@@ -1250,18 +1269,33 @@ export default function EventForm() {
                 >
                   {instagramPostUrl ? (
                     <>
-                      {/* Mobile: compact preview card that fits the right column */}
+                      {/* Mobile: 4:5 portrait thumbnail */}
                       <button
                         type="button"
-                        className="md:hidden w-full rounded-lg overflow-hidden border bg-muted/30"
+                        className="md:hidden w-full"
                         onClick={() => setShowIgFullscreen(true)}
-                        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
                       >
-                        <div className="text-[11px] px-2 py-1 text-left font-medium">
-                          Instagram
-                        </div>
-                        <div className="h-[120px] flex items-center justify-center text-[11px] text-muted-foreground">
-                          Tap to preview
+                        <div className="aspect-[4/5] w-full overflow-hidden rounded-lg">
+                          {instagramPreviewImageUrl ? (
+                            <img
+                              src={instagramPreviewImageUrl}
+                              alt="Instagram preview"
+                              className="w-full h-full object-cover object-center"
+                              onError={(e) => {
+                                // Fallback to placeholder if image fails to load
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  parent.innerHTML = '<div class="h-full flex items-center justify-center text-[11px] text-muted-foreground bg-muted/30">Add preview photo</div>';
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground bg-muted/30">
+                              Add preview photo
+                            </div>
+                          )}
                         </div>
                       </button>
 
