@@ -256,22 +256,25 @@ export default function PublicEventPage() {
     }, 0);
   };
 
-  const formatDate = (dateString: string) => {
+  // Format date as "Jan 4 (Sun)"
+  const formatEventDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${month} ${day} (${weekday})`;
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+  // Format time as "16:00–18:30" (24-hour format with en dash)
+  const formatEventTime = (startString: string, endString: string) => {
+    const formatTime = (date: Date) => {
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+    const start = new Date(startString);
+    const end = new Date(endString);
+    return `${formatTime(start)}–${formatTime(end)}`;
   };
 
   const hasSelections = () => {
@@ -327,14 +330,22 @@ export default function PublicEventPage() {
                   {org.name}
                 </p>
 
-                {/* Date & Time */}
-                <div className="space-y-1">
-                  <p className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                    {formatDate(event.start_at)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatTime(event.start_at)} - {formatTime(event.end_at)}
-                  </p>
+                {/* Date, Time, Location */}
+                <div className="space-y-1 break-words">
+                  <div>
+                    <span className="text-sm text-muted-foreground">Date:</span>{' '}
+                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>{formatEventDate(event.start_at)}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Time:</span>{' '}
+                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>{formatEventTime(event.start_at, event.end_at)}</span>
+                  </div>
+                  {event.location_text && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Location:</span>{' '}
+                      <span className="text-base font-medium" style={{ color: '#0F1F17' }}>{event.location_text}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
