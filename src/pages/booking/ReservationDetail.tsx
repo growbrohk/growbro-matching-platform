@@ -264,15 +264,15 @@ export default function ReservationDetail() {
                   {format(new Date(reservation.booking_slots.start_at), 'MMMM d, yyyy')}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {format(new Date(reservation.booking_slots.start_at), 'h:mm a')} -{' '}
-                  {format(new Date(reservation.booking_slots.end_at), 'h:mm a')}
+                  {format(new Date(reservation.booking_slots.start_at), 'HH:mm')} -{' '}
+                  {format(new Date(reservation.booking_slots.end_at), 'HH:mm')}
                 </p>
               </div>
             )}
             <div>
               <p className="text-sm text-muted-foreground">Created</p>
               <p className="font-medium">
-                {format(new Date(reservation.created_at), 'MMM d, yyyy h:mm a')}
+                {format(new Date(reservation.created_at), 'MMM d, yyyy HH:mm')}
               </p>
             </div>
           </CardContent>
@@ -335,7 +335,7 @@ export default function ReservationDetail() {
                 <div>
                   <p className="text-sm text-muted-foreground">Paid At</p>
                   <p className="font-medium">
-                    {format(new Date(paymentIntent.paid_at), 'MMM d, yyyy h:mm a')}
+                    {format(new Date(paymentIntent.paid_at), 'MMM d, yyyy HH:mm')}
                   </p>
                 </div>
               )}

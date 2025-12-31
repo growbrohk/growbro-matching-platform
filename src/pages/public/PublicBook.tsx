@@ -288,7 +288,7 @@ export default function PublicBook() {
                         >
                           <Clock className="h-4 w-4 mb-1" />
                           <div className="font-semibold">
-                            {format(new Date(slot.start_at), 'h:mm a')}
+                            {format(new Date(slot.start_at), 'HH:mm')}
                           </div>
                           <div className="text-xs opacity-75">
                             {slot.available} available

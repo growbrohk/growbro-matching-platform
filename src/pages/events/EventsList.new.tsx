@@ -57,13 +57,14 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+    const datePart = date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
     });
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${datePart} ${hours}:${minutes}`;
   };
 
   const getStatusColor = (status: string) => {

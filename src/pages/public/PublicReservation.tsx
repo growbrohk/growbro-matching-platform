@@ -224,8 +224,8 @@ export default function PublicReservation() {
                       {format(new Date(reservation.slot.start_at), 'EEEE, MMMM d, yyyy')}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(reservation.slot.start_at), 'h:mm a')} -{' '}
-                      {format(new Date(reservation.slot.end_at), 'h:mm a')}
+                      {format(new Date(reservation.slot.start_at), 'HH:mm')} -{' '}
+                      {format(new Date(reservation.slot.end_at), 'HH:mm')}
                     </p>
                   </div>
                 </div>
@@ -246,7 +246,7 @@ export default function PublicReservation() {
               <div>
                 <p className="text-sm text-muted-foreground">Booking Date</p>
                 <p className="font-medium">
-                  {format(new Date(reservation.created_at), 'MMM d, yyyy h:mm a')}
+                  {format(new Date(reservation.created_at), 'MMM d, yyyy HH:mm')}
                 </p>
               </div>
             </CardContent>
@@ -292,7 +292,7 @@ export default function PublicReservation() {
                       Please complete payment and submit proof below to confirm your booking.
                       {reservation.expires_at && (
                         <span className="block mt-1">
-                          Expires: {format(new Date(reservation.expires_at), 'MMM d, h:mm a')}
+                          Expires: {format(new Date(reservation.expires_at), 'MMM d, HH:mm')}
                         </span>
                       )}
                     </AlertDescription>

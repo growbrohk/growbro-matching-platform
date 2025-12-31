@@ -233,7 +233,7 @@ export default function ReservationsList() {
                         <div>
                           <p className="text-muted-foreground">Slot Time</p>
                           <p className="font-medium">
-                            {format(new Date(reservation.booking_slots.start_at), 'MMM d, h:mm a')}
+                            {format(new Date(reservation.booking_slots.start_at), 'MMM d, HH:mm')}
                           </p>
                         </div>
                       )}
