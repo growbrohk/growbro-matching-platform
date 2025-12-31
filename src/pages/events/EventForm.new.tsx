@@ -42,7 +42,7 @@ import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
-import { DateTime24Picker } from '@/components/ui/DateTime24Picker';
+import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 
 interface TicketTypeForm {
   id?: string;
@@ -793,10 +793,11 @@ export default function EventForm() {
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the start date and time
               </p>
-              <DateTime24Picker
+              <DateTimeRow24
                 value={startAt}
                 onChange={setStartAt}
                 disabled={false}
+                ariaLabel="Event start date and time"
                 className="w-full"
               />
             </div>
@@ -808,11 +809,12 @@ export default function EventForm() {
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the end date and time
               </p>
-              <DateTime24Picker
+              <DateTimeRow24
                 value={endAt}
                 onChange={setEndAt}
                 disabled={false}
                 min={startAt || undefined}
+                ariaLabel="Event end date and time"
                 className="w-full"
               />
             </div>
@@ -991,7 +993,7 @@ export default function EventForm() {
                                 <Label htmlFor={`available-start-${index}`} className="text-xs font-medium">
                                   Sales start
                                 </Label>
-                                <DateTime24Picker
+                                <DateTimeRow24
                                   id={`available-start-${index}`}
                                   value={tt.available_start_at || null}
                                   onChange={(date) => {
@@ -1003,6 +1005,7 @@ export default function EventForm() {
                                   }}
                                   disabled={tt.is_active === false}
                                   max={endAt || undefined}
+                                  ariaLabel="Sales start date and time"
                                   className="mt-1"
                                 />
                               </div>
@@ -1010,7 +1013,7 @@ export default function EventForm() {
                                 <Label htmlFor={`available-end-${index}`} className="text-xs font-medium">
                                   Sales end
                                 </Label>
-                                <DateTime24Picker
+                                <DateTimeRow24
                                   id={`available-end-${index}`}
                                   value={tt.available_end_at || null}
                                   onChange={(date) => {
@@ -1024,6 +1027,7 @@ export default function EventForm() {
                                   disabled={tt.is_active === false}
                                   min={tt.available_start_at || startAt || undefined}
                                   max={endAt || undefined}
+                                  ariaLabel="Sales end date and time"
                                   className="mt-1"
                                 />
                               </div>

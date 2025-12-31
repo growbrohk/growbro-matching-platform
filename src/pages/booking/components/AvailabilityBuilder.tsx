@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Time24Picker } from '@/components/ui/Time24Picker';
+import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
+import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -364,47 +366,81 @@ export default function AvailabilityBuilder({ resourceId }: AvailabilityBuilderP
               </div>
             )}
 
-            {formData.rule_type === 'one_off' && (
+            {formData.rule_type === 'one_off' ? (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  <Label htmlFor="start_datetime">Start Date & Time</Label>
+                  <DateTimeRow24
+                    id="start_datetime"
+                    value={
+                      formData.start_date && formData.start_time_local
+                        ? new Date(datetimeLocalToUTC(`${formData.start_date}T${formData.start_time_local}`))
+                        : null
+                    }
+                    onChange={(date) => {
+                      if (date) {
+                        // Convert UTC Date back to local datetime string
+                        const localStr = utcToDatetimeLocal(date.toISOString());
+                        const [datePart, timePart] = localStr.split('T');
+                        setFormData({
+                          ...formData,
+                          start_date: datePart || '',
+                          start_time_local: timePart || '09:00',
+                        });
+                      } else {
+                        setFormData({ ...formData, start_date: '', start_time_local: '09:00' });
+                      }
+                    }}
+                    ariaLabel="Start date and time"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={formData.end_date}
-                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                  <Label htmlFor="end_datetime">End Date & Time</Label>
+                  <DateTimeRow24
+                    id="end_datetime"
+                    value={
+                      formData.end_date && formData.end_time_local
+                        ? new Date(datetimeLocalToUTC(`${formData.end_date}T${formData.end_time_local}`))
+                        : null
+                    }
+                    onChange={(date) => {
+                      if (date) {
+                        // Convert UTC Date back to local datetime string
+                        const localStr = utcToDatetimeLocal(date.toISOString());
+                        const [datePart, timePart] = localStr.split('T');
+                        setFormData({
+                          ...formData,
+                          end_date: datePart || '',
+                          end_time_local: timePart || '17:00',
+                        });
+                      } else {
+                        setFormData({ ...formData, end_date: '', end_time_local: '17:00' });
+                      }
+                    }}
+                    ariaLabel="End date and time"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="start_time">Start Time</Label>
+                  <Time24Picker
+                    id="start_time"
+                    value={formData.start_time_local}
+                    onChange={(value) => setFormData({ ...formData, start_time_local: value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="end_time">End Time</Label>
+                  <Time24Picker
+                    id="end_time"
+                    value={formData.end_time_local}
+                    onChange={(value) => setFormData({ ...formData, end_time_local: value })}
                   />
                 </div>
               </div>
             )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="start_time">Start Time</Label>
-                <Time24Picker
-                  id="start_time"
-                  value={formData.start_time_local}
-                  onChange={(value) => setFormData({ ...formData, start_time_local: value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end_time">End Time</Label>
-                <Time24Picker
-                  id="end_time"
-                  value={formData.end_time_local}
-                  onChange={(value) => setFormData({ ...formData, end_time_local: value })}
-                />
-              </div>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="slot_duration">Slot Duration (minutes)</Label>
