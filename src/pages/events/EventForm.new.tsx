@@ -10,6 +10,13 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Plus, Trash2, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -956,226 +963,146 @@ export default function EventForm() {
 
                     {/* Available Time Section */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                      <h3 className="text-sm font-medium mb-3" style={{ color: '#0F1F17' }}>
-                        Available time
-                      </h3>
-                      <div className="space-y-3">
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`availability-${index}`}
-                            value="always"
-                            checked={tt.availability_mode === 'always' || !tt.availability_mode}
-                            onChange={(e) => updateTicketTypeForm(index, 'availability_mode', e.target.value as any)}
+                      <div className="flex items-start gap-4">
+                        <Label htmlFor={`availability-mode-${index}`} className="text-sm font-medium pt-2" style={{ width: '120px', flexShrink: 0 }}>
+                          Available time
+                        </Label>
+                        <div className="flex-1" style={{ maxWidth: '260px' }}>
+                          <Select
+                            value={tt.availability_mode || 'always'}
+                            onValueChange={(value) => updateTicketTypeForm(index, 'availability_mode', value as any)}
                             disabled={tt.is_active === false}
-                            className="h-4 w-4"
-                          />
-                          <div>
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              Always
-                            </div>
-                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              Available until the event ends
-                            </div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`availability-${index}`}
-                            value="scheduled"
-                            checked={tt.availability_mode === 'scheduled'}
-                            onChange={(e) => updateTicketTypeForm(index, 'availability_mode', e.target.value as any)}
-                            disabled={tt.is_active === false}
-                            className="h-4 w-4"
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              Schedule time
-                            </div>
-                            <div className="text-xs mb-3" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              Set specific start and end times for ticket sales
-                            </div>
-                            {tt.availability_mode === 'scheduled' && (
-                              <div className="space-y-3 mt-2">
-                                <div>
-                                  <Label htmlFor={`available-start-${index}`} className="text-xs font-medium">
-                                    Available from
-                                  </Label>
-                                  <Input
-                                    id={`available-start-${index}`}
-                                    type="datetime-local"
-                                    value={tt.available_start_at || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value || null;
-                                      updateTicketTypeForm(index, 'available_start_at', value);
-                                      // Validate: if end exists and new start >= end, clear end
-                                      if (value && tt.available_end_at && value >= tt.available_end_at) {
-                                        updateTicketTypeForm(index, 'available_end_at', null);
-                                      }
-                                    }}
-                                    disabled={tt.is_active === false}
-                                    max={endAt ? endAt.slice(0, 16) : undefined}
-                                    className="mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`available-end-${index}`} className="text-xs font-medium">
-                                    Available until
-                                  </Label>
-                                  <Input
-                                    id={`available-end-${index}`}
-                                    type="datetime-local"
-                                    value={tt.available_end_at || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value || null;
-                                      // Cap to event.end_at if provided
-                                      if (value && endAt && value > endAt.slice(0, 16)) {
-                                        updateTicketTypeForm(index, 'available_end_at', endAt.slice(0, 16));
-                                      } else {
-                                        updateTicketTypeForm(index, 'available_end_at', value);
-                                      }
-                                    }}
-                                    disabled={tt.is_active === false}
-                                    min={tt.available_start_at || (startAt ? startAt.slice(0, 16) : undefined)}
-                                    max={endAt ? endAt.slice(0, 16) : undefined}
-                                    className="mt-1"
-                                  />
-                                  {tt.available_end_at && endAt && tt.available_end_at > endAt.slice(0, 16) && (
-                                    <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                                      Note: Tickets stop selling automatically when the event ends.
-                                    </p>
-                                  )}
-                                </div>
+                          >
+                            <SelectTrigger id={`availability-mode-${index}`} className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="always">Always</SelectItem>
+                              <SelectItem value="scheduled">Scheduled</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {tt.availability_mode === 'scheduled' 
+                              ? 'Set specific start and end times for ticket sales'
+                              : 'Available until the event ends'}
+                          </p>
+                          {tt.availability_mode === 'scheduled' && (
+                            <div className="space-y-3 mt-3" style={{ marginLeft: '0' }}>
+                              <div>
+                                <Label htmlFor={`available-start-${index}`} className="text-xs font-medium">
+                                  Sales start
+                                </Label>
+                                <Input
+                                  id={`available-start-${index}`}
+                                  type="datetime-local"
+                                  value={tt.available_start_at || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value || null;
+                                    updateTicketTypeForm(index, 'available_start_at', value);
+                                    // Validate: if end exists and new start >= end, clear end
+                                    if (value && tt.available_end_at && value >= tt.available_end_at) {
+                                      updateTicketTypeForm(index, 'available_end_at', null);
+                                    }
+                                  }}
+                                  disabled={tt.is_active === false}
+                                  max={endAt ? endAt.slice(0, 16) : undefined}
+                                  className="mt-1"
+                                />
                               </div>
-                            )}
-                          </div>
-                        </label>
+                              <div>
+                                <Label htmlFor={`available-end-${index}`} className="text-xs font-medium">
+                                  Sales end
+                                </Label>
+                                <Input
+                                  id={`available-end-${index}`}
+                                  type="datetime-local"
+                                  value={tt.available_end_at || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value || null;
+                                    // Cap to event.end_at if provided
+                                    if (value && endAt && value > endAt.slice(0, 16)) {
+                                      updateTicketTypeForm(index, 'available_end_at', endAt.slice(0, 16));
+                                    } else {
+                                      updateTicketTypeForm(index, 'available_end_at', value);
+                                    }
+                                  }}
+                                  disabled={tt.is_active === false}
+                                  min={tt.available_start_at || (startAt ? startAt.slice(0, 16) : undefined)}
+                                  max={endAt ? endAt.slice(0, 16) : undefined}
+                                  className="mt-1"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs mt-3" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                        Tickets stop selling automatically when the event ends.
-                      </p>
                     </div>
 
                     {/* Access & Visibility Section */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                      <h3 className="text-sm font-medium mb-3" style={{ color: '#0F1F17' }}>
-                        Access & visibility
-                      </h3>
-                      <p className="text-xs mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                        Who can see this ticket?
-                      </p>
-                      
-                      <div className="space-y-3">
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`visibility-${index}`}
-                            value="public"
-                            checked={tt.visibility_mode === 'public' || !tt.visibility_mode}
-                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
-                            className="h-4 w-4"
-                          />
-                          <div>
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              Anyone (public)
+                      <div className="flex items-start gap-4">
+                        <Label htmlFor={`visibility-mode-${index}`} className="text-sm font-medium pt-2" style={{ width: '120px', flexShrink: 0 }}>
+                          Access & Visibility
+                        </Label>
+                        <div className="flex-1" style={{ maxWidth: '260px' }}>
+                          <Select
+                            value={tt.visibility_mode || 'public'}
+                            onValueChange={(value) => updateTicketTypeForm(index, 'visibility_mode', value as any)}
+                          >
+                            <SelectTrigger id={`visibility-mode-${index}`} className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="public">Public</SelectItem>
+                              <SelectItem value="code">Code</SelectItem>
+                              <SelectItem value="affiliate">Affiliate</SelectItem>
+                              <SelectItem value="hidden">Hidden</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {(() => {
+                              const mode = tt.visibility_mode || 'public';
+                              if (mode === 'public') return 'Visible to everyone on the public page';
+                              if (mode === 'code') return 'Only accessible with a link code';
+                              if (mode === 'affiliate') return 'Only accessible via affiliate links';
+                              if (mode === 'hidden') return 'Hidden from the public page';
+                              return 'Visible to everyone on the public page';
+                            })()}
+                          </p>
+                          {tt.visibility_mode === 'code' && (
+                            <div className="mt-3 flex gap-2" style={{ marginLeft: '0' }}>
+                              <Input
+                                type="text"
+                                value={tt.access_code || ''}
+                                onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
+                                placeholder="Enter access code"
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleGenerateCode(index)}
+                              >
+                                Generate code
+                              </Button>
                             </div>
-                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              Visible to everyone on the public page
+                          )}
+                          {tt.visibility_mode === 'affiliate' && (
+                            <div className="mt-3" style={{ marginLeft: '0' }}>
+                              <Textarea
+                                value={tt.allowed_affiliates?.join(', ') || ''}
+                                onChange={(e) => handleAffiliatesChange(index, e.target.value)}
+                                placeholder="Enter allowed affiliate slugs (comma-separated, optional)"
+                                rows={2}
+                                className="text-sm"
+                              />
+                              <p className="text-xs mt-1 text-muted-foreground">
+                                Leave blank to allow any affiliate. Enter specific slugs to restrict access.
+                              </p>
                             </div>
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`visibility-${index}`}
-                            value="code"
-                            checked={tt.visibility_mode === 'code'}
-                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
-                            className="h-4 w-4"
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              People with link code
-                            </div>
-                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              Customers must open the link with ?code=XXXX
-                            </div>
-                            {tt.visibility_mode === 'code' && (
-                              <div className="mt-2 flex gap-2">
-                                <Input
-                                  type="text"
-                                  value={tt.access_code || ''}
-                                  onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
-                                  placeholder="Enter access code"
-                                  className="flex-1"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleGenerateCode(index)}
-                                >
-                                  Generate code
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`visibility-${index}`}
-                            value="affiliate"
-                            checked={tt.visibility_mode === 'affiliate'}
-                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
-                            className="h-4 w-4"
-                          />
-                          <div className="flex-1">
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              Only via affiliate link
-                            </div>
-                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              Customers must open the link with ?ref=affiliateSlug
-                            </div>
-                            {tt.visibility_mode === 'affiliate' && (
-                              <div className="mt-2">
-                                <Textarea
-                                  value={tt.allowed_affiliates?.join(', ') || ''}
-                                  onChange={(e) => handleAffiliatesChange(index, e.target.value)}
-                                  placeholder="Enter allowed affiliate slugs (comma-separated, optional)"
-                                  rows={2}
-                                  className="text-sm"
-                                />
-                                <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                                  Leave blank to allow any affiliate. Enter specific slugs to restrict access.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </label>
-
-                        <label className="flex items-center space-x-3 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`visibility-${index}`}
-                            value="hidden"
-                            checked={tt.visibility_mode === 'hidden'}
-                            onChange={(e) => updateTicketTypeForm(index, 'visibility_mode', e.target.value as any)}
-                            className="h-4 w-4"
-                          />
-                          <div>
-                            <div className="font-medium text-sm" style={{ color: '#0F1F17' }}>
-                              Hidden (not for sale)
-                            </div>
-                            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              This ticket won't appear on the public page
-                            </div>
-                          </div>
-                        </label>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
