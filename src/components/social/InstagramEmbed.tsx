@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { ExternalLink } from 'lucide-react';
 
 interface InstagramEmbedProps {
   url: string | null | undefined;
@@ -10,9 +12,13 @@ interface InstagramEmbedProps {
  */
 export default function InstagramEmbed({ url }: InstagramEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
     if (!url || !containerRef.current) return;
+
+    // Reset fallback state
+    setShowFallback(false);
 
     // Clear any existing content
     containerRef.current.innerHTML = '';
@@ -39,11 +45,13 @@ export default function InstagramEmbed({ url }: InstagramEmbedProps) {
     const processEmbeds = () => {
       if (window.instgrm?.Embeds?.process) {
         window.instgrm.Embeds.process();
+        return true;
       }
+      return false;
     };
 
     // Try to process immediately
-    processEmbeds();
+    const immediateSuccess = processEmbeds();
 
     // Also process with a delay to ensure reliable rendering after modal opens
     const delayedProcess = setTimeout(() => {
@@ -52,22 +60,40 @@ export default function InstagramEmbed({ url }: InstagramEmbedProps) {
 
     // Wait for script to load if not already available
     let checkScriptInterval: NodeJS.Timeout | null = null;
-    if (!window.instgrm?.Embeds) {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    if (!window.instgrm?.Embeds && !immediateSuccess) {
       checkScriptInterval = setInterval(() => {
         if (window.instgrm?.Embeds) {
           processEmbeds();
+          // Clear interval on success
           if (checkScriptInterval) {
             clearInterval(checkScriptInterval);
+            checkScriptInterval = null;
+          }
+          // Clear timeout since we succeeded
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
           }
         }
       }, 100);
 
-      // Cleanup interval after 10 seconds
-      setTimeout(() => {
+      // Set timeout to show fallback after 5 seconds max
+      timeoutId = setTimeout(() => {
+        // If script still not loaded after 5 seconds, show fallback
+        if (!window.instgrm?.Embeds) {
+          setShowFallback(true);
+          if (containerRef.current) {
+            containerRef.current.innerHTML = '';
+          }
+        }
+        // Clear interval after timeout
         if (checkScriptInterval) {
           clearInterval(checkScriptInterval);
+          checkScriptInterval = null;
         }
-      }, 10000);
+      }, 5000); // 5 seconds max
     }
 
     // Cleanup function
@@ -77,6 +103,9 @@ export default function InstagramEmbed({ url }: InstagramEmbedProps) {
       }
       if (checkScriptInterval) {
         clearInterval(checkScriptInterval);
+      }
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
@@ -88,6 +117,26 @@ export default function InstagramEmbed({ url }: InstagramEmbedProps) {
     return (
       <div className="flex items-center justify-center h-64 border rounded-lg bg-muted/50" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <p className="text-sm text-muted-foreground">No Instagram post URL provided</p>
+      </div>
+    );
+  }
+
+  // Show fallback UI if embed failed to load after 5 seconds
+  if (showFallback) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 border rounded-lg bg-muted/50" style={{ borderColor: 'rgba(14,122,58,0.14)', minHeight: '200px' }}>
+        <p className="text-sm text-muted-foreground mb-4 text-center">
+          Instagram embed blocked. Open on Instagram
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+          className="flex items-center gap-2"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open on Instagram
+        </Button>
       </div>
     );
   }
