@@ -185,6 +185,7 @@ export interface Event {
   end_at: string;
   status: EventStatus;
   slug?: string;
+  location_text?: string | null;
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
   metadata: Record<string, any>;

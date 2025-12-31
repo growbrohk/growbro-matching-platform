@@ -53,6 +53,15 @@ export default function EventForm() {
   const { currentOrg, user } = useAuth();
   const { toast } = useToast();
 
+  // Helper to generate UUID v4
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const isEditMode = !!id;
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
@@ -66,7 +75,7 @@ export default function EventForm() {
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
-  const [venueOrgId, setVenueOrgId] = useState<string>('');
+  const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
 
@@ -75,7 +84,6 @@ export default function EventForm() {
   const [existingTicketTypes, setExistingTicketTypes] = useState<TicketType[]>([]);
 
   // Progressive disclosure states
-  const [showVenueSection, setShowVenueSection] = useState(false);
   const [showTicketTypesSection, setShowTicketTypesSection] = useState(false);
   const [showPublishingSection, setShowPublishingSection] = useState(false);
 
@@ -119,7 +127,7 @@ export default function EventForm() {
         setStartAt(event.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : '');
         setEndAt(event.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '');
         setStatus(event.status === 'published' ? 'published' : 'draft');
-        setVenueOrgId(event.venue_org_id || '');
+        setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
         setEventId(event.id);
 
@@ -142,7 +150,6 @@ export default function EventForm() {
         })));
 
         // Show sections if they have data
-        if (event.venue_org_id) setShowVenueSection(true);
         if (types.length > 0) setShowTicketTypesSection(true);
         setShowPublishingSection(true);
       } catch (error: any) {
@@ -234,11 +241,11 @@ export default function EventForm() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation: Check if eventId exists
-    if (!eventId || !currentOrg?.id) {
+    // Validation: Check if user and org exist
+    if (!user?.id || !currentOrg?.id) {
       toast({
         title: 'Error',
-        description: 'Please save the event first before uploading a preview photo',
+        description: 'Please sign in to upload preview photos',
         variant: 'destructive',
       });
       e.target.value = ''; // Clear file input
@@ -275,8 +282,16 @@ export default function EventForm() {
     else if (file.type === 'image/webp') ext = 'webp';
     else if (file.type === 'image/jpeg' || file.type === 'image/jpg') ext = 'jpg';
 
-    // Upload path: {orgId}/{eventId}/instagram-preview.{ext}
-    const uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
+    // Determine upload path based on whether eventId exists
+    let uploadPath: string;
+    if (eventId && currentOrg?.id) {
+      // Existing event: {orgId}/{eventId}/instagram-preview.{ext}
+      uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
+    } else {
+      // New event: temp/{userId}/{randomUUID}.{ext}
+      const randomUUID = generateUUID();
+      uploadPath = `temp/${user.id}/${randomUUID}.${ext}`;
+    }
 
     setUploadingPreview(true);
     try {
@@ -299,14 +314,16 @@ export default function EventForm() {
 
       const publicUrl = urlData.publicUrl;
 
-      // Update state
+      // Update state immediately
       setInstagramPreviewImageUrl(publicUrl);
 
-      // Persist immediately to database
-      await updateEvent({
-        id: eventId,
-        instagram_preview_image_url: publicUrl,
-      });
+      // If eventId exists, persist immediately to database
+      if (eventId) {
+        await updateEvent({
+          id: eventId,
+          instagram_preview_image_url: publicUrl,
+        });
+      }
 
       toast({
         title: 'Success',
@@ -389,7 +406,7 @@ export default function EventForm() {
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
         start_at: new Date(startAt).toISOString(),
         end_at: new Date(endAt).toISOString(),
-        venue_org_id: venueOrgId || null,
+        location_text: locationText.trim() || null,
         status: status,
         metadata: {},
       };
@@ -736,16 +753,11 @@ export default function EventForm() {
 
               {/* Upload Section */}
               <div className="space-y-2">
-                {!eventId && (
-                  <p className="text-xs text-muted-foreground">
-                    Save event first to upload preview photo
-                  </p>
-                )}
                 <div className="flex items-center gap-2">
                   <Input
                     type="file"
                     accept="image/*"
-                    disabled={!eventId || uploadingPreview}
+                    disabled={uploadingPreview}
                     onChange={handlePreviewImageUpload}
                     className="flex-1"
                   />
@@ -816,46 +828,25 @@ export default function EventForm() {
               />
             </div>
           </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Location
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              e.g., Koko Coffee @ G10, The Mills (optional)
+            </p>
+            <Input
+              type="text"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+              placeholder="e.g., Koko Coffee @ G10, The Mills"
+              className="w-full"
+            />
+          </div>
         </div>
 
         <Separator />
-
-        {/* Section 2: Venue (Progressive Disclosure) */}
-        {showVenueSection ? (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-                Where is this event taking place?
-              </h2>
-              <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                If this event is hosted at a venue, select the venue organization (optional)
-              </p>
-              <Input
-                type="text"
-                value={venueOrgId}
-                onChange={(e) => setVenueOrgId(e.target.value)}
-                placeholder="Venue organization ID (optional)"
-                className="w-full"
-              />
-              <p className="text-xs mt-2" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                Leave blank if this event is not at a specific venue
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowVenueSection(true)}
-              className="w-full"
-            >
-              + Add venue information (optional)
-            </Button>
-          </div>
-        )}
-
-        {showVenueSection && <Separator />}
 
         {/* Section 3: Ticket Types (Progressive Disclosure) */}
         {showTicketTypesSection ? (
@@ -1442,9 +1433,9 @@ export default function EventForm() {
                         </div>
                       </>
                     )}
-                    {venueOrgId && (
+                    {locationText && (
                       <div>
-                        <span className="font-medium">Location:</span> {venueOrgId}
+                        <span className="font-medium">Location:</span> {locationText}
                       </div>
                     )}
                   </div>

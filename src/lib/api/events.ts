@@ -57,6 +57,7 @@ export interface CreateEventData {
   start_at: string;
   end_at: string;
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
+  location_text?: string | null;
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
   metadata?: Record<string, any>;
@@ -120,13 +121,16 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     throw new Error(fetchError.message || 'Failed to fetch created event');
   }
 
-  // Update status, description, instagram_post_url, and instagram_preview_image_url if provided
+  // Update status, description, location_text, instagram_post_url, and instagram_preview_image_url if provided
   const updateFields: any = {};
   if (data.status && data.status !== 'draft') {
     updateFields.status = data.status;
   }
   if (data.description) {
     updateFields.description = data.description;
+  }
+  if (data.location_text !== undefined) {
+    updateFields.location_text = data.location_text;
   }
   if (data.instagram_post_url !== undefined) {
     updateFields.instagram_post_url = data.instagram_post_url;
