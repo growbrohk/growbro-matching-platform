@@ -33,6 +33,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Upload, X } from 'lucide-react';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
+import PublicEventForm from '@/components/events/PublicEventForm';
+import { datetimeLocalToUTC } from '@/lib/utils/datetime';
 
 interface TicketTypeForm {
   id?: string;
@@ -619,26 +621,6 @@ export default function EventForm() {
       </div>
     );
   }
-
-  const formatPreviewDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const formatPreviewTime = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
 
   const isQuotaUnlimited = (quota: string) => {
     const num = parseInt(quota);
@@ -1248,7 +1230,7 @@ export default function EventForm() {
                     <div className="flex items-center gap-2">
                       <Input
                         readOnly
-                        value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}`}
+                        value={`https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`}
                         className="flex-1 font-mono text-sm"
                       />
                       <Button
@@ -1256,7 +1238,7 @@ export default function EventForm() {
                         variant="outline"
                         size="sm"
                         onClick={async () => {
-                          const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                          const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
                           try {
                             await navigator.clipboard.writeText(url);
                             toast({
@@ -1280,7 +1262,7 @@ export default function EventForm() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                          const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
                           window.open(url, '_blank');
                         }}
                       >
@@ -1384,124 +1366,58 @@ export default function EventForm() {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-0">
             <DialogTitle className="text-2xl">Event Preview</DialogTitle>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto">
-            <div className="space-y-6 py-4">
-              {/* Header: Always 2 columns (even on mobile) */}
-              <div className="grid grid-cols-[1fr_160px] md:grid-cols-[2fr_1fr] gap-4 items-start">
-                {/* Left Column: Title + Date/Time + Venue */}
-                <div className="min-w-0">
-                  {/* Title */}
-                  <h2 className="text-2xl md:text-3xl font-bold mb-3 break-words" style={{ color: '#0F1F17' }}>
-                    {title.trim() || 'Event Title'}
-                  </h2>
-
-                  {/* Compact Meta Info */}
-                  <div className="space-y-1 text-sm break-words" style={{ color: '#0F1F17' }}>
-                    {startAt && endAt && (
-                      <>
-                        <div>
-                          <span className="font-medium">Date:</span>{' '}
-                          {(() => {
-                            const date = new Date(startAt);
-                            const month = date.toLocaleDateString('en-US', { month: 'short' });
-                            const day = date.getDate();
-                            const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-                            return `${month} ${day} (${weekday})`;
-                          })()}
-                        </div>
-                        <div>
-                          <span className="font-medium">Time:</span>{' '}
-                          {(() => {
-                            const start = new Date(startAt);
-                            const end = new Date(endAt);
-                            const startTime = start.toLocaleTimeString('en-US', { 
-                              hour: '2-digit', 
-                              minute: '2-digit',
-                              hour12: false 
-                            });
-                            const endTime = end.toLocaleTimeString('en-US', { 
-                              hour: '2-digit', 
-                              minute: '2-digit',
-                              hour12: false 
-                            });
-                            return `${startTime}–${endTime}`;
-                          })()}
-                        </div>
-                      </>
-                    )}
-                    {locationText && (
-                      <div>
-                        <span className="font-medium">Location:</span> {locationText}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column: Instagram Embed Panel */}
-                <EventMediaBlock 
-                  previewImageUrl={instagramPreviewImageUrl}
-                  instagramPostUrl={instagramPostUrl}
-                  mode="preview"
-                />
+          <div className="flex-1 overflow-y-auto px-6 pb-6">
+            {currentOrg && title.trim() && startAt && endAt ? (
+              <PublicEventForm
+                event={{
+                  id: eventId || generateUUID(),
+                  org_id: currentOrg.id,
+                  title: title.trim(),
+                  description: description || '',
+                  start_at: datetimeLocalToUTC(startAt),
+                  end_at: datetimeLocalToUTC(endAt),
+                  status: 'published',
+                  location_text: locationText || null,
+                  instagram_post_url: instagramPostUrl || null,
+                  instagram_preview_image_url: instagramPreviewImageUrl || null,
+                  metadata: {},
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }}
+                org={{
+                  id: currentOrg.id,
+                  name: currentOrg.name,
+                  slug: currentOrg?.slug,
+                }}
+                ticketTypes={ticketTypes.map((tt, index) => ({
+                  id: tt.id || `preview-${index}`,
+                  event_id: eventId || generateUUID(),
+                  name: tt.name.trim() || `Ticket Type ${index + 1}`,
+                  price: parseFloat(tt.price) || 0,
+                  quota: isQuotaUnlimited(tt.quota) ? 999999 : parseInt(tt.quota) || 0,
+                  visibility_mode: tt.visibility_mode || 'public',
+                  access_code: tt.access_code || null,
+                  allowed_affiliates: tt.allowed_affiliates || null,
+                  is_active: tt.is_active !== undefined ? tt.is_active : true,
+                  availability_mode: tt.availability_mode || 'always',
+                  available_start_at: tt.available_start_at ? datetimeLocalToUTC(tt.available_start_at) : null,
+                  available_end_at: tt.available_end_at ? datetimeLocalToUTC(tt.available_end_at) : null,
+                  metadata: {},
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }))}
+                mode="preview"
+              />
+            ) : (
+              <div className="py-8 text-center text-muted-foreground">
+                Please fill in the event title, start date, and end date to preview.
               </div>
-
-              {/* Body: Full width below header */}
-              <div className="space-y-6">
-                {/* Description */}
-                <EventDescription text={description} initialWordLimit={50} />
-
-                {/* Ticket Types */}
-                {ticketTypes.length > 0 && (
-                  <div className="space-y-4">
-                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      Ticket Types
-                    </p>
-                    <div className="space-y-3">
-                      {ticketTypes.map((tt, index) => (
-                        <div
-                          key={index}
-                          className="border rounded-lg p-4"
-                          style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-lg mb-1" style={{ color: '#0F1F17' }}>
-                                {tt.name.trim() || `Ticket Type ${index + 1}`}
-                              </h3>
-                              <div className="flex items-center gap-4 mt-2">
-                                <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                                  ${parseFloat(tt.price) || 0}.00
-                                </span>
-                                <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                                  {isQuotaUnlimited(tt.quota) ? 'Unlimited' : `${tt.quota || 0} available`}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* CTA Button */}
-                <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                  <Button
-                    type="button"
-                    disabled
-                    className="w-full"
-                    style={{ backgroundColor: '#0E7A3A', opacity: 0.6 }}
-                  >
-                    Get Tickets
-                  </Button>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

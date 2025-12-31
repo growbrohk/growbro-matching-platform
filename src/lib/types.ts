@@ -22,6 +22,7 @@ export type PricingModel = 'fixed' | 'revenue_share';
 export interface Org {
   id: string;
   name: string;
+  slug?: string;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

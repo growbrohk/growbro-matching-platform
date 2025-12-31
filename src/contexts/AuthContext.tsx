@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface Org {
   id: string;
   name: string;
+  slug?: string;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
