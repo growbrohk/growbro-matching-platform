@@ -28,6 +28,7 @@ export default function PublicEventPage() {
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [selections, setSelections] = useState<Record<string, number>>({});
   const [showContinueDialog, setShowContinueDialog] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   
   // Get query params
   const codeParam = searchParams.get('code');
@@ -280,6 +281,18 @@ export default function PublicEventPage() {
     });
   };
 
+  // Helper function to process description for expand/collapse
+  const processDescription = (description: string) => {
+    const trimmed = description.trim();
+    if (!trimmed) return { words: [], isLong: false, preview: '', full: '' };
+    
+    const words = trimmed.split(/\s+/);
+    const isLong = words.length > 50;
+    const preview = words.slice(0, 50).join(' ');
+    
+    return { words, isLong, preview, full: trimmed };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
@@ -334,16 +347,32 @@ export default function PublicEventPage() {
 
           <CardContent className="space-y-6">
             {/* Description */}
-            {event.description && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                  Description
-                </p>
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                  {event.description}
-                </p>
-              </div>
-            )}
+            {event.description && (() => {
+              const { isLong, preview, full } = processDescription(event.description);
+              const displayText = descExpanded ? full : (isLong ? preview : full);
+              
+              return (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                    Description
+                  </p>
+                  <div className={`text-sm whitespace-pre-wrap text-muted-foreground ${descExpanded ? 'max-h-[240px] overflow-auto md:max-h-none md:overflow-visible' : ''}`}>
+                    {displayText}
+                    {isLong && !descExpanded && '…'}
+                  </div>
+                  {isLong && (
+                    <Button
+                      variant="link"
+                      onClick={() => setDescExpanded(!descExpanded)}
+                      className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                      style={{ color: 'rgba(15,31,23,0.72)' }}
+                    >
+                      {descExpanded ? 'Show less' : 'Read more'}
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Tickets Section */}
             {ticketTypes.length > 0 && (
