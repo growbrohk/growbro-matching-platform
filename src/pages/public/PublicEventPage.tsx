@@ -13,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import EventDescription from '@/components/events/EventDescription';
+import EventMediaBlock from '@/components/events/EventMediaBlock';
 
 interface TicketSelection {
   ticketTypeId: string;
@@ -28,7 +30,6 @@ export default function PublicEventPage() {
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [selections, setSelections] = useState<Record<string, number>>({});
   const [showContinueDialog, setShowContinueDialog] = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
   
   // Get query params
   const codeParam = searchParams.get('code');
@@ -281,18 +282,6 @@ export default function PublicEventPage() {
     });
   };
 
-  // Helper function to process description for expand/collapse
-  const processDescription = (description: string) => {
-    const trimmed = description.trim();
-    if (!trimmed) return { words: [], isLong: false, preview: '', full: '' };
-    
-    const words = trimmed.split(/\s+/);
-    const isLong = words.length > 50;
-    const preview = words.slice(0, 50).join(' ');
-    
-    return { words, isLong, preview, full: trimmed };
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
@@ -324,55 +313,54 @@ export default function PublicEventPage() {
       <div className="max-w-2xl mx-auto">
         <Card className="rounded-2xl">
           <CardHeader className="space-y-4 pb-6">
-            {/* Event Title */}
-            <h1 className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
-              {event.title}
-            </h1>
+            {/* Header: Title + Meta on left, Media on right */}
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-6">
+              {/* Left Column: Title and Meta */}
+              <div className="space-y-4 min-w-0">
+                {/* Event Title */}
+                <h1 className="text-3xl font-bold" style={{ color: '#0F1F17' }}>
+                  {event.title}
+                </h1>
 
-            {/* Org Name */}
-            <p className="text-sm text-muted-foreground">
-              {org.name}
-            </p>
+                {/* Org Name */}
+                <p className="text-sm text-muted-foreground">
+                  {org.name}
+                </p>
 
-            {/* Date & Time */}
-            <div className="space-y-1">
-              <p className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                {formatDate(event.start_at)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {formatTime(event.start_at)} - {formatTime(event.end_at)}
-              </p>
+                {/* Date & Time */}
+                <div className="space-y-1">
+                  <p className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                    {formatDate(event.start_at)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatTime(event.start_at)} - {formatTime(event.end_at)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Column: Instagram Media Block */}
+              <div className="hidden md:block">
+                <EventMediaBlock 
+                  previewImageUrl={event.instagram_preview_image_url} 
+                  instagramPostUrl={event.instagram_post_url}
+                  mode="public"
+                />
+              </div>
+            </div>
+
+            {/* Mobile: Media Block below header */}
+            <div className="md:hidden">
+              <EventMediaBlock 
+                previewImageUrl={event.instagram_preview_image_url} 
+                instagramPostUrl={event.instagram_post_url}
+                mode="public"
+              />
             </div>
           </CardHeader>
 
           <CardContent className="space-y-6">
             {/* Description */}
-            {event.description && (() => {
-              const { isLong, preview, full } = processDescription(event.description);
-              const displayText = descExpanded ? full : (isLong ? preview : full);
-              
-              return (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                    Description
-                  </p>
-                  <div className={`text-sm whitespace-pre-wrap text-muted-foreground ${descExpanded ? 'max-h-[240px] overflow-auto md:max-h-none md:overflow-visible' : ''}`}>
-                    {displayText}
-                    {isLong && !descExpanded && '…'}
-                  </div>
-                  {isLong && (
-                    <Button
-                      variant="link"
-                      onClick={() => setDescExpanded(!descExpanded)}
-                      className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                      style={{ color: 'rgba(15,31,23,0.72)' }}
-                    >
-                      {descExpanded ? 'Show less' : 'Read more'}
-                    </Button>
-                  )}
-                </div>
-              );
-            })()}
+            <EventDescription text={event.description} initialWordLimit={50} />
 
             {/* Tickets Section */}
             {ticketTypes.length > 0 && (

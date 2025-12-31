@@ -31,6 +31,8 @@ import type { Event, TicketType } from '@/lib/types';
 import InstagramEmbed from '@/components/social/InstagramEmbed';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload, X } from 'lucide-react';
+import EventDescription from '@/components/events/EventDescription';
+import EventMediaBlock from '@/components/events/EventMediaBlock';
 
 interface TicketTypeForm {
   id?: string;
@@ -89,7 +91,6 @@ export default function EventForm() {
 
   // Preview dialog state
   const [showPreview, setShowPreview] = useState(false);
-  const [showIgFullscreen, setShowIgFullscreen] = useState(false);
 
   // Load event data if editing
   useEffect(() => {
@@ -1442,70 +1443,17 @@ export default function EventForm() {
                 </div>
 
                 {/* Right Column: Instagram Embed Panel */}
-                <div
-                  className="rounded-xl border bg-white p-2"
-                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                >
-                  {instagramPostUrl ? (
-                    <>
-                      {/* Mobile: 4:5 portrait thumbnail */}
-                      <button
-                        type="button"
-                        className="md:hidden w-full"
-                        onClick={() => setShowIgFullscreen(true)}
-                      >
-                        <div className="aspect-[4/5] w-full overflow-hidden rounded-lg">
-                          {instagramPreviewImageUrl ? (
-                            <img
-                              src={instagramPreviewImageUrl}
-                              alt="Instagram preview"
-                              className="w-full h-full object-cover object-center"
-                              onError={(e) => {
-                                // Fallback to placeholder if image fails to load
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  parent.innerHTML = '<div class="h-full flex items-center justify-center text-[11px] text-muted-foreground bg-muted/30">Add preview photo</div>';
-                                }
-                              }}
-                            />
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground bg-muted/30">
-                              Add preview photo
-                            </div>
-                          )}
-                        </div>
-                      </button>
-
-                      {/* Desktop: full embed */}
-                      <div className="hidden md:block max-h-[520px] overflow-auto">
-                        <div className="w-full overflow-hidden">
-                          <InstagramEmbed url={instagramPostUrl} />
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center min-h-[200px]">
-                      <p className="text-xs text-muted-foreground text-center">No Instagram post</p>
-                    </div>
-                  )}
-                </div>
+                <EventMediaBlock 
+                  previewImageUrl={instagramPreviewImageUrl}
+                  instagramPostUrl={instagramPostUrl}
+                  mode="preview"
+                />
               </div>
 
               {/* Body: Full width below header */}
               <div className="space-y-6">
                 {/* Description */}
-                {description.trim() && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      Description
-                    </p>
-                    <p className="text-base whitespace-pre-wrap break-words" style={{ color: '#0F1F17' }}>
-                      {description.trim()}
-                    </p>
-                  </div>
-                )}
+                <EventDescription text={description} initialWordLimit={50} />
 
                 {/* Ticket Types */}
                 {ticketTypes.length > 0 && (
@@ -1558,19 +1506,6 @@ export default function EventForm() {
         </DialogContent>
       </Dialog>
 
-      {/* Instagram Fullscreen Dialog */}
-      <Dialog open={showIgFullscreen} onOpenChange={setShowIgFullscreen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Instagram Preview</DialogTitle>
-          </DialogHeader>
-          {instagramPostUrl ? (
-            <InstagramEmbed url={instagramPostUrl} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No Instagram post</p>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
