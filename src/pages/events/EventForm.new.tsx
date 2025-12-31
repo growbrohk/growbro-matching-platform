@@ -1202,9 +1202,9 @@ export default function EventForm() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
               {/* Left Column: Event Info + Ticket Types */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="md:col-span-2 order-2 md:order-1 space-y-6">
                 {/* Title */}
                 <div>
                   <h2 className="text-3xl font-bold mb-2" style={{ color: '#0F1F17' }}>
@@ -1299,13 +1299,14 @@ export default function EventForm() {
               </div>
 
               {/* Right Column: Instagram Embed */}
-              <div className="lg:col-span-1">
+              <div className="md:col-span-1 order-1 md:order-2">
                 <div className="sticky top-0">
                   <div 
                     className="border rounded-lg p-4 bg-white"
                     style={{ 
                       borderColor: 'rgba(14,122,58,0.14)',
-                      maxHeight: 'calc(90vh - 120px)',
+                      minHeight: '320px',
+                      maxHeight: '520px',
                       overflowY: 'auto'
                     }}
                   >

@@ -35,24 +35,49 @@ export default function InstagramEmbed({ url }: InstagramEmbedProps) {
     blockquote.appendChild(link);
     containerRef.current.appendChild(blockquote);
 
-    // Process embeds if script is already loaded
-    if (window.instgrm && window.instgrm.Embeds) {
-      window.instgrm.Embeds.process();
-    } else {
-      // Wait for script to load if not already available
-      const checkScript = setInterval(() => {
-        if (window.instgrm && window.instgrm.Embeds) {
-          window.instgrm.Embeds.process();
-          clearInterval(checkScript);
+    // Process embeds immediately if script is already loaded
+    const processEmbeds = () => {
+      if (window.instgrm?.Embeds?.process) {
+        window.instgrm.Embeds.process();
+      }
+    };
+
+    // Try to process immediately
+    processEmbeds();
+
+    // Also process with a delay to ensure reliable rendering after modal opens
+    const delayedProcess = setTimeout(() => {
+      processEmbeds();
+    }, 450); // 450ms delay (middle of 300-600ms range)
+
+    // Wait for script to load if not already available
+    let checkScriptInterval: NodeJS.Timeout | null = null;
+    if (!window.instgrm?.Embeds) {
+      checkScriptInterval = setInterval(() => {
+        if (window.instgrm?.Embeds) {
+          processEmbeds();
+          if (checkScriptInterval) {
+            clearInterval(checkScriptInterval);
+          }
         }
       }, 100);
 
       // Cleanup interval after 10 seconds
-      setTimeout(() => clearInterval(checkScript), 10000);
+      setTimeout(() => {
+        if (checkScriptInterval) {
+          clearInterval(checkScriptInterval);
+        }
+      }, 10000);
     }
 
     // Cleanup function
     return () => {
+      if (delayedProcess) {
+        clearTimeout(delayedProcess);
+      }
+      if (checkScriptInterval) {
+        clearInterval(checkScriptInterval);
+      }
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
