@@ -1402,40 +1402,52 @@ export default function EventForm() {
               {/* Header: Always 2 columns (even on mobile) */}
               <div className="grid grid-cols-[1fr_160px] md:grid-cols-[2fr_1fr] gap-4 items-start">
                 {/* Left Column: Title + Date/Time + Venue */}
-                <div className="space-y-4 min-w-0">
+                <div className="min-w-0">
                   {/* Title */}
-                  <div>
-                    <h2 className="text-2xl md:text-3xl font-bold mb-2 break-words" style={{ color: '#0F1F17' }}>
-                      {title.trim() || 'Event Title'}
-                    </h2>
+                  <h2 className="text-2xl md:text-3xl font-bold mb-3 break-words" style={{ color: '#0F1F17' }}>
+                    {title.trim() || 'Event Title'}
+                  </h2>
+
+                  {/* Compact Meta Info */}
+                  <div className="space-y-1 text-sm break-words" style={{ color: '#0F1F17' }}>
+                    {startAt && endAt && (
+                      <>
+                        <div>
+                          <span className="font-medium">Date:</span>{' '}
+                          {(() => {
+                            const date = new Date(startAt);
+                            const month = date.toLocaleDateString('en-US', { month: 'short' });
+                            const day = date.getDate();
+                            const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+                            return `${month} ${day} (${weekday})`;
+                          })()}
+                        </div>
+                        <div>
+                          <span className="font-medium">Time:</span>{' '}
+                          {(() => {
+                            const start = new Date(startAt);
+                            const end = new Date(endAt);
+                            const startTime = start.toLocaleTimeString('en-US', { 
+                              hour: '2-digit', 
+                              minute: '2-digit',
+                              hour12: false 
+                            });
+                            const endTime = end.toLocaleTimeString('en-US', { 
+                              hour: '2-digit', 
+                              minute: '2-digit',
+                              hour12: false 
+                            });
+                            return `${startTime}–${endTime}`;
+                          })()}
+                        </div>
+                      </>
+                    )}
+                    {venueOrgId && (
+                      <div>
+                        <span className="font-medium">Location:</span> {venueOrgId}
+                      </div>
+                    )}
                   </div>
-
-                  {/* Date & Time */}
-                  {startAt && endAt && (
-                    <div className="space-y-1">
-                      <p className="text-xs md:text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                        Date & Time
-                      </p>
-                      <p className="text-base md:text-lg break-words" style={{ color: '#0F1F17' }}>
-                        {formatPreviewDate(startAt)}
-                      </p>
-                      <p className="text-xs md:text-sm break-words" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                        {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Venue */}
-                  {venueOrgId && (
-                    <div className="space-y-1">
-                      <p className="text-xs md:text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                        Venue
-                      </p>
-                      <p className="text-base md:text-lg break-words" style={{ color: '#0F1F17' }}>
-                        {venueOrgId}
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Right Column: Instagram Embed Panel */}
