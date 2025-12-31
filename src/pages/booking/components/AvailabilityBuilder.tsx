@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Time24Picker } from '@/components/ui/Time24Picker';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -389,20 +390,18 @@ export default function AvailabilityBuilder({ resourceId }: AvailabilityBuilderP
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="start_time">Start Time</Label>
-                <Input
+                <Time24Picker
                   id="start_time"
-                  type="time"
                   value={formData.start_time_local}
-                  onChange={(e) => setFormData({ ...formData, start_time_local: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, start_time_local: value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="end_time">End Time</Label>
-                <Input
+                <Time24Picker
                   id="end_time"
-                  type="time"
                   value={formData.end_time_local}
-                  onChange={(e) => setFormData({ ...formData, end_time_local: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, end_time_local: value })}
                 />
               </div>
             </div>

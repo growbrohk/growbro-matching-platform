@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Time24Picker } from '@/components/ui/Time24Picker';
 import React from 'react';
 
 interface Field {
@@ -84,7 +85,7 @@ function FieldInput({ field, baseProps }: { field: Field; baseProps: any }) {
     case 'date':
       return <Input type="date" {...baseProps} />;
     case 'time':
-      return <Input type="time" {...baseProps} />;
+      return <Time24Picker value={baseProps.value || "00:00"} onChange={() => {}} disabled={true} className={baseProps.className} id={baseProps.id} />;
     case 'dropdown':
     case 'multiple_choice':
       return (

@@ -41,7 +41,8 @@ import { Upload, X } from 'lucide-react';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
-import { datetimeLocalToUTC } from '@/lib/utils/datetime';
+import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
+import { DateTime24Picker } from '@/components/ui/DateTime24Picker';
 
 interface TicketTypeForm {
   id?: string;
@@ -54,8 +55,8 @@ interface TicketTypeForm {
   allowed_affiliates?: string[] | null;
   is_active?: boolean;
   availability_mode?: 'always' | 'scheduled';
-  available_start_at?: string | null;
-  available_end_at?: string | null;
+  available_start_at?: Date | null;
+  available_end_at?: Date | null;
 }
 
 export default function EventForm() {
@@ -83,8 +84,8 @@ export default function EventForm() {
   const [instagramPostUrl, setInstagramPostUrl] = useState('');
   const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
   const [uploadingPreview, setUploadingPreview] = useState(false);
-  const [startAt, setStartAt] = useState('');
-  const [endAt, setEndAt] = useState('');
+  const [startAt, setStartAt] = useState<Date | null>(null);
+  const [endAt, setEndAt] = useState<Date | null>(null);
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
@@ -134,8 +135,8 @@ export default function EventForm() {
         setDescription(event.description || '');
         setInstagramPostUrl(event.instagram_post_url || '');
         setInstagramPreviewImageUrl(event.instagram_preview_image_url || '');
-        setStartAt(event.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : '');
-        setEndAt(event.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '');
+        setStartAt(event.start_at ? new Date(event.start_at) : null);
+        setEndAt(event.end_at ? new Date(event.end_at) : null);
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
@@ -155,8 +156,8 @@ export default function EventForm() {
           allowed_affiliates: t.allowed_affiliates || null,
           is_active: t.is_active !== undefined ? t.is_active : true,
           availability_mode: t.availability_mode || 'always',
-          available_start_at: t.available_start_at ? new Date(t.available_start_at).toISOString().slice(0, 16) : null,
-          available_end_at: t.available_end_at ? new Date(t.available_end_at).toISOString().slice(0, 16) : null,
+          available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
+          available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
         })));
 
         // Show sections if they have data
@@ -227,7 +228,7 @@ export default function EventForm() {
     setTicketTypes(ticketTypes.filter((_, i) => i !== index));
   };
 
-  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean) => {
+  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean | Date) => {
     setTicketTypes(ticketTypes.map((tt, i) => 
       i === index ? { ...tt, [field]: value } : tt
     ));
@@ -384,7 +385,7 @@ export default function EventForm() {
     if (!currentOrg?.id) return false;
     if (!title.trim()) return false;
     if (!startAt || !endAt) return false;
-    if (new Date(startAt) >= new Date(endAt)) return false;
+    if (startAt >= endAt) return false;
     
     // Validate ticket types if any are added
     if (ticketTypes.length > 0) {
@@ -414,8 +415,8 @@ export default function EventForm() {
         description: description.trim() || undefined,
         instagram_post_url: instagramPostUrl.trim() || null,
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
-        start_at: new Date(startAt).toISOString(),
-        end_at: new Date(endAt).toISOString(),
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
         location_text: locationText.trim() || null,
         status: status,
         metadata: {},
@@ -477,10 +478,10 @@ export default function EventForm() {
           if (availabilityMode === 'scheduled') {
             // Validate and process scheduled availability
             if (tt.available_start_at) {
-              availableStartAt = new Date(tt.available_start_at).toISOString();
+              availableStartAt = tt.available_start_at.toISOString();
             }
             if (tt.available_end_at) {
-              const endDate = new Date(tt.available_end_at);
+              const endDate = tt.available_end_at;
               // Cap available_end_at to event.end_at
               const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
               availableEndAt = finalEndAt.toISOString();
@@ -570,10 +571,10 @@ export default function EventForm() {
           if (availabilityMode === 'scheduled') {
             // Validate and process scheduled availability
             if (tt.available_start_at) {
-              availableStartAt = new Date(tt.available_start_at).toISOString();
+              availableStartAt = tt.available_start_at.toISOString();
             }
             if (tt.available_end_at) {
-              const endDate = new Date(tt.available_end_at);
+              const endDate = tt.available_end_at;
               // Cap available_end_at to event.end_at
               const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
               availableEndAt = finalEndAt.toISOString();
@@ -792,11 +793,10 @@ export default function EventForm() {
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the start date and time
               </p>
-              <Input
-                type="datetime-local"
+              <DateTime24Picker
                 value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
-                required
+                onChange={setStartAt}
+                disabled={false}
                 className="w-full"
               />
             </div>
@@ -808,13 +808,12 @@ export default function EventForm() {
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the end date and time
               </p>
-              <Input
-                type="datetime-local"
+              <DateTime24Picker
                 value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-                required
-                className="w-full"
+                onChange={setEndAt}
+                disabled={false}
                 min={startAt || undefined}
+                className="w-full"
               />
             </div>
           </div>
@@ -992,20 +991,18 @@ export default function EventForm() {
                                 <Label htmlFor={`available-start-${index}`} className="text-xs font-medium">
                                   Sales start
                                 </Label>
-                                <Input
+                                <DateTime24Picker
                                   id={`available-start-${index}`}
-                                  type="datetime-local"
-                                  value={tt.available_start_at || ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value || null;
-                                    updateTicketTypeForm(index, 'available_start_at', value);
+                                  value={tt.available_start_at || null}
+                                  onChange={(date) => {
+                                    updateTicketTypeForm(index, 'available_start_at', date);
                                     // Validate: if end exists and new start >= end, clear end
-                                    if (value && tt.available_end_at && value >= tt.available_end_at) {
+                                    if (date && tt.available_end_at && date >= tt.available_end_at) {
                                       updateTicketTypeForm(index, 'available_end_at', null);
                                     }
                                   }}
                                   disabled={tt.is_active === false}
-                                  max={endAt ? endAt.slice(0, 16) : undefined}
+                                  max={endAt || undefined}
                                   className="mt-1"
                                 />
                               </div>
@@ -1013,22 +1010,20 @@ export default function EventForm() {
                                 <Label htmlFor={`available-end-${index}`} className="text-xs font-medium">
                                   Sales end
                                 </Label>
-                                <Input
+                                <DateTime24Picker
                                   id={`available-end-${index}`}
-                                  type="datetime-local"
-                                  value={tt.available_end_at || ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value || null;
+                                  value={tt.available_end_at || null}
+                                  onChange={(date) => {
                                     // Cap to event.end_at if provided
-                                    if (value && endAt && value > endAt.slice(0, 16)) {
-                                      updateTicketTypeForm(index, 'available_end_at', endAt.slice(0, 16));
+                                    if (date && endAt && date > endAt) {
+                                      updateTicketTypeForm(index, 'available_end_at', endAt);
                                     } else {
-                                      updateTicketTypeForm(index, 'available_end_at', value);
+                                      updateTicketTypeForm(index, 'available_end_at', date);
                                     }
                                   }}
                                   disabled={tt.is_active === false}
-                                  min={tt.available_start_at || (startAt ? startAt.slice(0, 16) : undefined)}
-                                  max={endAt ? endAt.slice(0, 16) : undefined}
+                                  min={tt.available_start_at || startAt || undefined}
+                                  max={endAt || undefined}
                                   className="mt-1"
                                 />
                               </div>
@@ -1306,8 +1301,8 @@ export default function EventForm() {
                   org_id: currentOrg.id,
                   title: title.trim(),
                   description: description || '',
-                  start_at: datetimeLocalToUTC(startAt),
-                  end_at: datetimeLocalToUTC(endAt),
+                  start_at: startAt ? startAt.toISOString() : '',
+                  end_at: endAt ? endAt.toISOString() : '',
                   status: 'published',
                   location_text: locationText || null,
                   instagram_post_url: instagramPostUrl || null,
@@ -1332,8 +1327,8 @@ export default function EventForm() {
                   allowed_affiliates: tt.allowed_affiliates || null,
                   is_active: tt.is_active !== undefined ? tt.is_active : true,
                   availability_mode: tt.availability_mode || 'always',
-                  available_start_at: tt.available_start_at ? datetimeLocalToUTC(tt.available_start_at) : null,
-                  available_end_at: tt.available_end_at ? datetimeLocalToUTC(tt.available_end_at) : null,
+                  available_start_at: tt.available_start_at ? tt.available_start_at.toISOString() : null,
+                  available_end_at: tt.available_end_at ? tt.available_end_at.toISOString() : null,
                   metadata: {},
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
