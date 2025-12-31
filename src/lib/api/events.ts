@@ -57,6 +57,7 @@ export interface CreateEventData {
   start_at: string;
   end_at: string;
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
+  instagram_post_url?: string | null;
   metadata?: Record<string, any>;
 }
 
@@ -118,24 +119,26 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     throw new Error(fetchError.message || 'Failed to fetch created event');
   }
 
-  // Update status if provided
+  // Update status, description, and instagram_post_url if provided
+  const updateFields: any = {};
   if (data.status && data.status !== 'draft') {
+    updateFields.status = data.status;
+  }
+  if (data.description) {
+    updateFields.description = data.description;
+  }
+  if (data.instagram_post_url !== undefined) {
+    updateFields.instagram_post_url = data.instagram_post_url;
+  }
+
+  if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
       .from('events')
-      .update({ status: data.status, description: data.description })
+      .update(updateFields)
       .eq('id', eventId);
 
     if (updateError) {
-      console.warn('Failed to update event status:', updateError);
-    }
-  } else if (data.description) {
-    const { error: updateError } = await supabase
-      .from('events')
-      .update({ description: data.description })
-      .eq('id', eventId);
-
-    if (updateError) {
-      console.warn('Failed to update event description:', updateError);
+      console.warn('Failed to update event fields:', updateError);
     }
   }
 

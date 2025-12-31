@@ -185,6 +185,7 @@ export interface Event {
   end_at: string;
   status: EventStatus;
   slug?: string;
+  instagram_post_url?: string | null;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

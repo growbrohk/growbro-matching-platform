@@ -28,6 +28,7 @@ import {
 } from '@/lib/api/events';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Event, TicketType } from '@/lib/types';
+import InstagramEmbed from '@/components/social/InstagramEmbed';
 
 interface TicketTypeForm {
   id?: string;
@@ -57,6 +58,7 @@ export default function EventForm() {
   // Event fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [instagramPostUrl, setInstagramPostUrl] = useState('');
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
@@ -107,6 +109,7 @@ export default function EventForm() {
 
         setTitle(event.title || '');
         setDescription(event.description || '');
+        setInstagramPostUrl(event.instagram_post_url || '');
         setStartAt(event.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : '');
         setEndAt(event.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '');
         setStatus(event.status === 'published' ? 'published' : 'draft');
@@ -253,6 +256,7 @@ export default function EventForm() {
         org_id: currentOrg.id,
         title: title.trim(),
         description: description.trim() || undefined,
+        instagram_post_url: instagramPostUrl.trim() || null,
         start_at: new Date(startAt).toISOString(),
         end_at: new Date(endAt).toISOString(),
         venue_org_id: venueOrgId || null,
@@ -563,6 +567,22 @@ export default function EventForm() {
                 borderColor: 'rgba(14,122,58,0.14)',
                 backgroundColor: '#FBF8F4',
               }}
+            />
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Instagram post URL (optional)
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Paste a public Instagram post/reel URL
+            </p>
+            <Input
+              type="url"
+              value={instagramPostUrl}
+              onChange={(e) => setInstagramPostUrl(e.target.value)}
+              placeholder="https://www.instagram.com/p/..."
+              className="w-full"
             />
           </div>
 
@@ -1176,102 +1196,123 @@ export default function EventForm() {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-2xl">Event Preview</DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
-            {/* Title */}
-            <div>
-              <h2 className="text-3xl font-bold mb-2" style={{ color: '#0F1F17' }}>
-                {title.trim() || 'Event Title'}
-              </h2>
-            </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-4">
+              {/* Left Column: Event Info + Ticket Types */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Title */}
+                <div>
+                  <h2 className="text-3xl font-bold mb-2" style={{ color: '#0F1F17' }}>
+                    {title.trim() || 'Event Title'}
+                  </h2>
+                </div>
 
-            {/* Date & Time */}
-            {startAt && endAt && (
-              <div className="space-y-1">
-                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Date & Time
-                </p>
-                <p className="text-lg" style={{ color: '#0F1F17' }}>
-                  {formatPreviewDate(startAt)}
-                </p>
-                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
-                </p>
-              </div>
-            )}
+                {/* Date & Time */}
+                {startAt && endAt && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      Date & Time
+                    </p>
+                    <p className="text-lg" style={{ color: '#0F1F17' }}>
+                      {formatPreviewDate(startAt)}
+                    </p>
+                    <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
+                    </p>
+                  </div>
+                )}
 
-            {/* Venue */}
-            {venueOrgId && (
-              <div className="space-y-1">
-                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Venue
-                </p>
-                <p className="text-lg" style={{ color: '#0F1F17' }}>
-                  {venueOrgId}
-                </p>
-              </div>
-            )}
+                {/* Venue */}
+                {venueOrgId && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      Venue
+                    </p>
+                    <p className="text-lg" style={{ color: '#0F1F17' }}>
+                      {venueOrgId}
+                    </p>
+                  </div>
+                )}
 
-            {/* Description */}
-            {description.trim() && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Description
-                </p>
-                <p className="text-base whitespace-pre-wrap" style={{ color: '#0F1F17' }}>
-                  {description.trim()}
-                </p>
-              </div>
-            )}
+                {/* Description */}
+                {description.trim() && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      Description
+                    </p>
+                    <p className="text-base whitespace-pre-wrap" style={{ color: '#0F1F17' }}>
+                      {description.trim()}
+                    </p>
+                  </div>
+                )}
 
-            {/* Ticket Types */}
-            {ticketTypes.length > 0 && (
-              <div className="space-y-4">
-                <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Ticket Types
-                </p>
-                <div className="space-y-3">
-                  {ticketTypes.map((tt, index) => (
-                    <div
-                      key={index}
-                      className="border rounded-lg p-4"
-                      style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg mb-1" style={{ color: '#0F1F17' }}>
-                            {tt.name.trim() || `Ticket Type ${index + 1}`}
-                          </h3>
-                          <div className="flex items-center gap-4 mt-2">
-                            <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                              ${parseFloat(tt.price) || 0}.00
-                            </span>
-                            <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                              {isQuotaUnlimited(tt.quota) ? 'Unlimited' : `${tt.quota || 0} available`}
-                            </span>
+                {/* Ticket Types */}
+                {ticketTypes.length > 0 && (
+                  <div className="space-y-4">
+                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      Ticket Types
+                    </p>
+                    <div className="space-y-3">
+                      {ticketTypes.map((tt, index) => (
+                        <div
+                          key={index}
+                          className="border rounded-lg p-4"
+                          style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg mb-1" style={{ color: '#0F1F17' }}>
+                                {tt.name.trim() || `Ticket Type ${index + 1}`}
+                              </h3>
+                              <div className="flex items-center gap-4 mt-2">
+                                <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                                  ${parseFloat(tt.price) || 0}.00
+                                </span>
+                                <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                                  {isQuotaUnlimited(tt.quota) ? 'Unlimited' : `${tt.quota || 0} available`}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {/* CTA Button */}
+                <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                  <Button
+                    type="button"
+                    disabled
+                    className="w-full"
+                    style={{ backgroundColor: '#0E7A3A', opacity: 0.6 }}
+                  >
+                    Get Tickets
+                  </Button>
                 </div>
               </div>
-            )}
 
-            {/* CTA Button */}
-            <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-              <Button
-                type="button"
-                disabled
-                className="w-full"
-                style={{ backgroundColor: '#0E7A3A', opacity: 0.6 }}
-              >
-                Get Tickets
-              </Button>
+              {/* Right Column: Instagram Embed */}
+              <div className="lg:col-span-1">
+                <div className="sticky top-0">
+                  <div 
+                    className="border rounded-lg p-4 bg-white"
+                    style={{ 
+                      borderColor: 'rgba(14,122,58,0.14)',
+                      maxHeight: 'calc(90vh - 120px)',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    <InstagramEmbed url={instagramPostUrl} />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
