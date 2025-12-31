@@ -77,6 +77,7 @@ export default function EventForm() {
 
   // Preview dialog state
   const [showPreview, setShowPreview] = useState(false);
+  const [showIgFullscreen, setShowIgFullscreen] = useState(false);
 
   // Load event data if editing
   useEffect(() => {
@@ -1202,50 +1203,92 @@ export default function EventForm() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
-              {/* Left Column: Event Info + Ticket Types */}
-              <div className="md:col-span-2 order-2 md:order-1 space-y-6">
-                {/* Title */}
-                <div>
-                  <h2 className="text-3xl font-bold mb-2" style={{ color: '#0F1F17' }}>
-                    {title.trim() || 'Event Title'}
-                  </h2>
+            <div className="space-y-6 py-4">
+              {/* Header: Always 2 columns (even on mobile) */}
+              <div className="grid grid-cols-[1fr_160px] md:grid-cols-[2fr_1fr] gap-4 items-start">
+                {/* Left Column: Title + Date/Time + Venue */}
+                <div className="space-y-4 min-w-0">
+                  {/* Title */}
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-bold mb-2 break-words" style={{ color: '#0F1F17' }}>
+                      {title.trim() || 'Event Title'}
+                    </h2>
+                  </div>
+
+                  {/* Date & Time */}
+                  {startAt && endAt && (
+                    <div className="space-y-1">
+                      <p className="text-xs md:text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        Date & Time
+                      </p>
+                      <p className="text-base md:text-lg break-words" style={{ color: '#0F1F17' }}>
+                        {formatPreviewDate(startAt)}
+                      </p>
+                      <p className="text-xs md:text-sm break-words" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Venue */}
+                  {venueOrgId && (
+                    <div className="space-y-1">
+                      <p className="text-xs md:text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        Venue
+                      </p>
+                      <p className="text-base md:text-lg break-words" style={{ color: '#0F1F17' }}>
+                        {venueOrgId}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Date & Time */}
-                {startAt && endAt && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      Date & Time
-                    </p>
-                    <p className="text-lg" style={{ color: '#0F1F17' }}>
-                      {formatPreviewDate(startAt)}
-                    </p>
-                    <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      {formatPreviewTime(startAt)} - {formatPreviewTime(endAt)}
-                    </p>
-                  </div>
-                )}
+                {/* Right Column: Instagram Embed Panel */}
+                <div
+                  className="rounded-xl border bg-white p-2"
+                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                >
+                  {instagramPostUrl ? (
+                    <>
+                      {/* Mobile: compact preview card that fits the right column */}
+                      <button
+                        type="button"
+                        className="md:hidden w-full rounded-lg overflow-hidden border bg-muted/30"
+                        onClick={() => setShowIgFullscreen(true)}
+                        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                      >
+                        <div className="text-[11px] px-2 py-1 text-left font-medium">
+                          Instagram
+                        </div>
+                        <div className="h-[120px] flex items-center justify-center text-[11px] text-muted-foreground">
+                          Tap to preview
+                        </div>
+                      </button>
 
-                {/* Venue */}
-                {venueOrgId && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      Venue
-                    </p>
-                    <p className="text-lg" style={{ color: '#0F1F17' }}>
-                      {venueOrgId}
-                    </p>
-                  </div>
-                )}
+                      {/* Desktop: full embed */}
+                      <div className="hidden md:block max-h-[520px] overflow-auto">
+                        <div className="w-full overflow-hidden">
+                          <InstagramEmbed url={instagramPostUrl} />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center min-h-[200px]">
+                      <p className="text-xs text-muted-foreground text-center">No Instagram post</p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
+              {/* Body: Full width below header */}
+              <div className="space-y-6">
                 {/* Description */}
                 {description.trim() && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
                       Description
                     </p>
-                    <p className="text-base whitespace-pre-wrap" style={{ color: '#0F1F17' }}>
+                    <p className="text-base whitespace-pre-wrap break-words" style={{ color: '#0F1F17' }}>
                       {description.trim()}
                     </p>
                   </div>
@@ -1297,25 +1340,22 @@ export default function EventForm() {
                   </Button>
                 </div>
               </div>
-
-              {/* Right Column: Instagram Embed */}
-              <div className="md:col-span-1 order-1 md:order-2">
-                <div className="sticky top-0">
-                  <div 
-                    className="border rounded-lg p-4 bg-white"
-                    style={{ 
-                      borderColor: 'rgba(14,122,58,0.14)',
-                      minHeight: '320px',
-                      maxHeight: '520px',
-                      overflowY: 'auto'
-                    }}
-                  >
-                    <InstagramEmbed url={instagramPostUrl} />
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Instagram Fullscreen Dialog */}
+      <Dialog open={showIgFullscreen} onOpenChange={setShowIgFullscreen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Instagram Preview</DialogTitle>
+          </DialogHeader>
+          {instagramPostUrl ? (
+            <InstagramEmbed url={instagramPostUrl} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No Instagram post</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
