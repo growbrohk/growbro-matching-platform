@@ -29,6 +29,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Event, TicketType } from '@/lib/types';
 import InstagramEmbed from '@/components/social/InstagramEmbed';
+import { supabase } from '@/integrations/supabase/client';
+import { Upload, X } from 'lucide-react';
 
 interface TicketTypeForm {
   id?: string;
@@ -60,6 +62,7 @@ export default function EventForm() {
   const [description, setDescription] = useState('');
   const [instagramPostUrl, setInstagramPostUrl] = useState('');
   const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
+  const [uploadingPreview, setUploadingPreview] = useState(false);
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
@@ -225,6 +228,129 @@ export default function EventForm() {
       .map(s => s.trim())
       .filter(s => s.length > 0);
     updateTicketTypeForm(index, 'allowed_affiliates', affiliates.length > 0 ? affiliates : null);
+  };
+
+  const handlePreviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validation: Check if eventId exists
+    if (!eventId || !currentOrg?.id) {
+      toast({
+        title: 'Error',
+        description: 'Please save the event first before uploading a preview photo',
+        variant: 'destructive',
+      });
+      e.target.value = ''; // Clear file input
+      return;
+    }
+
+    // Validation: File size (500KB max)
+    const maxSize = 500 * 1024; // 500KB
+    if (file.size > maxSize) {
+      toast({
+        title: 'Error',
+        description: 'File size must be less than 500KB',
+        variant: 'destructive',
+      });
+      e.target.value = ''; // Clear file input
+      return;
+    }
+
+    // Validation: File type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Error',
+        description: 'Only JPEG, PNG, and WebP images are allowed',
+        variant: 'destructive',
+      });
+      e.target.value = ''; // Clear file input
+      return;
+    }
+
+    // Determine file extension
+    let ext = 'jpg';
+    if (file.type === 'image/png') ext = 'png';
+    else if (file.type === 'image/webp') ext = 'webp';
+    else if (file.type === 'image/jpeg' || file.type === 'image/jpg') ext = 'jpg';
+
+    // Upload path: {orgId}/{eventId}/instagram-preview.{ext}
+    const uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
+
+    setUploadingPreview(true);
+    try {
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('event-previews')
+        .upload(uploadPath, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('event-previews')
+        .getPublicUrl(uploadPath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update state
+      setInstagramPreviewImageUrl(publicUrl);
+
+      // Persist immediately to database
+      await updateEvent({
+        id: eventId,
+        instagram_preview_image_url: publicUrl,
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Preview photo uploaded successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to upload preview photo',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingPreview(false);
+      e.target.value = ''; // Clear file input
+    }
+  };
+
+  const handleRemovePreviewImage = async () => {
+    if (!eventId) {
+      setInstagramPreviewImageUrl('');
+      return;
+    }
+
+    try {
+      // Update database
+      await updateEvent({
+        id: eventId,
+        instagram_preview_image_url: null,
+      });
+
+      // Clear state
+      setInstagramPreviewImageUrl('');
+
+      toast({
+        title: 'Success',
+        description: 'Preview photo removed',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to remove preview photo',
+        variant: 'destructive',
+      });
+    }
   };
 
   const canSubmit = () => {
@@ -595,15 +721,65 @@ export default function EventForm() {
               Instagram preview photo (optional)
             </h2>
             <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Used for the small portrait preview in mobile header (4:5). Paste an image URL.
+              Used for the small portrait preview in mobile header (4:5). Upload an image or paste a URL.
             </p>
-            <Input
-              type="url"
-              value={instagramPreviewImageUrl}
-              onChange={(e) => setInstagramPreviewImageUrl(e.target.value)}
-              placeholder="https://example.com/image.jpg"
-              className="w-full"
-            />
+            
+            <div className="space-y-4">
+              {/* URL Input */}
+              <Input
+                type="url"
+                value={instagramPreviewImageUrl}
+                onChange={(e) => setInstagramPreviewImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                className="w-full"
+              />
+
+              {/* Upload Section */}
+              <div className="space-y-2">
+                {!eventId && (
+                  <p className="text-xs text-muted-foreground">
+                    Save event first to upload preview photo
+                  </p>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={!eventId || uploadingPreview}
+                    onChange={handlePreviewImageUpload}
+                    className="flex-1"
+                  />
+                  {instagramPreviewImageUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemovePreviewImage}
+                      disabled={uploadingPreview}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview Thumbnail */}
+              {instagramPreviewImageUrl && (
+                <div className="w-full max-w-[200px]">
+                  <div className="aspect-[4/5] w-full overflow-hidden rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                    <img
+                      src={instagramPreviewImageUrl}
+                      alt="Instagram preview"
+                      className="w-full h-full object-cover object-center"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
