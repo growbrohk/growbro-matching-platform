@@ -186,40 +186,40 @@ export default function Landing() {
   const modules = useMemo(
     () => [
       {
-        title: "POS that’s actually usable",
+        title: "POS checkout (built)",
         desc: "Fast cart checkout, multiple payment methods, receipts — built for small teams.",
         icon: <CreditCard className="h-5 w-5" />,
         bullets: ["Cart-based checkout", "Cash / Card / FPS / PayMe / Octopus / WeChat / Alipay", "Receipt + export-ready history"],
       },
       {
-        title: "Online shop that shares the same stock",
+        title: "Product catalog + inventory (built)",
         desc: "One catalog. One inventory. Sell in-store and online without syncing.",
         icon: <ShoppingCart className="h-5 w-5" />,
         bullets: ["Product pages + variants", "Orders synced to backend", "Inventory auto-decrements from any channel"],
       },
       {
-        title: "Inventory that doesn’t break your brain",
-        desc: "Track stock, spot low inventory, keep everything consistent across sales channels.",
-        icon: <Package className="h-5 w-5" />,
-        bullets: ["Unified stock levels", "Simple adjustments", "Low-stock alerts (MVP)"],
-      },
-      {
-        title: "Events + bookings (O2O money)",
+        title: "Events + ticketing (built)",
         desc: "Create events, sell tickets, manage capacity, and check-in on-site via QR.",
         icon: <Calendar className="h-5 w-5" />,
         bullets: ["Ticket types + quotas", "Bookings list", "QR check-in flow"],
       },
       {
-        title: "Collab partners built-in",
-        desc: "Match brands ↔ venues. Propose collabs, manage deals, and chat in one place.",
-        icon: <Handshake className="h-5 w-5" />,
-        bullets: ["Discover partners", "Deal pipeline", "Chat threads per collab"],
+        title: "Host space listing + microsites (built)",
+        desc: "Hosts list consignment space. Each host gets a microsite with their catalog.",
+        icon: <Package className="h-5 w-5" />,
+        bullets: ["Space inventory per location", "Host-branded pages", "Same backend, per-host view"],
       },
       {
-        title: "Simple analytics + growth tools",
-        desc: "Know what’s working. Run promos, track sales, and improve week by week.",
+        title: "Collaboration workflow (beta)",
+        desc: "Rent space, collab product page, QR payment, shared tracking and splits.",
+        icon: <Handshake className="h-5 w-5" />,
+        bullets: ["Collab page generation", "Print-ready QR code", "Real-time shared records"],
+      },
+      {
+        title: "Analytics + insights (built)",
+        desc: "Know what's working. Track sales, monitor inventory, improve week by week.",
         icon: <BarChart3 className="h-5 w-5" />,
-        bullets: ["Sales overview", "Top products", "Lightweight insights (MVP)"],
+        bullets: ["Sales overview", "Top products", "Lightweight insights"],
       },
     ],
     []
@@ -315,9 +315,9 @@ export default function Landing() {
               style={{ fontFamily: "'Inter Tight', sans-serif" }}
             >
               <span className="block text-4xl sm:text-5xl lg:text-7xl xl:text-8xl leading-[1.05]">
-                POS + Shop + Events + Collabs —
+                Trackable offline collaborations —
                 <span className="block" style={{ color: BRAND.green }}>
-                  built as one system.
+                  matching, tracking, and fair splits.
                 </span>
               </span>
             </h1>
@@ -325,9 +325,9 @@ export default function Landing() {
             <p className="mt-5 text-base sm:text-lg lg:text-xl leading-relaxed max-w-3xl mx-auto"
               style={{ color: "rgba(15,31,23,0.72)" }}
             >
-              Growbro is an all-in-one online-to-offline collaboration platform.
-              No data migration. No double/triple stocking. Brands and venues can
-              sell everywhere and find partners to boost traffic — from the same backend.
+              Growbro is a shared backend for micro-SMEs to run offline collaborations.
+              Replace spreadsheets and Google Forms with one system: rent host-listed space,
+              track every transaction, and split incentives fairly — all in real time.
             </p>
 
             <div className="mt-7 sm:mt-8 flex flex-col sm:flex-row gap-3 justify-center">
@@ -357,21 +357,21 @@ export default function Landing() {
             </div>
 
             <div className="mt-7 flex flex-wrap justify-center gap-2">
-              <Pill text="No migration later" />
-              <Pill text="Unified inventory" />
-              <Pill text="Offline + Online sales" />
-              <Pill text="Built-in collab partners" />
-              <Pill text="Affordable for SMB" />
+              <Pill text="Match partners" />
+              <Pill text="Track traffic + sales" />
+              <Pill text="Split incentives fairly" />
+              <Pill text="Collab product page + QR" />
+              <Pill text="One backend one database" />
             </div>
           </div>
         </InViewPop>
 
-        {/* Proof strip / “turn out” block */}
+        {/* Proof strip / "turn out" block */}
         <InViewPop delay={0.08} className="mt-10">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <MiniStat label="Problem we remove" value="Double / triple stocking" />
-            <MiniStat label="System style" value="One backend for all modules" />
-            <MiniStat label="Best for" value="Brands + venues (O2O)" />
+            <MiniStat label="Replacing" value="Manual collabs + no tracking" />
+            <MiniStat label="System" value="Match • Track • Split" />
+            <MiniStat label="Users" value="Brands • Hosts • KOLs" />
           </div>
         </InViewPop>
       </Section>
@@ -492,6 +492,117 @@ export default function Landing() {
         </InViewPop>
       </Section>
 
+      {/* WHY GROWBRO - Pain points section */}
+      <Section className="py-14 sm:py-16 lg:py-20" bg={BRAND.beigeSoft}>
+        <InViewPop>
+          <div className="text-center">
+            <div className="text-sm font-semibold" style={{ color: BRAND.green }}>
+              Why Growbro
+            </div>
+            <h2
+              className="mt-2 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight"
+              style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+            >
+              Offline collabs are broken.
+            </h2>
+            <p className="mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed"
+              style={{ color: "rgba(15,31,23,0.72)" }}
+            >
+              Current tools aren't built for collaboration — they're built for single businesses.
+            </p>
+          </div>
+        </InViewPop>
+
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+          <InViewPop delay={0.02}>
+            <Card
+              title="Offline promo is blind"
+              desc="Put up a poster or display — zero data on who saw it, scanned it, or bought from it."
+              icon={<BarChart3 className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.04}>
+            <Card
+              title="KOL tracking is unrealistic"
+              desc="10 KOLs = 10 separate Google Forms. Each KOL has 20 brand partnerships. Manual nightmare."
+              icon={<MessageCircle className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.06}>
+            <Card
+              title="Consignment is manual"
+              desc="Brands and hosts track inventory on different spreadsheets. Nothing syncs. Disputes happen."
+              icon={<Package className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.08}>
+            <Card
+              title="Splits are unclear"
+              desc="Manual settlement at month-end. Both sides calculate differently. Arguments over numbers."
+              icon={<Receipt className="h-5 w-5" />}
+            />
+          </InViewPop>
+        </div>
+      </Section>
+
+      {/* CORE MECHANIC section */}
+      <Section className="py-14 sm:py-16 lg:py-20" bg={BRAND.beige}>
+        <InViewPop>
+          <div className="text-center">
+            <div className="text-sm font-semibold" style={{ color: BRAND.green }}>
+              How Growbro solves it
+            </div>
+            <h2
+              className="mt-2 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight"
+              style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+            >
+              Collab product page → host warehouse → print-ready QR.
+            </h2>
+            <p className="mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed"
+              style={{ color: "rgba(15,31,23,0.72)" }}
+            >
+              Each collaboration creates a product page tied to a host's consignment space as the only warehouse, 
+              with a payment-ready QR code that records all sales in real time — visible to both sides.
+            </p>
+          </div>
+        </InViewPop>
+
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+          <InViewPop delay={0.02}>
+            <Step
+              num="01"
+              title="Brands rent host-listed space"
+              desc="Hosts list consignment slots. Brands reserve them. No separate negotiation."
+              icon={<Handshake className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.04}>
+            <Step
+              num="02"
+              title="Growbro generates the collab page"
+              desc="Product page auto-created, tied to the host's location as the only warehouse."
+              icon={<ShoppingCart className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.06}>
+            <Step
+              num="03"
+              title="Print & scan QR to pay"
+              desc="Payment QR code ready to print. Every scan = instant recorded transaction."
+              icon={<CreditCard className="h-5 w-5" />}
+            />
+          </InViewPop>
+          <InViewPop delay={0.08}>
+            <Step
+              num="04"
+              title="Both sides see the same truth"
+              desc="Real-time records, shared inventory, automated splits. No disputes."
+              icon={<Database className="h-5 w-5" />}
+            />
+          </InViewPop>
+        </div>
+      </Section>
+
       {/* MODULES (Cash-like: clean grid, lots of detail per module) */}
       <Section id="modules" className="py-14 sm:py-16 lg:py-20" bg={BRAND.beigeSoft}>
         <InViewPop>
@@ -583,8 +694,8 @@ export default function Landing() {
               />
               <Step
                 num="03"
-                title="Launch events & collabs"
-                desc="Ticketing, bookings, partner matching, and chat."
+                title="Run trackable collaborations"
+                desc="Rent space → collab product page → QR payment → shared tracking and incentive splitting."
                 icon={<Handshake className="h-5 w-5" />}
               />
             </div>
@@ -674,6 +785,38 @@ export default function Landing() {
         </InViewPop>
       </Section>
 
+      {/* PROGRESS section */}
+      <Section className="py-14 sm:py-16 lg:py-20" bg={BRAND.beigeSoft}>
+        <InViewPop>
+          <div className="text-center">
+            <div className="text-sm font-semibold" style={{ color: BRAND.green }}>
+              Current status
+            </div>
+            <h2
+              className="mt-2 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight"
+              style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+            >
+              Already built. Now validating in real events.
+            </h2>
+            <p className="mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed"
+              style={{ color: "rgba(15,31,23,0.72)" }}
+            >
+              Backend is live: ticketing, product catalog, inventory, host space listing, and microsites 
+              all run on the same database. Collaboration workflow is finalizing — testing in a ~50-person 
+              event end of January.
+            </p>
+          </div>
+        </InViewPop>
+
+        <InViewPop delay={0.08} className="mt-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <MiniStat label="Built modules" value="POS, catalog, events, host spaces" />
+            <MiniStat label="Next validation" value="~50-person event end Jan" />
+            <MiniStat label="Focus" value="Collab workflow + QR payments" />
+          </div>
+        </InViewPop>
+      </Section>
+
       {/* FINAL CTA (Cash-like: bold close) */}
       <Section bg={BRAND.deep} className="py-14 sm:py-16 lg:py-20">
         <InViewPop>
@@ -694,13 +837,13 @@ export default function Landing() {
               className="mt-5 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight"
               style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.beigeSoft }}
             >
-              Ready to run everything in one system?
+              Ready to run trackable offline collabs?
             </h2>
 
             <p className="mt-4 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed"
               style={{ color: "rgba(244,239,233,0.72)" }}
             >
-              Start with POS + inventory. Add shop, events and collab partners when you’re ready.
+              Join as a brand to rent space and track sales. Or join as a host to list space and earn from collaborations.
             </p>
 
             <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
@@ -710,12 +853,12 @@ export default function Landing() {
                   className="w-full sm:w-auto font-bold px-7 py-6 h-auto"
                   style={{ backgroundColor: BRAND.green, color: "white" }}
                 >
-                  Start free
+                  Join as a Brand
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
 
-              <a href="#modules" className="w-full sm:w-auto">
+              <Link to="/auth" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
@@ -726,9 +869,9 @@ export default function Landing() {
                     backgroundColor: "rgba(255,255,255,0.03)",
                   }}
                 >
-                  Review modules
+                  Join as a Host / Venue
                 </Button>
-              </a>
+              </Link>
             </div>
           </div>
         </InViewPop>
