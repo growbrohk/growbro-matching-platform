@@ -5,8 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Calendar, Edit } from 'lucide-react';
+import { Loader2, Plus, Calendar, Edit, Search } from 'lucide-react';
 import { getTicketTypes } from '@/lib/api/events';
 import type { Event } from '@/lib/types';
 
@@ -21,6 +22,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
 
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const canCreate = !!currentOrg?.id;
 
@@ -139,8 +141,26 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
         </div>
       )}
 
+      {/* Search Bar */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search resources..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
       {/* Events List */}
-      {events.length === 0 ? (
+      {events.filter((event) => {
+        const matchesSearch =
+          event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          event.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesSearch;
+      }).length === 0 ? (
         <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardContent className="flex flex-col items-center justify-center py-16 p-4 md:p-6">
             <Calendar className="h-16 w-16 mb-4" style={{ color: '#0E7A3A', opacity: 0.3 }} />
@@ -162,7 +182,12 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full min-w-0">
-          {events.map((event) => (
+          {events.filter((event) => {
+            const matchesSearch =
+              event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              event.description?.toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesSearch;
+          }).map((event) => (
             <Card
               key={event.id}
               className="cursor-pointer hover:shadow-md transition-shadow w-full min-w-0"

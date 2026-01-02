@@ -44,9 +44,10 @@ interface BookingResource {
 
 interface BookingResourcesListProps {
   typeFilter?: string;
+  isEmbeddedInCatalog?: boolean;
 }
 
-export default function BookingResourcesList({ typeFilter: propTypeFilter }: BookingResourcesListProps = {}) {
+export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmbeddedInCatalog = false }: BookingResourcesListProps = {}) {
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -187,29 +188,59 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter }: Boo
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {typeFilter === 'space' ? 'Spaces' : 'Events & Workshops'}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {typeFilter === 'space'
-              ? 'Manage your bookable spaces'
-              : 'Manage your events, workshops, and classes'}
-          </p>
+    <div className={`w-full min-w-0 ${isEmbeddedInCatalog ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} space-y-4 md:space-y-6`}>
+      {/* Header - Only show when NOT embedded in Catalog */}
+      {!isEmbeddedInCatalog && (
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+              {typeFilter === 'space' ? 'Spaces' : 'Events & Workshops'}
+            </h1>
+            <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              {typeFilter === 'space'
+                ? 'Manage your bookable spaces'
+                : 'Manage your events, workshops, and classes'}
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowNewDialog(true)}
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            size="icon"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
+            title={typeFilter === 'space' ? 'Create new space' : 'Create new event'}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">{typeFilter === 'space' ? 'New Space' : 'New Event'}</span>
+          </Button>
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          {typeFilter === 'space' ? 'New Space' : 'New Event'}
-        </Button>
-      </div>
+      )}
+
+      {/* Embedded header - Show when embedded in Catalog */}
+      {isEmbeddedInCatalog && (
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg sm:text-xl font-semibold truncate" style={{ color: '#0F1F17' }}>
+              {typeFilter === 'space' ? 'Spaces' : 'Events & Workshops'}
+            </h2>
+          </div>
+          <Button
+            onClick={() => setShowNewDialog(true)}
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            size="icon"
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
+            title={typeFilter === 'space' ? 'Create new space' : 'Create new event'}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">{typeFilter === 'space' ? 'New Space' : 'New Event'}</span>
+          </Button>
+        </div>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-md">
@@ -224,29 +255,32 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter }: Boo
       </div>
 
       {filteredResources.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">
+        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardContent className="flex flex-col items-center justify-center py-16 p-4 md:p-6">
+            <Calendar className="h-16 w-16 mb-4" style={{ color: '#0E7A3A', opacity: 0.3 }} />
+            <h3 className="text-xl font-semibold mb-2" style={{ color: '#0F1F17' }}>
               {typeFilter === 'space' ? 'No spaces yet' : 'No events yet'}
             </h3>
-            <p className="text-muted-foreground text-center mb-4">
+            <p className="text-center text-muted-foreground mb-6 max-w-md">
               {typeFilter === 'space'
                 ? 'Get started by creating your first bookable space'
                 : 'Get started by creating your first event or workshop'}
             </p>
-            <Button onClick={() => setShowNewDialog(true)}>
+            <Button
+              onClick={() => setShowNewDialog(true)}
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            >
               <Plus className="h-4 w-4 mr-2" />
-              {typeFilter === 'space' ? 'Create Space' : 'Create Event'}
+              {typeFilter === 'space' ? 'Create Your First Space' : 'Create Your First Event'}
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full min-w-0">
           {filteredResources.map((resource) => (
             <Card
               key={resource.id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
+              className="cursor-pointer hover:shadow-md transition-shadow w-full min-w-0"
               onClick={() => navigate(`/app/booking/resources/${resource.id}?type=${typeFilter}`)}
             >
               <CardHeader>

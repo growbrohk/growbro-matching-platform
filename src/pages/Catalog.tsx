@@ -58,7 +58,7 @@ export default function Catalog() {
 
           <TabsContent value="spaces" className="mt-0">
             <div className="w-full min-w-0">
-              <ResourcesList typeFilter="space" />
+              <ResourcesList typeFilter="space" isEmbeddedInCatalog={true} />
             </div>
           </TabsContent>
         </div>
