@@ -69,6 +69,25 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
     return `${datePart} ${hours}:${minutes}`;
   };
 
+  const formatDateRange = (startDateString: string, endDateString: string) => {
+    const startDate = new Date(startDateString);
+    const endDate = new Date(endDateString);
+    
+    // Format date part (without comma): "Jan 4 2026"
+    const month = startDate.toLocaleDateString('en-US', { month: 'short' });
+    const day = startDate.getDate();
+    const year = startDate.getFullYear();
+    const datePart = `${month} ${day} ${year}`;
+    
+    // Format time parts: "16:00" and "17:30"
+    const startHours = startDate.getHours().toString().padStart(2, '0');
+    const startMinutes = startDate.getMinutes().toString().padStart(2, '0');
+    const endHours = endDate.getHours().toString().padStart(2, '0');
+    const endMinutes = endDate.getMinutes().toString().padStart(2, '0');
+    
+    return `${datePart} ${startHours}:${startMinutes}-${endHours}:${endMinutes}`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'published':
@@ -207,14 +226,11 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  <Calendar className="h-4 w-4" />
-                  <span>{formatDate(event.start_at)}</span>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    {formatDate(event.end_at)}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    <Calendar className="h-4 w-4" />
+                    <span>{formatDateRange(event.start_at, event.end_at)}</span>
+                  </div>
                   <Button
                     variant="ghost"
                     size="sm"
