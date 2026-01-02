@@ -299,25 +299,14 @@ export default function Landing() {
 
         <InViewPop>
           <div className="text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm"
-              style={{
-                borderColor: "rgba(14,122,58,0.18)",
-                backgroundColor: "rgba(244,239,233,0.65)",
-                color: "rgba(15,31,23,0.75)",
-              }}
-            >
-              <Sparkles className="h-4 w-4" style={{ color: BRAND.green }} />
-              <span>One backend. One inventory. One place to grow.</span>
-            </div>
-
             <h1
-              className="mt-6 font-extrabold tracking-tight"
+              className="font-extrabold tracking-tight"
               style={{ fontFamily: "'Inter Tight', sans-serif" }}
             >
               <span className="block text-4xl sm:text-5xl lg:text-7xl xl:text-8xl leading-[1.05]">
-                Trackable offline collaborations —
+                Growbro Collab Hub
                 <span className="block" style={{ color: BRAND.green }}>
-                  matching, tracking, and fair splits.
+                  This is how I met your partner
                 </span>
               </span>
             </h1>
@@ -325,12 +314,10 @@ export default function Landing() {
             <p className="mt-5 text-base sm:text-lg lg:text-xl leading-relaxed max-w-3xl mx-auto"
               style={{ color: "rgba(15,31,23,0.72)" }}
             >
-              Growbro is a shared backend for micro-SMEs to run offline collaborations.
-              Replace spreadsheets and Google Forms with one system: rent host-listed space,
-              track every transaction, and split incentives fairly — all in real time.
+              Think Tinder meets Couchsurfing — but for business collaborations.
             </p>
 
-            <div className="mt-7 sm:mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="mt-7 sm:mt-8 flex flex-wrap gap-3 justify-center">
               <Link to="/auth" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto font-bold px-7 py-6 h-auto"
                   style={{ backgroundColor: BRAND.green, color: "white" }}
