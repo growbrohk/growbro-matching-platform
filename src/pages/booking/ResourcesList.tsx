@@ -286,7 +286,7 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="truncate text-sm sm:text-base">{resource.name}</CardTitle>
+                    <CardTitle className="truncate text-base sm:text-lg">{resource.name}</CardTitle>
                     <CardDescription className="line-clamp-2 mt-1">
                       {resource.description || 'No description'}
                     </CardDescription>
