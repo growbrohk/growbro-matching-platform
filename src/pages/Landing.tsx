@@ -315,6 +315,7 @@ export default function Landing() {
               style={{ color: "rgba(15,31,23,0.72)" }}
             >
               Think Tinder meets Couchsurfing — but for business collaborations.
+              From Coffee shop consignment, cup sleeve ads, growbrew exhibition to run club events.
             </p>
 
             <div className="mt-7 sm:mt-8 flex gap-2 sm:gap-3 justify-center">
