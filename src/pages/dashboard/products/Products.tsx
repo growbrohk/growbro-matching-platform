@@ -5,8 +5,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCategories, getTags, getProductTagIds, type ProductCategory, type ProductTag } from '@/lib/api/categories-and-tags';
@@ -60,6 +61,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   const [allTags, setAllTags] = useState<ProductTag[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Filters
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
@@ -177,7 +179,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     fetchData();
   }, [currentOrg, toast]);
 
-  // Filter products by selected category and tab
+  // Filter products by selected category, tab, and search query
   const filteredProducts = useMemo(() => {
     let filtered = products;
     
@@ -200,8 +202,19 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
       }
     }
     
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.title.toLowerCase().includes(query) ||
+        p.description?.toLowerCase().includes(query) ||
+        p.sku?.toLowerCase().includes(query) ||
+        p.tags?.some(tag => tag.name.toLowerCase().includes(query))
+      );
+    }
+    
     return filtered;
-  }, [products, selectedCategoryId, selectedTab]);
+  }, [products, selectedCategoryId, selectedTab, searchQuery]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -297,7 +310,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
       </div>
     );
   }
@@ -316,7 +329,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 md:space-y-6">
+    <div className={`w-full min-w-0 ${isEmbeddedInCatalog ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} space-y-4 md:space-y-6`}>
       {/* Header and Pillar Tabs - Only show when NOT embedded in Catalog */}
       {!isEmbeddedInCatalog && (
         <>
@@ -360,6 +373,53 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
           </Tabs>
         </>
       )}
+
+      {/* Embedded header - Show when embedded in Catalog */}
+      {isEmbeddedInCatalog && (
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg sm:text-xl font-semibold truncate" style={{ color: '#0F1F17' }}>
+              Products
+            </h2>
+          </div>
+          <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => navigate('/app/settings/catalog')}
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+              title="Edit catalog settings"
+            >
+              <Pencil className="h-4 w-4" />
+              <span className="hidden sm:inline sm:ml-2">Edit</span>
+            </Button>
+            <Button 
+              onClick={() => navigate('/app/products/new')} 
+              disabled={!canCreate} 
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+              size="icon"
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
+              title="Add new product"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline sm:ml-2">Add Product</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Search Bar */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search resources..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
 
       {/* Content - Always show, but wrapped in Tabs only when NOT embedded */}
       {!isEmbeddedInCatalog ? (
