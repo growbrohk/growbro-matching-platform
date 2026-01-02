@@ -636,9 +636,9 @@ export default function EventForm() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
+    <div className="w-full max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 overflow-hidden">
         <div className="flex items-start justify-between mb-4">
           <Button 
             variant="ghost" 
@@ -668,9 +668,9 @@ export default function EventForm() {
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-8 overflow-hidden">
         {/* Section 1: Basic Information */}
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-hidden">
           <div>
             <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               What is the name of your event?
@@ -720,7 +720,7 @@ export default function EventForm() {
               value={instagramPostUrl}
               onChange={(e) => setInstagramPostUrl(e.target.value)}
               placeholder="https://www.instagram.com/p/..."
-              className="w-full"
+              className="w-full text-ellipsis"
             />
           </div>
 
@@ -739,7 +739,7 @@ export default function EventForm() {
                 value={instagramPreviewImageUrl}
                 onChange={(e) => setInstagramPreviewImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
-                className="w-full"
+                className="w-full text-ellipsis"
               />
 
               {/* Upload Section */}

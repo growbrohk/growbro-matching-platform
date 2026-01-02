@@ -130,7 +130,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const userInitials = user?.email?.charAt(0)?.toUpperCase() || 'U';
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FBF8F4' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ backgroundColor: '#FBF8F4' }}>
       {/* Subtle grid background */}
       <div
         className="fixed inset-0 pointer-events-none opacity-[0.35]"
@@ -262,8 +262,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 md:pl-64">
-          <div className="px-4 py-6 md:px-6 md:py-8 relative">
+        <main className="flex-1 md:pl-64 overflow-x-hidden">
+          <div className="px-4 py-6 md:px-6 md:py-8 relative overflow-x-hidden">
             {children}
           </div>
         </main>
