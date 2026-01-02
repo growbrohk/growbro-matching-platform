@@ -196,7 +196,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="truncate">{event.title}</CardTitle>
+                    <CardTitle className="truncate text-sm sm:text-base">{event.title}</CardTitle>
                     <CardDescription className="line-clamp-2 mt-1">
                       {event.description || 'No description'}
                     </CardDescription>
