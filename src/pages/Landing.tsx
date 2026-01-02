@@ -317,21 +317,21 @@ export default function Landing() {
               Think Tinder meets Couchsurfing — but for business collaborations.
             </p>
 
-            <div className="mt-7 sm:mt-8 flex flex-wrap gap-3 justify-center">
-              <Link to="/auth" className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto font-bold px-7 py-6 h-auto"
+            <div className="mt-7 sm:mt-8 flex gap-2 sm:gap-3 justify-center">
+              <Link to="/auth">
+                <Button size="lg" className="font-bold px-4 py-3 sm:px-7 sm:py-6 h-auto text-sm sm:text-base"
                   style={{ backgroundColor: BRAND.green, color: "white" }}
                 >
                   Start free
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-1.5 sm:ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
               </Link>
 
-              <a href="#modules" className="w-full sm:w-auto">
+              <a href="#modules">
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full sm:w-auto px-7 py-6 h-auto"
+                  className="px-4 py-3 sm:px-7 sm:py-6 h-auto text-sm sm:text-base"
                   style={{
                     borderColor: "rgba(14,122,58,0.25)",
                     color: BRAND.dark,
