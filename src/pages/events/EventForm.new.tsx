@@ -636,7 +636,7 @@ export default function EventForm() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pb-12">
+    <div className="max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-start justify-between mb-4">
@@ -785,7 +785,7 @@ export default function EventForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                 When does it start?
@@ -908,7 +908,7 @@ export default function EventForm() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor={`ticket-price-${index}`} className="text-sm font-medium">
                           Price ($)
@@ -964,11 +964,11 @@ export default function EventForm() {
 
                     {/* Available Time Section */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                      <div className="flex items-start gap-4">
-                        <Label htmlFor={`availability-mode-${index}`} className="text-sm font-medium pt-2" style={{ width: '120px', flexShrink: 0 }}>
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                        <Label htmlFor={`availability-mode-${index}`} className="text-sm font-medium sm:pt-2 sm:w-[120px] sm:flex-shrink-0">
                           Available time
                         </Label>
-                        <div className="flex-1" style={{ maxWidth: '260px' }}>
+                        <div className="flex-1 sm:max-w-[260px]">
                           <Select
                             value={tt.availability_mode || 'always'}
                             onValueChange={(value) => updateTicketTypeForm(index, 'availability_mode', value as any)}
@@ -1039,11 +1039,11 @@ export default function EventForm() {
 
                     {/* Access & Visibility Section */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                      <div className="flex items-start gap-4">
-                        <Label htmlFor={`visibility-mode-${index}`} className="text-sm font-medium pt-2" style={{ width: '120px', flexShrink: 0 }}>
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                        <Label htmlFor={`visibility-mode-${index}`} className="text-sm font-medium sm:pt-2 sm:w-[120px] sm:flex-shrink-0">
                           Access & Visibility
                         </Label>
-                        <div className="flex-1" style={{ maxWidth: '260px' }}>
+                        <div className="flex-1 sm:max-w-[260px]">
                           <Select
                             value={tt.visibility_mode || 'public'}
                             onValueChange={(value) => updateTicketTypeForm(index, 'visibility_mode', value as any)}
@@ -1153,48 +1153,52 @@ export default function EventForm() {
                 </p>
                 <Card className="bg-muted/50">
                   <CardContent className="pt-6">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <Input
                         readOnly
                         value={`https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`}
                         className="flex-1 font-mono text-sm"
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
-                          try {
-                            await navigator.clipboard.writeText(url);
-                            toast({
-                              title: 'Copied!',
-                              description: 'Link copied to clipboard',
-                            });
-                          } catch (err) {
-                            toast({
-                              title: 'Error',
-                              description: 'Failed to copy link',
-                              variant: 'destructive',
-                            });
-                          }
-                        }}
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copy
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
-                          window.open(url, '_blank');
-                        }}
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Open
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              toast({
+                                title: 'Copied!',
+                                description: 'Link copied to clipboard',
+                              });
+                            } catch (err) {
+                              toast({
+                                title: 'Error',
+                                description: 'Failed to copy link',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                          className="flex-1 sm:flex-initial"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
+                            window.open(url, '_blank');
+                          }}
+                          className="flex-1 sm:flex-initial"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Open
+                        </Button>
+                      </div>
                     </div>
                     {status !== 'published' && (
                       <p className="text-xs mt-3 text-muted-foreground">
@@ -1292,12 +1296,12 @@ export default function EventForm() {
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-0">
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
             <DialogTitle className="text-2xl">Event Preview</DialogTitle>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 pt-4">
             {currentOrg && title.trim() && startAt && endAt ? (
               <PublicEventForm
                 event={{
