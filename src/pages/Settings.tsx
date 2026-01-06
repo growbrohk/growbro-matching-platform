@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, ArrowRight, Tags } from 'lucide-react';
+import { Loader2, ArrowRight, Tags, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
@@ -66,6 +66,30 @@ export default function Settings() {
             Manage your organization settings
           </p>
         </div>
+
+        <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardHeader className="p-4 md:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+                  <User className="h-5 w-5" />
+                  Profile
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Edit your brand / venue profile
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6 pt-0">
+            <Link to="/app/settings/profile">
+              <Button variant="outline" className="w-full sm:w-auto">
+                Edit Profile
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
 
         <Card className="rounded-3xl border shadow-xl hover:shadow-2xl transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="p-4 md:p-6">

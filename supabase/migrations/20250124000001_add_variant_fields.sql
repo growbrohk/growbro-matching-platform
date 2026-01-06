@@ -14,3 +14,4 @@ COMMENT ON COLUMN product_variants.archived_at IS 'Soft delete timestamp. Varian
 
 
 
+
