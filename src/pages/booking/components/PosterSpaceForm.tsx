@@ -28,6 +28,7 @@ import PosterSpacePreview from './PosterSpacePreview';
 interface PosterSpaceFormProps {
   spaceId?: string;
   initialData?: PosterSpace;
+  initialCategory?: string;
   onSave?: (space: PosterSpace) => void;
   onCancel?: () => void;
 }
@@ -35,6 +36,7 @@ interface PosterSpaceFormProps {
 export default function PosterSpaceForm({
   spaceId,
   initialData,
+  initialCategory,
   onSave,
   onCancel,
 }: PosterSpaceFormProps) {
@@ -42,10 +44,21 @@ export default function PosterSpaceForm({
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState<number[]>([]);
 
+  // Map old 'poster' to new 'poster_space' for backward compatibility
+  const getInitialCategory = () => {
+    if (initialCategory) {
+      return initialCategory === 'poster_space' ? 'poster_space' : initialCategory;
+    }
+    if (initialData?.category) {
+      return initialData.category === 'poster' ? 'poster_space' : initialData.category;
+    }
+    return 'poster_space';
+  };
+
   const [formData, setFormData] = useState<UpsertPosterSpaceInput>({
     org_id: currentOrg?.id || '',
     title: '',
-    category: 'poster',
+    category: getInitialCategory() as any,
     short_description: '',
     bullets: [],
     photos: [],
@@ -66,10 +79,12 @@ export default function PosterSpaceForm({
 
   useEffect(() => {
     if (initialData) {
+      // Map old 'poster' to new 'poster_space' for backward compatibility
+      const category = initialData.category === 'poster' ? 'poster_space' : initialData.category;
       setFormData({
         org_id: initialData.org_id,
         title: initialData.title,
-        category: initialData.category,
+        category: category as any,
         short_description: initialData.short_description || '',
         bullets: initialData.bullets || [],
         photos: initialData.photos || [],
@@ -83,8 +98,14 @@ export default function PosterSpaceForm({
         tracking_prefix: initialData.tracking_prefix || null,
         status: initialData.status,
       });
+    } else if (initialCategory) {
+      // Set category when creating new space with initial category
+      setFormData((prev) => ({
+        ...prev,
+        category: (initialCategory === 'poster_space' ? 'poster_space' : initialCategory) as any,
+      }));
     }
-  }, [initialData]);
+  }, [initialData, initialCategory]);
 
   const handleAddBullet = () => {
     if (newBullet.trim() && formData.bullets!.length < 3) {
@@ -251,11 +272,16 @@ export default function PosterSpaceForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="poster">Poster</SelectItem>
-                    <SelectItem value="shelf">Shelf</SelectItem>
-                    <SelectItem value="booth">Booth</SelectItem>
-                    <SelectItem value="counter">Counter</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="poster_space">Poster Space</SelectItem>
+                    <SelectItem value="consignment_shelf">Consignment Shelf</SelectItem>
+                    <SelectItem value="cup_sleeve_promotion">Cup Sleeve Promotion</SelectItem>
+                    <SelectItem value="event_hosting">Event Hosting</SelectItem>
+                    {/* Legacy values for backward compatibility */}
+                    <SelectItem value="poster">Poster (Legacy)</SelectItem>
+                    <SelectItem value="shelf">Shelf (Legacy)</SelectItem>
+                    <SelectItem value="booth">Booth (Legacy)</SelectItem>
+                    <SelectItem value="counter">Counter (Legacy)</SelectItem>
+                    <SelectItem value="other">Other (Legacy)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -1,10 +1,21 @@
 import { supabase } from '@/integrations/supabase/client';
 
+export type PosterSpaceCategory = 
+  | 'poster_space' 
+  | 'consignment_shelf' 
+  | 'cup_sleeve_promotion' 
+  | 'event_hosting'
+  | 'poster' // Legacy - maps to 'poster_space'
+  | 'shelf' // Legacy
+  | 'booth' // Legacy
+  | 'counter' // Legacy
+  | 'other'; // Legacy
+
 export interface PosterSpace {
   id: string;
   org_id: string;
   title: string;
-  category: 'poster' | 'shelf' | 'booth' | 'counter' | 'other';
+  category: PosterSpaceCategory;
   short_description: string | null;
   bullets: string[];
   photos: string[];
@@ -39,7 +50,7 @@ export interface UpsertPosterSpaceInput {
   id?: string;
   org_id: string;
   title: string;
-  category?: 'poster' | 'shelf' | 'booth' | 'counter' | 'other';
+  category?: PosterSpaceCategory;
   short_description?: string | null;
   bullets?: string[];
   photos?: string[];

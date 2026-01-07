@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import PosterSpaceForm from './components/PosterSpaceForm';
+import AddSpaceCategoryModal, { type SpaceCategory } from './components/AddSpaceCategoryModal';
 import { upsertPosterSpace, type PosterSpace } from '@/lib/api/poster-spaces';
 
 interface BookingResource {
@@ -60,6 +61,9 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
   const [resources, setResources] = useState<BookingResource[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showPosterSpaceForm, setShowPosterSpaceForm] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<SpaceCategory | null>(null);
   const [creating, setCreating] = useState(false);
   const [newResource, setNewResource] = useState({
     name: '',
@@ -263,7 +267,13 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
             </h2>
           </div>
           <Button
-            onClick={() => setShowNewDialog(true)}
+            onClick={() => {
+              if (typeFilter === 'space') {
+                setShowCategoryModal(true);
+              } else {
+                setShowNewDialog(true);
+              }
+            }}
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             size="icon"
             className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
@@ -300,7 +310,13 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
                 : 'Get started by creating your first event or workshop'}
             </p>
             <Button
-              onClick={() => setShowNewDialog(true)}
+              onClick={() => {
+                if (typeFilter === 'space') {
+                  setShowCategoryModal(true);
+                } else {
+                  setShowNewDialog(true);
+                }
+              }}
               style={{ backgroundColor: '#0E7A3A', color: 'white' }}
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -357,39 +373,78 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
         </div>
       )}
 
-      {/* Create Dialog */}
-      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-        <DialogContent className={newResource.type === 'space' ? 'max-w-6xl max-h-[90vh] overflow-y-auto' : 'max-w-2xl'}>
-          <DialogHeader>
-            <DialogTitle>Create Booking Resource</DialogTitle>
-            <DialogDescription>
-              {newResource.type === 'space'
-                ? 'Create a new poster space for booking'
-                : 'Add a new space, workshop, or event that can be booked'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {newResource.type === 'space' ? (
-            // Show Poster Space Form for Space type
+      {/* Category Selection Modal - Only for Spaces */}
+      <AddSpaceCategoryModal
+        open={showCategoryModal}
+        onOpenChange={setShowCategoryModal}
+        onSelectCategory={async (category) => {
+          setSelectedCategory(category);
+          if (!currentOrg?.id) return;
+
+          if (category === 'poster_space') {
+            // Open PosterSpaceForm directly
+            setShowCategoryModal(false);
+            setShowPosterSpaceForm(true);
+          } else {
+            // Create draft poster_space with selected category and navigate to edit
+            try {
+              setCreating(true);
+              const space = await upsertPosterSpace({
+                org_id: currentOrg.id,
+                title: category === 'consignment_shelf' ? 'Consignment Shelf' :
+                       category === 'cup_sleeve_promotion' ? 'Cup Sleeve Promotion' :
+                       category === 'event_hosting' ? 'Event Hosting' : 'New Space',
+                category: category,
+                status: 'draft',
+              });
+              toast.success('Space created');
+              setShowCategoryModal(false);
+              fetchResources();
+              navigate(`/app/booking/spaces/${space.id}/edit`);
+            } catch (error: any) {
+              console.error('Error creating space:', error);
+              toast.error(error.message || 'Failed to create space');
+            } finally {
+              setCreating(false);
+            }
+          }
+        }}
+      />
+
+      {/* Poster Space Form Dialog - Only shown when poster_space category selected */}
+      <Dialog open={showPosterSpaceForm} onOpenChange={setShowPosterSpaceForm}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          {showPosterSpaceForm && (
             <PosterSpaceForm
+              initialCategory={selectedCategory === 'poster_space' ? 'poster_space' : undefined}
               onSave={(space) => {
-                setShowNewDialog(false);
-                setNewResource({
-                  name: '',
-                  type: 'space',
-                  description: '',
-                  location_text: '',
-                  base_price_amount: '',
-                });
+                setShowPosterSpaceForm(false);
+                setSelectedCategory(null);
                 fetchResources();
                 navigate(`/app/booking/spaces/${space.id}/edit`);
               }}
-              onCancel={() => setShowNewDialog(false)}
+              onCancel={() => {
+                setShowPosterSpaceForm(false);
+                setSelectedCategory(null);
+              }}
             />
-          ) : (
-            // Show legacy form for Workshop/Event
-            <>
-              <div className="space-y-4 py-4">
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Dialog - For Workshop/Event only */}
+      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Create Booking Resource</DialogTitle>
+            <DialogDescription>
+              Add a new workshop or event that can be booked
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Show legacy form for Workshop/Event */}
+          <>
+            <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">
                     Name <span className="text-destructive">*</span>
@@ -472,7 +527,6 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
                 </Button>
               </DialogFooter>
             </>
-          )}
         </DialogContent>
       </Dialog>
     </div>
