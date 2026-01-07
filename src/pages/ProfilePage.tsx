@@ -149,12 +149,18 @@ export default function ProfilePage() {
   const bioLines = bio.split('\n').filter(line => line.trim());
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 md:py-8">
+    <div className="w-full px-6 py-6 md:py-8">
       {/* Profile Header */}
-      <div className="flex gap-6 md:gap-8 mb-6">
+      <div className="flex gap-6 md:gap-8 mb-4">
         {/* Profile Picture */}
         <div className="flex-shrink-0">
-          <Avatar className="h-20 w-20 md:h-24 md:w-24 border-2" style={{ borderColor: 'rgba(14,122,58,0.2)' }}>
+          <Avatar 
+            className="h-20 w-20 md:h-24 md:w-24 border-2 shadow-sm" 
+            style={{ 
+              borderColor: 'rgba(14,122,58,0.2)',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)'
+            }}
+          >
             {logoUrl ? (
               <AvatarImage src={logoUrl} alt={brandName} />
             ) : (
@@ -167,49 +173,49 @@ export default function ProfilePage() {
 
         {/* Brand Name, Handle, Address */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-bold" style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}>
+          <div className="mb-1">
+            <h1 className="text-xl md:text-2xl font-bold inline" style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}>
               {brandName}
             </h1>
             {instagramHandle && (
-              <span className="text-base md:text-lg font-normal" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              <span className="text-base md:text-lg font-normal ml-2" style={{ color: 'rgba(15,31,23,0.6)' }}>
                 {instagramHandle}
               </span>
             )}
           </div>
           {address && (
-            <p className="text-sm md:text-base mb-4" style={{ color: '#0F1F17' }}>
+            <p className="text-sm md:text-base mb-0" style={{ color: '#0F1F17' }}>
               {address}
             </p>
           )}
+        </div>
+      </div>
 
-          {/* Stats Row */}
-          <div className="flex gap-6 md:gap-8 mt-4">
-            <div className="flex flex-col">
-              <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
-                {stats.catalogCount}
-              </span>
-              <span className="text-sm" style={{ color: '#0F1F17' }}>
-                Catalog
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
-                {stats.collabsCount}
-              </span>
-              <span className="text-sm" style={{ color: '#0F1F17' }}>
-                Collabs
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
-                {stats.connectCount}
-              </span>
-              <span className="text-sm" style={{ color: '#0F1F17' }}>
-                Connect
-              </span>
-            </div>
-          </div>
+      {/* Stats Row with Dividers */}
+      <div className="flex justify-between items-center py-3 border-t border-b mb-4" style={{ borderColor: 'rgba(0, 0, 0, 0.1)' }}>
+        <div className="flex items-baseline gap-1">
+          <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
+            {stats.catalogCount}
+          </span>
+          <span className="text-sm font-normal" style={{ color: '#0F1F17' }}>
+            Catalog
+          </span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
+            {stats.collabsCount}
+          </span>
+          <span className="text-sm font-normal" style={{ color: '#0F1F17' }}>
+            Collabs
+          </span>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
+            {stats.connectCount}
+          </span>
+          <span className="text-sm font-normal" style={{ color: '#0F1F17' }}>
+            Connect
+          </span>
         </div>
       </div>
 
@@ -217,7 +223,11 @@ export default function ProfilePage() {
       {bioLines.length > 0 && (
         <div className="mb-4">
           {bioLines.map((line, index) => (
-            <p key={index} className="text-sm md:text-base mb-1" style={{ color: '#0F1F17' }}>
+            <p 
+              key={index} 
+              className="text-sm md:text-base mb-1 leading-relaxed" 
+              style={{ color: '#0F1F17', lineHeight: '1.6' }}
+            >
               {line}
             </p>
           ))}
@@ -244,14 +254,14 @@ export default function ProfilePage() {
       <div className="flex gap-3 mt-6">
         <Button
           onClick={() => navigate('/app/settings/profile')}
-          className="flex-1 h-12 rounded-lg font-bold"
+          className="flex-1 h-12 rounded-2xl font-bold"
           style={{ backgroundColor: 'rgba(15,31,23,0.1)', color: '#0F1F17' }}
         >
           Edit Profile
         </Button>
         <Button
           onClick={() => navigate('/app/settings')}
-          className="flex-1 h-12 rounded-lg font-bold"
+          className="flex-1 h-12 rounded-2xl font-bold"
           style={{ backgroundColor: 'rgba(15,31,23,0.1)', color: '#0F1F17' }}
         >
           Setting
