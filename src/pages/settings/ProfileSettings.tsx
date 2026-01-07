@@ -209,13 +209,13 @@ export default function ProfileSettings() {
         <Button 
           variant="ghost" 
           className="mb-4 -ml-2" 
-          onClick={() => navigate('/app/settings')}
+          onClick={() => navigate(-1)}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Settings
+          Back
         </Button>
         <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-          Profile Settings
+          Edit Profile
         </h1>
         <p className="mt-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
           Manage your brand or venue profile
