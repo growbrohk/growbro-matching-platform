@@ -19,6 +19,19 @@ export interface OrgMember {
   created_at: string;
 }
 
+export interface OrgProfile {
+  org_id: string;
+  roles: string[];
+  category: 'f&b' | 'retail' | 'service' | 'other';
+  instagram: string | null;
+  address: string;
+  bio: string | null;
+  website: string | null;
+  logo_url: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;

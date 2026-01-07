@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, OrgProfile } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ export default function ProfileSettings() {
   const { currentOrg, refreshOrgMemberships } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [profileExists, setProfileExists] = useState(true);
   
   // Form fields
   const [roles, setRoles] = useState<Role[]>([]);
@@ -32,18 +33,61 @@ export default function ProfileSettings() {
   const [logoUrl, setLogoUrl] = useState('');
 
   useEffect(() => {
-    if (currentOrg) {
-      const metadata = currentOrg.metadata || {};
-      setName(currentOrg.name || '');
-      setRoles(metadata.roles || []);
-      setCategory(metadata.category || '');
-      setInstagram(metadata.instagram || '');
-      setAddress(metadata.address || '');
-      setBio(metadata.bio || '');
-      setWebsite(metadata.website || '');
-      setLogoUrl(metadata.logo_url || '');
-      setLoading(false);
-    }
+    const loadProfile = async () => {
+      if (!currentOrg) return;
+
+      try {
+        // Load org name
+        setName(currentOrg.name || '');
+
+        // Load profile from org_profiles table
+        const { data: profile, error } = await supabase
+          .from('org_profiles')
+          .select('*')
+          .eq('org_id', currentOrg.id)
+          .single();
+
+        if (error) {
+          // Profile doesn't exist yet - that's okay for migration
+          if (error.code === 'PGRST116') {
+            console.log('No profile found yet - will create on save');
+            setProfileExists(false);
+            
+            // Optional: Try to migrate from old metadata if it exists
+            const metadata = currentOrg.metadata || {};
+            if (metadata.roles || metadata.category || metadata.address) {
+              console.log('Found old metadata, prefilling form');
+              setRoles(metadata.roles || []);
+              setCategory(metadata.category || '');
+              setInstagram(metadata.instagram || '');
+              setAddress(metadata.address || '');
+              setBio(metadata.bio || '');
+              setWebsite(metadata.website || '');
+              setLogoUrl(metadata.logo_url || '');
+            }
+          } else {
+            throw error;
+          }
+        } else {
+          // Profile exists
+          setProfileExists(true);
+          setRoles(profile.roles || []);
+          setCategory(profile.category || '');
+          setInstagram(profile.instagram || '');
+          setAddress(profile.address || '');
+          setBio(profile.bio || '');
+          setWebsite(profile.website || '');
+          setLogoUrl(profile.logo_url || '');
+        }
+      } catch (error: any) {
+        console.error('Error loading profile:', error);
+        toast.error('Failed to load profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
   }, [currentOrg]);
 
   const handleRoleToggle = (role: Role) => {
@@ -77,35 +121,34 @@ export default function ProfileSettings() {
     try {
       if (!currentOrg) throw new Error('No organization selected');
 
-      const existingMetadata = currentOrg.metadata || {};
-
-      // Compute org_type for backward compatibility
-      const orgType = roles.includes('venue') && !roles.includes('brand') ? 'venue' : 'brand';
-
-      // Update org with profile data
-      const updatedMetadata = {
-        ...existingMetadata,
-        roles,
-        category,
-        instagram: instagram.trim() || null,
-        address: address.trim(),
-        bio: bio.trim() || null,
-        website: website.trim() || null,
-        logo_url: logoUrl.trim() || null,
-        org_type: orgType,
-      };
-
-      const { error: updateError } = await supabase
+      // Update org name
+      const { error: updateOrgError } = await supabase
         .from('orgs')
-        .update({ 
-          name: name.trim(),
-          metadata: updatedMetadata 
-        })
+        .update({ name: name.trim() })
         .eq('id', currentOrg.id);
 
-      if (updateError) throw updateError;
+      if (updateOrgError) throw updateOrgError;
+
+      // Upsert org_profiles
+      const { error: profileError } = await supabase
+        .from('org_profiles')
+        .upsert({
+          org_id: currentOrg.id,
+          roles,
+          category,
+          instagram: instagram.trim() || null,
+          address: address.trim(),
+          bio: bio.trim() || null,
+          website: website.trim() || null,
+          logo_url: logoUrl.trim() || null,
+        }, {
+          onConflict: 'org_id'
+        });
+
+      if (profileError) throw profileError;
 
       await refreshOrgMemberships();
+      setProfileExists(true);
       toast.success('Profile updated');
     } catch (error: any) {
       console.error('Error updating profile:', error);
@@ -151,6 +194,11 @@ export default function ProfileSettings() {
         <p className="mt-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
           Manage your brand or venue profile
         </p>
+        {!profileExists && (
+          <p className="mt-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(14,122,58,0.1)', color: '#0E7A3A' }}>
+            Complete your profile to get started
+          </p>
+        )}
       </div>
 
       {/* A) Basic info */}
@@ -428,4 +476,3 @@ export default function ProfileSettings() {
     </div>
   );
 }
-

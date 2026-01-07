@@ -72,7 +72,7 @@ export default function OnboardingNew() {
       // Step 3: Get the created org id
       const { data: memberships, error: membershipError } = await supabase
         .from('org_members')
-        .select('org_id, orgs(metadata)')
+        .select('org_id')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -83,33 +83,32 @@ export default function OnboardingNew() {
       }
 
       const orgId = memberships.org_id;
-      const existingMetadata = (memberships.orgs as any)?.metadata || {};
 
-      // Step 4: Compute org_type for backward compatibility
-      const orgType = roles.includes('venue') && !roles.includes('brand') ? 'venue' : 'brand';
-
-      // Step 5: Update org with profile data
-      const updatedMetadata = {
-        ...existingMetadata,
-        roles,
-        category,
-        instagram: instagram.trim() || null,
-        address: address.trim(),
-        bio: bio.trim() || null,
-        website: website.trim() || null,
-        logo_url: logoUrl.trim() || null,
-        org_type: orgType,
-      };
-
-      const { error: updateError } = await supabase
+      // Step 4: Update org name
+      const { error: updateOrgError } = await supabase
         .from('orgs')
-        .update({ 
-          name: name.trim(),
-          metadata: updatedMetadata 
-        })
+        .update({ name: name.trim() })
         .eq('id', orgId);
 
-      if (updateError) throw updateError;
+      if (updateOrgError) throw updateOrgError;
+
+      // Step 5: Insert/upsert org_profiles
+      const { error: profileError } = await supabase
+        .from('org_profiles')
+        .upsert({
+          org_id: orgId,
+          roles,
+          category,
+          instagram: instagram.trim() || null,
+          address: address.trim(),
+          bio: bio.trim() || null,
+          website: website.trim() || null,
+          logo_url: logoUrl.trim() || null,
+        }, {
+          onConflict: 'org_id'
+        });
+
+      if (profileError) throw profileError;
 
       // Step 6: Final refresh and redirect
       await refreshOrgMemberships();
