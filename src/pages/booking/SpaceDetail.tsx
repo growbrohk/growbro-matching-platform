@@ -31,14 +31,14 @@ export default function SpaceDetail() {
       const data = await getPosterSpace(id);
       if (!data || data.org_id !== currentOrg.id) {
         toast.error('Space not found');
-        navigate('/app/booking/resources?type=space');
+        navigate('/app/catalog?tab=spaces');
         return;
       }
       setSpace(data);
     } catch (error: any) {
       console.error('Error fetching space:', error);
       toast.error('Failed to load space');
-      navigate('/app/booking/resources?type=space');
+      navigate('/app/catalog?tab=spaces');
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export default function SpaceDetail() {
     try {
       await deletePosterSpace(space.id);
       toast.success('Space deleted');
-      navigate('/app/booking/resources?type=space');
+      navigate('/app/catalog?tab=spaces');
     } catch (error: any) {
       console.error('Error deleting space:', error);
       toast.error('Failed to delete space');
@@ -108,7 +108,7 @@ export default function SpaceDetail() {
             variant="ghost"
             size="icon"
             className="shrink-0 mt-1"
-            onClick={() => navigate('/app/booking/resources?type=space')}
+            onClick={() => navigate('/app/catalog?tab=spaces')}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>

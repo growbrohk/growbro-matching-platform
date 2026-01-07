@@ -76,8 +76,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
     { path: '/app/orders', label: 'Orders', icon: Receipt },
-    { path: '/app/booking/resources?type=event', label: 'Events & Workshops', icon: Calendar },
-    { path: '/app/booking/resources?type=space', label: 'Spaces', icon: Warehouse },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
@@ -105,15 +103,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
     if (path === '/app/inventory') {
       return location.pathname.startsWith('/app/inventory');
-    }
-    // Events & Workshops - check if on booking resources with type=event or type=workshop
-    if (path === '/app/booking/resources?type=event') {
-      return location.pathname.startsWith('/app/booking') && 
-             (location.search.includes('type=event') || location.search.includes('type=workshop'));
-    }
-    // Spaces - check if on booking resources with type=space
-    if (path === '/app/booking/resources?type=space') {
-      return location.pathname.startsWith('/app/booking') && location.search.includes('type=space');
     }
     if (checkPath === '/app/settings' || path === '/app/account') {
       return location.pathname.startsWith('/app/settings') || location.pathname.startsWith('/app/account');

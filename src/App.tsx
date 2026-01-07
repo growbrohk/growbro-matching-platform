@@ -23,17 +23,9 @@ import ProfileSettings from "./pages/settings/ProfileSettings";
 import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import Orders from "./pages/Orders";
-// Booking pages
-import BookingSettings from "./pages/booking/Settings";
-import ResourcesList from "./pages/booking/ResourcesList";
-import ResourceDetail from "./pages/booking/ResourceDetail";
+// Poster Space pages
 import SpaceDetail from "./pages/booking/SpaceDetail";
-import ReservationsList from "./pages/booking/ReservationsList";
-import ReservationDetail from "./pages/booking/ReservationDetail";
-import BookingFormPreviewPage from "./pages/booking/BookingFormPreviewPage";
-// Public booking pages
-import PublicBook from "./pages/public/PublicBook";
-import PublicReservation from "./pages/public/PublicReservation";
+// Public pages
 import PublicEventPage from "./pages/public/PublicEventPage";
 import PublicPosterSpace from "./pages/public/PublicPosterSpace";
 import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
@@ -147,11 +139,6 @@ function AppRoutes() {
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
       
-      {/* Public Booking Pages */}
-      <Route path="/book/:orgSlug/:resourceSlug" element={<PublicBook />} />
-      <Route path="/book/:resourceSlug" element={<PublicBook />} />
-      <Route path="/r/:qrToken" element={<PublicReservation />} />
-      
       {/* Public Poster Space Pages */}
       <Route path="/o/:orgSlug/spaces/:spaceId" element={<PublicPosterSpace />} />
       <Route path="/o/:orgSlug/spaces/:spaceId/request" element={<PublicPosterSpaceRequest />} />
@@ -206,21 +193,8 @@ function AppRoutes() {
       {/* Account route - Profile page (new preferred route) */}
       <Route path="/app/account" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
       
-      {/* Booking routes */}
-      <Route path="/app/booking/settings" element={<ProtectedRoute><AppLayout><BookingSettings /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking/resources" element={<ProtectedRoute><AppLayout><ResourcesList /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
+      {/* Poster Space routes */}
       <Route path="/app/booking/spaces/:id/edit" element={<ProtectedRoute><AppLayout><SpaceDetail /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/booking/preview/:resourceId" element={<ProtectedRoute><AppLayout><BookingFormPreviewPage /></AppLayout></ProtectedRoute>} />
-      
-      {/* Redirect old booking-v2 routes */}
-      <Route path="/app/booking-v2/settings" element={<Navigate to="/app/booking/settings" replace />} />
-      <Route path="/app/booking-v2/resources" element={<Navigate to="/app/booking/resources" replace />} />
-      <Route path="/app/booking-v2/resources/:id" element={<Navigate to="/app/booking/resources/:id" replace />} />
-      <Route path="/app/booking-v2/reservations" element={<Navigate to="/app/booking/reservations" replace />} />
-      <Route path="/app/booking-v2/reservations/:id" element={<Navigate to="/app/booking/reservations/:id" replace />} />
       
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
