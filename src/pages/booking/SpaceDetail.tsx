@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -17,32 +17,47 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, ExternalLink, Archive, Pause, Play, Trash2 } from 'lucide-react';
-import { getPosterSpace, upsertPosterSpace, deletePosterSpace, getBookingRequestsForSpace, type PosterSpace } from '@/lib/api/poster-spaces';
+import {
+  getPosterSpace,
+  upsertPosterSpace,
+  deletePosterSpace,
+  getBookingRequestsForSpace,
+  type PosterSpace,
+} from '@/lib/api/poster-spaces';
 import PosterSpaceForm from './components/PosterSpaceForm';
 
 export default function SpaceDetail() {
   const { id } = useParams<{ id: string }>();
   const { currentOrg } = useAuth();
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [space, setSpace] = useState<PosterSpace | null>(null);
+
   const [hasBookingRequests, setHasBookingRequests] = useState(false);
   const [checkingBookingRequests, setCheckingBookingRequests] = useState(false);
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (currentOrg?.id && id) {
-      fetchSpace();
+      void fetchSpace();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrg?.id, id]);
 
   useEffect(() => {
-    // Check for booking requests when space is loaded and is draft
-    if (space && space.status === 'draft' && id) {
-      checkBookingRequests();
+    // Only check booking requests for draft spaces (we only allow delete on drafts anyway)
+    if (space?.status === 'draft' && id) {
+      void checkBookingRequests();
+    } else {
+      // Not draft => no need to check; also avoid stale state from previous loads
+      setHasBookingRequests(false);
+      setCheckingBookingRequests(false);
     }
-  }, [space, id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [space?.id, space?.status, id]);
 
   const fetchSpace = async () => {
     if (!currentOrg?.id || !id) return;
@@ -50,11 +65,13 @@ export default function SpaceDetail() {
     try {
       setLoading(true);
       const data = await getPosterSpace(id);
+
       if (!data || data.org_id !== currentOrg.id) {
         toast.error('Space not found');
         navigate('/app/catalog?tab=spaces');
         return;
       }
+
       setSpace(data);
     } catch (error: any) {
       console.error('Error fetching space:', error);
@@ -71,11 +88,11 @@ export default function SpaceDetail() {
     try {
       setCheckingBookingRequests(true);
       const requests = await getBookingRequestsForSpace(id);
-      setHasBookingRequests(requests.length > 0);
+      setHasBookingRequests((requests?.length ?? 0) > 0);
     } catch (error: any) {
       console.error('Error checking booking requests:', error);
-      // On error, assume there might be requests to be safe
-      setHasBookingRequests(true);
+      // If check fails, do NOT block delete forever. Assume none and let DB/RLS enforce safety if needed.
+      setHasBookingRequests(false);
     } finally {
       setCheckingBookingRequests(false);
     }
@@ -94,8 +111,13 @@ export default function SpaceDetail() {
         ...space,
         status: newStatus,
       });
+
       setSpace(updated);
-      toast.success(`Space ${newStatus === 'published' ? 'published' : newStatus === 'paused' ? 'paused' : 'archived'}`);
+      toast.success(
+        `Space ${
+          newStatus === 'published' ? 'published' : newStatus === 'paused' ? 'paused' : 'archived'
+        }`,
+      );
     } catch (error: any) {
       console.error('Error updating space status:', error);
       toast.error('Failed to update space status');
@@ -112,12 +134,27 @@ export default function SpaceDetail() {
       navigate('/app/catalog?tab=spaces');
     } catch (error: any) {
       console.error('Error deleting space:', error);
-      toast.error(error.message || 'Failed to delete space');
+      toast.error(error?.message || 'Failed to delete space');
     } finally {
       setDeleting(false);
       setShowDeleteDialog(false);
     }
   };
+
+  const orgSlug = (currentOrg as any)?.slug;
+
+  const publicUrl = useMemo(() => {
+    if (!space) return '';
+    return orgSlug
+      ? `${window.location.origin}/o/${orgSlug}/spaces/${space.id}`
+      : `${window.location.origin}/spaces/${space.id}`;
+  }, [orgSlug, space]);
+
+  // Only allow delete when it's a draft AND we have confirmed there are no booking requests
+  const canDelete = useMemo(() => {
+    if (!space) return false;
+    return space.status === 'draft' && !checkingBookingRequests && !hasBookingRequests;
+  }, [space, checkingBookingRequests, hasBookingRequests]);
 
   if (loading) {
     return (
@@ -135,11 +172,6 @@ export default function SpaceDetail() {
     );
   }
 
-  const orgSlug = (currentOrg as any)?.slug;
-  const publicUrl = orgSlug
-    ? `${window.location.origin}/o/${orgSlug}/spaces/${space.id}`
-    : `${window.location.origin}/spaces/${space.id}`;
-
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Header */}
@@ -153,6 +185,7 @@ export default function SpaceDetail() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
+
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight break-words">
               {space.title}
@@ -167,6 +200,7 @@ export default function SpaceDetail() {
           <Badge variant={space.status === 'published' ? 'default' : 'secondary'} className="shrink-0">
             {space.status}
           </Badge>
+
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -178,36 +212,35 @@ export default function SpaceDetail() {
               <ExternalLink className="h-4 w-4 md:mr-2" />
               <span className="hidden md:inline">Preview</span>
             </Button>
+
             {space.status === 'published' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleStatusChange('paused')}
-              >
+              <Button variant="outline" size="sm" onClick={() => handleStatusChange('paused')}>
                 <Pause className="h-4 w-4 mr-2" />
                 Pause
               </Button>
             )}
+
             {space.status === 'paused' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleStatusChange('published')}
-              >
+              <Button variant="outline" size="sm" onClick={() => handleStatusChange('published')}>
                 <Play className="h-4 w-4 mr-2" />
                 Publish
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleStatusChange('archived')}
-            >
+
+            <Button variant="outline" size="sm" onClick={() => handleStatusChange('archived')}>
               <Archive className="h-4 w-4 mr-2" />
               Archive
             </Button>
-            {/* Delete button - only for draft spaces with no booking requests */}
-            {space.status === 'draft' && !hasBookingRequests && !checkingBookingRequests && (
+
+            {/* Delete: show a clear checking state to avoid “disabled destructive” confusion */}
+            {space.status === 'draft' && checkingBookingRequests && (
+              <Button variant="outline" size="sm" disabled>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Checking…
+              </Button>
+            )}
+
+            {canDelete && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -217,7 +250,9 @@ export default function SpaceDetail() {
                 Delete
               </Button>
             )}
-            {space.status === 'draft' && hasBookingRequests && (
+
+            {/* If draft but cannot delete due to booking requests, show a non-confusing disabled info button */}
+            {space.status === 'draft' && !checkingBookingRequests && hasBookingRequests && (
               <Button
                 variant="outline"
                 size="sm"
@@ -225,7 +260,7 @@ export default function SpaceDetail() {
                 title="Cannot delete space with existing booking requests"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+                Has requests
               </Button>
             )}
           </div>
@@ -238,7 +273,7 @@ export default function SpaceDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Space</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{space?.title}"? This action cannot be undone.
+              Are you sure you want to delete “{space.title}”? This action cannot be undone.
               All photos associated with this space will also be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -291,4 +326,3 @@ export default function SpaceDetail() {
     </div>
   );
 }
-
