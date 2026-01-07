@@ -27,6 +27,7 @@ import Orders from "./pages/Orders";
 import BookingSettings from "./pages/booking/Settings";
 import ResourcesList from "./pages/booking/ResourcesList";
 import ResourceDetail from "./pages/booking/ResourceDetail";
+import SpaceDetail from "./pages/booking/SpaceDetail";
 import ReservationsList from "./pages/booking/ReservationsList";
 import ReservationDetail from "./pages/booking/ReservationDetail";
 import BookingFormPreviewPage from "./pages/booking/BookingFormPreviewPage";
@@ -34,6 +35,9 @@ import BookingFormPreviewPage from "./pages/booking/BookingFormPreviewPage";
 import PublicBook from "./pages/public/PublicBook";
 import PublicReservation from "./pages/public/PublicReservation";
 import PublicEventPage from "./pages/public/PublicEventPage";
+import PublicPosterSpace from "./pages/public/PublicPosterSpace";
+import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
+import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 
@@ -148,6 +152,11 @@ function AppRoutes() {
       <Route path="/book/:resourceSlug" element={<PublicBook />} />
       <Route path="/r/:qrToken" element={<PublicReservation />} />
       
+      {/* Public Poster Space Pages */}
+      <Route path="/o/:orgSlug/spaces/:spaceId" element={<PublicPosterSpace />} />
+      <Route path="/o/:orgSlug/spaces/:spaceId/request" element={<PublicPosterSpaceRequest />} />
+      <Route path="/o/:orgSlug/spaces/:spaceId/request/:requestId/success" element={<PublicPosterSpaceRequestSuccess />} />
+      
       {/* 
         Protected Routes - Use /app prefix
         
@@ -201,6 +210,7 @@ function AppRoutes() {
       <Route path="/app/booking/settings" element={<ProtectedRoute><AppLayout><BookingSettings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/resources" element={<ProtectedRoute><AppLayout><ResourcesList /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/resources/:id" element={<ProtectedRoute><AppLayout><ResourceDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/booking/spaces/:id/edit" element={<ProtectedRoute><AppLayout><SpaceDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/reservations" element={<ProtectedRoute><AppLayout><ReservationsList /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/reservations/:id" element={<ProtectedRoute><AppLayout><ReservationDetail /></AppLayout></ProtectedRoute>} />
       <Route path="/app/booking/preview/:resourceId" element={<ProtectedRoute><AppLayout><BookingFormPreviewPage /></AppLayout></ProtectedRoute>} />

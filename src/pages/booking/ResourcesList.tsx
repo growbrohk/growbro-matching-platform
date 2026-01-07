@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import PosterSpaceForm from './components/PosterSpaceForm';
+import { upsertPosterSpace, type PosterSpace } from '@/lib/api/poster-spaces';
 
 interface BookingResource {
   id: string;
@@ -112,6 +114,37 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
       return;
     }
 
+    // If Type = Space, redirect to poster space creation flow
+    if (newResource.type === 'space') {
+      // Create a draft poster space
+      try {
+        setCreating(true);
+        const space = await upsertPosterSpace({
+          org_id: currentOrg.id,
+          title: newResource.name,
+          status: 'draft',
+        });
+        toast.success('Poster space created');
+        setShowNewDialog(false);
+        setNewResource({
+          name: '',
+          type: 'space',
+          description: '',
+          location_text: '',
+          base_price_amount: '',
+        });
+        fetchResources();
+        // Navigate to space detail/edit page
+        navigate(`/app/booking/spaces/${space.id}/edit`);
+      } catch (error: any) {
+        console.error('Error creating poster space:', error);
+        toast.error(error.message || 'Failed to create poster space');
+        setCreating(false);
+      }
+      return;
+    }
+
+    // For Workshop/Event, use existing flow
     try {
       setCreating(true);
       const slug = generateSlug(newResource.name);
@@ -326,95 +359,120 @@ export default function BookingResourcesList({ typeFilter: propTypeFilter, isEmb
 
       {/* Create Dialog */}
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={newResource.type === 'space' ? 'max-w-6xl max-h-[90vh] overflow-y-auto' : 'max-w-2xl'}>
           <DialogHeader>
             <DialogTitle>Create Booking Resource</DialogTitle>
             <DialogDescription>
-              Add a new space, workshop, or event that can be booked
+              {newResource.type === 'space'
+                ? 'Create a new poster space for booking'
+                : 'Add a new space, workshop, or event that can be booked'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">
-                Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={newResource.name}
-                onChange={(e) => setNewResource({ ...newResource, name: e.target.value })}
-                placeholder="e.g., Co-working Space, Pottery Workshop"
-              />
-            </div>
+          
+          {newResource.type === 'space' ? (
+            // Show Poster Space Form for Space type
+            <PosterSpaceForm
+              onSave={(space) => {
+                setShowNewDialog(false);
+                setNewResource({
+                  name: '',
+                  type: 'space',
+                  description: '',
+                  location_text: '',
+                  base_price_amount: '',
+                });
+                fetchResources();
+                navigate(`/app/booking/spaces/${space.id}/edit`);
+              }}
+              onCancel={() => setShowNewDialog(false)}
+            />
+          ) : (
+            // Show legacy form for Workshop/Event
+            <>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    value={newResource.name}
+                    onChange={(e) => setNewResource({ ...newResource, name: e.target.value })}
+                    placeholder="e.g., Co-working Space, Pottery Workshop"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="type">
-                Type <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={newResource.type}
-                onValueChange={(value: any) => setNewResource({ ...newResource, type: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="space">Space</SelectItem>
-                  <SelectItem value="workshop">Workshop</SelectItem>
-                  <SelectItem value="event">Event</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type">
+                    Type <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={newResource.type}
+                    onValueChange={(value: any) => setNewResource({ ...newResource, type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="space">Space</SelectItem>
+                      <SelectItem value="workshop">Workshop</SelectItem>
+                      <SelectItem value="event">Event</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={newResource.description}
-                onChange={(e) => setNewResource({ ...newResource, description: e.target.value })}
-                placeholder="Describe your resource..."
-                rows={3}
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newResource.description}
+                    onChange={(e) => setNewResource({ ...newResource, description: e.target.value })}
+                    placeholder="Describe your resource..."
+                    rows={3}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={newResource.location_text}
-                onChange={(e) => setNewResource({ ...newResource, location_text: e.target.value })}
-                placeholder="e.g., 123 Main St, Hong Kong"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={newResource.location_text}
+                    onChange={(e) => setNewResource({ ...newResource, location_text: e.target.value })}
+                    placeholder="e.g., 123 Main St, Hong Kong"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="price">Base Price (HKD)</Label>
-              <Input
-                id="price"
-                type="number"
-                value={newResource.base_price_amount}
-                onChange={(e) =>
-                  setNewResource({ ...newResource, base_price_amount: e.target.value })
-                }
-                placeholder="0"
-              />
-              <p className="text-sm text-muted-foreground">Leave empty for free resources</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewDialog(false)} disabled={creating}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={creating || !newResource.name}>
-              {creating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create Resource'
-              )}
-            </Button>
-          </DialogFooter>
+                <div className="space-y-2">
+                  <Label htmlFor="price">Base Price (HKD)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    value={newResource.base_price_amount}
+                    onChange={(e) =>
+                      setNewResource({ ...newResource, base_price_amount: e.target.value })
+                    }
+                    placeholder="0"
+                  />
+                  <p className="text-sm text-muted-foreground">Leave empty for free resources</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowNewDialog(false)} disabled={creating}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCreate} disabled={creating || !newResource.name}>
+                  {creating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Resource'
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
