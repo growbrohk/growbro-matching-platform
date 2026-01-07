@@ -20,6 +20,7 @@ import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
 import ProfileSettings from "./pages/settings/ProfileSettings";
+import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import Orders from "./pages/Orders";
 // Booking pages
@@ -193,8 +194,8 @@ function AppRoutes() {
       <Route path="/app/settings/catalog" element={<ProtectedRoute><AppLayout><CatalogSettings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings/profile" element={<ProtectedRoute><AppLayout><ProfileSettings /></AppLayout></ProtectedRoute>} />
       
-      {/* Account route - alias for settings (new preferred route) */}
-      <Route path="/app/account" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+      {/* Account route - Profile page (new preferred route) */}
+      <Route path="/app/account" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
       
       {/* Booking routes */}
       <Route path="/app/booking/settings" element={<ProtectedRoute><AppLayout><BookingSettings /></AppLayout></ProtectedRoute>} />
