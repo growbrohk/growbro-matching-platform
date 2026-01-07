@@ -93,8 +93,9 @@ export default function OnboardingNew() {
       if (updateOrgError) throw updateOrgError;
 
       // Step 5: Insert/upsert org_profiles
-      const { error: profileError } = await supabase
-        .from('org_profiles')
+      // Note: org_profiles table may not be in generated types yet, using type assertion
+      const { error: profileError } = await (supabase
+        .from('org_profiles' as any)
         .upsert({
           org_id: orgId,
           roles,
@@ -104,9 +105,9 @@ export default function OnboardingNew() {
           bio: bio.trim() || null,
           website: website.trim() || null,
           logo_url: logoUrl.trim() || null,
-        }, {
+        } as any, {
           onConflict: 'org_id'
-        });
+        })) as { error: any };
 
       if (profileError) throw profileError;
 
