@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { Calendar, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import {
-  getPublicPosterSpace,
+  getPublicPosterSpaceByShortCode,
   createBookingRequest,
   computeEndDate,
   checkBlackoutOverlap,
@@ -25,7 +25,7 @@ import {
 } from '@/lib/api/poster-spaces';
 
 export default function PublicPosterSpaceRequest() {
-  const { orgSlug, spaceId } = useParams<{ orgSlug: string; spaceId: string }>();
+  const { spaceParam } = useParams<{ spaceParam: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -44,10 +44,10 @@ export default function PublicPosterSpaceRequest() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (orgSlug && spaceId) {
+    if (spaceParam) {
       fetchSpace();
     }
-  }, [orgSlug, spaceId]);
+  }, [spaceParam]);
 
   useEffect(() => {
     // Pre-fill user info if logged in
@@ -61,18 +61,31 @@ export default function PublicPosterSpaceRequest() {
   }, [user]);
 
   const fetchSpace = async () => {
-    if (!orgSlug || !spaceId) return;
+    if (!spaceParam) return;
+
+    // Parse shortCode from spaceParam
+    const shortCode = spaceParam.split('-')[0];
 
     try {
       setLoading(true);
-      const result = await getPublicPosterSpace(orgSlug, spaceId);
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
       if (!result) {
         toast.error('Space not found');
-        navigate(`/o/${orgSlug}/spaces/${spaceId}`);
+        navigate(`/space/${spaceParam}`);
         return;
       }
       setSpace(result.space);
       setOrg(result.org);
+
+      // Optional redirect to canonical URL if slug exists and URL slug mismatches
+      if (result.org.slug) {
+        const expectedUrl = `/space/${shortCode}-${result.org.slug}/request`;
+        const currentUrl = `/space/${spaceParam}/request`;
+        if (currentUrl !== expectedUrl) {
+          navigate(expectedUrl, { replace: true });
+          return;
+        }
+      }
     } catch (error: any) {
       console.error('Error fetching poster space:', error);
       toast.error('Failed to load space');
@@ -135,7 +148,7 @@ export default function PublicPosterSpaceRequest() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate() || !space || !orgSlug || !spaceId) return;
+    if (!validate() || !space || !spaceParam) return;
 
     try {
       setSubmitting(true);
@@ -157,7 +170,11 @@ export default function PublicPosterSpaceRequest() {
       });
 
       toast.success('Booking request submitted successfully');
-      navigate(`/o/${orgSlug}/spaces/${spaceId}/request/${request.id}/success`);
+      const shortCode = spaceParam.split('-')[0];
+      const url = org?.slug
+        ? `/space/${shortCode}-${org.slug}/request/${request.id}/success`
+        : `/space/${shortCode}/request/${request.id}/success`;
+      navigate(url);
     } catch (error: any) {
       console.error('Error creating booking request:', error);
       toast.error(error.message || 'Failed to submit booking request');
@@ -194,7 +211,13 @@ export default function PublicPosterSpaceRequest() {
         <div className="mb-6">
           <Button
             variant="ghost"
-            onClick={() => navigate(`/o/${orgSlug}/spaces/${spaceId}`)}
+            onClick={() => {
+              const shortCode = spaceParam?.split('-')[0] || space.short_code;
+              const url = org?.slug
+                ? `/space/${shortCode}-${org.slug}`
+                : `/space/${shortCode}`;
+              navigate(url);
+            }}
             className="mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />

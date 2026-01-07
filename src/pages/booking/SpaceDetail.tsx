@@ -144,10 +144,11 @@ export default function SpaceDetail() {
   const orgSlug = (currentOrg as any)?.slug;
 
   const publicUrl = useMemo(() => {
-    if (!space) return '';
+    if (!space || !space.short_code) return '';
+    const origin = window.location.origin;
     return orgSlug
-      ? `${window.location.origin}/o/${orgSlug}/spaces/${space.id}`
-      : `${window.location.origin}/spaces/${space.id}`;
+      ? `${origin}/space/${space.short_code}-${orgSlug}`
+      : `${origin}/space/${space.short_code}`;
   }, [orgSlug, space]);
 
   // Only allow delete when it's a draft AND we have confirmed there are no booking requests

@@ -5,11 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { MapPin, Calendar, Loader2, ExternalLink } from 'lucide-react';
-import { getPublicPosterSpace, type PosterSpace } from '@/lib/api/poster-spaces';
+import { getPublicPosterSpaceByShortCode, type PosterSpace } from '@/lib/api/poster-spaces';
 import { supabase } from '@/integrations/supabase/client';
 
 export default function PublicPosterSpace() {
-  const { orgSlug, spaceId } = useParams<{ orgSlug: string; spaceId: string }>();
+  const { spaceParam } = useParams<{ spaceParam: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [space, setSpace] = useState<PosterSpace | null>(null);
@@ -17,23 +17,36 @@ export default function PublicPosterSpace() {
   const [orgProfile, setOrgProfile] = useState<any>(null);
 
   useEffect(() => {
-    if (orgSlug && spaceId) {
+    if (spaceParam) {
       fetchSpace();
     }
-  }, [orgSlug, spaceId]);
+  }, [spaceParam]);
 
   const fetchSpace = async () => {
-    if (!orgSlug || !spaceId) return;
+    if (!spaceParam) return;
+
+    // Parse shortCode from spaceParam (format: "shortCode" or "shortCode-orgSlug")
+    const shortCode = spaceParam.split('-')[0];
 
     try {
       setLoading(true);
-      const result = await getPublicPosterSpace(orgSlug, spaceId);
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
       if (!result) {
         toast.error('Space not found');
         return;
       }
       setSpace(result.space);
       setOrg(result.org);
+
+      // Optional redirect to canonical URL if slug exists and URL slug mismatches
+      if (result.org.slug) {
+        const expectedUrl = `/space/${shortCode}-${result.org.slug}`;
+        const currentUrl = `/space/${spaceParam}`;
+        if (currentUrl !== expectedUrl) {
+          navigate(expectedUrl, { replace: true });
+          return; // Let redirect happen, will re-render with correct URL
+        }
+      }
 
       // Fetch org profile for address/website
       const { data: profile } = await supabase
@@ -176,7 +189,13 @@ export default function PublicPosterSpace() {
             <Button
               size="lg"
               className="w-full"
-              onClick={() => navigate(`/o/${orgSlug}/spaces/${spaceId}/request`)}
+              onClick={() => {
+                const shortCode = spaceParam?.split('-')[0] || space.short_code;
+                const url = org?.slug 
+                  ? `/space/${shortCode}-${org.slug}/request`
+                  : `/space/${shortCode}/request`;
+                navigate(url);
+              }}
             >
               <Calendar className="h-4 w-4 mr-2" />
               Request to book

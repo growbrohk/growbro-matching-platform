@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { generateShortCode } from '@/lib/utils/short-code';
 
 export type PosterSpaceCategory = 
   | 'poster_space' 
@@ -14,6 +15,7 @@ export type PosterSpaceCategory =
 export interface PosterSpace {
   id: string;
   org_id: string;
+  short_code: string;
   title: string;
   category: PosterSpaceCategory;
   short_description: string | null;
@@ -95,7 +97,42 @@ export async function getPosterSpace(spaceId: string): Promise<PosterSpace | nul
 }
 
 /**
+ * Fetch a published poster space by short_code (for public pages)
+ */
+export async function getPublicPosterSpaceByShortCode(
+  shortCode: string
+): Promise<{ space: PosterSpace; org: any } | null> {
+  const { data, error } = await supabase
+    .from('poster_spaces')
+    .select(`
+      *,
+      orgs!inner (
+        id,
+        name,
+        slug
+      )
+    `)
+    .eq('short_code', shortCode)
+    .eq('status', 'published')
+    .single();
+
+  if (error) {
+    console.error('Error fetching public poster space by short_code:', error);
+    return null;
+  }
+
+  if (!data) return null;
+
+  const { orgs, ...space } = data as any;
+  return {
+    space: space as PosterSpace,
+    org: orgs,
+  };
+}
+
+/**
  * Fetch a published poster space by org slug and space ID (for public pages)
+ * @deprecated Use getPublicPosterSpaceByShortCode instead
  */
 export async function getPublicPosterSpace(
   orgSlug: string,
@@ -131,6 +168,23 @@ export async function getPublicPosterSpace(
 }
 
 /**
+ * Get short_code by UUID (for backward compatibility redirects)
+ */
+export async function getShortCodeById(spaceId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('poster_spaces')
+    .select('short_code')
+    .eq('id', spaceId)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data.short_code;
+}
+
+/**
  * Fetch all poster spaces for an org
  */
 export async function getPosterSpacesByOrg(orgId: string): Promise<PosterSpace[]> {
@@ -155,7 +209,7 @@ export async function upsertPosterSpace(input: UpsertPosterSpaceInput): Promise<
   const { id, ...data } = input;
 
   if (id) {
-    // Update existing
+    // Update existing - do NOT change short_code
     const { data: updated, error } = await supabase
       .from('poster_spaces')
       .update(data)
@@ -170,19 +224,71 @@ export async function upsertPosterSpace(input: UpsertPosterSpaceInput): Promise<
 
     return updated as PosterSpace;
   } else {
-    // Create new
-    const { data: created, error } = await supabase
-      .from('poster_spaces')
-      .insert(data)
-      .select()
-      .single();
+    // Create new - generate short_code with retry logic
+    let attempts = 0;
+    const maxAttempts = 5;
+    let shortCode = generateShortCode(7);
 
-    if (error) {
-      console.error('Error creating poster space:', error);
-      throw error;
+    while (attempts < maxAttempts) {
+      try {
+        const { data: created, error } = await supabase
+          .from('poster_spaces')
+          .insert({
+            ...data,
+            short_code: shortCode,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          // Check if it's a unique constraint violation on short_code
+          if (error.code === '23505' && error.message?.includes('short_code')) {
+            attempts++;
+            if (attempts < maxAttempts) {
+              // Generate new code and retry
+              shortCode = generateShortCode(7);
+              continue;
+            } else {
+              // Last attempt: try 8 chars
+              shortCode = generateShortCode(8);
+              const { data: retryCreated, error: retryError } = await supabase
+                .from('poster_spaces')
+                .insert({
+                  ...data,
+                  short_code: shortCode,
+                })
+                .select()
+                .single();
+
+              if (retryError) {
+                console.error('Error creating poster space after retries:', retryError);
+                throw retryError;
+              }
+
+              return retryCreated as PosterSpace;
+            }
+          } else {
+            // Other error, throw it
+            console.error('Error creating poster space:', error);
+            throw error;
+          }
+        }
+
+        return created as PosterSpace;
+      } catch (err: any) {
+        // If it's not a unique constraint error, throw it
+        if (err.code !== '23505' || !err.message?.includes('short_code')) {
+          throw err;
+        }
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw new Error('Failed to generate unique short_code after multiple attempts');
+        }
+        shortCode = generateShortCode(7);
+      }
     }
 
-    return created as PosterSpace;
+    throw new Error('Failed to create poster space');
   }
 }
 

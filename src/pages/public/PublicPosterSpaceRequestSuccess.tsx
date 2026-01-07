@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 
 export default function PublicPosterSpaceRequestSuccess() {
-  const { orgSlug, spaceId, requestId } = useParams<{
-    orgSlug: string;
-    spaceId: string;
+  const { spaceParam, requestId } = useParams<{
+    spaceParam: string;
     requestId: string;
   }>();
   const navigate = useNavigate();
@@ -27,11 +26,11 @@ export default function PublicPosterSpaceRequestSuccess() {
             <p className="mt-2">The space owner will review your request and get back to you soon.</p>
           </div>
           <div className="flex gap-2">
-            {orgSlug && spaceId && (
+            {spaceParam && (
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => navigate(`/o/${orgSlug}/spaces/${spaceId}`)}
+                onClick={() => navigate(`/space/${spaceParam}`)}
               >
                 Back to Space
               </Button>

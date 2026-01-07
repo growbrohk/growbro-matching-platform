@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Auth from "./pages/Auth";
 import OnboardingNew from "./pages/OnboardingNew";
@@ -32,6 +33,7 @@ import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
+import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
 
 const queryClient = new QueryClient();
 
@@ -131,6 +133,168 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Legacy redirect components for backward compatibility
+function LegacyPosterSpaceRedirect() {
+  const { orgSlug, spaceId } = useParams<{ orgSlug: string; spaceId: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function redirect() {
+      if (!spaceId) {
+        navigate('/');
+        return;
+      }
+
+      const shortCode = await getShortCodeById(spaceId);
+      if (!shortCode) {
+        navigate('/');
+        return;
+      }
+
+      // Try to get org slug from the space
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
+      if (result?.org?.slug) {
+        navigate(`/space/${shortCode}-${result.org.slug}`, { replace: true });
+      } else {
+        navigate(`/space/${shortCode}`, { replace: true });
+      }
+    }
+
+    void redirect().finally(() => setLoading(false));
+  }, [spaceId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function LegacyPosterSpaceRequestRedirect() {
+  const { orgSlug, spaceId } = useParams<{ orgSlug: string; spaceId: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function redirect() {
+      if (!spaceId) {
+        navigate('/');
+        return;
+      }
+
+      const shortCode = await getShortCodeById(spaceId);
+      if (!shortCode) {
+        navigate('/');
+        return;
+      }
+
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
+      if (result?.org?.slug) {
+        navigate(`/space/${shortCode}-${result.org.slug}/request`, { replace: true });
+      } else {
+        navigate(`/space/${shortCode}/request`, { replace: true });
+      }
+    }
+
+    void redirect().finally(() => setLoading(false));
+  }, [spaceId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function LegacyPosterSpaceRequestSuccessRedirect() {
+  const { orgSlug, spaceId, requestId } = useParams<{ orgSlug: string; spaceId: string; requestId: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function redirect() {
+      if (!spaceId) {
+        navigate('/');
+        return;
+      }
+
+      const shortCode = await getShortCodeById(spaceId);
+      if (!shortCode) {
+        navigate('/');
+        return;
+      }
+
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
+      if (result?.org?.slug) {
+        navigate(`/space/${shortCode}-${result.org.slug}/request/${requestId}/success`, { replace: true });
+      } else {
+        navigate(`/space/${shortCode}/request/${requestId}/success`, { replace: true });
+      }
+    }
+
+    void redirect().finally(() => setLoading(false));
+  }, [spaceId, requestId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function LegacyPosterSpaceRedirectSimple() {
+  const { spaceId } = useParams<{ spaceId: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function redirect() {
+      if (!spaceId) {
+        navigate('/');
+        return;
+      }
+
+      const shortCode = await getShortCodeById(spaceId);
+      if (!shortCode) {
+        navigate('/');
+        return;
+      }
+
+      const result = await getPublicPosterSpaceByShortCode(shortCode);
+      if (result?.org?.slug) {
+        navigate(`/space/${shortCode}-${result.org.slug}`, { replace: true });
+      } else {
+        navigate(`/space/${shortCode}`, { replace: true });
+      }
+    }
+
+    void redirect().finally(() => setLoading(false));
+  }, [spaceId, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -139,10 +303,16 @@ function AppRoutes() {
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingNew /></OnboardingRoute>} />
       
-      {/* Public Poster Space Pages */}
-      <Route path="/o/:orgSlug/spaces/:spaceId" element={<PublicPosterSpace />} />
-      <Route path="/o/:orgSlug/spaces/:spaceId/request" element={<PublicPosterSpaceRequest />} />
-      <Route path="/o/:orgSlug/spaces/:spaceId/request/:requestId/success" element={<PublicPosterSpaceRequestSuccess />} />
+      {/* Public Poster Space Pages - New canonical format */}
+      <Route path="/space/:spaceParam" element={<PublicPosterSpace />} />
+      <Route path="/space/:spaceParam/request" element={<PublicPosterSpaceRequest />} />
+      <Route path="/space/:spaceParam/request/:requestId/success" element={<PublicPosterSpaceRequestSuccess />} />
+      
+      {/* Legacy routes - backward compatibility redirects */}
+      <Route path="/o/:orgSlug/spaces/:spaceId" element={<LegacyPosterSpaceRedirect />} />
+      <Route path="/o/:orgSlug/spaces/:spaceId/request" element={<LegacyPosterSpaceRequestRedirect />} />
+      <Route path="/o/:orgSlug/spaces/:spaceId/request/:requestId/success" element={<LegacyPosterSpaceRequestSuccessRedirect />} />
+      <Route path="/spaces/:spaceId" element={<LegacyPosterSpaceRedirectSimple />} />
       
       {/* 
         Protected Routes - Use /app prefix
