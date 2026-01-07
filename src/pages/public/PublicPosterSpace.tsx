@@ -49,12 +49,18 @@ export default function PublicPosterSpace() {
       }
 
       // Fetch org profile for address/website
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('org_profiles')
         .select('address, website')
         .eq('org_id', result.org.id)
         .single();
-      if (profile) setOrgProfile(profile);
+      
+      if (profileError) {
+        console.warn('Failed to fetch org profile (may be expected for anon users):', profileError);
+        // Don't show error toast - org profile is optional for public view
+      } else if (profile) {
+        setOrgProfile(profile);
+      }
     } catch (error: any) {
       console.error('Error fetching poster space:', error);
       toast.error('Failed to load space');
