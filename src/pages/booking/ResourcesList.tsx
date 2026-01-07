@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import PosterSpaceForm from './components/PosterSpaceForm';
 import AddSpaceCategoryModal, { type SpaceCategory } from './components/AddSpaceCategoryModal';
-import { getPosterSpacesByOrg, upsertPosterSpace, type PosterSpace } from '@/lib/api/poster-spaces';
+import { getPosterSpacesByOrg, type PosterSpace } from '@/lib/api/poster-spaces';
 
 interface SpacesListProps {
   isEmbeddedInCatalog?: boolean;
@@ -28,7 +28,6 @@ export default function SpacesList({ isEmbeddedInCatalog = false }: SpacesListPr
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showPosterSpaceForm, setShowPosterSpaceForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SpaceCategory | null>(null);
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (currentOrg?.id) {
@@ -221,33 +220,10 @@ export default function SpacesList({ isEmbeddedInCatalog = false }: SpacesListPr
           setSelectedCategory(category);
           if (!currentOrg?.id) return;
 
-          if (category === 'poster_space') {
-            // Open PosterSpaceForm directly
-            setShowCategoryModal(false);
-            setShowPosterSpaceForm(true);
-          } else {
-            // Create draft poster_space with selected category and navigate to edit
-            try {
-              setCreating(true);
-              const space = await upsertPosterSpace({
-                org_id: currentOrg.id,
-                title: category === 'consignment_shelf' ? 'Consignment Shelf' :
-                       category === 'cup_sleeve_promotion' ? 'Cup Sleeve Promotion' :
-                       category === 'event_hosting' ? 'Event Hosting' : 'New Space',
-                category: category,
-                status: 'draft',
-              });
-              toast.success('Space created');
-              setShowCategoryModal(false);
-              fetchSpaces();
-              navigate(`/app/booking/spaces/${space.id}/edit`);
-            } catch (error: any) {
-              console.error('Error creating space:', error);
-              toast.error(error.message || 'Failed to create space');
-            } finally {
-              setCreating(false);
-            }
-          }
+          // For all categories, open the form dialog without creating any DB record
+          // Drafts will only be created when user clicks "Save Draft" or "Publish"
+          setShowCategoryModal(false);
+          setShowPosterSpaceForm(true);
         }}
       />
 
@@ -256,11 +232,12 @@ export default function SpacesList({ isEmbeddedInCatalog = false }: SpacesListPr
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           {showPosterSpaceForm && (
             <PosterSpaceForm
-              initialCategory={selectedCategory === 'poster_space' ? 'poster_space' : undefined}
+              initialCategory={selectedCategory || undefined}
               onSave={(space) => {
                 setShowPosterSpaceForm(false);
                 setSelectedCategory(null);
                 fetchSpaces();
+                // Navigate to edit page after save
                 navigate(`/app/booking/spaces/${space.id}/edit`);
               }}
               onCancel={() => {

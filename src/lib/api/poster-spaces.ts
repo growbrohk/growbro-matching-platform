@@ -187,9 +187,31 @@ export async function upsertPosterSpace(input: UpsertPosterSpaceInput): Promise<
 }
 
 /**
- * Delete a poster space
+ * Delete a poster space and all associated photos
  */
 export async function deletePosterSpace(spaceId: string): Promise<void> {
+  // First, fetch the space to get photo URLs
+  const space = await getPosterSpace(spaceId);
+  
+  if (!space) {
+    throw new Error('Space not found');
+  }
+
+  // Delete all photos from storage
+  if (space.photos && space.photos.length > 0) {
+    const deletePhotoPromises = space.photos.map((photoUrl) => {
+      try {
+        return deletePosterSpacePhoto(photoUrl);
+      } catch (error) {
+        // Log but don't fail if photo deletion fails
+        console.warn('Failed to delete photo:', photoUrl, error);
+        return Promise.resolve();
+      }
+    });
+    await Promise.all(deletePhotoPromises);
+  }
+
+  // Delete the space row
   const { error } = await supabase
     .from('poster_spaces')
     .delete()

@@ -5,9 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, ExternalLink, Archive, Pause, Play } from 'lucide-react';
-import { getPosterSpace, upsertPosterSpace, deletePosterSpace, type PosterSpace } from '@/lib/api/poster-spaces';
+import { ArrowLeft, Loader2, ExternalLink, Archive, Pause, Play, Trash2 } from 'lucide-react';
+import { getPosterSpace, upsertPosterSpace, deletePosterSpace, getBookingRequestsForSpace, type PosterSpace } from '@/lib/api/poster-spaces';
 import PosterSpaceForm from './components/PosterSpaceForm';
 
 export default function SpaceDetail() {
@@ -16,12 +26,23 @@ export default function SpaceDetail() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [space, setSpace] = useState<PosterSpace | null>(null);
+  const [hasBookingRequests, setHasBookingRequests] = useState(false);
+  const [checkingBookingRequests, setCheckingBookingRequests] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (currentOrg?.id && id) {
       fetchSpace();
     }
   }, [currentOrg?.id, id]);
+
+  useEffect(() => {
+    // Check for booking requests when space is loaded and is draft
+    if (space && space.status === 'draft' && id) {
+      checkBookingRequests();
+    }
+  }, [space, id]);
 
   const fetchSpace = async () => {
     if (!currentOrg?.id || !id) return;
@@ -41,6 +62,22 @@ export default function SpaceDetail() {
       navigate('/app/catalog?tab=spaces');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkBookingRequests = async () => {
+    if (!id) return;
+
+    try {
+      setCheckingBookingRequests(true);
+      const requests = await getBookingRequestsForSpace(id);
+      setHasBookingRequests(requests.length > 0);
+    } catch (error: any) {
+      console.error('Error checking booking requests:', error);
+      // On error, assume there might be requests to be safe
+      setHasBookingRequests(true);
+    } finally {
+      setCheckingBookingRequests(false);
     }
   };
 
@@ -66,15 +103,19 @@ export default function SpaceDetail() {
   };
 
   const handleDelete = async () => {
-    if (!space || !confirm('Are you sure you want to delete this space?')) return;
+    if (!space) return;
 
     try {
+      setDeleting(true);
       await deletePosterSpace(space.id);
       toast.success('Space deleted');
       navigate('/app/catalog?tab=spaces');
     } catch (error: any) {
       console.error('Error deleting space:', error);
-      toast.error('Failed to delete space');
+      toast.error(error.message || 'Failed to delete space');
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -165,9 +206,61 @@ export default function SpaceDetail() {
               <Archive className="h-4 w-4 mr-2" />
               Archive
             </Button>
+            {/* Delete button - only for draft spaces with no booking requests */}
+            {space.status === 'draft' && !hasBookingRequests && !checkingBookingRequests && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
+            {space.status === 'draft' && hasBookingRequests && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                title="Cannot delete space with existing booking requests"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Space</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{space?.title}"? This action cannot be undone.
+              All photos associated with this space will also be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Public URL Card */}
       {space.status === 'published' && (
