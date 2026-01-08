@@ -11,7 +11,7 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import PosterSpaceForm from './components/PosterSpaceForm';
+import SpaceForm from './components/SpaceForm';
 import AddSpaceCategoryModal, { type SpaceCategory } from './components/AddSpaceCategoryModal';
 import { getPosterSpacesByOrg, type PosterSpace } from '@/lib/api/poster-spaces';
 
@@ -26,7 +26,7 @@ export default function SpacesList({ isEmbeddedInCatalog = false }: SpacesListPr
   const [spaces, setSpaces] = useState<PosterSpace[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showPosterSpaceForm, setShowPosterSpaceForm] = useState(false);
+  const [showSpaceForm, setShowSpaceForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SpaceCategory | null>(null);
 
   useEffect(() => {
@@ -223,25 +223,25 @@ export default function SpacesList({ isEmbeddedInCatalog = false }: SpacesListPr
           // For all categories, open the form dialog without creating any DB record
           // Drafts will only be created when user clicks "Save Draft" or "Publish"
           setShowCategoryModal(false);
-          setShowPosterSpaceForm(true);
+          setShowSpaceForm(true);
         }}
       />
 
-      {/* Poster Space Form Dialog - Only shown when poster_space category selected */}
-      <Dialog open={showPosterSpaceForm} onOpenChange={setShowPosterSpaceForm}>
+      {/* Space Form Dialog */}
+      <Dialog open={showSpaceForm} onOpenChange={setShowSpaceForm}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          {showPosterSpaceForm && (
-            <PosterSpaceForm
+          {showSpaceForm && (
+            <SpaceForm
               initialCategory={selectedCategory || undefined}
               onSave={(space) => {
-                setShowPosterSpaceForm(false);
+                setShowSpaceForm(false);
                 setSelectedCategory(null);
                 fetchSpaces();
                 // Navigate to edit page after save
                 navigate(`/app/booking/spaces/${space.id}/edit`);
               }}
               onCancel={() => {
-                setShowPosterSpaceForm(false);
+                setShowSpaceForm(false);
                 setSelectedCategory(null);
               }}
             />

@@ -24,7 +24,7 @@ import {
   getBookingRequestsForSpace,
   type PosterSpace,
 } from '@/lib/api/poster-spaces';
-import PosterSpaceForm from './components/PosterSpaceForm';
+import SpaceForm from './components/SpaceForm';
 
 export default function SpaceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -323,7 +323,7 @@ export default function SpaceDetail() {
       )}
 
       {/* Form */}
-      <PosterSpaceForm spaceId={space.id} initialData={space} onSave={handleSave} />
+      <SpaceForm spaceId={space.id} initialData={space} onSave={handleSave} />
     </div>
   );
 }

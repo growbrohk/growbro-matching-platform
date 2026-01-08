@@ -39,7 +39,7 @@ const FALLBACK_PROMOTION_TYPES: TypeDefinition[] = [
   { id: '7', domain: 'promotion_type', value: 'cupsleeve', label: 'Cupsleeve', parent_domain: 'space_type', parent_value: 'promotion', db_table: 'poster_spaces', db_column: 'category', db_values: ['cup_sleeve_promotion'], sort_order: 2, active: true, created_at: '', updated_at: '' },
 ];
 
-interface PosterSpaceFormProps {
+interface SpaceFormProps {
   spaceId?: string;
   initialData?: PosterSpace;
   initialCategory?: string;
@@ -100,7 +100,7 @@ function mapUiTypesToCategory(
   return 'poster_space';
 }
 
-export default function PosterSpaceForm({
+export default function SpaceForm({
   spaceId,
   initialData,
   initialCategory,
