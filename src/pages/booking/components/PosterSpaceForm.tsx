@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,21 @@ import {
   type UpsertPosterSpaceInput,
   type PosterSpace,
 } from '@/lib/api/poster-spaces';
+import { useTypeDefinitions } from '@/hooks/use-type-definitions';
+import type { TypeDefinition } from '@/lib/api/type-definitions';
 import PosterSpacePreview from './PosterSpacePreview';
+
+// Fallback values for backward compatibility
+const FALLBACK_SPACE_TYPES: TypeDefinition[] = [
+  { id: '1', domain: 'space_type', value: 'consignment', label: 'Consignment', parent_domain: null, parent_value: null, db_table: 'poster_spaces', db_column: 'category', db_values: ['consignment_shelf', 'shelf', 'booth', 'counter'], sort_order: 1, active: true, created_at: '', updated_at: '' },
+  { id: '2', domain: 'space_type', value: 'promotion', label: 'Promotion', parent_domain: null, parent_value: null, db_table: 'poster_spaces', db_column: 'category', db_values: ['poster_space', 'cup_sleeve_promotion'], sort_order: 2, active: true, created_at: '', updated_at: '' },
+  { id: '3', domain: 'space_type', value: 'event', label: 'Event Hosting', parent_domain: null, parent_value: null, db_table: 'poster_spaces', db_column: 'category', db_values: ['event_hosting'], sort_order: 3, active: true, created_at: '', updated_at: '' },
+];
+
+const FALLBACK_PROMOTION_TYPES: TypeDefinition[] = [
+  { id: '6', domain: 'promotion_type', value: 'poster', label: 'Poster', parent_domain: 'space_type', parent_value: 'promotion', db_table: 'poster_spaces', db_column: 'category', db_values: ['poster_space'], sort_order: 1, active: true, created_at: '', updated_at: '' },
+  { id: '7', domain: 'promotion_type', value: 'cupsleeve', label: 'Cupsleeve', parent_domain: 'space_type', parent_value: 'promotion', db_table: 'poster_spaces', db_column: 'category', db_values: ['cup_sleeve_promotion'], sort_order: 2, active: true, created_at: '', updated_at: '' },
+];
 
 interface PosterSpaceFormProps {
   spaceId?: string;
@@ -31,6 +45,59 @@ interface PosterSpaceFormProps {
   initialCategory?: string;
   onSave?: (space: PosterSpace) => void;
   onCancel?: () => void;
+}
+
+/**
+ * Map DB category value to UI space type and promotion type
+ */
+function mapCategoryToUiTypes(
+  category: string,
+  spaceTypes: TypeDefinition[],
+  promoTypes: TypeDefinition[]
+): { spaceType: string | null; promoType: string | null } {
+  // Check promotion types first (more specific)
+  const promoMatch = promoTypes.find((pt) => pt.db_values.includes(category));
+  if (promoMatch) {
+    return { spaceType: 'promotion', promoType: promoMatch.value };
+  }
+
+  // Check space types
+  const spaceMatch = spaceTypes.find((st) => st.db_values.includes(category));
+  if (spaceMatch) {
+    return { spaceType: spaceMatch.value, promoType: null };
+  }
+
+  // Default fallback
+  return { spaceType: 'promotion', promoType: 'poster' };
+}
+
+/**
+ * Map UI selections to DB category value
+ */
+function mapUiTypesToCategory(
+  spaceType: string | null,
+  promoType: string | null,
+  spaceTypes: TypeDefinition[],
+  promoTypes: TypeDefinition[]
+): string {
+  // If promotion selected with subtype, use subtype
+  if (spaceType === 'promotion' && promoType) {
+    const promoDef = promoTypes.find((pt) => pt.value === promoType);
+    if (promoDef && promoDef.db_values.length > 0) {
+      return promoDef.db_values[0];
+    }
+  }
+
+  // Otherwise use space type's first db_value
+  if (spaceType) {
+    const spaceDef = spaceTypes.find((st) => st.value === spaceType);
+    if (spaceDef && spaceDef.db_values.length > 0) {
+      return spaceDef.db_values[0];
+    }
+  }
+
+  // Default fallback
+  return 'poster_space';
 }
 
 export default function PosterSpaceForm({
@@ -44,10 +111,23 @@ export default function PosterSpaceForm({
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState<number[]>([]);
 
+  // Fetch type definitions
+  const { typeDefinitions: spaceTypes } = useTypeDefinitions({
+    domain: 'space_type',
+    fallback: FALLBACK_SPACE_TYPES,
+  });
+
+  const { typeDefinitions: promoTypes } = useTypeDefinitions({
+    domain: 'promotion_type',
+    parent_domain: 'space_type',
+    parent_value: 'promotion',
+    fallback: FALLBACK_PROMOTION_TYPES,
+  });
+
   // Map old 'poster' to new 'poster_space' for backward compatibility
   const getInitialCategory = () => {
     if (initialCategory) {
-      return initialCategory === 'poster_space' ? 'poster_space' : initialCategory;
+      return initialCategory === 'poster' ? 'poster_space' : initialCategory;
     }
     if (initialData?.category) {
       return initialData.category === 'poster' ? 'poster_space' : initialData.category;
@@ -55,10 +135,25 @@ export default function PosterSpaceForm({
     return 'poster_space';
   };
 
+  const initialCategoryValue = getInitialCategory();
+  
+  // Map initial category to UI types
+  const initialUiTypes = useMemo(() => {
+    return mapCategoryToUiTypes(initialCategoryValue, spaceTypes, promoTypes);
+  }, [initialCategoryValue, spaceTypes, promoTypes]);
+
+  const [selectedSpaceType, setSelectedSpaceType] = useState<string | null>(initialUiTypes.spaceType);
+  const [selectedPromoType, setSelectedPromoType] = useState<string | null>(initialUiTypes.promoType);
+
+  // Compute category from UI selections
+  const computedCategory = useMemo(() => {
+    return mapUiTypesToCategory(selectedSpaceType, selectedPromoType, spaceTypes, promoTypes);
+  }, [selectedSpaceType, selectedPromoType, spaceTypes, promoTypes]);
+
   const [formData, setFormData] = useState<UpsertPosterSpaceInput>({
     org_id: currentOrg?.id || '',
     title: '',
-    category: getInitialCategory() as any,
+    category: initialCategoryValue as any,
     short_description: '',
     bullets: [],
     photos: [],
@@ -73,14 +168,25 @@ export default function PosterSpaceForm({
     status: 'draft',
   });
 
+  // Update category when UI selections change
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      category: computedCategory as any,
+    }));
+  }, [computedCategory]);
+
   const [newBullet, setNewBullet] = useState('');
   const [blackoutStart, setBlackoutStart] = useState('');
   const [blackoutEnd, setBlackoutEnd] = useState('');
 
   useEffect(() => {
-    if (initialData) {
+    if (initialData && spaceTypes.length > 0 && promoTypes.length > 0) {
       // Map old 'poster' to new 'poster_space' for backward compatibility
       const category = initialData.category === 'poster' ? 'poster_space' : initialData.category;
+      const uiTypes = mapCategoryToUiTypes(category, spaceTypes, promoTypes);
+      setSelectedSpaceType(uiTypes.spaceType);
+      setSelectedPromoType(uiTypes.promoType);
       setFormData({
         org_id: initialData.org_id,
         title: initialData.title,
@@ -98,14 +204,18 @@ export default function PosterSpaceForm({
         tracking_prefix: initialData.tracking_prefix || null,
         status: initialData.status,
       });
-    } else if (initialCategory) {
+    } else if (initialCategory && spaceTypes.length > 0 && promoTypes.length > 0) {
       // Set category when creating new space with initial category
+      const category = initialCategory === 'poster' ? 'poster_space' : initialCategory;
+      const uiTypes = mapCategoryToUiTypes(category, spaceTypes, promoTypes);
+      setSelectedSpaceType(uiTypes.spaceType);
+      setSelectedPromoType(uiTypes.promoType);
       setFormData((prev) => ({
         ...prev,
-        category: (initialCategory === 'poster_space' ? 'poster_space' : initialCategory) as any,
+        category: category as any,
       }));
     }
-  }, [initialData, initialCategory]);
+  }, [initialData, initialCategory, spaceTypes, promoTypes]);
 
   const handleAddBullet = () => {
     if (newBullet.trim() && formData.bullets!.length < 3) {
@@ -261,30 +371,55 @@ export default function PosterSpaceForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="space_type">Space Type</Label>
                 <Select
-                  value={formData.category}
-                  onValueChange={(value: any) =>
-                    setFormData({ ...formData, category: value })
-                  }
+                  value={selectedSpaceType || ''}
+                  onValueChange={(value) => {
+                    setSelectedSpaceType(value);
+                    // Reset promotion type if not promotion
+                    if (value !== 'promotion') {
+                      setSelectedPromoType(null);
+                    } else if (!selectedPromoType && promoTypes.length > 0) {
+                      // Auto-select first promotion type if promotion selected
+                      setSelectedPromoType(promoTypes[0].value);
+                    }
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select space type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="poster_space">Poster Space</SelectItem>
-                    <SelectItem value="consignment_shelf">Consignment Shelf</SelectItem>
-                    <SelectItem value="cup_sleeve_promotion">Cup Sleeve Promotion</SelectItem>
-                    <SelectItem value="event_hosting">Event Hosting</SelectItem>
-                    {/* Legacy values for backward compatibility */}
-                    <SelectItem value="poster">Poster (Legacy)</SelectItem>
-                    <SelectItem value="shelf">Shelf (Legacy)</SelectItem>
-                    <SelectItem value="booth">Booth (Legacy)</SelectItem>
-                    <SelectItem value="counter">Counter (Legacy)</SelectItem>
-                    <SelectItem value="other">Other (Legacy)</SelectItem>
+                    {spaceTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {selectedSpaceType === 'promotion' && (
+                <div className="space-y-2">
+                  <Label htmlFor="promotion_type">Promotion Type</Label>
+                  <Select
+                    value={selectedPromoType || ''}
+                    onValueChange={(value) => {
+                      setSelectedPromoType(value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select promotion type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {promoTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="short_description">Short description (1–2 lines)</Label>
