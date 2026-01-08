@@ -24,6 +24,7 @@ import {
   type PosterSpace,
 } from '@/lib/api/poster-spaces';
 import PosterDatesPicker from '@/components/poster/PosterDatesPicker';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function PublicPosterSpaceRequest() {
   const { spaceParam } = useParams<{ spaceParam: string }>();
@@ -33,6 +34,8 @@ export default function PublicPosterSpaceRequest() {
   const [submitting, setSubmitting] = useState(false);
   const [space, setSpace] = useState<PosterSpace | null>(null);
   const [org, setOrg] = useState<any>(null);
+  const [events, setEvents] = useState<{ id: string; title: string }[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     requested_start_date: '',
@@ -61,6 +64,12 @@ export default function PublicPosterSpaceRequest() {
       }));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (user && org?.id) {
+      fetchEvents();
+    }
+  }, [user, org?.id]);
 
   const fetchSpace = async () => {
     if (!spaceParam) return;
@@ -96,6 +105,27 @@ export default function PublicPosterSpaceRequest() {
     }
   };
 
+  const fetchEvents = async () => {
+    if (!user || !org?.id) return;
+
+    try {
+      setEventsLoading(true);
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, title')
+        .eq('org_id', org.id)
+        .order('start_at', { ascending: false });
+
+      if (error) throw error;
+      setEvents((data || []) as { id: string; title: string }[]);
+    } catch (error: any) {
+      console.error('Error fetching events:', error);
+      // Don't show toast error for events - it's not critical for the form
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -120,7 +150,8 @@ export default function PublicPosterSpaceRequest() {
       newErrors.duration_units = `Duration must be one of: ${space.allowed_durations.join(', ')} ${space.booking_unit}s`;
     }
 
-    if (!formData.event_id?.trim()) {
+    // Only require event_id if there are events available
+    if (events.length > 0 && !formData.event_id?.trim()) {
       newErrors.event_id = 'Event is required';
     }
 
@@ -281,40 +312,57 @@ export default function PublicPosterSpaceRequest() {
               <CardTitle>Event</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="event_id">
-                  Event <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={formData.event_id}
-                  onValueChange={(value) => {
-                    setFormData({ ...formData, event_id: value });
-                    setErrors({ ...errors, event_id: '' });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an event" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* TODO: Replace with user event catalog query */}
-                    {[
-                      { id: 'evt_1', title: 'RunHNT001 – Neon City Hunt' },
-                      { id: 'evt_2', title: 'RunHNT002 – Cyberpunk Adventure' },
-                      { id: 'evt_3', title: 'RunHNT003 – Future Quest' },
-                    ].map((event) => (
-                      <SelectItem key={event.id} value={event.id}>
-                        {event.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.event_id && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.event_id}</AlertDescription>
-                  </Alert>
-                )}
-              </div>
+              {eventsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading events...
+                </div>
+              ) : events.length === 0 ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    You don't have any events yet. Create your first event to start a poster collab.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      navigate('/app/events/new');
+                    }}
+                  >
+                    Create event
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="event_id">
+                    Event <span className="text-destructive">*</span>
+                  </Label>
+                  <Select
+                    value={formData.event_id}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, event_id: value });
+                      setErrors({ ...errors, event_id: '' });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an event" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {events.map((event) => (
+                        <SelectItem key={event.id} value={event.id}>
+                          {event.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.event_id && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{errors.event_id}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -389,7 +437,12 @@ export default function PublicPosterSpaceRequest() {
           {/* Submit */}
           <Card>
             <CardContent className="pt-6">
-              <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={submitting || (!eventsLoading && events.length === 0)}
+              >
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -402,6 +455,11 @@ export default function PublicPosterSpaceRequest() {
                   </>
                 )}
               </Button>
+              {!eventsLoading && events.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2 text-center">
+                  Create an event before submitting a poster request.
+                </p>
+              )}
             </CardContent>
           </Card>
         </form>
