@@ -23,6 +23,7 @@ import CatalogSettings from "./pages/settings/CatalogSettings";
 import ProfileSettings from "./pages/settings/ProfileSettings";
 import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
+import CollabSearch from "./pages/collab/CollabSearch";
 import Orders from "./pages/Orders";
 // Poster Space pages
 import SpaceDetail from "./pages/booking/SpaceDetail";
@@ -350,7 +351,7 @@ function AppRoutes() {
       <Route path="/app/bookings" element={<Navigate to="/app/catalog?tab=events" replace />} />
       
       {/* New: Collab page */}
-      <Route path="/app/collab" element={<ProtectedRoute><AppLayout><Collab /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/collab" element={<ProtectedRoute><AppLayout><CollabSearch /></AppLayout></ProtectedRoute>} />
       
       {/* New: Orders page */}
       <Route path="/app/orders" element={<ProtectedRoute><AppLayout><Orders /></AppLayout></ProtectedRoute>} />
