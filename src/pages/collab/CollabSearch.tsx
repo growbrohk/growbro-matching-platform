@@ -39,16 +39,16 @@ function DatePill({ label, date, onSelect, minDate }: DatePillProps) {
         <Button
           variant="outline"
           className={cn(
-            "w-full rounded-full h-11 justify-start text-left font-normal",
+            "w-full rounded-full h-12 sm:h-14 justify-start text-left font-normal min-w-0",
             !date && "text-muted-foreground",
             "bg-gray-50 hover:bg-gray-100 border-gray-200"
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, 'MMM d, yyyy') : label}
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          <span className="truncate">{date ? format(date, 'MMM d, yyyy') : label}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="start">
         <Calendar
           mode="single"
           selected={date}
@@ -108,16 +108,16 @@ function MultiSelect({ options, selected, placeholder, onSelectionChange }: Mult
         <Button
           variant="outline"
           className={cn(
-            "w-full rounded-full h-11 justify-between text-left font-normal",
+            "w-full rounded-full h-12 sm:h-14 justify-between text-left font-normal min-w-0",
             selected.length === 0 && "text-muted-foreground",
             "bg-gray-50 hover:bg-gray-100 border-gray-200"
           )}
         >
-          <span className="truncate">{getDisplayText()}</span>
+          <span className="truncate min-w-0">{getDisplayText()}</span>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-2" align="start">
         <div className="space-y-1">
           {selected.length > 0 && (
             <div className="px-2 py-1.5 border-b border-gray-200 mb-1">
@@ -184,61 +184,61 @@ export default function CollabSearch() {
   const brandPlaceholder = BRAND_TYPES.join(', ');
 
   return (
-    <div className="w-full min-h-screen flex flex-col items-center py-8" style={{ backgroundColor: 'rgba(255, 192, 203, 0.1)' }}>
+    <div className="w-full min-h-screen flex flex-col items-center py-8 px-4 sm:px-6 overflow-x-hidden" style={{ backgroundColor: 'rgba(255, 192, 203, 0.1)' }}>
       {/* Header */}
-      <div className="w-full max-w-[520px] mb-6 px-4">
-        <div className="flex items-center gap-4">
+      <div className="w-full max-w-[min(640px,calc(100vw-2rem))] sm:max-w-[min(720px,calc(100vw-3rem))] mb-6 mx-auto">
+        <div className="flex items-center gap-4 min-w-0">
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-full"
+            className="h-10 w-10 rounded-full shrink-0"
             onClick={() => navigate(-1)}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-2xl font-bold" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+          <h1 className="text-2xl font-bold truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
             All Collab
           </h1>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="w-full max-w-[520px] px-4 pb-6">
-        <Card className="rounded-3xl border shadow-lg p-6" style={{ backgroundColor: 'white', borderColor: 'rgba(14,122,58,0.14)' }}>
+      <div className="w-full max-w-[min(640px,calc(100vw-2rem))] sm:max-w-[min(720px,calc(100vw-3rem))] pb-6 mx-auto">
+        <Card className="rounded-3xl border shadow-lg px-5 py-6 sm:px-7 sm:py-7" style={{ backgroundColor: 'white', borderColor: 'rgba(14,122,58,0.14)' }}>
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-50 rounded-full p-1">
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-slate-100/70 rounded-full p-1">
                 <TabsTrigger 
                   value="space" 
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm min-w-0"
                 >
-                  Space
+                  <span className="truncate">Space</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="brand"
-                  className="rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm min-w-0"
                 >
-                  Brand
+                  <span className="truncate">Brand</span>
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="space" className="space-y-4 mt-0">
+              <TabsContent value="space" className="space-y-5 mt-0">
                 {/* Location Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <div className="relative min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground shrink-0" />
                   <Input
                     type="text"
                     placeholder="Search location…"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="pl-10 pr-12 rounded-full h-11 bg-gray-50 border-gray-200"
+                    className="pl-10 pr-12 rounded-full h-12 sm:h-14 bg-gray-50 border-gray-200 min-w-0"
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 sm:h-12 sm:w-12 rounded-full shrink-0"
                     onClick={handleCurrentLocation}
                   >
-                    <MapPin className="h-4 w-4" />
+                    <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
                 </div>
 
@@ -271,24 +271,24 @@ export default function CollabSearch() {
                 />
               </TabsContent>
 
-              <TabsContent value="brand" className="space-y-4 mt-0">
+              <TabsContent value="brand" className="space-y-5 mt-0">
                 {/* Location Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <div className="relative min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground shrink-0" />
                   <Input
                     type="text"
                     placeholder="Search location…"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="pl-10 pr-12 rounded-full h-11 bg-gray-50 border-gray-200"
+                    className="pl-10 pr-12 rounded-full h-12 sm:h-14 bg-gray-50 border-gray-200 min-w-0"
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 sm:h-12 sm:w-12 rounded-full shrink-0"
                     onClick={handleCurrentLocation}
                   >
-                    <MapPin className="h-4 w-4" />
+                    <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
                 </div>
 
@@ -323,21 +323,21 @@ export default function CollabSearch() {
             </Tabs>
 
             {/* Bottom Action Row */}
-            <div className="flex items-center gap-3 mt-6 pt-6 border-t" style={{ borderColor: 'rgba(14,122,58,0.12)' }}>
+            <div className="flex items-center gap-3 mt-6 pt-6 border-t min-w-0" style={{ borderColor: 'rgba(14,122,58,0.12)' }}>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-11 w-11 rounded-full shrink-0"
+                className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shrink-0"
                 onClick={() => console.log('Map clicked')}
               >
-                <Map className="h-5 w-5" />
+                <Map className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
               <Button
                 onClick={handleSearch}
-                className="flex-1 h-11 rounded-full font-semibold"
+                className="flex-1 h-12 sm:h-14 rounded-full font-semibold min-w-0"
                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
               >
-                Search
+                <span className="truncate">Search</span>
               </Button>
             </div>
           </Card>
