@@ -18,6 +18,8 @@ export interface PosterSpace {
   short_code: string;
   title: string;
   category: PosterSpaceCategory;
+  kind: 'consignment' | 'promotion' | 'event_hosting';
+  subtype: 'poster' | 'cupsleeve' | null;
   short_description: string | null;
   bullets: string[];
   photos: string[];
@@ -53,6 +55,8 @@ export interface UpsertPosterSpaceInput {
   org_id: string;
   title: string;
   category?: PosterSpaceCategory;
+  kind?: 'consignment' | 'promotion' | 'event_hosting';
+  subtype?: 'poster' | 'cupsleeve' | null;
   short_description?: string | null;
   bullets?: string[];
   photos?: string[];

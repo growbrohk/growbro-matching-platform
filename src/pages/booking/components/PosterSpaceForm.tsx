@@ -106,7 +106,7 @@ export default function PosterSpaceForm({
   initialCategory,
   onSave,
   onCancel,
-}: SpaceFormProps) {
+}: PosterSpaceFormProps) {
   const { currentOrg } = useAuth();
   const [saving, setSaving] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState<number[]>([]);
@@ -150,10 +150,28 @@ export default function PosterSpaceForm({
     return mapUiTypesToCategory(selectedSpaceType, selectedPromoType, spaceTypes, promoTypes);
   }, [selectedSpaceType, selectedPromoType, spaceTypes, promoTypes]);
 
+  // Compute kind/subtype from UI selections
+  const computedKind = useMemo(() => {
+    if (selectedSpaceType === 'consignment') return 'consignment';
+    if (selectedSpaceType === 'promotion') return 'promotion';
+    if (selectedSpaceType === 'event') return 'event_hosting';
+    return 'promotion' as const; // Default fallback
+  }, [selectedSpaceType]);
+
+  const computedSubtype = useMemo(() => {
+    if (computedKind === 'promotion') {
+      if (selectedPromoType === 'poster') return 'poster' as const;
+      if (selectedPromoType === 'cupsleeve') return 'cupsleeve' as const;
+    }
+    return null;
+  }, [computedKind, selectedPromoType]);
+
   const [formData, setFormData] = useState<UpsertPosterSpaceInput>({
     org_id: currentOrg?.id || '',
     title: '',
     category: initialCategoryValue as any,
+    kind: computedKind,
+    subtype: computedSubtype,
     short_description: '',
     bullets: [],
     photos: [],
@@ -168,13 +186,15 @@ export default function PosterSpaceForm({
     status: 'draft',
   });
 
-  // Update category when UI selections change
+  // Update category, kind, and subtype when UI selections change
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
       category: computedCategory as any,
+      kind: computedKind,
+      subtype: computedSubtype,
     }));
-  }, [computedCategory]);
+  }, [computedCategory, computedKind, computedSubtype]);
 
   const [newBullet, setNewBullet] = useState('');
   const [blackoutStart, setBlackoutStart] = useState('');
@@ -187,10 +207,17 @@ export default function PosterSpaceForm({
       const uiTypes = mapCategoryToUiTypes(category, spaceTypes, promoTypes);
       setSelectedSpaceType(uiTypes.spaceType);
       setSelectedPromoType(uiTypes.promoType);
+      
+      // Derive kind/subtype from initialData if available, otherwise from category
+      const kind = initialData.kind || (uiTypes.spaceType === 'consignment' ? 'consignment' : uiTypes.spaceType === 'event' ? 'event_hosting' : 'promotion');
+      const subtype = initialData.subtype || (uiTypes.promoType === 'poster' ? 'poster' : uiTypes.promoType === 'cupsleeve' ? 'cupsleeve' : null);
+      
       setFormData({
         org_id: initialData.org_id,
         title: initialData.title,
         category: category as any,
+        kind: kind as 'consignment' | 'promotion' | 'event_hosting',
+        subtype: subtype as 'poster' | 'cupsleeve' | null,
         short_description: initialData.short_description || '',
         bullets: initialData.bullets || [],
         photos: initialData.photos || [],
@@ -210,9 +237,16 @@ export default function PosterSpaceForm({
       const uiTypes = mapCategoryToUiTypes(category, spaceTypes, promoTypes);
       setSelectedSpaceType(uiTypes.spaceType);
       setSelectedPromoType(uiTypes.promoType);
+      
+      // Derive kind/subtype from category
+      const kind = uiTypes.spaceType === 'consignment' ? 'consignment' : uiTypes.spaceType === 'event' ? 'event_hosting' : 'promotion';
+      const subtype = uiTypes.promoType === 'poster' ? 'poster' : uiTypes.promoType === 'cupsleeve' ? 'cupsleeve' : null;
+      
       setFormData((prev) => ({
         ...prev,
         category: category as any,
+        kind: kind as 'consignment' | 'promotion' | 'event_hosting',
+        subtype: subtype as 'poster' | 'cupsleeve' | null,
       }));
     }
   }, [initialData, initialCategory, spaceTypes, promoTypes]);

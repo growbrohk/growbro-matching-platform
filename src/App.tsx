@@ -32,6 +32,7 @@ import PublicEventPage from "./pages/public/PublicEventPage";
 import PublicPosterSpace from "./pages/public/PublicPosterSpace";
 import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
+import TrackingRedirect from "./pages/public/TrackingRedirect";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -308,6 +309,9 @@ function AppRoutes() {
       <Route path="/space/:spaceParam" element={<PublicPosterSpace />} />
       <Route path="/space/:spaceParam/request" element={<PublicPosterSpaceRequest />} />
       <Route path="/space/:spaceParam/request/:requestId/success" element={<PublicPosterSpaceRequestSuccess />} />
+      
+      {/* Tracking redirect route */}
+      <Route path="/t/:shortCode" element={<TrackingRedirect />} />
       
       {/* Legacy routes - backward compatibility redirects */}
       <Route path="/o/:orgSlug/spaces/:spaceId" element={<LegacyPosterSpaceRedirect />} />
