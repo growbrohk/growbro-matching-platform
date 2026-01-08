@@ -23,6 +23,7 @@ import {
   checkBlackoutOverlap,
   type PosterSpace,
 } from '@/lib/api/poster-spaces';
+import PosterDatesPicker from '@/components/poster/PosterDatesPicker';
 
 export default function PublicPosterSpaceRequest() {
   const { spaceParam } = useParams<{ spaceParam: string }>();
@@ -36,6 +37,7 @@ export default function PublicPosterSpaceRequest() {
   const [formData, setFormData] = useState({
     requested_start_date: '',
     duration_units: 1,
+    event_id: '',
     message: '',
     requester_name: '',
     requester_email: '',
@@ -118,6 +120,10 @@ export default function PublicPosterSpaceRequest() {
       newErrors.duration_units = `Duration must be one of: ${space.allowed_durations.join(', ')} ${space.booking_unit}s`;
     }
 
+    if (!formData.event_id?.trim()) {
+      newErrors.event_id = 'Event is required';
+    }
+
     if (!user) {
       if (!formData.requester_name?.trim()) {
         newErrors.requester_name = 'Name is required';
@@ -158,6 +164,8 @@ export default function PublicPosterSpaceRequest() {
         formData.duration_units
       );
 
+      // TODO: Include event_id in createBookingRequest payload once backend supports it
+      // Currently event_id is stored in formData and validated, but not sent to backend
       const request = await createBookingRequest({
         poster_space_id: space.id,
         requester_user_id: user?.id || null,
@@ -228,80 +236,82 @@ export default function PublicPosterSpaceRequest() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Start Date */}
+          {/* Dates */}
           <Card>
             <CardHeader>
-              <CardTitle>Start Date</CardTitle>
+              <CardTitle>Dates</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="start_date">
-                  Start date <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="start_date"
-                  type="date"
-                  value={formData.requested_start_date}
-                  onChange={(e) => {
-                    setFormData({ ...formData, requested_start_date: e.target.value });
-                    setErrors({ ...errors, requested_start_date: '' });
-                  }}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                />
-                {errors.requested_start_date && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.requested_start_date}</AlertDescription>
-                  </Alert>
-                )}
-                {formData.requested_start_date && formData.duration_units && (
-                  <p className="text-sm text-muted-foreground">
-                    End date:{' '}
-                    {computeEndDate(
-                      formData.requested_start_date,
-                      space.booking_unit,
-                      formData.duration_units
-                    )}
-                  </p>
-                )}
-              </div>
+              <PosterDatesPicker
+                space={space}
+                value={{
+                  startDate: formData.requested_start_date,
+                  durationUnits: formData.duration_units,
+                }}
+                onChange={(next) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    requested_start_date: next.startDate || '',
+                    duration_units: next.durationUnits,
+                  }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    requested_start_date: '',
+                    duration_units: '',
+                  }));
+                }}
+                error={errors.requested_start_date || errors.duration_units}
+              />
+              {formData.requested_start_date && formData.duration_units && (
+                <p className="text-sm text-muted-foreground">
+                  End date:{' '}
+                  {computeEndDate(
+                    formData.requested_start_date,
+                    space.booking_unit,
+                    formData.duration_units
+                  )}
+                </p>
+              )}
             </CardContent>
           </Card>
 
-          {/* Duration */}
+          {/* Event */}
           <Card>
             <CardHeader>
-              <CardTitle>Duration</CardTitle>
+              <CardTitle>Event</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="duration">
-                  Duration <span className="text-destructive">*</span>
+                <Label htmlFor="event_id">
+                  Event <span className="text-destructive">*</span>
                 </Label>
                 <Select
-                  value={formData.duration_units.toString()}
+                  value={formData.event_id}
                   onValueChange={(value) => {
-                    setFormData({ ...formData, duration_units: parseInt(value) });
-                    setErrors({ ...errors, duration_units: '' });
+                    setFormData({ ...formData, event_id: value });
+                    setErrors({ ...errors, event_id: '' });
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select an event" />
                   </SelectTrigger>
                   <SelectContent>
-                    {space.allowed_durations.map((duration) => (
-                      <SelectItem key={duration} value={duration.toString()}>
-                        {duration} {space.booking_unit}
-                        {duration > 1 ? 's' : ''}
+                    {/* TODO: Replace with user event catalog query */}
+                    {[
+                      { id: 'evt_1', title: 'RunHNT001 – Neon City Hunt' },
+                      { id: 'evt_2', title: 'RunHNT002 – Cyberpunk Adventure' },
+                      { id: 'evt_3', title: 'RunHNT003 – Future Quest' },
+                    ].map((event) => (
+                      <SelectItem key={event.id} value={event.id}>
+                        {event.title}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.duration_units && (
+                {errors.event_id && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.duration_units}</AlertDescription>
+                    <AlertDescription>{errors.event_id}</AlertDescription>
                   </Alert>
                 )}
               </div>
