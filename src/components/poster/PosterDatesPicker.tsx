@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { format, parseISO, differenceInCalendarDays, addMonths, startOfMonth } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { PosterSpace } from '@/lib/api/poster-spaces';
 import type { DateRange } from 'react-day-picker';
@@ -33,6 +32,7 @@ export default function PosterDatesPicker({
 }: PosterDatesPickerProps) {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'flexible'>('calendar');
+  const monthRowRef = useRef<HTMLDivElement | null>(null);
 
   // Calendar tab state
   const [calendarRange, setCalendarRange] = useState<DateRange | undefined>(
@@ -183,55 +183,61 @@ export default function PosterDatesPicker({
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-[520px] max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Select Dates</DialogTitle>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'calendar' | 'flexible')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="calendar">Calendar</TabsTrigger>
-              <TabsTrigger value="flexible">Flexible</TabsTrigger>
-            </TabsList>
+          <div className="px-6">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'calendar' | 'flexible')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                <TabsTrigger value="flexible">Flexible</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="calendar" className="mt-4">
-              <div className="space-y-4">
-                <Calendar
-                  mode="range"
-                  selected={calendarRange}
-                  onSelect={setCalendarRange}
-                  disabled={(date) => date < today}
-                  numberOfMonths={1}
-                />
-                {getUnitsLabel() && (
-                  <p className="text-sm text-muted-foreground text-center">{getUnitsLabel()}</p>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="flexible" className="mt-4">
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium mb-2">Duration</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {(['3 nights', '1 week', '1 month'] as FlexibleDuration[]).map((duration) => (
-                      <Button
-                        key={duration}
-                        type="button"
-                        variant={flexibleDuration === duration ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setFlexibleDuration(duration)}
-                      >
-                        {duration}
-                      </Button>
-                    ))}
+              <TabsContent value="calendar" className="mt-4">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="w-fit mx-auto">
+                    <Calendar
+                      mode="range"
+                      selected={calendarRange}
+                      onSelect={setCalendarRange}
+                      disabled={(date) => date < today}
+                      numberOfMonths={1}
+                      className="mx-auto"
+                    />
                   </div>
+                  {getUnitsLabel() && (
+                    <p className="text-sm text-muted-foreground text-center">{getUnitsLabel()}</p>
+                  )}
                 </div>
+              </TabsContent>
 
-                <div>
-                  <p className="text-sm font-medium mb-2">Month</p>
-                  <ScrollArea className="w-full">
-                    <div className="flex gap-2 pb-2">
+              <TabsContent value="flexible" className="mt-4 overflow-x-hidden">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Duration</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['3 nights', '1 week', '1 month'] as FlexibleDuration[]).map((duration) => (
+                        <Button
+                          key={duration}
+                          type="button"
+                          variant={flexibleDuration === duration ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setFlexibleDuration(duration)}
+                        >
+                          {duration}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <p className="text-sm font-medium mb-2">Month</p>
+                    <div
+                      ref={monthRowRef}
+                      className="flex gap-2 overflow-x-auto whitespace-nowrap pb-2 -mx-1 px-1"
+                    >
                       {months.map((month, idx) => (
                         <Button
                           key={idx}
@@ -244,37 +250,34 @@ export default function PosterDatesPicker({
                           }
                           size="sm"
                           onClick={() => setFlexibleMonth(month)}
-                          className="min-w-[100px]"
+                          className="shrink-0 min-w-[110px]"
                         >
                           {format(month, 'MMM yyyy')}
                         </Button>
                       ))}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-w-[40px]"
-                        onClick={() => {
-                          const scrollContainer = document.querySelector('[data-radix-scroll-area-viewport]');
-                          if (scrollContainer) {
-                            scrollContainer.scrollBy({ left: 200, behavior: 'smooth' });
-                          }
-                        }}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
                     </div>
-                  </ScrollArea>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-8 min-w-[40px]"
+                      onClick={() => {
+                        monthRowRef.current?.scrollBy({ left: 220, behavior: 'smooth' });
+                      }}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+              </TabsContent>
+            </Tabs>
+          </div>
 
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={handleClear}>
+          <DialogFooter className="px-6 pb-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleClear} className="w-full sm:w-auto">
               Clear
             </Button>
-            <Button type="button" onClick={handleSelect} disabled={isSelectDisabled()}>
+            <Button type="button" onClick={handleSelect} disabled={isSelectDisabled()} className="w-full sm:w-auto">
               Select
             </Button>
           </DialogFooter>
