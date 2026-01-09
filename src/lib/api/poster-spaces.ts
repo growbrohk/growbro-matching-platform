@@ -454,6 +454,24 @@ export async function deletePosterSpacePhoto(photoUrl: string): Promise<void> {
 }
 
 /**
+ * Parse a YYYY-MM-DD string as a local date (avoiding timezone issues)
+ */
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Format a Date as YYYY-MM-DD in local timezone
+ */
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Compute end date based on booking unit and duration
  */
 export function computeEndDate(
@@ -461,7 +479,8 @@ export function computeEndDate(
   bookingUnit: 'week' | 'day' | 'month',
   durationUnits: number
 ): string {
-  const start = new Date(startDate);
+  // Parse as local date to avoid timezone issues
+  const start = parseLocalDate(startDate);
   let end: Date;
 
   switch (bookingUnit) {
@@ -482,25 +501,117 @@ export function computeEndDate(
       throw new Error(`Unknown booking unit: ${bookingUnit}`);
   }
 
-  return end.toISOString().split('T')[0];
+  return formatLocalDate(end);
 }
 
 /**
  * Check if a date range overlaps with any blackout ranges
+ * Uses local date parsing to avoid timezone issues
  */
 export function checkBlackoutOverlap(
   startDate: string,
   endDate: string,
   blackoutRanges: Array<{ start: string; end: string }>
 ): boolean {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  if (!blackoutRanges || blackoutRanges.length === 0) {
+    return false;
+  }
+
+  // Parse as local dates to avoid timezone issues
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
+
+  // Set to start/end of day for inclusive comparison
+  const startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
 
   return blackoutRanges.some((range) => {
-    const rangeStart = new Date(range.start);
-    const rangeEnd = new Date(range.end);
-    // Check for overlap: ranges overlap if start <= rangeEnd && end >= rangeStart
-    return start <= rangeEnd && end >= rangeStart;
+    const rangeStart = parseLocalDate(range.start);
+    const rangeEnd = parseLocalDate(range.end);
+    
+    const rangeStartOfDay = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), 0, 0, 0, 0);
+    const rangeEndOfDay = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), 23, 59, 59, 999);
+    
+    // Check for overlap: ranges overlap if start <= rangeEnd && end >= rangeStart (inclusive)
+    return startOfDay <= rangeEndOfDay && endOfDay >= rangeStartOfDay;
   });
+}
+
+/**
+ * Dev-only: Test blackout overlap logic
+ * Run in browser console: window.testBlackoutOverlap()
+ */
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  (window as any).testBlackoutOverlap = () => {
+    const tests = [
+      {
+        name: 'Non-overlapping dates',
+        startDate: '2025-01-10',
+        endDate: '2025-01-17',
+        blackoutRanges: [{ start: '2025-02-01', end: '2025-02-10' }],
+        expected: false,
+      },
+      {
+        name: 'Overlapping dates (start in blackout)',
+        startDate: '2025-01-10',
+        endDate: '2025-01-20',
+        blackoutRanges: [{ start: '2025-01-15', end: '2025-01-25' }],
+        expected: true,
+      },
+      {
+        name: 'Overlapping dates (end in blackout)',
+        startDate: '2025-01-10',
+        endDate: '2025-01-20',
+        blackoutRanges: [{ start: '2025-01-05', end: '2025-01-15' }],
+        expected: true,
+      },
+      {
+        name: 'Boundary case (end == blackoutStart)',
+        startDate: '2025-01-10',
+        endDate: '2025-01-15',
+        blackoutRanges: [{ start: '2025-01-15', end: '2025-01-20' }],
+        expected: true, // Inclusive: end date overlaps with blackout start
+      },
+      {
+        name: 'Boundary case (start == blackoutEnd)',
+        startDate: '2025-01-15',
+        endDate: '2025-01-20',
+        blackoutRanges: [{ start: '2025-01-10', end: '2025-01-15' }],
+        expected: true, // Inclusive: start date overlaps with blackout end
+      },
+      {
+        name: 'Completely within blackout',
+        startDate: '2025-01-12',
+        endDate: '2025-01-14',
+        blackoutRanges: [{ start: '2025-01-10', end: '2025-01-20' }],
+        expected: true,
+      },
+      {
+        name: 'Completely encompasses blackout',
+        startDate: '2025-01-05',
+        endDate: '2025-01-25',
+        blackoutRanges: [{ start: '2025-01-10', end: '2025-01-20' }],
+        expected: true,
+      },
+    ];
+
+    console.log('Testing blackout overlap logic...');
+    let passed = 0;
+    let failed = 0;
+
+    tests.forEach((test) => {
+      const result = checkBlackoutOverlap(test.startDate, test.endDate, test.blackoutRanges);
+      if (result === test.expected) {
+        console.log(`✅ ${test.name}: PASSED`);
+        passed++;
+      } else {
+        console.error(`❌ ${test.name}: FAILED (expected ${test.expected}, got ${result})`);
+        failed++;
+      }
+    });
+
+    console.log(`\nResults: ${passed} passed, ${failed} failed`);
+    return { passed, failed, total: tests.length };
+  };
 }
 

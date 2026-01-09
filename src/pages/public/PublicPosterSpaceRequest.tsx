@@ -173,8 +173,54 @@ export default function PublicPosterSpaceRequest() {
         space.booking_unit,
         formData.duration_units
       );
-      if (checkBlackoutOverlap(formData.requested_start_date, endDate, space.blackout_ranges)) {
+      
+      // Debug logs - parse dates as local to show actual values being compared
+      const parseLocalDateForLog = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+      
+      console.debug('[Blackout Validation]', {
+        requested_start_date: {
+          raw: formData.requested_start_date,
+          parsed_local: parseLocalDateForLog(formData.requested_start_date).toISOString(),
+        },
+        computed_end_date: {
+          raw: endDate,
+          parsed_local: parseLocalDateForLog(endDate).toISOString(),
+        },
+        duration_units: formData.duration_units,
+        booking_unit: space.booking_unit,
+        blackout_ranges: space.blackout_ranges?.map((r) => ({
+          start: { raw: r.start, parsed_local: parseLocalDateForLog(r.start).toISOString() },
+          end: { raw: r.end, parsed_local: parseLocalDateForLog(r.end).toISOString() },
+        })),
+      });
+      
+      const hasOverlap = checkBlackoutOverlap(formData.requested_start_date, endDate, space.blackout_ranges);
+      
+      if (hasOverlap) {
+        // Find which blackout range overlaps
+        const overlappingRange = space.blackout_ranges?.find((range) => {
+          const start = parseLocalDateForLog(formData.requested_start_date);
+          const end = parseLocalDateForLog(endDate);
+          const rangeStart = parseLocalDateForLog(range.start);
+          const rangeEnd = parseLocalDateForLog(range.end);
+          
+          const startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+          const endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+          const rangeStartOfDay = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), 0, 0, 0, 0);
+          const rangeEndOfDay = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), 23, 59, 59, 999);
+          
+          return startOfDay <= rangeEndOfDay && endOfDay >= rangeStartOfDay;
+        });
+        
+        console.debug('[Blackout Validation] Overlap detected', {
+          overlapping_range: overlappingRange,
+        });
         newErrors.requested_start_date = 'Selected dates overlap with a blackout period';
+      } else {
+        console.debug('[Blackout Validation] No overlap');
       }
     }
 

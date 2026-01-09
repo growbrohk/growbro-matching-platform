@@ -57,12 +57,19 @@ export default function PosterDatesPicker({
     }
 
     const dateStart = startOfDay(date);
+    const dateEnd = endOfDay(date);
 
     return space.blackout_ranges.some((range) => {
-      const rangeStart = startOfDay(parseISO(range.start));
-      const rangeEnd = endOfDay(parseISO(range.end));
+      // Parse blackout dates as local dates to avoid timezone issues
+      // parseISO can cause timezone issues, so we parse manually
+      const [startYear, startMonth, startDay] = range.start.split('-').map(Number);
+      const [endYear, endMonth, endDay] = range.end.split('-').map(Number);
+      const rangeStart = startOfDay(new Date(startYear, startMonth - 1, startDay));
+      const rangeEnd = endOfDay(new Date(endYear, endMonth - 1, endDay));
+      
       // Check if the date falls within the blackout range (inclusive)
-      return isWithinInterval(dateStart, { start: rangeStart, end: rangeEnd });
+      return isWithinInterval(dateStart, { start: rangeStart, end: rangeEnd }) ||
+             isWithinInterval(dateEnd, { start: rangeStart, end: rangeEnd });
     });
   };
 
