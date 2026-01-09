@@ -31,6 +31,8 @@ export interface PosterSpace {
   blackout_ranges: Array<{ start: string; end: string }>;
   tracking_enabled: boolean;
   tracking_prefix: string | null;
+  default_host_split_percent: number;
+  listing_fee_cents: number;
   status: 'draft' | 'published' | 'paused' | 'archived';
   created_at: string;
   updated_at: string;
@@ -68,6 +70,8 @@ export interface UpsertPosterSpaceInput {
   blackout_ranges?: Array<{ start: string; end: string }>;
   tracking_enabled?: boolean;
   tracking_prefix?: string | null;
+  default_host_split_percent?: number;
+  listing_fee_cents?: number;
   status?: 'draft' | 'published' | 'paused' | 'archived';
 }
 

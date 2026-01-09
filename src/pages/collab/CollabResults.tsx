@@ -192,12 +192,19 @@ export default function CollabResults() {
     }
   };
 
-  // Extract rate and listing fee (placeholder logic)
+  // Extract rate and listing fee from space
   const getRateAndFee = (space: SpaceResult) => {
-    // TODO: Wire real rate/listing fee from collabs table when available
-    // For now, use placeholders
-    const rate = '—%';
-    const listingFee = '— listing fee';
+    // Use default_host_split_percent from space (fallback to 10 if missing)
+    const percent = space.default_host_split_percent ?? 10;
+    const rate = `${percent}%`;
+
+    // Format listing fee: integer dollars if divisible by 100, else 2 decimals
+    const listingFeeCents = space.listing_fee_cents ?? 0;
+    const listingFeeDollars = listingFeeCents / 100;
+    const listingFee = listingFeeCents % 100 === 0
+      ? `HK$${listingFeeDollars.toFixed(0)}`
+      : `HK$${listingFeeDollars.toFixed(2)}`;
+
     return { rate, listingFee };
   };
 

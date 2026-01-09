@@ -183,6 +183,8 @@ export default function PosterSpaceForm({
     blackout_ranges: [],
     tracking_enabled: true,
     tracking_prefix: null,
+    default_host_split_percent: 10,
+    listing_fee_cents: 0,
     status: 'draft',
   });
 
@@ -229,6 +231,8 @@ export default function PosterSpaceForm({
         blackout_ranges: initialData.blackout_ranges || [],
         tracking_enabled: initialData.tracking_enabled,
         tracking_prefix: initialData.tracking_prefix || null,
+        default_host_split_percent: initialData.default_host_split_percent ?? 10,
+        listing_fee_cents: initialData.listing_fee_cents ?? 0,
         status: initialData.status,
       });
     } else if (initialCategory && spaceTypes.length > 0 && promoTypes.length > 0) {
@@ -635,6 +639,53 @@ export default function PosterSpaceForm({
                   {formData.price_cents
                     ? `From ${formData.currency} ${formData.price_cents / 100} / ${formData.booking_unit}`
                     : 'Pricing: Inquiry'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="revenue_share">Revenue share (%)</Label>
+                <Input
+                  id="revenue_share"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={formData.default_host_split_percent ?? 10}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    const clampedValue = isNaN(value) ? 10 : Math.max(0, Math.min(100, value));
+                    setFormData({
+                      ...formData,
+                      default_host_split_percent: clampedValue,
+                    });
+                  }}
+                  placeholder="10"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Percentage of revenue shared with host (0-100%)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="listing_fee">Listing fee (HK$)</Label>
+                <Input
+                  id="listing_fee"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={formData.listing_fee_cents ? formData.listing_fee_cents / 100 : ''}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    const cents = isNaN(value) || value < 0 ? 0 : Math.round(value * 100);
+                    setFormData({
+                      ...formData,
+                      listing_fee_cents: cents,
+                    });
+                  }}
+                  placeholder="0"
+                />
+                <p className="text-sm text-muted-foreground">
+                  One-time listing fee in Hong Kong dollars
                 </p>
               </div>
 
