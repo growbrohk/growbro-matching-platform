@@ -243,9 +243,10 @@ export default function PublicPosterSpaceRequest() {
 
       // TODO: Include event_id in createBookingRequest payload once backend supports it
       // Currently event_id is stored in formData and validated, but not sent to backend
+      // Note: requester_user_id is omitted - trigger will auto-set it for authenticated users
       const request = await createBookingRequest({
         poster_space_id: space.id,
-        requester_user_id: user?.id || null,
+        // requester_user_id is omitted - trigger sets it automatically for authenticated users
         requester_name: formData.requester_name || undefined,
         requester_email: formData.requester_email || undefined,
         message: formData.message || null,
