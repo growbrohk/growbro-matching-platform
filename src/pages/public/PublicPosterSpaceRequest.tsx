@@ -29,7 +29,7 @@ import { supabase } from '@/integrations/supabase/client';
 export default function PublicPosterSpaceRequest() {
   const { spaceParam } = useParams<{ spaceParam: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, currentOrg } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [space, setSpace] = useState<PosterSpace | null>(null);
@@ -66,10 +66,10 @@ export default function PublicPosterSpaceRequest() {
   }, [user]);
 
   useEffect(() => {
-    if (user && org?.id) {
+    if (user && currentOrg?.id) {
       fetchEvents();
     }
-  }, [user, org?.id]);
+  }, [user, currentOrg?.id]);
 
   const fetchSpace = async () => {
     if (!spaceParam) return;
@@ -106,14 +106,14 @@ export default function PublicPosterSpaceRequest() {
   };
 
   const fetchEvents = async () => {
-    if (!user || !org?.id) return;
+    if (!user || !currentOrg?.id) return;
 
     try {
       setEventsLoading(true);
       const { data, error } = await supabase
         .from('events')
         .select('id, title')
-        .eq('org_id', org.id)
+        .eq('org_id', currentOrg.id)
         .order('start_at', { ascending: false });
 
       if (error) throw error;
