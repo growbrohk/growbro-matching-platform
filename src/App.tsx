@@ -24,6 +24,7 @@ import ProfileSettings from "./pages/settings/ProfileSettings";
 import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import CollabSearch from "./pages/collab/CollabSearch";
+import CollabResults from "./pages/collab/CollabResults";
 import Orders from "./pages/Orders";
 // Poster Space pages
 import SpaceDetail from "./pages/booking/SpaceDetail";
@@ -356,6 +357,9 @@ function AppRoutes() {
       
       {/* New: Collab page */}
       <Route path="/app/collab" element={<ProtectedRoute><AppLayout><CollabSearch /></AppLayout></ProtectedRoute>} />
+      
+      {/* Collab Results - Public route for search results */}
+      <Route path="/collab/results" element={<PublicRoute><CollabResults /></PublicRoute>} />
       
       {/* New: Orders page */}
       <Route path="/app/orders" element={<ProtectedRoute><AppLayout><Orders /></AppLayout></ProtectedRoute>} />

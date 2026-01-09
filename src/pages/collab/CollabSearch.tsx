@@ -232,17 +232,18 @@ export default function CollabSearch() {
   };
 
   const handleSearch = () => {
-    const payload = {
-      tab: activeTab,
-      location,
-      startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
-      endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
-      spaceTypes: selectedSpaceTypes,
-      promoTypes: selectedPromoTypes,
-      brandTypes: selectedBrandTypes,
-    };
-    console.log('Search payload:', payload);
-    // TODO: Implement actual search logic using mapSpaceUiTypeToCategories and mapBrandUiTypeToQueries
+    // Build query params
+    const params = new URLSearchParams();
+    params.set('tab', activeTab);
+    if (location) params.set('location', location);
+    if (startDate) params.set('start', format(startDate, 'yyyy-MM-dd'));
+    if (endDate) params.set('end', format(endDate, 'yyyy-MM-dd'));
+    if (selectedSpaceTypes.length > 0) params.set('types', selectedSpaceTypes.join(','));
+    if (selectedPromoTypes.length > 0) params.set('promoTypes', selectedPromoTypes.join(','));
+    if (selectedBrandTypes.length > 0) params.set('brandTypes', selectedBrandTypes.join(','));
+
+    // Navigate to results page
+    navigate(`/collab/results?${params.toString()}`);
   };
 
   const spacePlaceholder = spaceTypes.length > 0 
