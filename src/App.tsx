@@ -33,6 +33,7 @@ import PublicEventPage from "./pages/public/PublicEventPage";
 import PublicPosterSpace from "./pages/public/PublicPosterSpace";
 import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
+import PublicProfile from "./pages/public/PublicProfile";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
@@ -374,6 +375,9 @@ function AppRoutes() {
       
       {/* Poster Space routes */}
       <Route path="/app/booking/spaces/:id/edit" element={<ProtectedRoute><AppLayout><SpaceDetail /></AppLayout></ProtectedRoute>} />
+      
+      {/* Public Profile Page - Must be before generic orgSlug route */}
+      <Route path="/profile/:orgSlug" element={<PublicProfile />} />
       
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
