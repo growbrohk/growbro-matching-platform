@@ -358,8 +358,8 @@ function AppRoutes() {
       {/* New: Collab page */}
       <Route path="/app/collab" element={<ProtectedRoute><AppLayout><CollabSearch /></AppLayout></ProtectedRoute>} />
       
-      {/* Collab Results - Public route for search results */}
-      <Route path="/collab/results" element={<PublicRoute><CollabResults /></PublicRoute>} />
+      {/* Collab Results - Protected route for search results */}
+      <Route path="/collab/results" element={<ProtectedRoute><AppLayout><CollabResults /></AppLayout></ProtectedRoute>} />
       
       {/* New: Orders page */}
       <Route path="/app/orders" element={<ProtectedRoute><AppLayout><Orders /></AppLayout></ProtectedRoute>} />

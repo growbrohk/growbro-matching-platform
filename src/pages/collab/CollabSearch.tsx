@@ -416,6 +416,7 @@ export default function CollabSearch() {
                 <Map className="h-5 w-5 sm:h-6 sm:w-6" />
               </Button>
               <Button
+                type="button"
                 onClick={handleSearch}
                 className="flex-1 h-12 sm:h-14 rounded-full font-semibold min-w-0"
                 style={{ backgroundColor: '#0E7A3A', color: 'white' }}
