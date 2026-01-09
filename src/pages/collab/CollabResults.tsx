@@ -201,9 +201,16 @@ export default function CollabResults() {
     // Format listing fee: integer dollars if divisible by 100, else 2 decimals
     const listingFeeCents = space.listing_fee_cents ?? 0;
     const listingFeeDollars = listingFeeCents / 100;
-    const listingFee = listingFeeCents % 100 === 0
-      ? `HK$${listingFeeDollars.toFixed(0)}`
-      : `HK$${listingFeeDollars.toFixed(2)}`;
+    const bookingUnit = space.booking_unit || 'week';
+    
+    // Capitalize first letter of booking unit
+    const unitDisplay = bookingUnit.charAt(0).toUpperCase() + bookingUnit.slice(1);
+    
+    const listingFeeAmount = listingFeeCents % 100 === 0
+      ? listingFeeDollars.toFixed(0)
+      : listingFeeDollars.toFixed(2);
+    
+    const listingFee = `HK$${listingFeeAmount}/${unitDisplay}`;
 
     return { rate, listingFee };
   };

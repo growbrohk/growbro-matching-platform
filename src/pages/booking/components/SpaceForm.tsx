@@ -178,7 +178,6 @@ export default function SpaceForm({
     }));
   }, [computedCategory]);
 
-  const [newBullet, setNewBullet] = useState('');
   const [blackoutStart, setBlackoutStart] = useState('');
   const [blackoutEnd, setBlackoutEnd] = useState('');
 
@@ -220,23 +219,6 @@ export default function SpaceForm({
       }));
     }
   }, [initialData, initialCategory, spaceTypes, promoTypes]);
-
-  const handleAddBullet = () => {
-    if (newBullet.trim() && formData.bullets!.length < 3) {
-      setFormData({
-        ...formData,
-        bullets: [...(formData.bullets || []), newBullet.trim()],
-      });
-      setNewBullet('');
-    }
-  };
-
-  const handleRemoveBullet = (index: number) => {
-    setFormData({
-      ...formData,
-      bullets: formData.bullets!.filter((_, i) => i !== index),
-    });
-  };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -305,21 +287,6 @@ export default function SpaceForm({
       ...formData,
       blackout_ranges: formData.blackout_ranges!.filter((_, i) => i !== index),
     });
-  };
-
-  const handleToggleDuration = (duration: number) => {
-    const durations = formData.allowed_durations || [];
-    if (durations.includes(duration)) {
-      setFormData({
-        ...formData,
-        allowed_durations: durations.filter((d) => d !== duration),
-      });
-    } else {
-      setFormData({
-        ...formData,
-        allowed_durations: [...durations, duration].sort((a, b) => a - b),
-      });
-    }
   };
 
   const handleSave = async (status: 'draft' | 'published') => {
@@ -437,43 +404,6 @@ export default function SpaceForm({
                   rows={2}
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label>What you'll get (max 3 bullets)</Label>
-                <div className="space-y-2">
-                  {formData.bullets!.map((bullet, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <Input value={bullet} readOnly className="flex-1" />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveBullet(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  {formData.bullets!.length < 3 && (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={newBullet}
-                        onChange={(e) => setNewBullet(e.target.value)}
-                        placeholder="Add a bullet point..."
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddBullet();
-                          }
-                        }}
-                      />
-                      <Button type="button" variant="outline" onClick={handleAddBullet}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -553,62 +483,6 @@ export default function SpaceForm({
               </div>
 
               <div className="space-y-2">
-                <Label>Allowed durations</Label>
-                <div className="flex flex-wrap gap-2">
-                  {[1, 2, 3, 4, 6, 8, 12].map((duration) => (
-                    <Button
-                      key={duration}
-                      type="button"
-                      variant={
-                        formData.allowed_durations!.includes(duration) ? 'default' : 'outline'
-                      }
-                      size="sm"
-                      onClick={() => handleToggleDuration(duration)}
-                    >
-                      {duration} {formData.booking_unit}
-                      {duration > 1 ? 's' : ''}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="price">Price per unit (optional)</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="price"
-                    type="number"
-                    value={formData.price_cents ? formData.price_cents / 100 : ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null,
-                      })
-                    }
-                    placeholder="Leave empty for Inquiry"
-                  />
-                  <Select
-                    value={formData.currency}
-                    onValueChange={(value) => setFormData({ ...formData, currency: value })}
-                  >
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="HKD">HKD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="CNY">CNY</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {formData.price_cents
-                    ? `From ${formData.currency} ${formData.price_cents / 100} / ${formData.booking_unit}`
-                    : 'Pricing: Inquiry'}
-                </p>
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="revenue_share">Revenue share (%)</Label>
                 <Input
                   id="revenue_share"
@@ -651,7 +525,7 @@ export default function SpaceForm({
                   placeholder="0"
                 />
                 <p className="text-sm text-muted-foreground">
-                  One-time listing fee in Hong Kong dollars
+                  Listing fee per {formData.booking_unit}
                 </p>
               </div>
 
