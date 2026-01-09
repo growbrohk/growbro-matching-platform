@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format, parseISO, differenceInCalendarDays } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { checkBlackoutOverlap } from '@/lib/api/poster-spaces';
 import type { PosterSpace } from '@/lib/api/poster-spaces';
 import type { DateRange } from 'react-day-picker';
 
@@ -48,6 +50,33 @@ export default function PosterDatesPicker({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Check if a date falls within any blackout range
+  const isDateInBlackout = (date: Date): boolean => {
+    if (!space.blackout_ranges || space.blackout_ranges.length === 0) {
+      return false;
+    }
+
+    const dateStart = startOfDay(date);
+
+    return space.blackout_ranges.some((range) => {
+      const rangeStart = startOfDay(parseISO(range.start));
+      const rangeEnd = endOfDay(parseISO(range.end));
+      // Check if the date falls within the blackout range (inclusive)
+      return isWithinInterval(dateStart, { start: rangeStart, end: rangeEnd });
+    });
+  };
+
+  // Check if a date range overlaps with any blackout range
+  const doesRangeOverlapBlackout = (from: Date, to: Date): boolean => {
+    if (!space.blackout_ranges || space.blackout_ranges.length === 0) {
+      return false;
+    }
+
+    const startDateStr = format(from, 'yyyy-MM-dd');
+    const endDateStr = format(to, 'yyyy-MM-dd');
+    return checkBlackoutOverlap(startDateStr, endDateStr, space.blackout_ranges);
+  };
+
   const getDisplayText = () => {
     if (!value.startDate) {
       return 'Tap to select dates';
@@ -72,7 +101,14 @@ export default function PosterDatesPicker({
       const from = calendarRange.from;
       const to = calendarRange.to || from;
       const days = differenceInCalendarDays(to, from) + 1;
+      
       if (days >= 1) {
+        // Check if the selected range overlaps with blackout periods
+        if (doesRangeOverlapBlackout(from, to)) {
+          toast.error('Selected dates include blackout period');
+          return;
+        }
+
         onChange({
           startDate: format(from, 'yyyy-MM-dd'),
           durationUnits: days,
@@ -80,6 +116,25 @@ export default function PosterDatesPicker({
         setOpen(false);
       }
     }
+  };
+
+  // Handle calendar range selection with blackout validation
+  const handleCalendarSelect = (range: DateRange | undefined) => {
+    if (!range) {
+      setCalendarRange(range);
+      return;
+    }
+
+    // If both from and to are selected, validate the range
+    if (range.from && range.to) {
+      if (doesRangeOverlapBlackout(range.from, range.to)) {
+        toast.error('Selected dates include blackout period');
+        // Don't update the range if it overlaps
+        return;
+      }
+    }
+
+    setCalendarRange(range);
   };
 
   const isSelectDisabled = () => {
@@ -126,14 +181,23 @@ export default function PosterDatesPicker({
                   <Calendar
                     mode="range"
                     selected={calendarRange}
-                    onSelect={setCalendarRange}
-                    disabled={(date) => date < today}
+                    onSelect={handleCalendarSelect}
+                    disabled={(date) => {
+                      // Disable past dates and blackout dates
+                      if (date < today) return true;
+                      return isDateInBlackout(date);
+                    }}
                     numberOfMonths={1}
                     className="mx-auto"
                   />
                 </div>
                 {getUnitsLabel() && (
                   <p className="text-sm text-muted-foreground text-center">{getUnitsLabel()}</p>
+                )}
+                {space.blackout_ranges && space.blackout_ranges.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Dates marked as unavailable are blackout periods
+                  </p>
                 )}
               </div>
             </div>
