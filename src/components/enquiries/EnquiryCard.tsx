@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Mail, HelpCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import type { EnquiryItem } from '@/pages/Enquiries';
 
 interface EnquiryCardProps {
@@ -22,6 +23,15 @@ function getThumbnailUrl(urlOrPath: string): string {
 }
 
 export default function EnquiryCard({ enquiry }: EnquiryCardProps) {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    if (enquiry.type === 'message') {
+      navigate(`/messages/${enquiry.id}`);
+    }
+    // Other types can have their own navigation logic
+  };
+
   // Avatar decision tree
   const getAvatar = () => {
     // System waiting confirmation without brand logo = BIG red "?"
@@ -151,7 +161,11 @@ export default function EnquiryCard({ enquiry }: EnquiryCardProps) {
   const previewText = enquiry.previewText;
 
   return (
-    <Card className="rounded-2xl border p-4 hover:shadow-md transition-shadow" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+    <Card 
+      className={`rounded-2xl border p-4 hover:shadow-md transition-shadow ${enquiry.type === 'message' ? 'cursor-pointer' : ''}`}
+      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+      onClick={enquiry.type === 'message' ? handleClick : undefined}
+    >
       <div className="flex gap-4">
         {/* Left: Avatar */}
         <div className="flex-shrink-0">

@@ -6,9 +6,10 @@ import { useNavigate } from 'react-router-dom';
 export interface ProfileActionsProps {
   mode: 'owner' | 'public';
   onEdit?: () => void;
+  otherOrgId?: string;
 }
 
-export default function ProfileActions({ mode, onEdit }: ProfileActionsProps) {
+export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActionsProps) {
   const navigate = useNavigate();
 
   if (mode === 'owner') {
@@ -45,7 +46,11 @@ export default function ProfileActions({ mode, onEdit }: ProfileActionsProps) {
       </Button>
       <Button
         onClick={() => {
-          toast.info('Message feature coming soon');
+          if (otherOrgId) {
+            navigate(`/messages/new?toOrg=${otherOrgId}`);
+          } else {
+            toast.error('Organization ID not available');
+          }
         }}
         className="flex-1 h-12 rounded-2xl font-bold"
         style={{ backgroundColor: 'rgba(15,31,23,0.1)', color: '#0F1F17' }}

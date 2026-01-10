@@ -82,7 +82,7 @@ export default function PublicProfile() {
           mode="public"
         />
         
-        <ProfileActions mode="public" />
+        <ProfileActions mode="public" otherOrgId={org.id} />
         
         <ProfileGrid
           orgId={org.id}

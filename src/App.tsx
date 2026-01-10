@@ -35,6 +35,8 @@ import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import PublicProfile from "./pages/public/PublicProfile";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
+import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
+import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -367,6 +369,10 @@ function AppRoutes() {
       {/* Legacy routes redirect to Enquiries */}
       <Route path="/app/notifications" element={<Navigate to="/app/enquiries" replace />} />
       <Route path="/app/orders" element={<Navigate to="/app/enquiries" replace />} />
+      
+      {/* Messaging routes (fullscreen, no AppLayout) */}
+      <Route path="/messages/new" element={<ProtectedRoute><MessagesComposerPage /></ProtectedRoute>} />
+      <Route path="/messages/:conversationId" element={<ProtectedRoute><MessagesThreadPage /></ProtectedRoute>} />
       
       {/* Settings routes */}
       <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />

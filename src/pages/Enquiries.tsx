@@ -182,9 +182,120 @@ export default function Enquiries() {
         }
       }
 
-      // Fetch messages (placeholder - adjust based on your messages schema)
-      // Note: You'll need to implement message fetching based on your actual schema
-      // For now, this is a placeholder structure
+      // Fetch conversations (Messages)
+      // First get conversation IDs for current org
+      const { data: myConversations, error: conversationsError } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('org_id', currentOrg.id);
+
+      if (!conversationsError && myConversations && myConversations.length > 0) {
+        const convIds = myConversations.map(cp => cp.conversation_id);
+        
+        // Fetch conversation details with last_message_at
+        const { data: conversationsData } = await supabase
+          .from('conversations')
+          .select('id, last_message_at, created_at')
+          .in('id', convIds)
+          .order('last_message_at', { ascending: false, nullsFirst: false });
+
+        if (conversationsData && conversationsData.length > 0) {
+          // Fetch last message for each conversation (using a subquery approach)
+          // For each conversation, get the most recent message
+          const conversationData: Array<{
+            conversationId: string;
+            lastMessage: any;
+            otherOrgId: string;
+          }> = [];
+
+          for (const convId of convIds) {
+          // Get last message
+          const { data: lastMessage } = await supabase
+            .from('conversation_messages')
+            .select('id, body, created_at, sender_org_id')
+            .eq('conversation_id', convId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+          // Get other participant org_id
+          const { data: otherParticipant } = await supabase
+            .from('conversation_participants')
+            .select('org_id')
+            .eq('conversation_id', convId)
+            .neq('org_id', currentOrg.id)
+            .limit(1)
+            .single();
+
+          if (lastMessage && otherParticipant) {
+            conversationData.push({
+              conversationId: convId,
+              lastMessage,
+              otherOrgId: otherParticipant.org_id,
+            });
+          }
+        }
+
+        // Fetch all other orgs with profiles in one query
+        const otherOrgIds = conversationData.map(cd => cd.otherOrgId);
+        const otherOrgMap = new Map<string, any>();
+        if (otherOrgIds.length > 0) {
+          const { data: otherOrgs } = await supabase
+            .from('orgs')
+            .select(`
+              id,
+              name,
+              slug,
+              org_profiles(category, address, logo_url)
+            `)
+            .in('id', otherOrgIds);
+
+          if (otherOrgs) {
+            for (const org of otherOrgs) {
+              const profileData = Array.isArray(org.org_profiles) 
+                ? org.org_profiles[0] 
+                : org.org_profiles;
+              otherOrgMap.set(org.id, {
+                name: org.name,
+                slug: org.slug,
+                logoUrl: profileData?.logo_url,
+                category: profileData?.category,
+                location: profileData?.address,
+              });
+            }
+          }
+        }
+
+        // Create enquiry items
+        for (const cd of conversationData) {
+          const otherOrg = otherOrgMap.get(cd.otherOrgId);
+          if (!otherOrg) continue;
+
+          const convInfo = conversationsData.find(c => c.id === cd.conversationId);
+          const lastMessageAt = convInfo?.last_message_at || cd.lastMessage.created_at;
+
+          allEnquiries.push({
+            id: cd.conversationId,
+            type: 'message',
+            status: 'pending',
+            brand: {
+              name: otherOrg.name,
+              slug: otherOrg.slug,
+              logoUrl: otherOrg.logoUrl,
+              category: otherOrg.category,
+              location: otherOrg.location,
+            },
+            item: {
+              name: 'Message',
+              type: 'message',
+            },
+            previewText: cd.lastMessage.body,
+            date: lastMessageAt,
+            unread: false,
+          });
+          }
+        }
+      }
 
       // Sort by date (newest first)
       allEnquiries.sort((a, b) => {
