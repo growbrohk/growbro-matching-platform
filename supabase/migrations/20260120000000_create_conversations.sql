@@ -143,19 +143,25 @@ CREATE POLICY "Users can view conversations they participate in"
   );
 
 -- Conversation participants: Users can view participants of their conversations
+-- Simplified to avoid recursion: user can see participants if they're a member of that org
+-- OR if the conversation has messages (indicating it's active) and user is member of any org in it
+-- We check via conversation_messages to avoid querying conversation_participants recursively
 CREATE POLICY "Users can view participants of their conversations"
   ON conversation_participants FOR SELECT
   USING (
+    -- User is a member of the participant org (can see their own org's participation)
     EXISTS (
       SELECT 1 FROM org_members om
       WHERE om.org_id = conversation_participants.org_id
       AND om.user_id = auth.uid()
     )
+    -- OR user is a member of an org that has sent/received messages in this conversation
+    -- This avoids recursion by checking conversation_messages instead of conversation_participants
     OR EXISTS (
-      SELECT 1 FROM conversation_participants cp2
-      INNER JOIN org_members om2 ON om2.org_id = cp2.org_id
-      WHERE cp2.conversation_id = conversation_participants.conversation_id
-      AND om2.user_id = auth.uid()
+      SELECT 1 FROM org_members om
+      INNER JOIN conversation_messages cm ON cm.sender_org_id = om.org_id
+      WHERE om.user_id = auth.uid()
+      AND cm.conversation_id = conversation_participants.conversation_id
     )
   );
 
