@@ -31,8 +31,13 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
   const [loading, setLoading] = useState(true);
   const [brandItems, setBrandItems] = useState<GridItem[]>([]);
   const [spaceItems, setSpaceItems] = useState<GridItem[]>([]);
+  const [brandCount, setBrandCount] = useState(0);
+  const [spaceCount, setSpaceCount] = useState(0);
 
   useEffect(() => {
+    // Load counts for both tabs on mount
+    loadCounts();
+    
     if (activeTab === 'brand') {
       loadBrandItems();
     } else {
@@ -40,6 +45,42 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, orgId, orgSlug, mode]);
+
+  const loadCounts = async () => {
+    try {
+      // Fetch total counts for brand items (products + events)
+      const [productsCountResult, eventsCountResult, spacesCountResult] = await Promise.all([
+        supabase
+          .from('products')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId),
+        mode === 'public'
+          ? supabase
+              .from('events')
+              .select('*', { count: 'exact', head: true })
+              .eq('org_id', orgId)
+              .eq('status', 'published')
+          : supabase
+              .from('events')
+              .select('*', { count: 'exact', head: true })
+              .eq('org_id', orgId),
+        supabase
+          .from('poster_spaces')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .eq('status', 'published'),
+      ]);
+
+      const productsCount = productsCountResult.count || 0;
+      const eventsCount = eventsCountResult.count || 0;
+      const spacesCount = spacesCountResult.count || 0;
+
+      setBrandCount(productsCount + eventsCount);
+      setSpaceCount(spacesCount);
+    } catch (error: any) {
+      console.error('Error loading counts:', error);
+    }
+  };
 
   const loadBrandItems = async () => {
     try {
@@ -227,7 +268,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
   return (
     <div className="w-full">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'brand' | 'space')}>
-        <TabsList className="w-full justify-start mb-4 bg-transparent" style={{ borderBottom: '1px solid rgba(0, 0, 0, 0.1)' }}>
+        <TabsList className="w-full justify-center mb-4 bg-transparent" style={{ borderBottom: '1px solid rgba(0, 0, 0, 0.1)' }}>
           <TabsTrigger 
             value="brand" 
             className="data-[state=active]:border-b-2 data-[state=active]:border-foreground rounded-none"
@@ -236,7 +277,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
               borderRadius: 0
             }}
           >
-            Brand
+            Brand({brandCount})
           </TabsTrigger>
           <TabsTrigger 
             value="space"
@@ -246,7 +287,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
               borderRadius: 0
             }}
           >
-            Space
+            Space({spaceCount})
           </TabsTrigger>
         </TabsList>
         
