@@ -102,6 +102,9 @@ export default function EventForm() {
   // Preview dialog state
   const [showPreview, setShowPreview] = useState(false);
 
+  // Validation errors state
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
   // Load event data if editing
   useEffect(() => {
     if (!isEditMode || !id || !currentOrg) return;
@@ -381,30 +384,63 @@ export default function EventForm() {
     }
   };
 
-  const canSubmit = () => {
-    if (!currentOrg?.id) return false;
-    if (!title.trim()) return false;
-    if (!startAt || !endAt) return false;
-    if (startAt >= endAt) return false;
+  const validateForm = (): string[] => {
+    const errors: string[] = [];
+    
+    if (!currentOrg?.id) {
+      errors.push('Organization is required');
+    }
+    if (!title.trim()) {
+      errors.push('Event title is required');
+    }
+    if (!startAt) {
+      errors.push('Event start date and time is required');
+    }
+    if (!endAt) {
+      errors.push('Event end date and time is required');
+    }
+    if (startAt && endAt && startAt >= endAt) {
+      errors.push('Event end time must be after start time');
+    }
     
     // Validate ticket types if any are added
     if (ticketTypes.length > 0) {
-      return ticketTypes.every(tt => 
-        tt.name.trim() && 
-        tt.price && 
-        parseFloat(tt.price) >= 0 && 
-        tt.quota && 
-        parseInt(tt.quota) > 0
-      );
+      ticketTypes.forEach((tt, index) => {
+        if (!tt.name.trim()) {
+          errors.push(`Ticket Type ${index + 1}: Ticket name is required`);
+        }
+        // Price is optional - if empty or whitespace, it will be treated as 0 (free)
+        const priceStr = (tt.price || '').trim();
+        if (priceStr !== '' && (isNaN(parseFloat(priceStr)) || parseFloat(priceStr) < 0)) {
+          errors.push(`Ticket Type ${index + 1}: Price must be a valid number >= 0`);
+        }
+        if (!tt.quota || parseInt(tt.quota) <= 0) {
+          errors.push(`Ticket Type ${index + 1}: Available tickets must be greater than 0`);
+        }
+      });
     }
     
-    return true;
+    return errors;
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!canSubmit() || !currentOrg) return;
+    // Validate form
+    const errors = validateForm();
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      // Scroll to top to show errors
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    
+    setValidationErrors([]);
+    
+    if (!currentOrg) {
+      setValidationErrors(['Organization is required']);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -498,10 +534,13 @@ export default function EventForm() {
 
           if (tt.id && !tt.isNew) {
             // Update existing
+            // If price is empty or whitespace, treat as 0 (free)
+            const priceStr = (tt.price || '').trim();
+            const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
             await updateTicketType({
               id: tt.id,
               name: tt.name.trim(),
-              price: parseFloat(tt.price),
+              price: ticketPrice,
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
               visibility_mode: tt.visibility_mode || 'public',
@@ -514,10 +553,13 @@ export default function EventForm() {
             });
           } else {
             // Create new
+            // If price is empty or whitespace, treat as 0 (free)
+            const priceStr = (tt.price || '').trim();
+            const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
             await createTicketType({
               event_id: savedEventId,
               name: tt.name.trim(),
-              price: parseFloat(tt.price),
+              price: ticketPrice,
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
               visibility_mode: tt.visibility_mode || 'public',
@@ -589,10 +631,13 @@ export default function EventForm() {
             }
           }
 
+          // If price is empty or whitespace, treat as 0 (free)
+          const priceStr = (tt.price || '').trim();
+          const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
           await createTicketType({
             event_id: savedEventId,
             name: tt.name.trim(),
-            price: parseFloat(tt.price),
+            price: ticketPrice,
             quota: parseInt(tt.quota),
             metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
             visibility_mode: tt.visibility_mode || 'public',
@@ -669,11 +714,24 @@ export default function EventForm() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-8 overflow-hidden">
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
+            <h3 className="font-semibold text-red-800">Please fix the following errors:</h3>
+            <ul className="list-disc list-inside space-y-1">
+              {validationErrors.map((error, index) => (
+                <li key={index} className="text-sm text-red-700">{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Section 1: Basic Information */}
         <div className="space-y-6 overflow-hidden">
           <div>
             <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               What is the name of your event?
+              <span className="text-red-500 ml-1">*</span>
             </h2>
             <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
               Give your event a clear, descriptive title
@@ -681,7 +739,10 @@ export default function EventForm() {
             <Input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (validationErrors.length > 0) setValidationErrors([]);
+              }}
               placeholder="e.g., Summer Music Festival 2024"
               required
               className="w-full"
@@ -789,13 +850,17 @@ export default function EventForm() {
             <div>
               <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                 When does it start?
+                <span className="text-red-500 ml-1">*</span>
               </h2>
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the start date and time
               </p>
               <DateTimeRow24
                 value={startAt}
-                onChange={setStartAt}
+                onChange={(date) => {
+                  setStartAt(date);
+                  if (validationErrors.length > 0) setValidationErrors([]);
+                }}
                 disabled={false}
                 ariaLabel="Event start date and time"
                 className="w-full"
@@ -805,13 +870,17 @@ export default function EventForm() {
             <div>
               <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                 When does it end?
+                <span className="text-red-500 ml-1">*</span>
               </h2>
               <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
                 Select the end date and time
               </p>
               <DateTimeRow24
                 value={endAt}
-                onChange={setEndAt}
+                onChange={(date) => {
+                  setEndAt(date);
+                  if (validationErrors.length > 0) setValidationErrors([]);
+                }}
                 disabled={false}
                 min={startAt || undefined}
                 ariaLabel="Event end date and time"
@@ -896,12 +965,16 @@ export default function EventForm() {
                     <div>
                       <Label htmlFor={`ticket-name-${index}`} className="text-sm font-medium">
                         Ticket name
+                        <span className="text-red-500 ml-1">*</span>
                       </Label>
                       <Input
                         id={`ticket-name-${index}`}
                         type="text"
                         value={tt.name}
-                        onChange={(e) => updateTicketTypeForm(index, 'name', e.target.value)}
+                        onChange={(e) => {
+                          updateTicketTypeForm(index, 'name', e.target.value);
+                          if (validationErrors.length > 0) setValidationErrors([]);
+                        }}
                         placeholder="e.g., General Admission, VIP, Early Bird"
                         required
                         className="mt-1"
@@ -913,15 +986,20 @@ export default function EventForm() {
                         <Label htmlFor={`ticket-price-${index}`} className="text-sm font-medium">
                           Price ($)
                         </Label>
+                        <p className="text-xs mt-1 mb-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          Leave empty for free ticket
+                        </p>
                         <Input
                           id={`ticket-price-${index}`}
                           type="number"
                           step="0.01"
                           min="0"
                           value={tt.price}
-                          onChange={(e) => updateTicketTypeForm(index, 'price', e.target.value)}
-                          placeholder="0.00"
-                          required
+                          onChange={(e) => {
+                            updateTicketTypeForm(index, 'price', e.target.value);
+                            if (validationErrors.length > 0) setValidationErrors([]);
+                          }}
+                          placeholder="0.00 (leave empty for free)"
                           className="mt-1"
                         />
                       </div>
@@ -929,13 +1007,17 @@ export default function EventForm() {
                       <div>
                         <Label htmlFor={`ticket-quota-${index}`} className="text-sm font-medium">
                           Available tickets
+                          <span className="text-red-500 ml-1">*</span>
                         </Label>
                         <Input
                           id={`ticket-quota-${index}`}
                           type="number"
                           min="1"
                           value={tt.quota}
-                          onChange={(e) => updateTicketTypeForm(index, 'quota', e.target.value)}
+                          onChange={(e) => {
+                            updateTicketTypeForm(index, 'quota', e.target.value);
+                            if (validationErrors.length > 0) setValidationErrors([]);
+                          }}
                           placeholder="100"
                           required
                           className="mt-1"
@@ -1278,7 +1360,7 @@ export default function EventForm() {
             </Button>
             <Button
               type="submit"
-              disabled={!canSubmit() || saving}
+              disabled={saving}
               style={{ backgroundColor: '#0E7A3A' }}
             >
               {saving ? (
@@ -1328,7 +1410,7 @@ export default function EventForm() {
                   id: tt.id || `preview-${index}`,
                   event_id: eventId || generateUUID(),
                   name: tt.name.trim() || `Ticket Type ${index + 1}`,
-                  price: parseFloat(tt.price) || 0,
+                  price: (tt.price || '').trim() === '' ? 0 : (parseFloat(tt.price) || 0),
                   quota: isQuotaUnlimited(tt.quota) ? 999999 : parseInt(tt.quota) || 0,
                   visibility_mode: tt.visibility_mode || 'public',
                   access_code: tt.access_code || null,
