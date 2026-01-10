@@ -15,17 +15,22 @@ The previous `conversation_participants` policy only allowed users to see partic
 
 ### Migration: `20260120000005_fix_conversations_rls_policies.sql`
 
-#### 1. Fixed `conversations` SELECT Policy
-- **Policy:** "Users can view their conversations"
-- **Logic:** Allow SELECT if user belongs to an org participating in the conversation (via `conversation_participants` + `org_members`)
+#### 1. Created Helper Function: `user_can_access_conversation()`
+- **Type:** SECURITY DEFINER function (bypasses RLS to break recursion)
+- **Purpose:** Check if current user is a member of any org participating in a conversation
+- **Why:** Avoids infinite recursion by querying `conversation_participants` without RLS checks
 
-#### 2. Fixed `conversation_participants` SELECT Policy
+#### 2. Fixed `conversations` SELECT Policy
+- **Policy:** "Users can view their conversations"
+- **Logic:** Uses `user_can_access_conversation()` function to check access
+
+#### 3. Fixed `conversation_participants` SELECT Policy
 - **Policy:** "cp_select_if_member"
 - **Logic:** Allow SELECT if:
   1. User is a member of the participant's org (can see their own org's participation), OR
-  2. User is a member of ANY org participating in the same conversation (can see other participants)
+  2. User can access the conversation (via helper function - breaks recursion)
 
-This ensures users can see BOTH participants in a conversation, not just their own org's participation.
+This ensures users can see BOTH participants in a conversation, not just their own org's participation, while avoiding infinite recursion.
 
 ## Frontend Verification
 
@@ -95,10 +100,9 @@ All queries should succeed and return expected data.
 
 ## Notes
 
-- The `conversation_participants` policy uses a self-reference (checks other rows in the same table), but this is safe because:
-  - The first EXISTS clause handles the direct case (user's own org)
-  - The second EXISTS clause checks other participants, and for those rows, the first EXISTS will match
-  - PostgreSQL RLS evaluates policies per-row, avoiding infinite recursion
+- **Recursion Prevention:** The `conversation_participants` policy uses a SECURITY DEFINER helper function to check conversation access. This function bypasses RLS when querying `conversation_participants`, breaking the recursion cycle that would occur if the policy referenced itself directly.
 
-- The fix maintains security: users can only see conversations where they're a participant (via org membership)
+- **Security:** The fix maintains security: users can only see conversations where they're a participant (via org membership). The SECURITY DEFINER function still checks org membership, it just bypasses RLS to avoid recursion.
+
+- **Why SECURITY DEFINER:** PostgreSQL RLS policies cannot reference the same table they're protecting without causing recursion. By using a SECURITY DEFINER function, we can query `conversation_participants` without triggering RLS, then use the result in the policy check.
 
