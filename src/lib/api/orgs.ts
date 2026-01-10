@@ -12,19 +12,98 @@ export interface OrgWithProfile {
 }
 
 /**
+ * Generate slug from org name (matches database function logic)
+ */
+function generateSlugFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'org';
+}
+
+/**
  * Get organization by slug with profile
+ * Falls back to name lookup if slug doesn't exist, and auto-generates slug
  */
 export async function getOrgBySlugWithProfile(orgSlug: string): Promise<OrgWithProfile | null> {
-  const { data: org, error: orgError } = await supabase
+  // First, try to find by slug
+  let { data: org, error: orgError } = await supabase
     .from('orgs')
     .select('*')
     .eq('slug', orgSlug)
     .single();
 
-  if (orgError) {
-    if (orgError.code === 'PGRST116') {
+  // If not found by slug, try to find by name (normalized to match slug format)
+  if (orgError && orgError.code === 'PGRST116') {
+    // Fetch orgs without slugs and check if their name would generate this slug
+    // We'll check client-side since we need to generate slug from name
+    const { data: orgsWithoutSlug, error: nameError } = await supabase
+      .from('orgs')
+      .select('*')
+      .is('slug', null)
+      .limit(100); // Reasonable limit for checking
+    
+    // Find the org whose name would generate this slug
+    let matchingOrg = null;
+    if (!nameError && orgsWithoutSlug) {
+      matchingOrg = orgsWithoutSlug.find(org => {
+        const generatedSlug = generateSlugFromName(org.name);
+        return generatedSlug === orgSlug;
+      });
+    }
+
+    if (matchingOrg) {
+      org = matchingOrg;
+      
+      // If org found but doesn't have slug, generate and save it
+      if (!org.slug) {
+        const generatedSlug = generateSlugFromName(org.name);
+        
+        // Check if generated slug conflicts with existing slug
+        const { data: existingOrg } = await supabase
+          .from('orgs')
+          .select('id')
+          .eq('slug', generatedSlug)
+          .neq('id', org.id)
+          .single();
+        
+        let finalSlug = generatedSlug;
+        if (existingOrg) {
+          // If conflict, append counter
+          let counter = 1;
+          while (true) {
+            const { data: checkOrg } = await supabase
+              .from('orgs')
+              .select('id')
+              .eq('slug', `${generatedSlug}-${counter}`)
+              .single();
+            
+            if (!checkOrg) {
+              finalSlug = `${generatedSlug}-${counter}`;
+              break;
+            }
+            counter++;
+          }
+        }
+        
+        // Update org with generated slug
+        const { error: updateError } = await supabase
+          .from('orgs')
+          .update({ slug: finalSlug })
+          .eq('id', org.id);
+        
+        if (updateError) {
+          console.warn('Failed to update org slug:', updateError);
+        } else {
+          org.slug = finalSlug;
+        }
+      }
+    } else {
+      // Not found by name either
       return null;
     }
+  } else if (orgError) {
+    // Other error occurred
     throw new Error(orgError.message || 'Failed to fetch organization');
   }
 
