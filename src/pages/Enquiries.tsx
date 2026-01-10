@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell, SlidersHorizontal } from 'lucide-react';
+import { Mail, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
@@ -238,7 +238,7 @@ export default function Enquiries() {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="h-10 w-10 rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'rgba(14,122,58,0.1)' }}>
-              <Bell className="h-5 w-5" style={{ color: '#0E7A3A' }} />
+              <Mail className="h-5 w-5" style={{ color: '#0E7A3A' }} />
             </div>
             <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
               Enquiries
@@ -305,7 +305,7 @@ export default function Enquiries() {
           <div className="p-8 md:p-12 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="h-16 w-16 rounded-3xl flex items-center justify-center" style={{ backgroundColor: 'rgba(14,122,58,0.08)' }}>
-                <Bell className="h-8 w-8" style={{ color: '#0E7A3A' }} />
+                <Mail className="h-8 w-8" style={{ color: '#0E7A3A' }} />
               </div>
               <div className="space-y-2">
                 <h3 className="text-xl font-semibold" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>

@@ -21,7 +21,7 @@ import {
   X,
   Handshake,
   ShoppingBag,
-  Bell,
+  Mail,
   User,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -75,7 +75,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
-    { path: '/app/enquiries', label: 'Enquiries', icon: Bell },
+    { path: '/app/enquiries', label: 'Enquiries', icon: Mail },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
@@ -85,7 +85,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
-    { path: '/app/enquiries', label: 'Enquiries', icon: Bell },
+    { path: '/app/enquiries', label: 'Enquiries', icon: Mail },
     { path: '/app/account', label: 'Account', icon: User, activePath: '/app/settings' },
   ];
 
