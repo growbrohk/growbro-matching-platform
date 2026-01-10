@@ -17,7 +17,7 @@ export interface EnquiryItem {
   id: string;
   type: 'request' | 'message' | 'sales_order' | 'system';
   status?: 'pending' | 'waiting_confirmation' | 'confirmed' | 'archived' | string;
-  brand?: { name: string; logoUrl?: string; category?: string; location?: string };
+  brand?: { name: string; slug?: string; logoUrl?: string; category?: string; location?: string };
   item?: { name: string; thumbnailUrl?: string; type?: 'event' | 'product' | 'space' };
   period?: { start?: string | Date; end?: string | Date };
   previewText?: string;
@@ -71,7 +71,7 @@ export default function Enquiries() {
         if (requesterUserIds.length > 0) {
           const { data: orgMembers } = await supabase
             .from('org_members')
-            .select('user_id, org_id, orgs(name, org_profiles(logo_url, category, location))')
+            .select('user_id, org_id, orgs(name, slug, org_profiles(logo_url, category, location))')
             .in('user_id', requesterUserIds);
 
           if (orgMembers) {
@@ -84,6 +84,7 @@ export default function Enquiries() {
               if (!requesterOrgMap.has(member.user_id)) {
                 requesterOrgMap.set(member.user_id, {
                   name: orgData?.name,
+                  slug: orgData?.slug,
                   logoUrl: profileData?.logo_url,
                   category: profileData?.category,
                   location: profileData?.location,
@@ -106,6 +107,7 @@ export default function Enquiries() {
             status: request.status === 'pending' ? 'pending' : request.status === 'approved' ? 'confirmed' : 'archived',
             brand: {
               name: request.requester_name || requesterOrg?.name || 'Unknown',
+              slug: requesterOrg?.slug,
               logoUrl: requesterOrg?.logoUrl,
               category: requesterOrg?.category,
               location: requesterOrg?.location,
@@ -137,6 +139,7 @@ export default function Enquiries() {
             org_id,
             orgs!inner(
               name,
+              slug,
               org_profiles(logo_url, category, location)
             )
           )
@@ -160,6 +163,7 @@ export default function Enquiries() {
             status: order.status === 'paid' ? 'confirmed' : order.status === 'pending' ? 'waiting_confirmation' : 'archived',
             brand: {
               name: orgData?.name || 'Unknown',
+              slug: orgData?.slug,
               logoUrl: profileData?.logo_url,
               category: profileData?.category,
               location: profileData?.location,

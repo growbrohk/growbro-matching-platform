@@ -184,12 +184,9 @@ export default function CollabResults() {
   const handleOrgClick = (e: React.MouseEvent, space: SpaceResult) => {
     e.stopPropagation();
     if (space.org_slug) {
-      // Navigate to org profile - using a reasonable route pattern
-      // If no public profile route exists, we'll use a placeholder or fallback
       navigate(`/profile/${space.org_slug}`);
-    } else if (space.org_id) {
-      navigate(`/org/${space.org_id}`);
     }
+    // If no slug, do nothing - org name is displayed as plain text (not clickable)
   };
 
   // Extract rate and listing fee from space
@@ -365,14 +362,20 @@ export default function CollabResults() {
                       {/* Host Row */}
                       {space.org_name && (
                         <div className="flex items-center justify-between">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-3 text-xs rounded-full bg-gray-50 hover:bg-gray-100 border-gray-200"
-                            onClick={(e) => handleOrgClick(e, space)}
-                          >
-                            {space.org_name}
-                          </Button>
+                          {space.org_slug ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-3 text-xs rounded-full bg-gray-50 hover:bg-gray-100 border-gray-200"
+                              onClick={(e) => handleOrgClick(e, space)}
+                            >
+                              {space.org_name}
+                            </Button>
+                          ) : (
+                            <span className="h-7 px-3 text-xs rounded-full bg-gray-50 border border-gray-200 flex items-center">
+                              {space.org_name}
+                            </span>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"

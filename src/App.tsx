@@ -382,6 +382,9 @@ function AppRoutes() {
       {/* Public Profile Page - Must be before generic orgSlug route */}
       <Route path="/profile/:orgSlug" element={<PublicProfile />} />
       
+      {/* Explicit /org/* route - shows NotFound (hard cutover, no redirects) */}
+      <Route path="/org/*" element={<NotFound />} />
+      
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
       
