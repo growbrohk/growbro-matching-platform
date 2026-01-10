@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -64,6 +66,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { count: unreadCount } = useUnreadEnquiriesCount();
 
   const handleSignOut = async () => {
     await signOut();
@@ -207,21 +210,31 @@ export function AppLayout({ children }: AppLayoutProps) {
         <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:pt-16">
           <div className="flex-1 flex flex-col border-r" style={{ borderColor: "rgba(14,122,58,0.12)", backgroundColor: "rgba(251,248,244,0.5)" }}>
             <nav className="flex-1 px-2 py-4 space-y-1">
-              {navItems.map((item) => (
-                <Link key={item.path} to={item.path}>
-                  <Button
-                    variant={isActive(item.path) ? 'secondary' : 'ghost'}
-                    className={cn(
-                      'w-full justify-start gap-3 h-11',
-                      isActive(item.path) && 'bg-primary/10 text-primary font-medium'
-                    )}
-                    style={!isActive(item.path) ? { color: 'rgba(15,31,23,0.75)' } : {}}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Button>
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const showBadge = item.path === '/app/enquiries' && unreadCount > 0;
+                return (
+                  <Link key={item.path} to={item.path}>
+                    <Button
+                      variant={isActive(item.path) ? 'secondary' : 'ghost'}
+                      className={cn(
+                        'w-full justify-start gap-3 h-11 relative',
+                        isActive(item.path) && 'bg-primary/10 text-primary font-medium'
+                      )}
+                      style={!isActive(item.path) ? { color: 'rgba(15,31,23,0.75)' } : {}}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                      {showBadge && (
+                        <Badge 
+                          className="absolute top-1 right-1 h-5 min-w-5 px-1.5 bg-red-500 text-white text-[10px] font-bold border-0 flex items-center justify-center"
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </Badge>
+                      )}
+                    </Button>
+                  </Link>
+                );
+              })}
             </nav>
 
             {/* User section at bottom */}
@@ -263,17 +276,27 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="grid grid-cols-5 gap-0.5 px-2 py-2.5">
           {bottomTabItems.map((item) => {
             const active = isActive(item.path, item.activePath);
+            const showBadge = item.path === '/app/enquiries' && unreadCount > 0;
             return (
               <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
                 <Button
                   variant={active ? 'secondary' : 'ghost'}
                   className={cn(
-                    'flex flex-col h-auto py-1.5 gap-0.5 w-full',
+                    'flex flex-col h-auto py-1.5 gap-0.5 w-full relative',
                     active && 'bg-primary/10 text-primary'
                   )}
                   style={!active ? { color: 'rgba(15,31,23,0.75)' } : {}}
                 >
-                  <item.icon className="h-5 w-5" />
+                  <div className="relative">
+                    <item.icon className="h-5 w-5" />
+                    {showBadge && (
+                      <Badge 
+                        className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 bg-red-500 text-white text-[10px] font-bold border-0 flex items-center justify-center"
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Badge>
+                    )}
+                  </div>
                   <span className="text-[10px] leading-tight">{item.label}</span>
                 </Button>
               </Link>
@@ -308,21 +331,31 @@ export function AppLayout({ children }: AppLayoutProps) {
               )}
             </div>
             <nav className="flex-1 p-4 space-y-1">
-              {navItems.map((item) => (
-                <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
-                  <Button
-                    variant={isActive(item.path) ? 'secondary' : 'ghost'}
-                    className={cn(
-                      'w-full justify-start gap-3 h-11',
-                      isActive(item.path) && 'bg-primary/10 text-primary font-medium'
-                    )}
-                    style={!isActive(item.path) ? { color: 'rgba(15,31,23,0.75)' } : {}}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
-                  </Button>
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const showBadge = item.path === '/app/enquiries' && unreadCount > 0;
+                return (
+                  <Link key={item.path} to={item.path} onClick={() => setMobileMenuOpen(false)}>
+                    <Button
+                      variant={isActive(item.path) ? 'secondary' : 'ghost'}
+                      className={cn(
+                        'w-full justify-start gap-3 h-11 relative',
+                        isActive(item.path) && 'bg-primary/10 text-primary font-medium'
+                      )}
+                      style={!isActive(item.path) ? { color: 'rgba(15,31,23,0.75)' } : {}}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                      {showBadge && (
+                        <Badge 
+                          className="absolute top-1 right-1 h-5 min-w-5 px-1.5 bg-red-500 text-white text-[10px] font-bold border-0 flex items-center justify-center"
+                        >
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </Badge>
+                      )}
+                    </Button>
+                  </Link>
+                );
+              })}
             </nav>
             <div className="p-4 border-t" style={{ borderColor: "rgba(14,122,58,0.12)" }}>
               <Button

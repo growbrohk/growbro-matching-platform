@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import ActionSheet from '@/components/messages/ActionSheet';
 import ThreadActionSheet from '@/components/messages/ThreadActionSheet';
+import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 
 interface Message {
   id: string;
@@ -35,6 +36,7 @@ export default function MessagesThreadPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
   const { currentOrg } = useAuth();
+  const { refetch: refetchUnreadCount } = useUnreadEnquiriesCount();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherOrg, setOtherOrg] = useState<OtherOrg | null>(null);
@@ -47,7 +49,27 @@ export default function MessagesThreadPage() {
   useEffect(() => {
     if (!conversationId || !currentOrg) return;
     loadConversation();
+    markAsRead();
   }, [conversationId, currentOrg]);
+
+  const markAsRead = async () => {
+    if (!conversationId || !currentOrg) return;
+
+    try {
+      // Update last_read_at for the current org's participation
+      await supabase
+        .from('conversation_participants')
+        .update({ last_read_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .eq('org_id', currentOrg.id);
+      
+      // Refetch unread count to update badge
+      refetchUnreadCount();
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+      // Don't show error to user, just log it
+    }
+  };
 
   const loadConversation = async () => {
     if (!conversationId || !currentOrg) return;

@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
 import { format } from 'date-fns';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
+import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
 
@@ -30,6 +31,7 @@ export interface EnquiryItem {
 
 export default function Enquiries() {
   const { currentOrg } = useAuth();
+  const { refetch: refetchUnreadCount } = useUnreadEnquiriesCount();
   const [filter, setFilter] = useState<FilterType>('all');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
@@ -92,6 +94,22 @@ export default function Enquiries() {
               }
             }
           }
+        }
+
+        // Mark unread booking requests as seen
+        const unreadRequestIds = allRequests
+          .filter(({ request }) => !request.host_seen_at)
+          .map(({ request }) => request.id);
+
+        if (unreadRequestIds.length > 0) {
+          // Update host_seen_at for all unread requests in batch
+          await supabase
+            .from('poster_space_booking_requests')
+            .update({ host_seen_at: new Date().toISOString() })
+            .in('id', unreadRequestIds);
+          
+          // Refetch unread count to update badge
+          refetchUnreadCount();
         }
 
         for (const { request, space } of allRequests) {
