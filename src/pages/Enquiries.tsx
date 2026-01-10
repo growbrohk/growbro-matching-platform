@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
 import { format } from 'date-fns';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
+import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
 import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
@@ -35,12 +36,24 @@ export default function Enquiries() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
+  const [messageEnquiries, setMessageEnquiries] = useState<MessageEnquiryRowData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentOrg) return;
     fetchEnquiries();
   }, [currentOrg, filter]);
+
+  // Refetch on window focus to update message list
+  useEffect(() => {
+    const handleFocus = () => {
+      if (currentOrg) {
+        fetchEnquiries();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [currentOrg]);
 
   const fetchEnquiries = async () => {
     if (!currentOrg) return;
@@ -200,118 +213,33 @@ export default function Enquiries() {
         }
       }
 
-      // Fetch conversations (Messages)
-      // First get conversation IDs for current org
-      const { data: myConversations, error: conversationsError } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('org_id', currentOrg.id);
+      // Fetch conversations (Messages) using RPC
+      const { data: inboxData, error: inboxError } = await supabase
+        .rpc('get_conversation_inbox', { p_org_id: currentOrg.id });
 
-      if (!conversationsError && myConversations && myConversations.length > 0) {
-        const convIds = myConversations.map(cp => cp.conversation_id);
+      if (!inboxError && inboxData) {
+        // Store message enquiries separately for WhatsApp-style rendering
+        setMessageEnquiries(inboxData as MessageEnquiryRowData[]);
         
-        // Fetch conversation details with last_message_at
-        const { data: conversationsData } = await supabase
-          .from('conversations')
-          .select('id, last_message_at, created_at')
-          .in('id', convIds)
-          .order('last_message_at', { ascending: false, nullsFirst: false });
-
-        if (conversationsData && conversationsData.length > 0) {
-          // Fetch last message for each conversation (using a subquery approach)
-          // For each conversation, get the most recent message
-          const conversationData: Array<{
-            conversationId: string;
-            lastMessage: any;
-            otherOrgId: string;
-          }> = [];
-
-          for (const convId of convIds) {
-          // Get last message
-          const { data: lastMessage } = await supabase
-            .from('conversation_messages')
-            .select('id, body, created_at, sender_org_id')
-            .eq('conversation_id', convId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          // Get other participant org_id
-          const { data: otherParticipant } = await supabase
-            .from('conversation_participants')
-            .select('org_id')
-            .eq('conversation_id', convId)
-            .neq('org_id', currentOrg.id)
-            .limit(1)
-            .single();
-
-          if (lastMessage && otherParticipant) {
-            conversationData.push({
-              conversationId: convId,
-              lastMessage,
-              otherOrgId: otherParticipant.org_id,
-            });
-          }
-        }
-
-        // Fetch all other orgs with profiles in one query
-        const otherOrgIds = conversationData.map(cd => cd.otherOrgId);
-        const otherOrgMap = new Map<string, any>();
-        if (otherOrgIds.length > 0) {
-          const { data: otherOrgs } = await supabase
-            .from('orgs')
-            .select(`
-              id,
-              name,
-              slug,
-              org_profiles(category, address, logo_url)
-            `)
-            .in('id', otherOrgIds);
-
-          if (otherOrgs) {
-            for (const org of otherOrgs) {
-              const profileData = Array.isArray(org.org_profiles) 
-                ? org.org_profiles[0] 
-                : org.org_profiles;
-              otherOrgMap.set(org.id, {
-                name: org.name,
-                slug: org.slug,
-                logoUrl: profileData?.logo_url,
-                category: profileData?.category,
-                location: profileData?.address,
-              });
-            }
-          }
-        }
-
-        // Create enquiry items
-        for (const cd of conversationData) {
-          const otherOrg = otherOrgMap.get(cd.otherOrgId);
-          if (!otherOrg) continue;
-
-          const convInfo = conversationsData.find(c => c.id === cd.conversationId);
-          const lastMessageAt = convInfo?.last_message_at || cd.lastMessage.created_at;
-
+        // Also add to allEnquiries for filtering/sorting compatibility
+        // (but we'll render them separately with MessageEnquiryRow)
+        for (const inboxRow of inboxData) {
           allEnquiries.push({
-            id: cd.conversationId,
+            id: inboxRow.conversation_id,
             type: 'message',
             status: 'pending',
             brand: {
-              name: otherOrg.name,
-              slug: otherOrg.slug,
-              logoUrl: otherOrg.logoUrl,
-              category: otherOrg.category,
-              location: otherOrg.location,
+              name: inboxRow.other_org_name,
+              logoUrl: inboxRow.other_org_logo_url || undefined,
             },
             item: {
               name: 'Message',
               type: 'message',
             },
-            previewText: cd.lastMessage.body,
-            date: lastMessageAt,
-            unread: false,
+            previewText: inboxRow.last_message_body,
+            date: inboxRow.last_message_at,
+            unread: inboxRow.unread_count > 0,
           });
-          }
         }
       }
 
@@ -457,9 +385,19 @@ export default function Enquiries() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredEnquiries.map((enquiry) => (
-            <EnquiryCard key={enquiry.id} enquiry={enquiry} />
-          ))}
+          {filteredEnquiries.map((enquiry) => {
+            // Render message enquiries with WhatsApp-style component
+            if (enquiry.type === 'message') {
+              const messageData = messageEnquiries.find(m => m.conversation_id === enquiry.id);
+              if (messageData) {
+                return <MessageEnquiryRow key={enquiry.id} data={messageData} />;
+              }
+              // Fallback to standard card if messageData not found (shouldn't happen)
+              return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
+            }
+            // Render other enquiries with standard card
+            return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
+          })}
         </div>
       )}
     </div>

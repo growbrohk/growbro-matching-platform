@@ -49,7 +49,6 @@ export default function MessagesThreadPage() {
   useEffect(() => {
     if (!conversationId || !currentOrg) return;
     loadConversation();
-    markAsRead();
   }, [conversationId, currentOrg]);
 
   const markAsRead = async () => {
@@ -126,6 +125,9 @@ export default function MessagesThreadPage() {
 
       if (messagesError) throw messagesError;
       setMessages(messagesData || []);
+
+      // Mark as read AFTER messages are loaded
+      await markAsRead();
     } catch (error: any) {
       console.error('Error loading conversation:', error);
       toast.error('Failed to load conversation');

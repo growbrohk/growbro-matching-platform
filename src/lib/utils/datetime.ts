@@ -102,3 +102,42 @@ export function formatEventTime(startString: string, endString: string): string 
   return formatTimeRangeForDisplay(startString, endString);
 }
 
+/**
+ * Format message time for WhatsApp-style display
+ * - If today: "11:27 PM" (12-hour format)
+ * - Else: "Jan 10" (short date format)
+ */
+export function formatMessageTime(dateString: string): string {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  const now = new Date();
+  
+  // Convert both to Hong Kong timezone for comparison
+  const dateHK = new Date(date.toLocaleString('en-US', { timeZone: TIMEZONE }));
+  const nowHK = new Date(now.toLocaleString('en-US', { timeZone: TIMEZONE }));
+  
+  // Check if same day
+  const isToday = 
+    dateHK.getDate() === nowHK.getDate() &&
+    dateHK.getMonth() === nowHK.getMonth() &&
+    dateHK.getFullYear() === nowHK.getFullYear();
+  
+  if (isToday) {
+    // Format as 12-hour time: "11:27 PM"
+    return dateHK.toLocaleTimeString('en-US', {
+      timeZone: TIMEZONE,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } else {
+    // Format as short date: "Jan 10"
+    return dateHK.toLocaleDateString('en-US', {
+      timeZone: TIMEZONE,
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+}
+
