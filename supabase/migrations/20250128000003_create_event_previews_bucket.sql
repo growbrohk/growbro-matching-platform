@@ -15,19 +15,31 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage policies: Allow authenticated users to upload files for their org's events
--- Users can upload to their org's folder
+-- Users can upload to their org's folder or temp folder (for new events before eventId exists)
+-- Drop existing policies if they exist (to handle re-running migration)
+DROP POLICY IF EXISTS "Users can upload preview images for their org's events" ON storage.objects;
+DROP POLICY IF EXISTS "Anyone can view preview images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update preview images for their org's events" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete preview images for their org's events" ON storage.objects;
+
 CREATE POLICY "Users can upload preview images for their org's events"
 ON storage.objects FOR INSERT
 WITH CHECK (
   bucket_id = 'event-previews' AND
   auth.role() = 'authenticated' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM orgs
-    WHERE EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.org_id = orgs.id
-      AND org_members.user_id = auth.uid()
+  (
+    -- Allow uploads to org folders
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM orgs
+      WHERE EXISTS (
+        SELECT 1 FROM org_members
+        WHERE org_members.org_id = orgs.id
+        AND org_members.user_id = auth.uid()
+      )
     )
+    OR
+    -- Allow uploads to temp folder only for the user's own folder (for new events)
+    ((storage.foldername(name))[1] = 'temp' AND (storage.foldername(name))[2] = auth.uid()::text)
   )
 );
 
@@ -42,13 +54,37 @@ ON storage.objects FOR UPDATE
 USING (
   bucket_id = 'event-previews' AND
   auth.role() = 'authenticated' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM orgs
-    WHERE EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.org_id = orgs.id
-      AND org_members.user_id = auth.uid()
+  (
+    -- Allow updates to org folders
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM orgs
+      WHERE EXISTS (
+        SELECT 1 FROM org_members
+        WHERE org_members.org_id = orgs.id
+        AND org_members.user_id = auth.uid()
+      )
     )
+    OR
+    -- Allow updates to temp folder only for the user's own folder
+    ((storage.foldername(name))[1] = 'temp' AND (storage.foldername(name))[2] = auth.uid()::text)
+  )
+)
+WITH CHECK (
+  bucket_id = 'event-previews' AND
+  auth.role() = 'authenticated' AND
+  (
+    -- Allow updates to org folders
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM orgs
+      WHERE EXISTS (
+        SELECT 1 FROM org_members
+        WHERE org_members.org_id = orgs.id
+        AND org_members.user_id = auth.uid()
+      )
+    )
+    OR
+    -- Allow updates to temp folder only for the user's own folder
+    ((storage.foldername(name))[1] = 'temp' AND (storage.foldername(name))[2] = auth.uid()::text)
   )
 );
 
@@ -57,13 +93,19 @@ ON storage.objects FOR DELETE
 USING (
   bucket_id = 'event-previews' AND
   auth.role() = 'authenticated' AND
-  (storage.foldername(name))[1] IN (
-    SELECT id::text FROM orgs
-    WHERE EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.org_id = orgs.id
-      AND org_members.user_id = auth.uid()
+  (
+    -- Allow deletes to org folders
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM orgs
+      WHERE EXISTS (
+        SELECT 1 FROM org_members
+        WHERE org_members.org_id = orgs.id
+        AND org_members.user_id = auth.uid()
+      )
     )
+    OR
+    -- Allow deletes to temp folder only for the user's own folder
+    ((storage.foldername(name))[1] = 'temp' AND (storage.foldername(name))[2] = auth.uid()::text)
   )
 );
 
