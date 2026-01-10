@@ -9,11 +9,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
 import { format } from 'date-fns';
-import NotificationCard from '@/components/notifications/NotificationCard';
+import EnquiryCard from '@/components/enquiries/EnquiryCard';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
 
-export interface NotificationItem {
+export interface EnquiryItem {
   id: string;
   type: 'request' | 'message' | 'sales_order' | 'system';
   status?: 'pending' | 'waiting_confirmation' | 'confirmed' | 'archived' | string;
@@ -28,23 +28,23 @@ export interface NotificationItem {
   spaceType?: string;
 }
 
-export default function Notifications() {
+export default function Enquiries() {
   const { currentOrg } = useAuth();
   const [filter, setFilter] = useState<FilterType>('all');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentOrg) return;
-    fetchNotifications();
+    fetchEnquiries();
   }, [currentOrg, filter]);
 
-  const fetchNotifications = async () => {
+  const fetchEnquiries = async () => {
     if (!currentOrg) return;
     setLoading(true);
     try {
-      const allNotifications: NotificationItem[] = [];
+      const allEnquiries: EnquiryItem[] = [];
 
       // Fetch booking requests (Requests)
       const { data: spaces } = await supabase
@@ -100,7 +100,7 @@ export default function Notifications() {
 
           // Don't filter during fetch - filter after fetching all data
 
-          allNotifications.push({
+          allEnquiries.push({
             id: request.id,
             type: 'request',
             status: request.status === 'pending' ? 'pending' : request.status === 'approved' ? 'confirmed' : 'archived',
@@ -154,7 +154,7 @@ export default function Notifications() {
 
           // Don't filter during fetch - filter after fetching all data
 
-          allNotifications.push({
+          allEnquiries.push({
             id: order.id,
             type: 'sales_order',
             status: order.status === 'paid' ? 'confirmed' : order.status === 'pending' ? 'waiting_confirmation' : 'archived',
@@ -183,35 +183,35 @@ export default function Notifications() {
       // For now, this is a placeholder structure
 
       // Sort by date (newest first)
-      allNotifications.sort((a, b) => {
+      allEnquiries.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         return dateB - dateA;
       });
 
-      setNotifications(allNotifications);
+      setEnquiries(allEnquiries);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('Error fetching enquiries:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredNotifications = notifications.filter((notif) => {
+  const filteredEnquiries = enquiries.filter((enquiry) => {
     if (filter === 'all') {
-      return notif.status !== 'archived';
+      return enquiry.status !== 'archived';
     }
     if (filter === 'archived') {
-      return notif.status === 'archived';
+      return enquiry.status === 'archived';
     }
     if (filter === 'requests') {
-      return notif.type === 'request' && notif.status !== 'archived';
+      return enquiry.type === 'request' && enquiry.status !== 'archived';
     }
     if (filter === 'messages') {
-      return notif.type === 'message' && notif.status !== 'archived';
+      return enquiry.type === 'message' && enquiry.status !== 'archived';
     }
     if (filter === 'sales_orders') {
-      return notif.type === 'sales_order' && notif.status !== 'archived';
+      return enquiry.type === 'sales_order' && enquiry.status !== 'archived';
     }
     return true;
   });
@@ -219,15 +219,15 @@ export default function Notifications() {
   const getEmptyStateMessage = () => {
     switch (filter) {
       case 'requests':
-        return 'No requests yet';
+        return 'No enquiries yet';
       case 'messages':
         return 'No messages yet';
       case 'sales_orders':
-        return 'No sales orders yet';
+        return 'No sales enquiries yet';
       case 'archived':
-        return 'No archived items';
+        return 'No archived enquiries';
       default:
-        return 'No notifications yet';
+        return 'No enquiries yet';
     }
   };
 
@@ -241,11 +241,11 @@ export default function Notifications() {
               <Bell className="h-5 w-5" style={{ color: '#0E7A3A' }} />
             </div>
             <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-              Notifications
+              Enquiries
             </h1>
           </div>
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            View requests, messages, and sales orders in one place
+            Manage requests, messages, and sales enquiries in one place
           </p>
         </div>
 
@@ -263,7 +263,7 @@ export default function Notifications() {
           </DrawerTrigger>
           <DrawerContent>
             <DrawerHeader>
-              <DrawerTitle>Filter Notifications</DrawerTitle>
+              <DrawerTitle>Filter Enquiries</DrawerTitle>
             </DrawerHeader>
             <div className="p-4">
               <RadioGroup value={filter} onValueChange={(value) => { setFilter(value as FilterType); setFilterDrawerOpen(false); }}>
@@ -295,12 +295,12 @@ export default function Notifications() {
         </Drawer>
       </div>
 
-      {/* Notifications List */}
+      {/* Enquiries List */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>Loading notifications...</div>
+          <div className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>Loading enquiries...</div>
         </div>
-      ) : filteredNotifications.length === 0 ? (
+      ) : filteredEnquiries.length === 0 ? (
         <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <div className="p-8 md:p-12 text-center">
             <div className="flex flex-col items-center gap-4">
@@ -316,7 +316,7 @@ export default function Notifications() {
                   {filter === 'requests' && 'Booking requests from brands will appear here.'}
                   {filter === 'messages' && 'Messages from collaborators will appear here.'}
                   {filter === 'sales_orders' && 'Sales orders from your catalog will appear here.'}
-                  {filter === 'archived' && 'Archived notifications will appear here.'}
+                  {filter === 'archived' && 'Archived enquiries will appear here.'}
                 </p>
               </div>
             </div>
@@ -324,8 +324,8 @@ export default function Notifications() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredNotifications.map((notification) => (
-            <NotificationCard key={notification.id} notification={notification} />
+          {filteredEnquiries.map((enquiry) => (
+            <EnquiryCard key={enquiry.id} enquiry={enquiry} />
           ))}
         </div>
       )}

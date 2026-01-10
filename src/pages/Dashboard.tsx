@@ -90,7 +90,7 @@ export default function Dashboard() {
       ) : (
         <div className="grid grid-cols-3 gap-2 md:gap-4">
           {/* Orders Card */}
-          <Link to="/app/orders">
+          <Link to="/app/enquiries">
             <Card className="rounded-lg md:rounded-2xl border hover:shadow-lg transition-shadow cursor-pointer" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
               <CardContent className="p-2.5 md:p-4 text-center">
                 <Receipt className="h-4 w-4 md:h-5 md:w-5 mx-auto mb-1.5 md:mb-2" style={{ color: '#0E7A3A' }} />
@@ -181,7 +181,7 @@ export default function Dashboard() {
             </Button>
           </Link>
 
-          <Link to="/app/orders">
+          <Link to="/app/enquiries">
             <Button 
               variant="outline" 
               className="w-full h-auto flex flex-col items-center gap-1 md:gap-2 py-2.5 md:py-4 rounded-lg md:rounded-2xl border hover:shadow-md transition-all"

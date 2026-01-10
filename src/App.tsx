@@ -25,7 +25,7 @@ import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import CollabSearch from "./pages/collab/CollabSearch";
 import CollabResults from "./pages/collab/CollabResults";
-import Notifications from "./pages/Notifications";
+import Enquiries from "./pages/Enquiries";
 // Poster Space pages
 import SpaceDetail from "./pages/booking/SpaceDetail";
 // Public pages
@@ -362,10 +362,11 @@ function AppRoutes() {
       {/* Collab Results - Protected route for search results */}
       <Route path="/collab/results" element={<ProtectedRoute><AppLayout><CollabResults /></AppLayout></ProtectedRoute>} />
       
-      {/* Notifications page (replaces Orders) */}
-      <Route path="/app/notifications" element={<ProtectedRoute><AppLayout><Notifications /></AppLayout></ProtectedRoute>} />
-      {/* Legacy Orders route redirects to Notifications */}
-      <Route path="/app/orders" element={<Navigate to="/app/notifications" replace />} />
+      {/* Enquiries page (canonical route) */}
+      <Route path="/app/enquiries" element={<ProtectedRoute><AppLayout><Enquiries /></AppLayout></ProtectedRoute>} />
+      {/* Legacy routes redirect to Enquiries */}
+      <Route path="/app/notifications" element={<Navigate to="/app/enquiries" replace />} />
+      <Route path="/app/orders" element={<Navigate to="/app/enquiries" replace />} />
       
       {/* Settings routes */}
       <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />

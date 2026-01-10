@@ -75,17 +75,17 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
-    { path: '/app/notifications', label: 'Notifications', icon: Bell },
+    { path: '/app/enquiries', label: 'Enquiries', icon: Bell },
     { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
-  // Mobile bottom tabs: Dashboard | Catalog | Collab | Notifications | Account
+  // Mobile bottom tabs: Dashboard | Catalog | Collab | Enquiries | Account
   const bottomTabItems = [
     { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
-    { path: '/app/notifications', label: 'Notifications', icon: Bell },
+    { path: '/app/enquiries', label: 'Enquiries', icon: Bell },
     { path: '/app/account', label: 'Account', icon: User, activePath: '/app/settings' },
   ];
 
@@ -110,8 +110,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (path === '/app/collab') {
       return location.pathname.startsWith('/app/collab');
     }
-    if (path === '/app/notifications') {
-      return location.pathname.startsWith('/app/notifications') || location.pathname.startsWith('/app/orders');
+    if (path === '/app/enquiries') {
+      return location.pathname.startsWith('/app/enquiries') || location.pathname.startsWith('/app/notifications') || location.pathname.startsWith('/app/orders');
     }
     return false;
   };
