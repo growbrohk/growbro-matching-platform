@@ -39,6 +39,7 @@ import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
 import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
 // Checkout pages
 import CompleteBookingPage from "./pages/checkout/CompleteBookingPage";
+import BookingSuccessPage from "./pages/booking/BookingSuccessPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -395,6 +396,9 @@ function AppRoutes() {
       
       {/* Checkout route - Must be before generic orgSlug route */}
       <Route path="/events/:eventId/checkout" element={<CompleteBookingPage />} />
+      
+      {/* Booking success route */}
+      <Route path="/booking/:orderId/success" element={<BookingSuccessPage />} />
       
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
