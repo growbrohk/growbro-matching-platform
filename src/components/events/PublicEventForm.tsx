@@ -436,8 +436,9 @@ export default function PublicEventForm({
                           <Select
                             value={(selections[tt.id] || 0).toString()}
                             onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
+                            disabled={isUnavailable}
                           >
-                            <SelectTrigger className="w-24" disabled={isUnavailable}>
+                            <SelectTrigger className="w-24">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
