@@ -34,11 +34,15 @@ import {
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
 import { getEvent } from '@/lib/api/events';
+import { createBooking } from '@/lib/api/bookings';
+import { clearBookingDraft } from '@/lib/types/booking';
+import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
+  const { toast } = useToast();
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
   const [event, setEvent] = useState<Event | null>(null);
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
@@ -56,6 +60,7 @@ export default function CompleteBookingPage() {
     applied: false,
     discountAmount: 0,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -527,20 +532,54 @@ export default function CompleteBookingPage() {
             </div>
             <Button
               type="button"
-              onClick={() => {
-                // Handle payment - placeholder
-                console.log('Go to payment');
-                if (event?.collect_attendee_info === 'per_ticket' && bookingDraft) {
-                  console.log('Attendees:', attendees);
-                  // Save attendees to booking draft before proceeding
-                  const updatedDraft = { ...bookingDraft, attendees };
-                  saveBookingDraft(updatedDraft);
+              onClick={async () => {
+                if (!bookingDraft || !isFormValid()) return;
+
+                setIsSubmitting(true);
+                try {
+                  // Ensure attendees are saved to draft
+                  let finalDraft = bookingDraft;
+                  if (event?.collect_attendee_info === 'per_ticket' && attendees.length > 0) {
+                    finalDraft = { ...bookingDraft, attendees };
+                    saveBookingDraft(finalDraft);
+                  }
+
+                  // Create booking
+                  const discount = promoState.applied ? promoState.discountAmount : 0;
+                  const result = await createBooking(
+                    finalDraft,
+                    contactInfo,
+                    event?.collect_attendee_info === 'per_ticket' ? attendees : undefined,
+                    discount
+                  );
+
+                  // Clear booking draft
+                  clearBookingDraft();
+
+                  // Show success message
+                  toast({
+                    title: 'Booking created successfully',
+                    description: 'Your order has been created. Redirecting to payment...',
+                  });
+
+                  // TODO: Redirect to payment provider (Stripe) or success page
+                  // For now, redirect to a success page or orders page
+                  navigate(`/booking/${result.orderId}/success`);
+                } catch (error: any) {
+                  console.error('Error creating booking:', error);
+                  toast({
+                    title: 'Error',
+                    description: error.message || 'Failed to create booking. Please try again.',
+                    variant: 'destructive',
+                  });
+                } finally {
+                  setIsSubmitting(false);
                 }
               }}
-              disabled={!isFormValid()}
+              disabled={!isFormValid() || isSubmitting}
               className="px-8 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Go to payment
+              {isSubmitting ? 'Processing...' : 'Go to payment'}
             </Button>
           </div>
         </div>
