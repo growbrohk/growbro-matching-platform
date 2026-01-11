@@ -375,35 +375,36 @@ export default function BookingSuccessPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Quantity</p>
                     <div className="space-y-1">
-                      {order.order_items && order.order_items.length > 0 ? (
+                      {order.tickets && order.tickets.length > 0 ? (
                         <>
-                          {order.order_items.map((item, idx) => {
-                            const quantity = Number(item.quantity) || 0;
-                            const ticketName = item.ticket_type?.name || 'Ticket';
-                            // Only show items with quantity > 0
-                            if (quantity <= 0) return null;
-                            return (
-                              <p key={idx}>
-                                {quantity}x {ticketName}
-                                {item.unit_price > 0 && (
-                                  <span className="text-muted-foreground ml-2">
-                                    ({formatPrice(Number(item.unit_price) || 0, currency)} each)
-                                  </span>
-                                )}
-                              </p>
-                            );
-                          })}
-                          {order.order_items.some(item => (Number(item.quantity) || 0) > 0) && (
-                            <p className="font-semibold mt-2 pt-2 border-t" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                              Total: {order.order_items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)} ticket(s)
-                            </p>
-                          )}
+                          {/* Show breakdown by ticket type if order_items available */}
+                          {order.order_items && order.order_items.length > 0 ? (
+                            <>
+                              {order.order_items.map((item, idx) => {
+                                const quantity = Number(item.quantity) || 0;
+                                const ticketName = item.ticket_type?.name || 'Ticket';
+                                // Only show items with quantity > 0
+                                if (quantity <= 0) return null;
+                                return (
+                                  <p key={idx}>
+                                    {quantity}x {ticketName}
+                                    {item.unit_price > 0 && (
+                                      <span className="text-muted-foreground ml-2">
+                                        ({formatPrice(Number(item.unit_price) || 0, currency)} each)
+                                      </span>
+                                    )}
+                                  </p>
+                                );
+                              })}
+                            </>
+                          ) : null}
+                          {/* Always show total from tickets count (source of truth) */}
+                          <p className="font-semibold mt-2 pt-2 border-t" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+                            Total: {order.tickets.length} ticket(s)
+                          </p>
                         </>
-                      ) : order.tickets && order.tickets.length > 0 ? (
-                        // Fallback: use ticket count if order_items is empty
-                        <p>{order.tickets.length} ticket(s)</p>
                       ) : (
-                        <p className="text-muted-foreground">No items found</p>
+                        <p className="text-muted-foreground">No tickets found</p>
                       )}
                     </div>
                   </div>

@@ -143,70 +143,87 @@ export async function createBooking(
 
 /**
  * Get order by ID with event and payment config
+ * Uses RPC function to ensure tickets are ALWAYS returned (works for anon users)
  */
 export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent | null> {
-  // Try to fetch order - this will work for authenticated users or if RLS allows
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      event:events (
-        id,
-        title,
-        start_at,
-        end_at,
-        location_text,
-        enable_stripe,
-        enable_payme,
-        enable_fps,
-        payme_link,
-        fps_link,
-        org_id
-      ),
-      order_items (
-        id,
-        ticket_type_id,
-        quantity,
-        unit_price,
-        subtotal,
-        ticket_type:ticket_types (
-          id,
-          name
-        )
-      ),
-      tickets (
-        id,
-        first_name,
-        last_name,
-        email,
-        phone
-      )
-    `)
-    .eq('id', orderId)
-    .single();
+  // Use RPC function for secure fetching (works for anon users)
+  // Type assertion needed because RPC function is not yet in generated types
+  const { data: rpcData, error: rpcError } = await supabase.rpc('get_order_with_event_and_tickets' as any, {
+    p_order_id: orderId,
+  }) as { data: any; error: any };
 
-  if (error) {
-    console.error('Error fetching order:', error);
-    // If it's a permission error, it might be RLS blocking access
-    if (error.code === 'PGRST116') {
-      return null;
-    }
-    // Log the full error for debugging
-    console.error('Full error details:', {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    throw new Error(error.message || 'Failed to fetch order');
+  if (rpcError) {
+    console.error('Error fetching order via RPC:', rpcError);
+    throw new Error(rpcError.message || 'Failed to fetch order');
   }
 
-  if (!data) {
+  if (!rpcData || !rpcData.order) {
     return null;
   }
 
-  // Type assertion - Supabase returns the correct structure but TypeScript needs help
-  return data as unknown as OrderWithEvent;
+  // Transform RPC JSONB response to OrderWithEvent format
+  const orderData = rpcData.order;
+  const eventData = rpcData.event;
+  const orderItems = rpcData.order_items || [];
+  const tickets = rpcData.tickets || [];
+
+  // Ensure tickets array is always present (this is the source of truth for quantity)
+  if (!Array.isArray(tickets)) {
+    console.warn('Tickets data is not an array:', tickets);
+  }
+
+  const result: OrderWithEvent = {
+    id: orderData.id,
+    event_id: orderData.event_id,
+    buyer_user_id: orderData.buyer_user_id,
+    buyer_first_name: orderData.buyer_first_name,
+    buyer_last_name: orderData.buyer_last_name,
+    buyer_email: orderData.buyer_email,
+    buyer_phone: orderData.buyer_phone,
+    total_amount: Number(orderData.total_amount),
+    currency: orderData.currency || 'HKD',
+    status: orderData.status,
+    payment_method: orderData.payment_method,
+    payment_status: orderData.payment_status,
+    receipt_url: orderData.receipt_url,
+    payment_reference_link: orderData.payment_reference_link,
+    submitted_at: orderData.submitted_at,
+    created_at: orderData.created_at,
+    updated_at: orderData.updated_at,
+    event: {
+      id: eventData.id,
+      title: eventData.title,
+      start_at: eventData.start_at,
+      end_at: eventData.end_at,
+      location_text: eventData.location_text,
+      enable_stripe: eventData.enable_stripe,
+      enable_payme: eventData.enable_payme,
+      enable_fps: eventData.enable_fps,
+      payme_link: eventData.payme_link,
+      fps_link: eventData.fps_link,
+      org_id: eventData.org_id,
+    },
+    order_items: orderItems.map((item: any) => ({
+      id: item.id,
+      ticket_type_id: item.ticket_type_id,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price),
+      subtotal: Number(item.subtotal),
+      ticket_type: {
+        id: item.ticket_type.id,
+        name: item.ticket_type.name,
+      },
+    })),
+    tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
+      id: ticket.id,
+      first_name: ticket.first_name,
+      last_name: ticket.last_name,
+      email: ticket.email,
+      phone: ticket.phone,
+    })) : [],
+  };
+
+  return result;
 }
 
 /**
