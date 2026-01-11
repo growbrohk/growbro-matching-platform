@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -92,7 +92,8 @@ export default function PublicEventForm({
   }, [ticketTypes, initialSelections]);
 
   // Check if a ticket type is available for purchase
-  const isTicketAvailable = (tt: TicketType): { available: boolean; reason?: string } => {
+  // Memoized to prevent unnecessary recalculations
+  const isTicketAvailable = useCallback((tt: TicketType): { available: boolean; reason?: string } => {
     if (!event) return { available: false, reason: 'Event not found' };
 
     // Layer 1: Manual admin-controlled toggle: if is_active is false, ticket is not available
@@ -100,15 +101,18 @@ export default function PublicEventForm({
       return { available: false, reason: 'Not on sale' };
     }
 
+    // Use UTC time for consistent comparisons (database dates are UTC)
     const now = new Date();
+    // Parse UTC date strings correctly - they're already in UTC format
     const eventEndAt = new Date(event.end_at);
 
     // Hard cutoff: if event has ended, all tickets are unavailable
-    if (now > eventEndAt) {
+    if (now.getTime() > eventEndAt.getTime()) {
       return { available: false, reason: 'Event ended' };
     }
 
     // Layer 2: Time-based availability rules
+    // Ensure availability_mode defaults to 'always' if null/undefined
     const availabilityMode = tt.availability_mode || 'always';
     
     if (availabilityMode === 'always') {
@@ -127,16 +131,17 @@ export default function PublicEventForm({
       }
       
       // Check start time: if set and we're before it, not available yet
-      if (availableStartAt && now < availableStartAt) {
+      // Use getTime() for reliable numeric comparison
+      if (availableStartAt && now.getTime() < availableStartAt.getTime()) {
         return { available: false, reason: 'Sales not started' };
       }
       
       // Check end time: effective end = min(available_end_at, event.end_at)
       const effectiveEndAt = availableEndAt 
-        ? (availableEndAt < eventEndAt ? availableEndAt : eventEndAt)
+        ? (availableEndAt.getTime() < eventEndAt.getTime() ? availableEndAt : eventEndAt)
         : eventEndAt;
       
-      if (now > effectiveEndAt) {
+      if (now.getTime() > effectiveEndAt.getTime()) {
         return { available: false, reason: 'Sales closed' };
       }
       
@@ -145,7 +150,7 @@ export default function PublicEventForm({
 
     // Fallback: if unknown mode, treat as unavailable
     return { available: false, reason: 'Unknown availability mode' };
-  };
+  }, [event]);
 
   // Filter visible tickets
   const visibleTicketTypes = ticketTypes.filter(tt => {
@@ -186,7 +191,70 @@ export default function PublicEventForm({
   const hasCodeOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'code');
   const hasAffiliateOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'affiliate');
 
-  // Reset unavailable ticket quantities to 0
+  // Memoize visibility check to prevent unnecessary recalculations
+  const getTicketVisibility = useCallback((tt: TicketType): boolean => {
+    const visibilityMode = tt.visibility_mode || 'public';
+    
+    if (visibilityMode === 'hidden') return false;
+    if (visibilityMode === 'public') return true;
+    if (visibilityMode === 'code') {
+      return codeParam !== null && codeParam === tt.access_code;
+    }
+    if (visibilityMode === 'affiliate') {
+      if (!refParam) return false;
+      if (tt.allowed_affiliates && tt.allowed_affiliates.length > 0) {
+        return tt.allowed_affiliates.includes(refParam);
+      }
+      return true;
+    }
+    return false;
+  }, [codeParam, refParam]);
+
+  // Track previous code/ref params to detect actual changes
+  const prevCodeParamRef = useRef(codeParam);
+  const prevRefParamRef = useRef(refParam);
+
+  // Separate effect to handle visibility changes (code/ref param changes)
+  // This should only reset when visibility actually changes, not on every render
+  useEffect(() => {
+    if (!event || ticketTypes.length === 0) return;
+    
+    // Only reset if codeParam or refParam actually changed
+    const codeChanged = prevCodeParamRef.current !== codeParam;
+    const refChanged = prevRefParamRef.current !== refParam;
+    
+    if (!codeChanged && !refChanged) {
+      // Update refs but don't reset selections
+      prevCodeParamRef.current = codeParam;
+      prevRefParamRef.current = refParam;
+      return;
+    }
+    
+    // Update refs
+    prevCodeParamRef.current = codeParam;
+    prevRefParamRef.current = refParam;
+    
+    // Only reset visibility-based selections when codeParam or refParam actually changes
+    setSelections(prev => {
+      const updated = { ...prev };
+      let changed = false;
+
+      ticketTypes.forEach(tt => {
+        const isVisible = getTicketVisibility(tt);
+        
+        // Remove selections for tickets that are no longer visible
+        if (!isVisible && prev[tt.id] !== undefined) {
+          delete updated[tt.id];
+          changed = true;
+        }
+      });
+
+      return changed ? updated : prev;
+    });
+  }, [codeParam, refParam, ticketTypes, getTicketVisibility, event]);
+
+  // Only reset unavailable tickets periodically - do NOT reset on dependency changes
+  // This effect sets up a periodic check but does NOT run immediately
   useEffect(() => {
     if (!event || ticketTypes.length === 0) return;
 
@@ -196,12 +264,7 @@ export default function PublicEventForm({
         let changed = false;
 
         ticketTypes.forEach(tt => {
-          const visibilityMode = tt.visibility_mode || 'public';
-          const isVisible = visibilityMode === 'public' || 
-            (visibilityMode === 'code' && codeParam !== null && codeParam === tt.access_code) ||
-            (visibilityMode === 'affiliate' && refParam !== null && 
-              (!tt.allowed_affiliates || tt.allowed_affiliates.length === 0 || tt.allowed_affiliates.includes(refParam))) ||
-            (visibilityMode === 'hidden' && false);
+          const isVisible = getTicketVisibility(tt);
           
           // Remove selections for invisible tickets
           if (!isVisible && prev[tt.id] !== undefined) {
@@ -211,9 +274,12 @@ export default function PublicEventForm({
           }
           
           // Only check availability for visible tickets
+          // Only reset if ticket was previously selected (> 0) and NOW becomes unavailable
           if (isVisible) {
             const availability = isTicketAvailable(tt);
-            if (!availability.available && (prev[tt.id] || 0) > 0) {
+            const currentQty = prev[tt.id] || 0;
+            // Only reset if ticket was selected and is now unavailable
+            if (!availability.available && currentQty > 0) {
               updated[tt.id] = 0;
               changed = true;
             }
@@ -224,13 +290,12 @@ export default function PublicEventForm({
       });
     };
 
-    checkAndResetUnavailable();
-    
-    // Check periodically (every minute) to catch tickets that become unavailable
+    // Only run periodic checks (every minute) - do NOT run immediately
+    // This prevents the "select then immediately reset" behavior
     const interval = setInterval(checkAndResetUnavailable, 60000);
     
     return () => clearInterval(interval);
-  }, [event, ticketTypes, codeParam, refParam]);
+  }, [event, ticketTypes, codeParam, refParam, isTicketAvailable, getTicketVisibility]);
 
   const updateQuantity = (ticketTypeId: string, quantity: number) => {
     const ticketType = ticketTypes.find(tt => tt.id === ticketTypeId);
