@@ -138,7 +138,7 @@ export default function CompleteBookingPage() {
 
   if (!bookingDraft) {
     return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground">Loading booking details...</p>
         </div>
@@ -146,10 +146,13 @@ export default function CompleteBookingPage() {
     );
   }
 
+  // Check if contact info is empty
+  const hasContactInfo = contactInfo.firstName || contactInfo.lastName || contactInfo.phone || contactInfo.email;
+
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b">
+      <div className="sticky top-0 z-10 bg-background border-b" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-4">
           <Button
             type="button"
@@ -159,7 +162,7 @@ export default function CompleteBookingPage() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold flex-1">Complete booking</h1>
+          <h1 className="text-lg font-semibold flex-1" style={{ color: '#0F1F17' }}>Complete booking</h1>
           <Button
             type="button"
             variant="ghost"
@@ -175,7 +178,7 @@ export default function CompleteBookingPage() {
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Top Summary Block */}
-        <div className="space-y-3">
+        <div className="space-y-3 p-4 rounded-2xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <h2 className="text-xl font-bold" style={{ color: '#0F1F17' }}>
             {bookingDraft.eventTitle}
           </h2>
@@ -204,7 +207,7 @@ export default function CompleteBookingPage() {
         {/* Contact Info Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#f97316' }} />
+            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
             <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
               Contact info
             </h3>
@@ -212,53 +215,56 @@ export default function CompleteBookingPage() {
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
             We'll contact you only if there's any updates to your booking
           </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            {contactInfo.firstName || contactInfo.lastName ? (
-              <div
-                className="px-3 py-1 rounded-full text-sm"
-                style={{ backgroundColor: '#f97316', color: 'white' }}
+          {!hasContactInfo && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Clear form and open dialog for adding new contact
+                  setContactInfo({
+                    firstName: '',
+                    lastName: '',
+                    phone: '',
+                    email: '',
+                  });
+                  setShowContactDialog(true);
+                }}
+                style={{ borderColor: 'rgba(14,122,58,0.2)', color: '#0E7A3A' }}
               >
-                {contactInfo.firstName} {contactInfo.lastName}
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowContactDialog(true)}
-              style={{ borderColor: '#f97316', color: '#f97316' }}
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add
-            </Button>
-          </div>
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+          )}
 
           {/* Contact Card */}
-          {(contactInfo.firstName || contactInfo.lastName || contactInfo.phone || contactInfo.email) && (
-            <div className="border rounded-lg p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+          {hasContactInfo && (
+            <div className="border rounded-2xl p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
               <div className="flex items-center justify-between">
                 <div className="flex-1 grid grid-cols-2 gap-4">
                   <div>
                     <Label className="text-xs text-muted-foreground">First name</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.firstName ? '#0F1F17' : '#f97316' }}>
+                    <p className="text-sm mt-1" style={{ color: contactInfo.firstName ? '#0F1F17' : '#0E7A3A' }}>
                       {contactInfo.firstName || 'Please enter'}
                     </p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Last name</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.lastName ? '#0F1F17' : '#f97316' }}>
+                    <p className="text-sm mt-1" style={{ color: contactInfo.lastName ? '#0F1F17' : '#0E7A3A' }}>
                       {contactInfo.lastName || 'Please enter'}
                     </p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Phone number</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.phone ? '#0F1F17' : '#f97316' }}>
+                    <p className="text-sm mt-1" style={{ color: contactInfo.phone ? '#0F1F17' : '#0E7A3A' }}>
                       {contactInfo.phone || 'Please enter'}
                     </p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Email address</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.email ? '#0F1F17' : '#f97316' }}>
+                    <p className="text-sm mt-1" style={{ color: contactInfo.email ? '#0F1F17' : '#0E7A3A' }}>
                       {contactInfo.email || 'Please enter'}
                     </p>
                   </div>
@@ -280,7 +286,7 @@ export default function CompleteBookingPage() {
         {/* Discounts Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#f97316' }} />
+            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
             <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
               Discounts
             </h3>
@@ -297,7 +303,7 @@ export default function CompleteBookingPage() {
               <Button
                 type="button"
                 onClick={handleApplyPromo}
-                style={{ backgroundColor: '#f97316' }}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 Apply
               </Button>
@@ -316,7 +322,7 @@ export default function CompleteBookingPage() {
       </div>
 
       {/* Bottom Sticky Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t z-20">
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t z-20" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-2">
           <div className="flex items-center justify-between">
             <div>
@@ -341,11 +347,7 @@ export default function CompleteBookingPage() {
                 console.log('Go to payment');
               }}
               disabled={!isContactValid()}
-              className="px-8"
-              style={{
-                backgroundColor: isContactValid() ? '#f97316' : '#ccc',
-                color: 'white',
-              }}
+              className="px-8 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Go to payment
             </Button>
@@ -421,7 +423,7 @@ export default function CompleteBookingPage() {
               type="button"
               onClick={handleSaveContact}
               disabled={!isContactValid()}
-              style={{ backgroundColor: '#f97316' }}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save
             </Button>
