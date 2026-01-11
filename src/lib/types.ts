@@ -190,6 +190,11 @@ export interface Event {
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
   collect_attendee_info?: 'primary' | 'per_ticket';
+  enable_stripe?: boolean | null;
+  enable_payme?: boolean | null;
+  enable_fps?: boolean | null;
+  payme_link?: string | null;
+  fps_link?: string | null;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

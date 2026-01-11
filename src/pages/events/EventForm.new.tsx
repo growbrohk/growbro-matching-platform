@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Trash2, Loader2, Eye, Copy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Eye, Copy, ExternalLink, CreditCard, Smartphone, QrCode } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -95,6 +95,13 @@ export default function EventForm() {
   const [eventSlug, setEventSlug] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
   const [collectAttendeeInfo, setCollectAttendeeInfo] = useState<'primary' | 'per_ticket'>('primary');
+  
+  // Payment method fields
+  const [enableStripe, setEnableStripe] = useState<boolean>(false);
+  const [enablePayme, setEnablePayme] = useState<boolean>(false);
+  const [enableFps, setEnableFps] = useState<boolean>(false);
+  const [paymeLink, setPaymeLink] = useState<string>('');
+  const [fpsLink, setFpsLink] = useState<string>('');
 
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
@@ -150,6 +157,11 @@ export default function EventForm() {
         setEventSlug((event as any).slug || '');
         setEventId(event.id);
         setCollectAttendeeInfo(event.collect_attendee_info || 'primary');
+        setEnableStripe(event.enable_stripe || false);
+        setEnablePayme(event.enable_payme || false);
+        setEnableFps(event.enable_fps || false);
+        setPaymeLink(event.payme_link || '');
+        setFpsLink(event.fps_link || '');
 
         // Load ticket types
         const types = await getTicketTypes(id);
@@ -462,6 +474,11 @@ export default function EventForm() {
         location_text: locationText.trim() || null,
         status: status,
         collect_attendee_info: collectAttendeeInfo,
+        enable_stripe: enableStripe || null,
+        enable_payme: enablePayme || null,
+        enable_fps: enableFps || null,
+        payme_link: paymeLink.trim() || null,
+        fps_link: fpsLink.trim() || null,
         metadata: {},
       };
 
@@ -943,6 +960,124 @@ export default function EventForm() {
                 </Label>
               </div>
             </RadioGroup>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Section 2.5: Payment Methods */}
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Payment Methods
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Choose which payment methods customers can use to pay for tickets
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Stripe */}
+            <div className="border rounded-lg p-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <CreditCard className="h-5 w-5" style={{ color: '#0E7A3A' }} />
+                  <div>
+                    <Label htmlFor="enable-stripe" className="text-sm font-medium cursor-pointer">
+                      Stripe Card (Online)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Secure online card payments
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="enable-stripe"
+                  checked={enableStripe}
+                  onCheckedChange={setEnableStripe}
+                />
+              </div>
+            </div>
+
+            {/* PayMe */}
+            <div className="border rounded-lg p-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <Smartphone className="h-5 w-5" style={{ color: '#0E7A3A' }} />
+                  <div>
+                    <Label htmlFor="enable-payme" className="text-sm font-medium cursor-pointer">
+                      PayMe
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Customers upload PayMe receipt after payment
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="enable-payme"
+                  checked={enablePayme}
+                  onCheckedChange={setEnablePayme}
+                />
+              </div>
+              {enablePayme && (
+                <div className="mt-3">
+                  <Label htmlFor="payme-link" className="text-sm font-medium mb-2 block">
+                    PayMe Payment Link
+                  </Label>
+                  <Input
+                    id="payme-link"
+                    type="url"
+                    value={paymeLink}
+                    onChange={(e) => setPaymeLink(e.target.value)}
+                    placeholder="https://payme.hsbc.com.hk/..."
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Share your PayMe payment link or QR code URL
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* FPS */}
+            <div className="border rounded-lg p-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <QrCode className="h-5 w-5" style={{ color: '#0E7A3A' }} />
+                  <div>
+                    <Label htmlFor="enable-fps" className="text-sm font-medium cursor-pointer">
+                      FPS (Faster Payment System)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Customers upload FPS receipt/screenshot after payment
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="enable-fps"
+                  checked={enableFps}
+                  onCheckedChange={setEnableFps}
+                />
+              </div>
+              {enableFps && (
+                <div className="mt-3">
+                  <Label htmlFor="fps-link" className="text-sm font-medium mb-2 block">
+                    FPS Payment Link or QR Code
+                  </Label>
+                  <Input
+                    id="fps-link"
+                    type="url"
+                    value={fpsLink}
+                    onChange={(e) => setFpsLink(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Share your FPS payment link or QR code URL
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

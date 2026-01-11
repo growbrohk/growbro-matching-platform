@@ -61,6 +61,11 @@ export interface CreateEventData {
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
   collect_attendee_info?: 'primary' | 'per_ticket';
+  enable_stripe?: boolean | null;
+  enable_payme?: boolean | null;
+  enable_fps?: boolean | null;
+  payme_link?: string | null;
+  fps_link?: string | null;
   metadata?: Record<string, any>;
 }
 
@@ -122,7 +127,7 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     throw new Error(fetchError.message || 'Failed to fetch created event');
   }
 
-  // Update status, description, location_text, instagram_post_url, instagram_preview_image_url, and collect_attendee_info if provided
+  // Update status, description, location_text, instagram_post_url, instagram_preview_image_url, collect_attendee_info, and payment fields if provided
   const updateFields: any = {};
   if (data.status && data.status !== 'draft') {
     updateFields.status = data.status;
@@ -141,6 +146,21 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.collect_attendee_info !== undefined) {
     updateFields.collect_attendee_info = data.collect_attendee_info;
+  }
+  if (data.enable_stripe !== undefined) {
+    updateFields.enable_stripe = data.enable_stripe;
+  }
+  if (data.enable_payme !== undefined) {
+    updateFields.enable_payme = data.enable_payme;
+  }
+  if (data.enable_fps !== undefined) {
+    updateFields.enable_fps = data.enable_fps;
+  }
+  if (data.payme_link !== undefined) {
+    updateFields.payme_link = data.payme_link;
+  }
+  if (data.fps_link !== undefined) {
+    updateFields.fps_link = data.fps_link;
   }
 
   if (Object.keys(updateFields).length > 0) {
