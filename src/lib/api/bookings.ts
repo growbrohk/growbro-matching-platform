@@ -61,6 +61,7 @@ export async function createBooking(
       first_name: attendee.firstName,
       last_name: attendee.lastName,
       email: attendee.email,
+      phone: attendee.phone,
     }));
   }
 

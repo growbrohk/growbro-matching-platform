@@ -28,7 +28,8 @@ ADD COLUMN IF NOT EXISTS buyer_phone TEXT;
 ALTER TABLE tickets
 ADD COLUMN IF NOT EXISTS first_name TEXT,
 ADD COLUMN IF NOT EXISTS last_name TEXT,
-ADD COLUMN IF NOT EXISTS email TEXT;
+ADD COLUMN IF NOT EXISTS email TEXT,
+ADD COLUMN IF NOT EXISTS phone TEXT;
 
 -- ============================================================================
 -- 3. UPDATE RLS POLICIES
@@ -56,7 +57,7 @@ CREATE OR REPLACE FUNCTION create_event_booking(
   p_buyer_email TEXT DEFAULT NULL,
   p_buyer_phone TEXT DEFAULT NULL,
   p_currency TEXT DEFAULT 'HKD',
-  p_attendees JSONB DEFAULT NULL -- Array of {ticket_type_id, first_name, last_name, email} for per-ticket mode
+  p_attendees JSONB DEFAULT NULL -- Array of {ticket_type_id, first_name, last_name, email, phone} for per-ticket mode
 )
 RETURNS UUID
 SECURITY DEFINER
@@ -167,7 +168,8 @@ BEGIN
           status,
           first_name,
           last_name,
-          email
+          email,
+          phone
         )
         VALUES (
           v_order_id,
@@ -177,7 +179,8 @@ BEGIN
           'valid',
           COALESCE(v_attendee->>'first_name', '')::TEXT,
           COALESCE(v_attendee->>'last_name', '')::TEXT,
-          COALESCE(v_attendee->>'email', '')::TEXT
+          COALESCE(v_attendee->>'email', '')::TEXT,
+          COALESCE(v_attendee->>'phone', '')::TEXT
         );
         
         v_attendee_index := v_attendee_index + 1;
@@ -191,7 +194,8 @@ BEGIN
           status,
           first_name,
           last_name,
-          email
+          email,
+          phone
         )
         VALUES (
           v_order_id,
@@ -201,7 +205,8 @@ BEGIN
           'valid',
           p_buyer_first_name,
           p_buyer_last_name,
-          p_buyer_email
+          p_buyer_email,
+          p_buyer_phone
         );
       END IF;
     END LOOP;

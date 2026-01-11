@@ -105,6 +105,7 @@ export default function CompleteBookingPage() {
                     firstName: '',
                     lastName: '',
                     email: '',
+                    phone: '',
                     ticketTypeId: line.ticketTypeId,
                   });
                 }
@@ -152,6 +153,7 @@ export default function CompleteBookingPage() {
       (attendee) =>
         attendee.firstName.trim() !== '' &&
         attendee.lastName.trim() !== '' &&
+        attendee.phone.trim() !== '' &&
         isValidEmail(attendee.email)
     );
   };
@@ -193,6 +195,7 @@ export default function CompleteBookingPage() {
       handleAttendeeUpdate(index, 'firstName', firstAttendee.firstName);
       handleAttendeeUpdate(index, 'lastName', firstAttendee.lastName);
       handleAttendeeUpdate(index, 'email', firstAttendee.email);
+      handleAttendeeUpdate(index, 'phone', firstAttendee.phone);
     }
   };
 
@@ -393,6 +396,19 @@ export default function CompleteBookingPage() {
                           onChange={(e) => handleAttendeeUpdate(index, 'email', e.target.value)}
                           className="mt-1"
                           placeholder="Enter email address"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`attendee-phone-${index}`} className="text-sm">
+                          Phone number <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id={`attendee-phone-${index}`}
+                          type="tel"
+                          value={attendee.phone}
+                          onChange={(e) => handleAttendeeUpdate(index, 'phone', e.target.value)}
+                          className="mt-1"
+                          placeholder="Enter phone number"
                         />
                       </div>
                     </CardContent>
