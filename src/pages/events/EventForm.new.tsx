@@ -17,6 +17,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  RadioGroup,
+  RadioGroupItem,
+} from '@/components/ui/radio-group';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -90,6 +94,7 @@ export default function EventForm() {
   const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
+  const [collectAttendeeInfo, setCollectAttendeeInfo] = useState<'primary' | 'per_ticket'>('primary');
 
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
@@ -144,6 +149,7 @@ export default function EventForm() {
         setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
         setEventId(event.id);
+        setCollectAttendeeInfo(event.collect_attendee_info || 'primary');
 
         // Load ticket types
         const types = await getTicketTypes(id);
@@ -455,6 +461,7 @@ export default function EventForm() {
         end_at: endAt.toISOString(),
         location_text: locationText.trim() || null,
         status: status,
+        collect_attendee_info: collectAttendeeInfo,
         metadata: {},
       };
 
@@ -903,6 +910,39 @@ export default function EventForm() {
               placeholder="e.g., Koko Coffee @ G10, The Mills"
               className="w-full"
             />
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Information Collection
+            </h2>
+            <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Choose how attendee information is collected during checkout
+            </p>
+            <RadioGroup
+              value={collectAttendeeInfo}
+              onValueChange={(value) => setCollectAttendeeInfo(value as 'primary' | 'per_ticket')}
+              className="space-y-3"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="primary" id="primary" />
+                <Label htmlFor="primary" className="font-normal cursor-pointer">
+                  Primary Booker Only
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    Collect contact information for the person making the booking
+                  </span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="per_ticket" id="per_ticket" />
+                <Label htmlFor="per_ticket" className="font-normal cursor-pointer">
+                  Per-Ticket Information
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    Collect name and email for each individual ticket holder
+                  </span>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
         </div>
 

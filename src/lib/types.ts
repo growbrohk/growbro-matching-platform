@@ -189,6 +189,7 @@ export interface Event {
   location_text?: string | null;
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
+  collect_attendee_info?: 'primary' | 'per_ticket';
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

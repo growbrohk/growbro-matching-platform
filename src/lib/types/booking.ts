@@ -11,12 +11,20 @@ export interface BookingDraftLine {
   ticketTypeId: string; // Reference to ticket type
 }
 
+export interface AttendeeInfo {
+  firstName: string;
+  lastName: string;
+  email: string;
+  ticketTypeId: string;
+}
+
 export interface BookingDraft {
   eventId: string;
   eventTitle: string;
   dateLabel?: string; // e.g., "12 Jan 2026"
   currency: string; // e.g., "HKD"
   lines: BookingDraftLine[];
+  attendees?: AttendeeInfo[]; // Per-ticket attendee information
 }
 
 export interface ContactInfo {

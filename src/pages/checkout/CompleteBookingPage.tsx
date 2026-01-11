@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -17,10 +18,11 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Plus, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronUp, ChevronDown, X, Copy } from 'lucide-react';
 import {
   BookingDraft,
   ContactInfo,
+  AttendeeInfo,
   PromoCodeState,
   loadBookingDraft,
   saveContactInfo,
@@ -28,19 +30,24 @@ import {
   savePromoCode,
   loadPromoCode,
   calculateBookingTotal,
+  saveBookingDraft,
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
+import { getEvent } from '@/lib/api/events';
+import type { Event } from '@/lib/types';
 
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
+  const [event, setEvent] = useState<Event | null>(null);
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
     phone: '',
     email: '',
   });
+  const [attendees, setAttendees] = useState<AttendeeInfo[]>([]);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -50,7 +57,7 @@ export default function CompleteBookingPage() {
     discountAmount: 0,
   });
 
-  // Load booking draft on mount
+  // Load booking draft and event on mount
   useEffect(() => {
     const draft = loadBookingDraft();
     if (!draft) {
@@ -72,7 +79,53 @@ export default function CompleteBookingPage() {
       setPromoState(savedPromo);
       setPromoCode(savedPromo.code);
     }
+
+    // Fetch event data
+    const fetchEvent = async () => {
+      if (draft.eventId) {
+        try {
+          const eventData = await getEvent(draft.eventId);
+          if (eventData) {
+            setEvent(eventData);
+            
+            // Initialize attendees array if per-ticket collection is required
+            if (eventData.collect_attendee_info === 'per_ticket') {
+              const totalTickets = draft.lines.reduce((sum, line) => sum + line.qty, 0);
+              const initialAttendees: AttendeeInfo[] = [];
+              
+              // Create attendee entries for each ticket
+              draft.lines.forEach((line) => {
+                for (let i = 0; i < line.qty; i++) {
+                  initialAttendees.push({
+                    firstName: '',
+                    lastName: '',
+                    email: '',
+                    ticketTypeId: line.ticketTypeId,
+                  });
+                }
+              });
+              
+              // Load saved attendees if available
+              if (draft.attendees && draft.attendees.length === totalTickets) {
+                setAttendees(draft.attendees);
+              } else {
+                setAttendees(initialAttendees);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch event:', error);
+        }
+      }
+    };
+
+    fetchEvent();
   }, [navigate]);
+
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   // Validate contact info
   const isContactValid = (): boolean => {
@@ -84,9 +137,26 @@ export default function CompleteBookingPage() {
     );
   };
 
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  // Validate attendees (for per-ticket collection)
+  const areAttendeesValid = (): boolean => {
+    if (!event || event.collect_attendee_info !== 'per_ticket') {
+      return true; // Not required for primary-only mode
+    }
+    
+    return attendees.every(
+      (attendee) =>
+        attendee.firstName.trim() !== '' &&
+        attendee.lastName.trim() !== '' &&
+        isValidEmail(attendee.email)
+    );
+  };
+
+  // Check if form is valid (either contact info or all attendees)
+  const isFormValid = (): boolean => {
+    if (event?.collect_attendee_info === 'per_ticket') {
+      return areAttendeesValid();
+    }
+    return isContactValid();
   };
 
   // Handle contact info save
@@ -94,6 +164,30 @@ export default function CompleteBookingPage() {
     if (isContactValid()) {
       saveContactInfo(contactInfo);
       setShowContactDialog(false);
+    }
+  };
+
+  // Handle attendee update
+  const handleAttendeeUpdate = (index: number, field: keyof AttendeeInfo, value: string) => {
+    const updated = [...attendees];
+    updated[index] = { ...updated[index], [field]: value };
+    setAttendees(updated);
+    
+    // Save to booking draft
+    if (bookingDraft) {
+      const updatedDraft = { ...bookingDraft, attendees: updated };
+      setBookingDraft(updatedDraft);
+      saveBookingDraft(updatedDraft);
+    }
+  };
+
+  // Copy from Attendee 1
+  const handleCopyFromFirst = (index: number) => {
+    if (attendees.length > 0 && index > 0) {
+      const firstAttendee = attendees[0];
+      handleAttendeeUpdate(index, 'firstName', firstAttendee.firstName);
+      handleAttendeeUpdate(index, 'lastName', firstAttendee.lastName);
+      handleAttendeeUpdate(index, 'email', firstAttendee.email);
     }
   };
 
@@ -204,82 +298,173 @@ export default function CompleteBookingPage() {
           </div>
         </div>
 
-        {/* Contact Info Section */}
+        {/* Contact Info / Attendee Info Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
             <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
-              Contact info
+              {event?.collect_attendee_info === 'per_ticket' ? 'Attendee information' : 'Contact info'}
             </h3>
           </div>
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            We'll contact you only if there's any updates to your booking
+            {event?.collect_attendee_info === 'per_ticket'
+              ? 'Please provide information for each attendee'
+              : "We'll contact you only if there's any updates to your booking"}
           </p>
-          {!hasContactInfo && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // Clear form and open dialog for adding new contact
-                  setContactInfo({
-                    firstName: '',
-                    lastName: '',
-                    phone: '',
-                    email: '',
-                  });
-                  setShowContactDialog(true);
-                }}
-                style={{ borderColor: 'rgba(14,122,58,0.2)', color: '#0E7A3A' }}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            </div>
-          )}
 
-          {/* Contact Card */}
-          {hasContactInfo && (
-            <div className="border rounded-2xl p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1 grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">First name</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.firstName ? '#0F1F17' : '#0E7A3A' }}>
-                      {contactInfo.firstName || 'Please enter'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Last name</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.lastName ? '#0F1F17' : '#0E7A3A' }}>
-                      {contactInfo.lastName || 'Please enter'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Phone number</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.phone ? '#0F1F17' : '#0E7A3A' }}>
-                      {contactInfo.phone || 'Please enter'}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Email address</Label>
-                    <p className="text-sm mt-1" style={{ color: contactInfo.email ? '#0F1F17' : '#0E7A3A' }}>
-                      {contactInfo.email || 'Please enter'}
-                    </p>
+          {event?.collect_attendee_info === 'per_ticket' ? (
+            /* Per-Ticket Attendee Forms */
+            <div className="space-y-4">
+              {attendees.map((attendee, index) => {
+                const lineIndex = bookingDraft?.lines.findIndex(
+                  (line) => line.ticketTypeId === attendee.ticketTypeId
+                );
+                const ticketLabel = bookingDraft?.lines[lineIndex || 0]?.label || 'Ticket';
+                
+                return (
+                  <Card
+                    key={index}
+                    className="border rounded-2xl"
+                    style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                          Attendee {index + 1}
+                        </CardTitle>
+                        {index > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyFromFirst(index)}
+                            className="text-xs"
+                            style={{ color: '#0E7A3A' }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy from Attendee 1
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{ticketLabel}</p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor={`attendee-firstName-${index}`} className="text-sm">
+                            First name <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            id={`attendee-firstName-${index}`}
+                            type="text"
+                            value={attendee.firstName}
+                            onChange={(e) => handleAttendeeUpdate(index, 'firstName', e.target.value)}
+                            className="mt-1"
+                            placeholder="Enter first name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor={`attendee-lastName-${index}`} className="text-sm">
+                            Last name <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            id={`attendee-lastName-${index}`}
+                            type="text"
+                            value={attendee.lastName}
+                            onChange={(e) => handleAttendeeUpdate(index, 'lastName', e.target.value)}
+                            className="mt-1"
+                            placeholder="Enter last name"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor={`attendee-email-${index}`} className="text-sm">
+                          Email address <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id={`attendee-email-${index}`}
+                          type="email"
+                          value={attendee.email}
+                          onChange={(e) => handleAttendeeUpdate(index, 'email', e.target.value)}
+                          className="mt-1"
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            /* Primary Contact Info (Original) */
+            <>
+              {!hasContactInfo && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Clear form and open dialog for adding new contact
+                      setContactInfo({
+                        firstName: '',
+                        lastName: '',
+                        phone: '',
+                        email: '',
+                      });
+                      setShowContactDialog(true);
+                    }}
+                    style={{ borderColor: 'rgba(14,122,58,0.2)', color: '#0E7A3A' }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+              )}
+
+              {/* Contact Card */}
+              {hasContactInfo && (
+                <div className="border rounded-2xl p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">First name</Label>
+                        <p className="text-sm mt-1" style={{ color: contactInfo.firstName ? '#0F1F17' : '#0E7A3A' }}>
+                          {contactInfo.firstName || 'Please enter'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Last name</Label>
+                        <p className="text-sm mt-1" style={{ color: contactInfo.lastName ? '#0F1F17' : '#0E7A3A' }}>
+                          {contactInfo.lastName || 'Please enter'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Phone number</Label>
+                        <p className="text-sm mt-1" style={{ color: contactInfo.phone ? '#0F1F17' : '#0E7A3A' }}>
+                          {contactInfo.phone || 'Please enter'}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Email address</Label>
+                        <p className="text-sm mt-1" style={{ color: contactInfo.email ? '#0F1F17' : '#0E7A3A' }}>
+                          {contactInfo.email || 'Please enter'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowContactDialog(true)}
+                      className="ml-2"
+                    >
+                      Edit
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowContactDialog(true)}
-                  className="ml-2"
-                >
-                  Edit
-                </Button>
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -345,8 +530,14 @@ export default function CompleteBookingPage() {
               onClick={() => {
                 // Handle payment - placeholder
                 console.log('Go to payment');
+                if (event?.collect_attendee_info === 'per_ticket' && bookingDraft) {
+                  console.log('Attendees:', attendees);
+                  // Save attendees to booking draft before proceeding
+                  const updatedDraft = { ...bookingDraft, attendees };
+                  saveBookingDraft(updatedDraft);
+                }
               }}
-              disabled={!isContactValid()}
+              disabled={!isFormValid()}
               className="px-8 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Go to payment

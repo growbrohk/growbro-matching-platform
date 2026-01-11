@@ -60,6 +60,7 @@ export interface CreateEventData {
   location_text?: string | null;
   instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
+  collect_attendee_info?: 'primary' | 'per_ticket';
   metadata?: Record<string, any>;
 }
 
@@ -121,7 +122,7 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
     throw new Error(fetchError.message || 'Failed to fetch created event');
   }
 
-  // Update status, description, location_text, instagram_post_url, and instagram_preview_image_url if provided
+  // Update status, description, location_text, instagram_post_url, instagram_preview_image_url, and collect_attendee_info if provided
   const updateFields: any = {};
   if (data.status && data.status !== 'draft') {
     updateFields.status = data.status;
@@ -137,6 +138,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.instagram_preview_image_url !== undefined) {
     updateFields.instagram_preview_image_url = data.instagram_preview_image_url;
+  }
+  if (data.collect_attendee_info !== undefined) {
+    updateFields.collect_attendee_info = data.collect_attendee_info;
   }
 
   if (Object.keys(updateFields).length > 0) {
