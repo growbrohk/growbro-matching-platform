@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
-import { formatEventDate } from '@/lib/utils/datetime';
+import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import { CreditCard, Smartphone, QrCode, ChevronDown, Loader2, ExternalLink } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -36,16 +36,43 @@ export default function BookingSuccessPage() {
 
     const fetchOrder = async () => {
       try {
+        console.log('Fetching order:', orderId);
+        
+        // Check if this is the last order created (for guest checkout access)
+        const lastOrderId = sessionStorage.getItem('last_order_id');
+        const isRecentOrder = lastOrderId === orderId;
+        
         const orderData = await getOrderWithEvent(orderId);
+        console.log('Order data received:', orderData);
+        
         if (!orderData) {
-          toast({
-            title: 'Order not found',
-            description: 'The order you are looking for does not exist.',
-            variant: 'destructive',
-          });
-          navigate('/');
+          console.error('Order not found for ID:', orderId);
+          
+          // If this was a recent order, it might be an RLS issue
+          if (isRecentOrder) {
+            toast({
+              title: 'Order found but access denied',
+              description: 'Your order was created successfully, but there was an issue loading it. Please try refreshing the page or contact support.',
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Order not found',
+              description: 'The order you are looking for does not exist. It may have been created as a guest checkout - please try logging in first.',
+              variant: 'destructive',
+            });
+          }
+          
+          // Don't navigate immediately - let user see the error
+          setLoading(false);
           return;
         }
+        
+        // Clear the session storage after successful fetch
+        if (isRecentOrder) {
+          sessionStorage.removeItem('last_order_id');
+        }
+        
         setOrder(orderData);
         
         // Check if payment was already submitted
@@ -54,11 +81,17 @@ export default function BookingSuccessPage() {
         }
       } catch (error: any) {
         console.error('Error fetching order:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        });
         toast({
           title: 'Error',
-          description: error.message || 'Failed to load order details.',
+          description: error.message || 'Failed to load order details. Please try refreshing the page.',
           variant: 'destructive',
         });
+        setLoading(false);
       } finally {
         setLoading(false);
       }
@@ -137,6 +170,15 @@ export default function BookingSuccessPage() {
       return;
     }
 
+    if (selectedPaymentMethod !== 'payme' && selectedPaymentMethod !== 'fps') {
+      toast({
+        title: 'Invalid payment method',
+        description: 'Please select PayMe or FPS for manual payment.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const paymentLink = selectedPaymentMethod === 'payme' 
@@ -149,7 +191,7 @@ export default function BookingSuccessPage() {
 
       await submitManualPayment({
         orderId,
-        paymentMethod: selectedPaymentMethod,
+        paymentMethod: selectedPaymentMethod as 'payme' | 'fps',
         receiptFile,
         paymentReferenceLink: paymentLink,
       });
@@ -294,7 +336,9 @@ export default function BookingSuccessPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Date & Time</p>
-                    <p>{formatEventDate(event.start_at, event.end_at)}</p>
+                    <p>
+                      {formatEventDate(event.start_at)} {formatEventTime(event.start_at, event.end_at)}
+                    </p>
                   </div>
                   {event.location_text && (
                     <div>

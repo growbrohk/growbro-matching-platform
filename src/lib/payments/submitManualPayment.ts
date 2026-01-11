@@ -5,9 +5,11 @@
 import { supabase } from '@/integrations/supabase/client';
 import { updateOrderPayment } from '@/lib/api/bookings';
 
+export type ManualPaymentMethod = 'payme' | 'fps';
+
 export interface SubmitManualPaymentParams {
   orderId: string;
-  paymentMethod: 'payme' | 'fps';
+  paymentMethod: ManualPaymentMethod;
   receiptFile: File;
   paymentReferenceLink: string;
 }

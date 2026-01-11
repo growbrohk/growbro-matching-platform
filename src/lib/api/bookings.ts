@@ -145,6 +145,7 @@ export async function createBooking(
  * Get order by ID with event and payment config
  */
 export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent | null> {
+  // Try to fetch order - this will work for authenticated users or if RLS allows
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -185,13 +186,27 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     .single();
 
   if (error) {
+    console.error('Error fetching order:', error);
+    // If it's a permission error, it might be RLS blocking access
     if (error.code === 'PGRST116') {
       return null;
     }
+    // Log the full error for debugging
+    console.error('Full error details:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
     throw new Error(error.message || 'Failed to fetch order');
   }
 
-  return data as OrderWithEvent;
+  if (!data) {
+    return null;
+  }
+
+  // Type assertion - Supabase returns the correct structure but TypeScript needs help
+  return data as unknown as OrderWithEvent;
 }
 
 /**

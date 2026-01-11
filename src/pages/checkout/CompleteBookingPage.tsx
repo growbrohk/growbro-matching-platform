@@ -578,6 +578,9 @@ export default function CompleteBookingPage() {
                     description: 'Your order has been created. Redirecting to payment...',
                   });
 
+                  // Store orderId in sessionStorage for guest checkout access
+                  sessionStorage.setItem('last_order_id', result.orderId);
+                  
                   // TODO: Redirect to payment provider (Stripe) or success page
                   // For now, redirect to a success page or orders page
                   navigate(`/booking/${result.orderId}/success`);
