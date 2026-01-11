@@ -77,22 +77,36 @@ export default function PublicEventForm({
   const [selections, setSelections] = useState<Record<string, number>>(initialSelections);
   const [showContinueDialog, setShowContinueDialog] = useState(false);
 
-  // Initialize selections from props
+  // Initialize selections from props - ONLY if selections are currently empty
+  // Use functional update to avoid overwriting user choices
   useEffect(() => {
-    if (Object.keys(initialSelections).length > 0) {
-      setSelections(initialSelections);
-    } else {
-      // Initialize selections (will be filtered by visibility in render)
+    setSelections(prev => {
+      // If user has already made selections, don't overwrite them
+      const hasUserSelections = Object.values(prev).some(qty => qty > 0);
+      if (hasUserSelections) {
+        console.log('[PublicEventForm] Preserving user selections, skipping initialization');
+        return prev;
+      }
+
+      // If initialSelections provided, use them
+      if (Object.keys(initialSelections).length > 0) {
+        console.log('[PublicEventForm] Initializing from initialSelections prop');
+        return initialSelections;
+      }
+
+      // Otherwise, initialize empty selections for all ticket types
       const initial: Record<string, number> = {};
       ticketTypes.forEach(tt => {
         initial[tt.id] = 0;
       });
-      setSelections(initial);
-    }
+      console.log('[PublicEventForm] Initializing empty selections for', ticketTypes.length, 'ticket types');
+      return initial;
+    });
   }, [ticketTypes, initialSelections]);
 
   // Check if a ticket type is available for purchase
   // Memoized to prevent unnecessary recalculations
+  // Added 5-minute safety margin to prevent clock drift issues
   const isTicketAvailable = useCallback((tt: TicketType): { available: boolean; reason?: string } => {
     if (!event) return { available: false, reason: 'Event not found' };
 
@@ -103,11 +117,28 @@ export default function PublicEventForm({
 
     // Use UTC time for consistent comparisons (database dates are UTC)
     const now = new Date();
-    // Parse UTC date strings correctly - they're already in UTC format
-    const eventEndAt = new Date(event.end_at);
+    const nowTime = now.getTime();
+    
+    // Parse UTC date strings correctly - ensure they're parsed as UTC
+    // Handle both ISO strings and ensure proper UTC parsing
+    const parseUTCDate = (dateString: string): Date => {
+      // If it's already a valid ISO string, new Date() will parse it correctly
+      // But ensure we're comparing UTC to UTC
+      const date = new Date(dateString);
+      // Validate the date was parsed correctly
+      if (isNaN(date.getTime())) {
+        console.error('[PublicEventForm] Invalid date string:', dateString);
+        return new Date(0); // Return epoch as fallback
+      }
+      return date;
+    };
 
-    // Hard cutoff: if event has ended, all tickets are unavailable
-    if (now.getTime() > eventEndAt.getTime()) {
+    const eventEndAt = parseUTCDate(event.end_at);
+    const eventEndTime = eventEndAt.getTime();
+
+    // Hard cutoff: if event has ended (with 5-minute safety margin), all tickets are unavailable
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    if (nowTime > (eventEndTime + FIVE_MINUTES_MS)) {
       return { available: false, reason: 'Event ended' };
     }
 
@@ -122,26 +153,31 @@ export default function PublicEventForm({
     
     if (availabilityMode === 'scheduled') {
       // Check if we're within the scheduled availability window
-      const availableStartAt = tt.available_start_at ? new Date(tt.available_start_at) : null;
-      const availableEndAt = tt.available_end_at ? new Date(tt.available_end_at) : null;
+      const availableStartAt = tt.available_start_at ? parseUTCDate(tt.available_start_at) : null;
+      const availableEndAt = tt.available_end_at ? parseUTCDate(tt.available_end_at) : null;
       
       // If scheduled but no times set, treat as unavailable (validation should prevent this)
       if (!availableStartAt && !availableEndAt) {
         return { available: false, reason: 'Sales not scheduled' };
       }
       
-      // Check start time: if set and we're before it, not available yet
-      // Use getTime() for reliable numeric comparison
-      if (availableStartAt && now.getTime() < availableStartAt.getTime()) {
-        return { available: false, reason: 'Sales not started' };
+      // Check start time: if set and we're before it (with safety margin), not available yet
+      if (availableStartAt) {
+        const startTime = availableStartAt.getTime();
+        // Add safety margin: if we're within 5 minutes before start, still allow
+        if (nowTime < (startTime - FIVE_MINUTES_MS)) {
+          return { available: false, reason: 'Sales not started' };
+        }
       }
       
       // Check end time: effective end = min(available_end_at, event.end_at)
       const effectiveEndAt = availableEndAt 
-        ? (availableEndAt.getTime() < eventEndAt.getTime() ? availableEndAt : eventEndAt)
+        ? (availableEndAt.getTime() < eventEndTime ? availableEndAt : eventEndAt)
         : eventEndAt;
+      const effectiveEndTime = effectiveEndAt.getTime();
       
-      if (now.getTime() > effectiveEndAt.getTime()) {
+      // Add safety margin: if we're within 5 minutes after end, still allow
+      if (nowTime > (effectiveEndTime + FIVE_MINUTES_MS)) {
         return { available: false, reason: 'Sales closed' };
       }
       
@@ -268,8 +304,12 @@ export default function PublicEventForm({
           
           // Remove selections for invisible tickets
           if (!isVisible && prev[tt.id] !== undefined) {
-            delete updated[tt.id];
-            changed = true;
+            const currentQty = prev[tt.id] || 0;
+            if (currentQty > 0) {
+              console.log(`🔴 RESETTING TICKET "${tt.name}" TO 0 BECAUSE: Ticket is no longer visible`);
+              delete updated[tt.id];
+              changed = true;
+            }
             return;
           }
           
@@ -279,7 +319,16 @@ export default function PublicEventForm({
             const availability = isTicketAvailable(tt);
             const currentQty = prev[tt.id] || 0;
             // Only reset if ticket was selected and is now unavailable
+            // Double-check: ensure availability_mode exists or defaults correctly
+            const availabilityMode = tt.availability_mode || 'always';
             if (!availability.available && currentQty > 0) {
+              // Additional safety: if availability_mode is missing/null, don't reset
+              // This prevents false positives from date parsing issues
+              if (availabilityMode === 'always' && availability.reason !== 'Event ended' && availability.reason !== 'Not on sale') {
+                console.warn(`⚠️ [PublicEventForm] Skipping reset for "${tt.name}" - availability_mode is 'always' but marked unavailable:`, availability.reason);
+                return; // Don't reset if it's 'always' mode and not clearly ended/disabled
+              }
+              console.log(`🔴 RESETTING TICKET "${tt.name}" TO 0 BECAUSE: ${availability.reason || 'Unavailable'}`);
               updated[tt.id] = 0;
               changed = true;
             }
@@ -298,19 +347,31 @@ export default function PublicEventForm({
   }, [event, ticketTypes, codeParam, refParam, isTicketAvailable, getTicketVisibility]);
 
   const updateQuantity = (ticketTypeId: string, quantity: number) => {
+    console.log(`🟢 [PublicEventForm] updateQuantity called: ticketTypeId=${ticketTypeId}, quantity=${quantity}`);
+    
     const ticketType = ticketTypes.find(tt => tt.id === ticketTypeId);
-    if (!ticketType) return;
+    if (!ticketType) {
+      console.warn(`[PublicEventForm] Ticket type not found: ${ticketTypeId}`);
+      return;
+    }
 
     const availability = isTicketAvailable(ticketType);
     if (!availability.available) {
+      console.log(`[PublicEventForm] Cannot select quantity - ticket unavailable: ${availability.reason}`);
       // Don't allow selection if ticket is unavailable
       return;
     }
 
-    setSelections(prev => ({
-      ...prev,
-      [ticketTypeId]: Math.max(0, Math.min(4, quantity))
-    }));
+    // Use functional update to ensure we're working with latest state
+    setSelections(prev => {
+      const newQty = Math.max(0, Math.min(4, quantity));
+      const updated = {
+        ...prev,
+        [ticketTypeId]: newQty
+      };
+      console.log(`✅ [PublicEventForm] Setting quantity for "${ticketType.name}" to ${newQty}. Previous: ${prev[ticketTypeId] || 0}`);
+      return updated;
+    });
   };
 
   const calculateSubtotal = (): number => {
