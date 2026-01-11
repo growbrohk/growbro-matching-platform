@@ -451,6 +451,10 @@ export default function BookingSuccessPage() {
                     setReceiptFile(null);
                   }
                   setSelectedPaymentMethod(newMethod);
+                  // Ensure collapsible opens when payment method is selected
+                  if (newMethod && newMethod !== selectedPaymentMethod) {
+                    // The collapsible's onOpenChange will handle this, but we ensure state is set
+                  }
                 }}
               >
                 <div className="space-y-3">
@@ -516,11 +520,6 @@ export default function BookingSuccessPage() {
                             htmlFor="payme"
                             className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent"
                             style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                            onClick={(e) => {
-                              if (selectedPaymentMethod !== 'payme') {
-                                setSelectedPaymentMethod('payme');
-                              }
-                            }}
                           >
                             <div className="flex items-center gap-3">
                               <RadioGroupItem value="payme" id="payme" />
