@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
@@ -14,6 +15,10 @@ import {
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import {
+  BookingDraft,
+  saveBookingDraft,
+} from '@/lib/types/booking';
 
 /**
  * Format datetime as "dd-MM-yyyy HH:mm" (24-hour format)
@@ -68,6 +73,7 @@ export default function PublicEventForm({
   refParam = null,
   initialSelections = {},
 }: PublicEventFormProps) {
+  const navigate = useNavigate();
   const [selections, setSelections] = useState<Record<string, number>>(initialSelections);
   const [showContinueDialog, setShowContinueDialog] = useState(false);
 
@@ -259,12 +265,60 @@ export default function PublicEventForm({
 
   const subtotal = calculateSubtotal();
 
+  // Format date as "12 Jan 2026" for booking draft
+  const formatDateForBooking = (dateString: string): string => {
+    const date = new Date(dateString);
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Hong_Kong',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    return formatter.format(date);
+  };
+
   const handleContinue = () => {
     if (mode === 'preview') {
       // In preview mode, just show a message instead of opening dialog
       return;
     }
-    setShowContinueDialog(true);
+
+    // Build booking draft from selections
+    const lines: BookingDraft['lines'] = [];
+    visibleTicketTypes.forEach((tt) => {
+      const qty = selections[tt.id] || 0;
+      if (qty > 0) {
+        // Ensure qty is at least 1
+        const finalQty = Math.max(1, qty);
+        lines.push({
+          label: tt.name, // e.g., "1-Day Ticket"
+          optionLabel: 'Adult', // Default to "Adult" for now
+          unitPrice: tt.price,
+          qty: finalQty,
+          ticketTypeId: tt.id,
+        });
+      }
+    });
+
+    // Only proceed if there are valid selections
+    if (lines.length === 0) {
+      return;
+    }
+
+    // Create booking draft
+    const draft: BookingDraft = {
+      eventId: event.id,
+      eventTitle: event.title,
+      dateLabel: formatDateForBooking(event.start_at),
+      currency: 'HKD',
+      lines,
+    };
+
+    // Save to localStorage
+    saveBookingDraft(draft);
+
+    // Navigate to checkout
+    navigate(`/events/${event.id}/checkout`);
   };
 
   return (

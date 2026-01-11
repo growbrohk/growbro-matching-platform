@@ -37,6 +37,8 @@ import PublicProfile from "./pages/public/PublicProfile";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
 import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
 import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
+// Checkout pages
+import CompleteBookingPage from "./pages/checkout/CompleteBookingPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -390,6 +392,9 @@ function AppRoutes() {
       
       {/* Explicit /org/* route - shows NotFound (hard cutover, no redirects) */}
       <Route path="/org/*" element={<NotFound />} />
+      
+      {/* Checkout route - Must be before generic orgSlug route */}
+      <Route path="/events/:eventId/checkout" element={<CompleteBookingPage />} />
       
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />
