@@ -158,23 +158,32 @@ export default function SuccessfulBookingPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            @page { size: auto; margin: 0mm; }
             @media print {
+              @page { size: auto; margin: 10mm; }
+              html, body { 
+                height: auto !important; 
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
               body * { visibility: hidden; }
               .print-container, .print-container * { visibility: visible; }
               .print-container { 
-                position: absolute; 
-                left: 0; 
-                top: 0; 
+                position: static !important;
                 width: 100%;
                 display: block !important;
+                orphans: 3;
+                widows: 3;
               }
               .ticket-page-break {
-                break-after: page;
-                page-break-after: always;
                 display: block;
+                break-before: page;
+                page-break-before: always;
+                break-inside: avoid;
+                orphans: 3;
+                widows: 3;
               }
-              button, .no-print { display: none !important; }
+              button, .no-print, footer, header { display: none !important; }
             }
           `,
         }}
