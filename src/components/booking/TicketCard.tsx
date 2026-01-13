@@ -252,13 +252,11 @@ export function TicketCardPreview({
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const ticketRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
 
   useEffect(() => {
     const updateScale = () => {
-      if (!containerRef.current || !ticketRef.current) return;
+      if (!containerRef.current) return;
 
       const containerWidth = containerRef.current.clientWidth;
       const ticketWidth = 800; // Fixed ticket width
@@ -267,10 +265,6 @@ export function TicketCardPreview({
       
       const newScale = Math.min(1, availableWidth / ticketWidth);
       setScale(newScale);
-
-      // Measure ticket height and set wrapper height to prevent overlap
-      const ticketHeight = ticketRef.current.getBoundingClientRect().height;
-      setWrapperHeight(ticketHeight * newScale);
     };
 
     updateScale();
@@ -288,17 +282,18 @@ export function TicketCardPreview({
   return (
     <div 
       ref={containerRef}
-      className={`w-full flex justify-center ${className}`}
+      className={`w-full ${className}`}
       style={{
-        minHeight: wrapperHeight ? `${wrapperHeight}px` : 'auto',
+        display: 'grid',
+        placeItems: 'start center',
       }}
     >
       <div
-        ref={ticketRef}
         style={{
           transform: `scale(${scale})`,
           transformOrigin: 'top center',
           width: '800px',
+          marginBottom: `calc(-800px * (1 - ${scale}) * 1.5)`,
         }}
       >
         {children}

@@ -197,7 +197,7 @@ export default function SuccessfulBookingPage() {
 
         {/* Ticket Cards - Render all tickets */}
         <div className="container mx-auto px-4">
-          <div className="print-container flex flex-col gap-6">
+          <div className="print-container flex flex-col gap-0">
             {tickets.map((ticket, index) => {
               if (!ticket.qr_code) return null;
               
@@ -208,10 +208,10 @@ export default function SuccessfulBookingPage() {
                 : 'GUEST';
 
               return (
-                <div key={ticket.id || index}>
+                <div key={ticket.id || index} style={{ margin: 0, padding: 0 }}>
                   {tickets.length > 1 && (
-                    <p className="text-sm text-muted-foreground mb-2 text-center no-print">
-                      Ticket {index + 1} of {tickets.length}
+                    <p className="text-sm text-muted-foreground mb-2 text-center" style={{ marginBottom: '0.5rem' }}>
+                      <span className="no-print">Ticket {index + 1} of {tickets.length}</span>
                     </p>
                   )}
                   <TicketCardPreview>
