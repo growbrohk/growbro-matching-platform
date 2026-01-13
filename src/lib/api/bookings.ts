@@ -239,6 +239,34 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
 }
 
 /**
+ * Confirm free order (set to paid and confirmed)
+ * Used for free tickets (amount_total = 0) to ensure they are immediately confirmed
+ */
+export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent> {
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      payment_status: 'paid',
+      fulfillment_status: 'confirmed',
+      payment_method: 'free',
+      status: 'paid',
+    })
+    .eq('id', orderId);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to confirm free order');
+  }
+
+  // Fetch the updated order with event to return
+  const updatedOrder = await getOrderWithEvent(orderId);
+  if (!updatedOrder) {
+    throw new Error('Failed to fetch updated order');
+  }
+
+  return updatedOrder;
+}
+
+/**
  * Update order payment information
  * For PayMe/FPS: Sets payment_status = 'pending', fulfillment_status = 'pending_confirmation'
  * For Stripe: Will be handled by webhook (sets payment_status = 'paid', fulfillment_status = 'confirmed')

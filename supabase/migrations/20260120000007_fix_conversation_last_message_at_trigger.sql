@@ -47,3 +47,4 @@ AND EXISTS (
 
 COMMENT ON FUNCTION update_conversation_last_message_at() IS 'Trigger function to update conversations.last_message_at when messages are inserted. Uses SECURITY DEFINER to bypass RLS.';
 
+

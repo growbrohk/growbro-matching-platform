@@ -80,3 +80,4 @@ Fixed unread message logic to correctly count only messages from OTHER orgs, not
 - TypeScript errors in MessagesThreadPage.tsx are due to missing conversation table types in Supabase types.ts - these are pre-existing and don't affect runtime behavior
 - The unread badge hook (`useUnreadEnquiriesCount`) automatically polls every 30 seconds and refetches on window focus
 
+

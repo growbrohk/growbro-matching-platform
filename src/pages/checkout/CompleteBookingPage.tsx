@@ -34,7 +34,7 @@ import {
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
 import { getEvent } from '@/lib/api/events';
-import { createBooking } from '@/lib/api/bookings';
+import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
@@ -562,6 +562,7 @@ export default function CompleteBookingPage() {
 
                   // Create booking
                   const discount = promoState.applied ? promoState.discountAmount : 0;
+                  const finalTotal = Math.max(0, subtotal - discount);
                   const result = await createBooking(
                     finalDraft,
                     contactInfo,
@@ -575,25 +576,48 @@ export default function CompleteBookingPage() {
                   // Store orderId in sessionStorage for guest checkout access
                   sessionStorage.setItem('last_order_id', result.orderId);
                   
-                  // Determine redirect based on order total
-                  // Free tickets (amount = 0) are immediately confirmed and go to success page
-                  // Paid tickets go to payment page
-                  const finalTotal = Math.max(0, subtotal - discount);
-                  
+                  // FIX: For free tickets, ensure order is confirmed synchronously before navigation
                   if (finalTotal === 0) {
-                    // Free ticket - already confirmed, go to success page
-                    toast({
-                      title: 'Booking created successfully',
-                      description: 'Your free ticket has been confirmed!',
-                    });
-                    navigate(`/booking/success/${result.orderId}`);
+                    try {
+                      // Ensure free order is confirmed (RPC should already do this, but verify/update to be safe)
+                      const updatedOrder = await confirmFreeOrder(result.orderId);
+                      
+                      console.debug('[booking-route]', {
+                        orderId: result.orderId,
+                        amount_total: updatedOrder.total_amount,
+                        payment_status: updatedOrder.payment_status,
+                        fulfillment_status: updatedOrder.fulfillment_status,
+                        payment_method: updatedOrder.payment_method,
+                        route: 'success',
+                      });
+
+                      toast({
+                        title: 'Booking created successfully',
+                        description: 'Your free ticket has been confirmed!',
+                      });
+                      navigate(`/booking/success/${result.orderId}`, { replace: true });
+                    } catch (error: any) {
+                      console.error('Error confirming free order:', error);
+                      // Even if update fails, try to navigate to success (RPC should have set it correctly)
+                      toast({
+                        title: 'Booking created',
+                        description: 'Your booking has been created.',
+                      });
+                      navigate(`/booking/success/${result.orderId}`, { replace: true });
+                    }
                   } else {
                     // Paid ticket - go to payment page
+                    console.debug('[booking-route]', {
+                      orderId: result.orderId,
+                      amount_total: finalTotal,
+                      route: 'payment',
+                    });
+
                     toast({
                       title: 'Booking created successfully',
                       description: 'Redirecting to payment...',
                     });
-                    navigate(`/booking/payment/${result.orderId}`);
+                    navigate(`/booking/payment/${result.orderId}`, { replace: true });
                   }
                 } catch (error: any) {
                   console.error('Error creating booking:', error);

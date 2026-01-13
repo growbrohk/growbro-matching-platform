@@ -134,3 +134,4 @@ CREATE TRIGGER update_bookings_updated_at
 
 
 
+

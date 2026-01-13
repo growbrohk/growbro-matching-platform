@@ -68,13 +68,13 @@ export default function PendingBookingPage() {
           // Redirect based on order state
           if (orderData.payment_status === 'paid' && orderData.fulfillment_status === 'confirmed') {
             // Already confirmed - go to success page
-            navigate(`/booking/success/${orderId}`);
+            navigate(`/booking/success/${orderId}`, { replace: true });
           } else if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
             // Needs payment
-            navigate(`/booking/payment/${orderId}`);
+            navigate(`/booking/payment/${orderId}`, { replace: true });
           } else {
             // Other states - redirect to payment
-            navigate(`/booking/payment/${orderId}`);
+            navigate(`/booking/payment/${orderId}`, { replace: true });
           }
           return;
         }

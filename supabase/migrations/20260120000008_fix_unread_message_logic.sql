@@ -74,3 +74,4 @@ ON public.conversation_messages (conversation_id, sender_org_id, created_at DESC
 
 COMMENT ON FUNCTION public.get_unread_enquiries_count(uuid) IS 'Returns total count of unread enquiries. Unread messages = conversations with messages from OTHER orgs after last_read_at. Unread bookings = requests with host_seen_at IS NULL.';
 
+

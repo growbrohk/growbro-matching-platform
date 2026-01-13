@@ -12,7 +12,7 @@
  * - FPS (manual with receipt) → redirects to pending
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { getBookingRoute } from '@/lib/utils/booking-route';
 import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -47,6 +48,7 @@ export default function PaymentPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
     if (!orderId) {
@@ -69,32 +71,41 @@ export default function PaymentPage() {
         }
 
         setOrder(orderData);
+        setLoading(false);
 
-        // Check eligibility: Must have amount > 0 and be unpaid
-        const isEligible = 
-          orderData.total_amount > 0 && 
-          orderData.payment_status === 'unpaid';
+        // Use unified routing logic with loading guard
+        // Do NOT redirect until order fetch is finished and order is non-null
+        if (redirectedRef.current) {
+          return; // Already redirected, prevent multiple redirects
+        }
 
-        if (!isEligible) {
-          // Redirect based on order state
-          if (orderData.payment_status === 'paid' && orderData.fulfillment_status === 'confirmed') {
-            // Already paid and confirmed - go to success
-            navigate(`/booking/success/${orderId}`);
-          } else if (
-            (orderData.payment_method === 'payme' || orderData.payment_method === 'fps') &&
-            (orderData.payment_status === 'pending' || orderData.payment_status === 'submitted') &&
-            orderData.fulfillment_status === 'pending_confirmation'
-          ) {
-            // PayMe/FPS pending - go to pending page
-            navigate(`/booking/pending/${orderId}`);
+        const route = getBookingRoute(orderData);
+
+        console.debug('[booking-route]', {
+          orderId,
+          amount_total: orderData.total_amount,
+          payment_status: orderData.payment_status,
+          fulfillment_status: orderData.fulfillment_status,
+          payment_method: orderData.payment_method,
+          route,
+          currentPage: 'payment',
+        });
+
+        // If route is not 'payment', redirect accordingly (one-way)
+        if (route !== 'payment') {
+          redirectedRef.current = true;
+          if (route === 'success') {
+            navigate(`/booking/success/${orderId}`, { replace: true });
+          } else if (route === 'pending') {
+            navigate(`/booking/pending/${orderId}`, { replace: true });
           } else {
-            // Other states - stay on payment page or redirect to success if free
-            if (orderData.total_amount === 0) {
-              navigate(`/booking/success/${orderId}`);
-            }
+            // Fallback to success
+            navigate(`/booking/success/${orderId}`, { replace: true });
           }
           return;
         }
+
+        // Route is 'payment' - this page is correct, continue rendering
       } catch (error: any) {
         console.error('Error fetching order:', error);
         toast({
@@ -102,7 +113,6 @@ export default function PaymentPage() {
           description: error.message || 'Failed to load order details.',
           variant: 'destructive',
         });
-      } finally {
         setLoading(false);
       }
     };
@@ -195,13 +205,15 @@ export default function PaymentPage() {
         paymentReferenceLink: paymentLink,
       });
 
+      // BUG FIX 2: Immediately redirect to pending page after successful submission
+      // The order state has been updated to payment_status='pending', fulfillment_status='pending_confirmation'
       toast({
         title: 'Payment submitted',
         description: 'Your payment receipt has been submitted. Redirecting...',
       });
 
-      // Redirect to pending page
-      navigate(`/booking/pending/${orderId}`);
+      // Use replace: true to prevent back navigation to payment page
+      navigate(`/booking/pending/${orderId}`, { replace: true });
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       toast({

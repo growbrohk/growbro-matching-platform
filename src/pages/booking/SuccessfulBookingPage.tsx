@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
+import { getBookingRoute } from '@/lib/utils/booking-route';
 import EventTicketCard from '@/components/booking/EventTicketCard';
 import { CheckCircle2, Download, Loader2 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export default function SuccessfulBookingPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const ticketCardRef = useRef<HTMLDivElement>(null);
+  const redirectedRef = useRef(false);
 
   useEffect(() => {
     if (!orderId) {
@@ -56,29 +58,41 @@ export default function SuccessfulBookingPage() {
         }
 
         setOrder(orderData);
+        setLoading(false);
 
-        // Check eligibility: Must be paid + confirmed
-        const isEligible = 
-          orderData.payment_status === 'paid' && 
-          orderData.fulfillment_status === 'confirmed';
+        // Use unified routing logic with loading guard
+        // Do NOT redirect until order fetch is finished and order is non-null
+        if (redirectedRef.current) {
+          return; // Already redirected, prevent multiple redirects
+        }
 
-        if (!isEligible) {
-          // Redirect based on order state
-          if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
-            // Needs payment
-            navigate(`/booking/payment/${orderId}`);
-          } else if (
-            orderData.payment_method === 'payme' || 
-            orderData.payment_method === 'fps'
-          ) {
-            // PayMe/FPS pending confirmation
-            navigate(`/booking/pending/${orderId}`);
+        const route = getBookingRoute(orderData);
+
+        console.debug('[booking-route]', {
+          orderId,
+          amount_total: orderData.total_amount,
+          payment_status: orderData.payment_status,
+          fulfillment_status: orderData.fulfillment_status,
+          payment_method: orderData.payment_method,
+          route,
+          currentPage: 'success',
+        });
+
+        // If route is not 'success', redirect accordingly (one-way)
+        if (route !== 'success') {
+          redirectedRef.current = true;
+          if (route === 'payment') {
+            navigate(`/booking/payment/${orderId}`, { replace: true });
+          } else if (route === 'pending') {
+            navigate(`/booking/pending/${orderId}`, { replace: true });
           } else {
-            // Other states - redirect to payment
-            navigate(`/booking/payment/${orderId}`);
+            // Fallback to payment
+            navigate(`/booking/payment/${orderId}`, { replace: true });
           }
           return;
         }
+
+        // Route is 'success' - this page is correct, continue rendering
       } catch (error: any) {
         console.error('Error fetching order:', error);
         toast({
@@ -86,7 +100,6 @@ export default function SuccessfulBookingPage() {
           description: error.message || 'Failed to load order details.',
           variant: 'destructive',
         });
-      } finally {
         setLoading(false);
       }
     };
