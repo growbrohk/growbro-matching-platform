@@ -87,29 +87,31 @@ export default function TicketCard({
         </p>
       </div>
       
-      {/* White card container */}
-      <div
-        className="w-full max-w-[800px] bg-white rounded-2xl shadow-2xl overflow-hidden"
-        style={{
-          width: '800px',
-          marginBottom: captureMode ? '0' : '2rem',
-        }}
-      >
+      {/* Black side padding wrapper */}
+      <div className="w-full bg-[#000000] px-4 pb-4">
+        {/* White card container */}
+        <div
+          className="w-full max-w-[800px] bg-white rounded-3xl shadow-2xl overflow-hidden mx-auto"
+          style={{
+            width: '800px',
+            marginBottom: captureMode ? '0' : '2rem',
+          }}
+        >
         {/* Card header row */}
-        <div className="flex items-start justify-between px-8 pt-8 pb-6">
+        <div className="flex items-start justify-between px-8 pt-10 pb-6">
           {/* Left: Growbro horizontal logo only (bigger) */}
           <div className="flex items-center">
             <img
               src="/growbro-logo-horizontal.png"
               alt="growbro"
-              className="h-[32px] w-auto"
+              className="h-[52px] w-auto"
               style={{ maxWidth: '200px' }}
             />
           </div>
           
           {/* Right: Checkin code */}
           <div className="flex flex-col items-end">
-            <span className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            <span className="text-xs text-gray-400 uppercase tracking-wide mb-1">
               CHECKIN CODE
             </span>
             <span className="text-xl font-bold text-black">
@@ -134,7 +136,7 @@ export default function TicketCard({
         <div className="px-8 pb-6 space-y-4">
           {/* Event Name */}
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
               EVENT NAME
             </p>
             <p className="text-lg font-bold text-black">
@@ -144,7 +146,7 @@ export default function TicketCard({
           
           {/* Date and Time */}
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
               DATE AND TIME
             </p>
             <p className="text-lg font-bold text-black">
@@ -154,7 +156,7 @@ export default function TicketCard({
           
           {/* Venue */}
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
               VENUE
             </p>
             <p className="text-lg font-bold text-black">
@@ -205,7 +207,7 @@ export default function TicketCard({
           <div className="flex-1 space-y-4">
             {/* Participant Name */}
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
                 PARTICIPANT NAME
               </p>
               <p className="text-lg font-bold text-black uppercase">
@@ -215,7 +217,7 @@ export default function TicketCard({
             
             {/* Ticket Price */}
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
                 TICKET PRICE
               </p>
               <p className="text-lg font-bold text-black">
@@ -226,7 +228,7 @@ export default function TicketCard({
           
           {/* Right block: Seat number */}
           <div className="flex flex-col items-end">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
               SEAT NUMBER
             </p>
             <p className="text-5xl font-bold text-black">
@@ -234,6 +236,7 @@ export default function TicketCard({
             </p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
