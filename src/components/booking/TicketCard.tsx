@@ -9,6 +9,7 @@
 
 import { QRCodeSVG } from 'qrcode.react';
 import { formatTicketDateTime } from '@/lib/utils/datetime';
+import { useEffect, useRef, useState } from 'react';
 
 export interface TicketCardProps {
   // Event info
@@ -92,17 +93,14 @@ export default function TicketCard({
       >
         {/* Card header row */}
         <div className="flex items-start justify-between px-8 pt-8 pb-6">
-          {/* Left: Growbro horizontal logo */}
-          <div className="flex items-center gap-2">
+          {/* Left: Growbro horizontal logo only (bigger) */}
+          <div className="flex items-center">
             <img
               src="/growbro-logo-horizontal.png"
               alt="growbro"
-              className="h-8 w-auto"
+              className="h-[32px] w-auto"
+              style={{ maxWidth: '200px' }}
             />
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-black">growbro</span>
-              <span className="text-xs text-gray-500">hong kong</span>
-            </div>
           </div>
           
           {/* Right: Checkin code */}
@@ -232,6 +230,74 @@ export default function TicketCard({
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * TicketCardPreview - Responsive wrapper for TicketCard
+ * Scales down the 800px ticket on mobile without clipping
+ * Keeps the actual ticket at 800px for capture quality
+ */
+export function TicketCardPreview({ 
+  children, 
+  className = '' 
+}: { 
+  children: React.ReactNode; 
+  className?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const ticketRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [wrapperHeight, setWrapperHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current || !ticketRef.current) return;
+
+      const containerWidth = containerRef.current.clientWidth;
+      const ticketWidth = 800; // Fixed ticket width
+      const padding = 32; // Account for container padding (px-4 = 16px each side)
+      const availableWidth = containerWidth - padding;
+      
+      const newScale = Math.min(1, availableWidth / ticketWidth);
+      setScale(newScale);
+
+      // Measure ticket height and set wrapper height to prevent overlap
+      const ticketHeight = ticketRef.current.getBoundingClientRect().height;
+      setWrapperHeight(ticketHeight * newScale);
+    };
+
+    updateScale();
+
+    const resizeObserver = new ResizeObserver(updateScale);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  return (
+    <div 
+      ref={containerRef}
+      className={`w-full flex justify-center ${className}`}
+      style={{
+        minHeight: wrapperHeight ? `${wrapperHeight}px` : 'auto',
+      }}
+    >
+      <div
+        ref={ticketRef}
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+          width: '800px',
+        }}
+      >
+        {children}
       </div>
     </div>
   );
