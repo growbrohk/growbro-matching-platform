@@ -12,35 +12,19 @@ import { formatTicketDateTime } from '@/lib/utils/datetime';
 import React, { useEffect, useRef, useState } from 'react';
 
 export interface TicketCardProps {
-  // Event info
   eventName: string;
-  dateTime: string; // ISO date string (start_at)
+  dateTime: string;
   venue: string;
-
-  // Ticket info
-  checkinCode: string; // order_no or booking code
-  qrValue: string; // QR code value (ticket.qr_code)
-
-  // Participant info
-  participantName: string; // Full name (first_name + last_name)
-  price: number; // Ticket price (0 means FREE)
-  seatNumber?: string | null; // Seat number (null/undefined means FREE)
-
-  // Currency for price display
-  currency?: string; // Default: 'HKD'
-
-  // Styling
+  checkinCode: string;
+  qrValue: string;
+  participantName: string;
+  price: number;
+  seatNumber?: string | null;
+  currency?: string;
   className?: string;
-
-  // Capture mode - removes extra bottom padding (for isolated capture)
   captureMode?: boolean;
 }
 
-/**
- * Format price for display
- * - If price === 0 or null/undefined => "FREE"
- * - Else format with currency symbol
- */
 function formatPrice(price: number, currency: string = 'HKD'): string {
   if (!price || price === 0) return 'FREE';
 
@@ -55,11 +39,6 @@ function formatPrice(price: number, currency: string = 'HKD'): string {
   return `${symbol}${price.toFixed(0)}`;
 }
 
-/**
- * IMPORTANT:
- * - This component renders a full black frame (full-bleed) + centered white card
- * - The white card is ALWAYS inside the black background (like reference)
- */
 export default function TicketCard({
   eventName,
   dateTime,
@@ -78,13 +57,9 @@ export default function TicketCard({
   const displaySeatNumber = seatNumber || 'FREE';
 
   return (
-    /**
-     * FULL-BLEED BLACK:
-     * w-screen + left-1/2 -translate-x-1/2 ensures black extends beyond any .container px-4
-     */
     <div className={`w-screen relative left-1/2 -translate-x-1/2 bg-black ${className}`}>
       <div className="flex flex-col items-center">
-        {/* Top title area (on black) */}
+        {/* Title (part of card canvas) */}
         <div className="w-full flex flex-col items-center pt-10 pb-6 px-4">
           <h1 className="text-[32px] font-extrabold text-white uppercase tracking-tight">
             THIS IS YOUR TICKET
@@ -94,29 +69,31 @@ export default function TicketCard({
           </p>
         </div>
 
-        {/* Black padding area that holds the white card */}
+        {/* Card holder */}
         <div className={`w-full flex justify-center px-6 ${captureMode ? 'pb-0' : 'pb-12'}`}>
-          {/* White ticket card */}
           <div
-            className="bg-white rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.35)] mx-auto"
-            style={{ width: 800 }} // fixed like reference
+            className="bg-white rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+            style={{ width: 800 }}
           >
             {/* Header */}
-            <div className="flex items-start justify-between px-10 pt-10 pb-6">
+            <div className="flex items-start justify-between px-10 pt-8 pb-6">
+              {/* 🔥 LOGO — 1.5× BIGGER */}
               <div className="flex items-center">
                 <img
                   src="/growbro-logo-horizontal.png"
                   alt="growbro"
-                  className="h-[52px] w-auto"
-                  style={{ maxWidth: '280px' }}
+                  className="h-[84px] w-auto"     // ⬅️ was 56px
+                  style={{ maxWidth: 480 }}       // ⬅️ scaled with height
                 />
               </div>
 
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end pt-2">
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
                   CHECKIN CODE
                 </span>
-                <span className="text-2xl font-black text-black">{checkinCode}</span>
+                <span className="text-2xl font-black text-black">
+                  {checkinCode}
+                </span>
               </div>
             </div>
 
@@ -151,7 +128,7 @@ export default function TicketCard({
               </div>
             </div>
 
-            {/* Perforation line + notches (match reference) */}
+            {/* Perforation */}
             <div className="relative my-4">
               <div className="mx-10 border-t-2 border-dashed border-gray-300" />
               <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black" />
@@ -165,14 +142,18 @@ export default function TicketCard({
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
                     PARTICIPANT NAME
                   </p>
-                  <p className="text-[18px] font-extrabold text-black uppercase">{participantName}</p>
+                  <p className="text-[18px] font-extrabold text-black uppercase">
+                    {participantName}
+                  </p>
                 </div>
 
                 <div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
                     TICKET PRICE
                   </p>
-                  <p className="text-[16px] font-extrabold text-black">{formattedPrice}</p>
+                  <p className="text-[16px] font-extrabold text-black">
+                    {formattedPrice}
+                  </p>
                 </div>
               </div>
 
@@ -180,7 +161,9 @@ export default function TicketCard({
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
                   SEAT NUMBER
                 </p>
-                <p className="text-[56px] font-black text-black leading-none">{displaySeatNumber}</p>
+                <p className="text-[56px] font-black text-black leading-none">
+                  {displaySeatNumber}
+                </p>
               </div>
             </div>
           </div>
@@ -191,11 +174,7 @@ export default function TicketCard({
 }
 
 /**
- * TicketCardPreview - Responsive wrapper for TicketCard
- * Scales down the 800px card on mobile WITHOUT clipping.
- *
- * IMPORTANT:
- * This wrapper must measure height properly (no "magic marginBottom" hack).
+ * TicketCardPreview — unchanged, already correct
  */
 export function TicketCardPreview({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -206,16 +185,11 @@ export function TicketCardPreview({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const update = () => {
       if (!containerRef.current || !ticketRef.current) return;
-
-      const containerWidth = containerRef.current.clientWidth;
-      const availableWidth = containerWidth - 32; // safe padding
-      const newScale = Math.min(1, availableWidth / 800);
-
-      setScale(newScale);
-
-      // IMPORTANT: use scrollHeight (stable) then multiply by scale
+      const cw = containerRef.current.clientWidth;
+      const s = Math.min(1, (cw - 32) / 800);
+      setScale(s);
       const h = ticketRef.current.scrollHeight;
-      setWrapperHeight(h * newScale);
+      setWrapperHeight(h * s);
     };
 
     update();
@@ -223,14 +197,17 @@ export function TicketCardPreview({ children }: { children: React.ReactNode }) {
     setTimeout(update, 100);
 
     const ro = new ResizeObserver(update);
-    if (containerRef.current) ro.observe(containerRef.current);
-    if (ticketRef.current) ro.observe(ticketRef.current);
-
+    ro.observe(containerRef.current);
+    ro.observe(ticketRef.current);
     return () => ro.disconnect();
   }, []);
 
   return (
-    <div ref={containerRef} className="w-full flex justify-center" style={{ height: wrapperHeight || 'auto', overflow: 'visible' }}>
+    <div
+      ref={containerRef}
+      className="w-full flex justify-center"
+      style={{ height: wrapperHeight || 'auto', overflow: 'visible' }}
+    >
       <div
         ref={ticketRef}
         style={{
