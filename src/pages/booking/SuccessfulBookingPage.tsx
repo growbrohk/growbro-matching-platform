@@ -15,8 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
-import EventTicketCard from '@/components/booking/EventTicketCard';
-import TicketImageCard from '@/components/booking/TicketImageCard';
+import TicketCard from '@/components/booking/TicketCard';
 import { CheckCircle2, Download, Loader2 } from 'lucide-react';
 
 const BRAND = {
@@ -142,10 +141,10 @@ export default function SuccessfulBookingPage() {
           continue;
         }
 
-        // Capture the ticket as canvas
+        // Capture the ticket as canvas (black background for ticket card)
         const canvas = await html2canvas(ref, {
           scale: 2,
-          backgroundColor: BRAND.beigeSoft,
+          backgroundColor: '#000000',
           useCORS: true,
           logging: false,
         } as any);
@@ -275,6 +274,22 @@ export default function SuccessfulBookingPage() {
     );
   }
 
+  // Calculate price per ticket (total_amount / ticket count)
+  const pricePerTicket = tickets.length > 0 
+    ? Math.round((order.total_amount || 0) / tickets.length)
+    : 0;
+
+  // Get first ticket for display (or use first available ticket with QR code)
+  const displayTicket = tickets.find(t => t.qr_code) || tickets[0];
+  const participantName = displayTicket.first_name || displayTicket.last_name
+    ? `${displayTicket.first_name || ''} ${displayTicket.last_name || ''}`.trim().toUpperCase()
+    : order.buyer_first_name || order.buyer_last_name
+    ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim().toUpperCase()
+    : 'GUEST';
+
+  // Venue name (venue_name or location_text)
+  const venue = order.event.venue_name || order.event.location_text || 'TBA';
+
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: BRAND.beigeSoft }}>
       {/* Header */}
@@ -306,18 +321,16 @@ export default function SuccessfulBookingPage() {
       {/* Ticket Card */}
       <div className="container mx-auto px-4">
         <div ref={ticketCardRef}>
-          <EventTicketCard
-            eventTitle={order.event.title}
-            eventCategory={order.event.category}
-            eventAddress={order.event.location_text}
-            venueName={order.event.venue_name}
-            eventDate={order.event.start_at}
-            eventTime={order.event.end_at}
-            eventStartTime={order.event.start_at}
-            coverImageUrl={order.event.cover_image_url}
-            bookingCode={bookingCode}
-            tickets={tickets}
-            showQR={true}
+          <TicketCard
+            eventName={order.event.title}
+            dateTime={order.event.start_at}
+            venue={venue}
+            checkinCode={bookingCode}
+            qrValue={displayTicket.qr_code || ''}
+            participantName={participantName}
+            price={pricePerTicket}
+            seatNumber={null} // Seat numbers not currently in schema
+            currency={order.currency || 'HKD'}
           />
         </div>
 
@@ -326,27 +339,24 @@ export default function SuccessfulBookingPage() {
           {tickets.map((ticket, index) => {
             if (!ticket.qr_code) return null;
             
-            const attendeeName = ticket.first_name || ticket.last_name
-              ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim()
-              : null;
+            const ticketParticipantName = ticket.first_name || ticket.last_name
+              ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim().toUpperCase()
+              : order.buyer_first_name || order.buyer_last_name
+              ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim().toUpperCase()
+              : 'GUEST';
 
             return (
               <div key={ticket.id} ref={setTicketRef(index)}>
-                <TicketImageCard
-                  eventTitle={order.event.title}
-                  eventCategory={order.event.category}
-                  eventAddress={order.event.location_text}
-                  venueName={order.event.venue_name}
-                  eventDate={order.event.start_at}
-                  eventTime={order.event.end_at}
-                  eventStartTime={order.event.start_at}
-                  coverImageUrl={order.event.cover_image_url}
-                  bookingCode={bookingCode}
-                  ticketQrCode={ticket.qr_code}
-                  ticketIndex={index}
-                  ticketCount={tickets.length}
-                  attendeeName={attendeeName}
-                  attendeeEmail={ticket.email}
+                <TicketCard
+                  eventName={order.event.title}
+                  dateTime={order.event.start_at}
+                  venue={venue}
+                  checkinCode={bookingCode}
+                  qrValue={ticket.qr_code}
+                  participantName={ticketParticipantName}
+                  price={pricePerTicket}
+                  seatNumber={null} // Seat numbers not currently in schema
+                  currency={order.currency || 'HKD'}
                 />
               </div>
             );

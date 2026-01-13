@@ -141,3 +141,46 @@ export function formatMessageTime(dateString: string): string {
   }
 }
 
+/**
+ * Format ticket date/time in the format: "FRIDAY 23RD SEPTEMBER 19:30"
+ * Example output: "FRIDAY 23RD SEPTEMBER 19:30"
+ */
+export function formatTicketDateTime(dateString: string): string {
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
+  
+  // Convert to Hong Kong timezone for all date parts
+  const hkDateStr = date.toLocaleString('en-US', { timeZone: TIMEZONE });
+  const hkDate = new Date(hkDateStr);
+  
+  // Get weekday (uppercase)
+  const weekday = hkDate.toLocaleDateString('en-US', {
+    weekday: 'long',
+  }).toUpperCase();
+  
+  // Get day with ordinal suffix
+  const day = hkDate.getDate();
+  const getOrdinalSuffix = (n: number): string => {
+    const j = n % 10;
+    const k = n % 100;
+    if (j === 1 && k !== 11) return 'ST';
+    if (j === 2 && k !== 12) return 'ND';
+    if (j === 3 && k !== 13) return 'RD';
+    return 'TH';
+  };
+  const dayWithOrdinal = `${day}${getOrdinalSuffix(day)}`;
+  
+  // Get month (uppercase)
+  const month = hkDate.toLocaleDateString('en-US', {
+    month: 'long',
+  }).toUpperCase();
+  
+  // Get time (HH:mm format)
+  const hours = hkDate.getHours().toString().padStart(2, '0');
+  const minutes = hkDate.getMinutes().toString().padStart(2, '0');
+  const time = `${hours}:${minutes}`;
+  
+  return `${weekday} ${dayWithOrdinal} ${month} ${time}`;
+}
+
