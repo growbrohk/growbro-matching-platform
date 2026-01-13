@@ -159,31 +159,18 @@ export default function SuccessfulBookingPage() {
         dangerouslySetInnerHTML={{
           __html: `
             @media print {
-              @page { size: auto; margin: 10mm; }
-              html, body { 
-                height: auto !important; 
-                overflow: visible !important;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
+              @page { margin: 0; size: auto; }
+              html, body { height: auto !important; margin: 0 !important; padding: 0 !important; }
               body * { visibility: hidden; }
               .print-container, .print-container * { visibility: visible; }
-              .print-container { 
-                position: static !important;
-                width: 100%;
-                display: block !important;
-                orphans: 3;
-                widows: 3;
+              .print-container { position: static !important; display: block !important; width: 100%; }
+              .ticket-page-break { 
+                display: block; 
+                break-before: page; 
+                page-break-before: always; 
+                height: 100vh; /* Ensure one ticket fills the printed page */
               }
-              .ticket-page-break {
-                display: block;
-                break-before: page;
-                page-break-before: always;
-                break-inside: avoid;
-                orphans: 3;
-                widows: 3;
-              }
-              button, .no-print, footer, header { display: none !important; }
+              .no-print { display: none !important; }
             }
           `,
         }}
@@ -231,8 +218,8 @@ export default function SuccessfulBookingPage() {
               return (
                 <div key={ticket.id || index} className="ticket-page-break">
                   {tickets.length > 1 && (
-                    <p className="text-sm text-muted-foreground mb-2 text-center" style={{ marginBottom: '0.5rem' }}>
-                      <span className="no-print">Ticket {index + 1} of {tickets.length}</span>
+                    <p className="text-sm text-muted-foreground mb-2 text-center no-print" style={{ marginBottom: '0.5rem' }}>
+                      Ticket {index + 1} of {tickets.length}
                     </p>
                   )}
                   <TicketCardPreview>

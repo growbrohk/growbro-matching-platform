@@ -77,8 +77,8 @@ export default function TicketCard({
   
   return (
     <div className={`flex flex-col items-center ${className}`} style={{ backgroundColor: '#000000' }}>
-      {/* Top title area (outside white card) */}
-      <div className="w-full flex flex-col items-center py-8 px-4">
+      {/* Top title area */}
+      <div className="w-full flex flex-col items-center py-8 px-4 bg-black">
         <h1 className="text-3xl font-bold text-white mb-2 uppercase tracking-tight">
           THIS IS YOUR TICKET
         </h1>
@@ -87,34 +87,31 @@ export default function TicketCard({
         </p>
       </div>
       
-      {/* Black side padding wrapper */}
-      <div className="w-full bg-[#000000] px-4 pb-4">
-        {/* White card container */}
+      {/* The Frame: Black side padding wrapper that matches reference */}
+      <div className="w-full bg-black px-4 pb-8"> 
         <div
-          className="w-full max-w-[800px] bg-white rounded-3xl shadow-2xl overflow-hidden mx-auto"
+          className="w-full max-w-[800px] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden mx-auto"
           style={{
             width: '800px',
-            marginBottom: captureMode ? '0' : '2rem',
+            marginBottom: captureMode ? '0' : '0', // Margin handled by Preview/Container now
           }}
         >
-        {/* Card header row */}
-        <div className="flex items-start justify-between px-8 pt-10 pb-6">
-          {/* Left: Growbro horizontal logo only (bigger) */}
+        {/* Card header: Increased logo size and padding */}
+        <div className="flex items-start justify-between px-10 pt-12 pb-6">
           <div className="flex items-center">
             <img
               src="/growbro-logo-horizontal.png"
               alt="growbro"
-              className="h-[52px] w-auto"
-              style={{ maxWidth: '200px' }}
+              className="h-[58px] w-auto" // Bigger logo
+              style={{ maxWidth: '240px' }}
             />
           </div>
           
-          {/* Right: Checkin code */}
           <div className="flex flex-col items-end">
-            <span className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
               CHECKIN CODE
             </span>
-            <span className="text-xl font-bold text-black">
+            <span className="text-2xl font-black text-black">
               {checkinCode}
             </span>
           </div>
@@ -201,42 +198,27 @@ export default function TicketCard({
           </div>
         </div>
         
-        {/* Bottom section */}
-        <div className="px-8 pb-8 flex items-end justify-between">
-          {/* Left block: Participant name + price */}
-          <div className="flex-1 space-y-4">
-            {/* Participant Name */}
+        {/* Updated Bottom section for bold SEAT NUMBER */}
+        <div className="px-10 pb-10 flex items-end justify-between">
+          <div className="flex-1 space-y-6">
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
-                PARTICIPANT NAME
-              </p>
-              <p className="text-lg font-bold text-black uppercase">
-                {participantName}
-              </p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">PARTICIPANT NAME</p>
+              <p className="text-xl font-bold text-black uppercase">{participantName}</p>
             </div>
-            
-            {/* Ticket Price */}
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
-                TICKET PRICE
-              </p>
-              <p className="text-lg font-bold text-black">
-                {formattedPrice}
-              </p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">TICKET PRICE</p>
+              <p className="text-xl font-bold text-black">{formattedPrice}</p>
             </div>
           </div>
           
-          {/* Right block: Seat number */}
           <div className="flex flex-col items-end">
-            <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">
-              SEAT NUMBER
-            </p>
-            <p className="text-5xl font-bold text-black">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">SEAT NUMBER</p>
+            <p className="text-7xl font-black text-black leading-none">
               {displaySeatNumber}
             </p>
           </div>
         </div>
-      </div>
+        </div>
       </div>
     </div>
   );
