@@ -133,7 +133,7 @@ export default function SuccessfulBookingPage() {
       const files: File[] = [];
       const objectUrls: string[] = [];
 
-      // Capture each ticket as a separate image
+        // Capture each ticket as a separate image
       for (let i = 0; i < tickets.length; i++) {
         const ref = ticketImageRefs.current[i];
         if (!ref || !tickets[i]?.qr_code) {
@@ -143,6 +143,8 @@ export default function SuccessfulBookingPage() {
         // The ref points to the div containing TicketCard
         // Get bounding box to ensure correct dimensions
         const rect = ref.getBoundingClientRect();
+        const measuredWidth = rect.width || 800;
+        const measuredHeight = rect.height || 1200;
 
         // Capture the ticket as canvas (black background for ticket card)
         // The TicketCard component already has black background, so we capture the whole ref
@@ -151,8 +153,10 @@ export default function SuccessfulBookingPage() {
           backgroundColor: '#000000',
           useCORS: true,
           logging: false,
-          // Don't set explicit width/height - let html2canvas measure the element naturally
-          // This prevents the "long strip" issue
+          windowWidth: 800,
+          windowHeight: measuredHeight,
+          width: measuredWidth,
+          height: measuredHeight,
         } as any);
 
         // Convert canvas to blob
@@ -356,13 +360,13 @@ export default function SuccessfulBookingPage() {
         {/* Hidden capture nodes for download - positioned off-screen but visible to html2canvas */}
         <div 
           style={{ 
-            position: 'fixed',
+            position: 'absolute',
             left: '-99999px',
             top: 0,
             zIndex: -1,
             opacity: 0,
             pointerEvents: 'none',
-            overflow: 'hidden',
+            overflow: 'visible',
           }}
         >
           {tickets.map((ticket, index) => {
@@ -379,9 +383,12 @@ export default function SuccessfulBookingPage() {
                 key={`capture-${ticket.id || index}`} 
                 ref={setTicketRef(index)}
                 style={{
+                  position: 'absolute',
+                  top: `${index * 2000}px`, // Stack tickets vertically with large spacing
+                  left: 0,
                   width: '800px',
                   transform: 'none',
-                  display: 'inline-block',
+                  isolation: 'isolate',
                 }}
               >
                 <TicketCard
@@ -394,6 +401,7 @@ export default function SuccessfulBookingPage() {
                   price={pricePerTicket}
                   seatNumber={null} // Seat numbers not currently in schema
                   currency={order.currency || 'HKD'}
+                  captureMode={true}
                 />
               </div>
             );

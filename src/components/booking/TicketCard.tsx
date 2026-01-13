@@ -31,6 +31,9 @@ export interface TicketCardProps {
   
   // Styling
   className?: string;
+  
+  // Capture mode - removes marginBottom for isolated capture
+  captureMode?: boolean;
 }
 
 /**
@@ -66,6 +69,7 @@ export default function TicketCard({
   seatNumber,
   currency = 'HKD',
   className = '',
+  captureMode = false,
 }: TicketCardProps) {
   const formattedDateTime = formatTicketDateTime(dateTime);
   const formattedPrice = formatPrice(price, currency);
@@ -88,7 +92,7 @@ export default function TicketCard({
         className="w-full max-w-[800px] bg-white rounded-2xl shadow-2xl overflow-hidden"
         style={{
           width: '800px',
-          marginBottom: '2rem',
+          marginBottom: captureMode ? '0' : '2rem',
         }}
       >
         {/* Card header row */}
