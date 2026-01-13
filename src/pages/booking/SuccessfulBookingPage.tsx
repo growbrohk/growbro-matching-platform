@@ -322,7 +322,7 @@ export default function SuccessfulBookingPage() {
 
       {/* Ticket Cards - Render all tickets */}
       <div className="container mx-auto px-4">
-        <div className="space-y-8">
+        <div className="flex flex-col gap-4">
           {tickets.map((ticket, index) => {
             if (!ticket.qr_code) return null;
             
@@ -335,7 +335,7 @@ export default function SuccessfulBookingPage() {
             return (
               <div key={ticket.id || index}>
                 {tickets.length > 1 && (
-                  <p className="text-sm text-muted-foreground mb-4 text-center">
+                  <p className="text-sm text-muted-foreground mb-2 text-center">
                     Ticket {index + 1} of {tickets.length}
                   </p>
                 )}
@@ -361,12 +361,12 @@ export default function SuccessfulBookingPage() {
         <div 
           style={{ 
             position: 'absolute',
-            left: '-99999px',
             top: 0,
-            zIndex: -1,
-            opacity: 0,
+            left: '-9999px',
+            width: '800px',
+            height: 0,
+            overflow: 'hidden',
             pointerEvents: 'none',
-            overflow: 'visible',
           }}
         >
           {tickets.map((ticket, index) => {
@@ -383,10 +383,8 @@ export default function SuccessfulBookingPage() {
                 key={`capture-${ticket.id || index}`} 
                 ref={setTicketRef(index)}
                 style={{
-                  position: 'absolute',
-                  top: `${index * 2000}px`, // Stack tickets vertically with large spacing
-                  left: 0,
                   width: '800px',
+                  marginBottom: '20px',
                   transform: 'none',
                   isolation: 'isolate',
                 }}
