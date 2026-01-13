@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import EventTicketCard from '@/components/booking/EventTicketCard';
+import TicketImageCard from '@/components/booking/TicketImageCard';
 import { CheckCircle2, Download, Loader2 } from 'lucide-react';
 
 const BRAND = {
@@ -35,6 +36,7 @@ export default function SuccessfulBookingPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const ticketCardRef = useRef<HTMLDivElement>(null);
+  const ticketImageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const redirectedRef = useRef(false);
 
   useEffect(() => {
@@ -107,63 +109,130 @@ export default function SuccessfulBookingPage() {
     fetchOrder();
   }, [orderId, navigate, toast]);
 
-  const handleDownloadTicket = async () => {
-    if (!ticketCardRef.current || !order) {
+  const setTicketRef = (index: number) => (el: HTMLDivElement | null) => {
+    ticketImageRefs.current[index] = el;
+  };
+
+  const handleDownloadTickets = async () => {
+    if (!order) {
+      return;
+    }
+
+    const tickets = order.tickets ?? [];
+    if (tickets.length === 0) {
       return;
     }
 
     setDownloading(true);
     try {
-      // Dynamic imports - only loaded when user clicks download
+      // Wait a tick to ensure hidden nodes are painted
+      await new Promise(r => setTimeout(r, 50));
+
+      // Dynamic import - only loaded when user clicks download
       const html2canvas = (await import('html2canvas')).default;
-      const jsPDF = (await import('jspdf')).default;
 
-      // Capture the ticket card as canvas
-      const canvas = await html2canvas(ticketCardRef.current, {
-        background: BRAND.beigeSoft,
-        useCORS: true,
-        logging: false,
-      });
+      const bookingCode = order.order_no || order.id.slice(0, 8).toUpperCase();
+      const files: File[] = [];
+      const objectUrls: string[] = [];
 
-      // Create PDF
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
+      // Capture each ticket as a separate image
+      for (let i = 0; i < tickets.length; i++) {
+        const ref = ticketImageRefs.current[i];
+        if (!ref || !tickets[i]?.qr_code) {
+          continue;
+        }
 
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+        // Capture the ticket as canvas
+        const canvas = await html2canvas(ref, {
+          scale: 2,
+          backgroundColor: BRAND.beigeSoft,
+          useCORS: true,
+          logging: false,
+        } as any);
 
-      // Add first page
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+        // Convert canvas to blob
+        const blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, 'image/png', 1.0);
+        });
 
-      // Add additional pages if needed
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        if (!blob) {
+          continue;
+        }
+
+        // Create file
+        const filename = `ticket_${bookingCode}_${i + 1}.png`;
+        const file = new File([blob], filename, { type: 'image/png' });
+        files.push(file);
       }
 
-      // Download
-      const bookingCode = order.order_no || order.id.slice(0, 8).toUpperCase();
-      pdf.save(`ticket_${bookingCode}.pdf`);
+      if (files.length === 0) {
+        throw new Error('No tickets could be captured');
+      }
+
+      // Try Web Share API first (best for mobile)
+      if (navigator.share && navigator.canShare({ files })) {
+        try {
+          await navigator.share({
+            files,
+            title: 'Your tickets',
+            text: `Your tickets for ${order.event.title}`,
+          });
+          toast({
+            title: 'Tickets shared',
+            description: 'Your tickets have been shared. You can save them to your photos.',
+          });
+          return;
+        } catch (shareError: any) {
+          // User cancelled share, or share failed - fall through to fallback
+          if (shareError.name !== 'AbortError') {
+            console.warn('Web Share API failed:', shareError);
+          }
+        }
+      }
+
+      // Fallback: Open each image in a new tab (works well on mobile for long-press save)
+      // Also attempt direct download for desktop browsers
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const objectUrl = URL.createObjectURL(file);
+        objectUrls.push(objectUrl);
+
+        // Try direct download first (works on desktop)
+        try {
+          const a = document.createElement('a');
+          a.href = objectUrl;
+          a.download = file.name;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          
+          // Small delay between downloads
+          if (i < files.length - 1) {
+            await new Promise(r => setTimeout(r, 300));
+          }
+        } catch (downloadError) {
+          // If download fails, open in new tab as fallback
+          window.open(objectUrl, '_blank');
+        }
+      }
 
       toast({
-        title: 'Ticket downloaded',
-        description: 'Your ticket has been saved.',
+        title: 'Tickets downloaded',
+        description: files.length === 1 
+          ? 'Your ticket has been saved.' 
+          : `${files.length} tickets have been saved.`,
       });
+
+      // Clean up object URLs after a delay
+      setTimeout(() => {
+        objectUrls.forEach(url => URL.revokeObjectURL(url));
+      }, 5000);
     } catch (error: any) {
-      console.error('Error downloading ticket:', error);
+      console.error('Error downloading tickets:', error);
       toast({
         title: 'Download failed',
-        description: error.message || 'Failed to download ticket. Please try again.',
+        description: error.message || 'Failed to download tickets. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -252,8 +321,45 @@ export default function SuccessfulBookingPage() {
           />
         </div>
 
+        {/* Hidden capture nodes for individual ticket images */}
+        <div className="sr-only" style={{ position: 'absolute', left: -99999 }}>
+          {tickets.map((ticket, index) => {
+            if (!ticket.qr_code) return null;
+            
+            const attendeeName = ticket.first_name || ticket.last_name
+              ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim()
+              : null;
+
+            return (
+              <div key={ticket.id} ref={setTicketRef(index)}>
+                <TicketImageCard
+                  eventTitle={order.event.title}
+                  eventCategory={order.event.category}
+                  eventAddress={order.event.location_text}
+                  venueName={order.event.venue_name}
+                  eventDate={order.event.start_at}
+                  eventTime={order.event.end_at}
+                  eventStartTime={order.event.start_at}
+                  coverImageUrl={order.event.cover_image_url}
+                  bookingCode={bookingCode}
+                  ticketQrCode={ticket.qr_code}
+                  ticketIndex={index}
+                  ticketCount={tickets.length}
+                  attendeeName={attendeeName}
+                  attendeeEmail={ticket.email}
+                />
+              </div>
+            );
+          })}
+        </div>
+
         {/* Download Button */}
         <div className="mt-6">
+          {tickets.length > 1 && (
+            <p className="text-sm text-muted-foreground mb-3 text-center">
+              Each ticket will be saved as a photo.
+            </p>
+          )}
           <Button
             className="w-full h-12 text-base font-semibold"
             style={{ 
@@ -261,7 +367,7 @@ export default function SuccessfulBookingPage() {
               color: 'white',
               fontFamily: "'Inter Tight', sans-serif"
             }}
-            onClick={handleDownloadTicket}
+            onClick={handleDownloadTickets}
             disabled={downloading}
           >
             {downloading ? (
@@ -272,7 +378,7 @@ export default function SuccessfulBookingPage() {
             ) : (
               <>
                 <Download className="mr-2 h-5 w-5" />
-                Download Ticket
+                {tickets.length > 1 ? 'Download Tickets' : 'Download Ticket'}
               </>
             )}
           </Button>
