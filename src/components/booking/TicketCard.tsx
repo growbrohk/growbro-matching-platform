@@ -103,8 +103,8 @@ export default function TicketCard({
             <img
               src="/growbro-logo-horizontal.png"
               alt="growbro"
-              className="h-[84px] w-auto"
-              style={{ maxWidth: 480 }}
+              className="h-[112px] w-auto"
+              style={{ maxWidth: 640 }}
             />
           </div>
 
