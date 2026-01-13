@@ -158,10 +158,22 @@ export default function SuccessfulBookingPage() {
       <style
         dangerouslySetInnerHTML={{
           __html: `
+            @page { size: auto; margin: 0mm; }
             @media print {
               body * { visibility: hidden; }
               .print-container, .print-container * { visibility: visible; }
-              .print-container { position: absolute; left: 0; top: 0; width: 100%; }
+              .print-container { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%;
+                display: block !important;
+              }
+              .ticket-page-break {
+                break-after: page;
+                page-break-after: always;
+                display: block;
+              }
               button, .no-print { display: none !important; }
             }
           `,
@@ -208,7 +220,7 @@ export default function SuccessfulBookingPage() {
                 : 'GUEST';
 
               return (
-                <div key={ticket.id || index}>
+                <div key={ticket.id || index} className="ticket-page-break">
                   {tickets.length > 1 && (
                     <p className="text-sm text-muted-foreground mb-2 text-center" style={{ marginBottom: '0.5rem' }}>
                       <span className="no-print">Ticket {index + 1} of {tickets.length}</span>
