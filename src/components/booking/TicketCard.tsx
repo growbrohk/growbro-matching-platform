@@ -244,59 +244,43 @@ export default function TicketCard({
  * Scales down the 800px ticket on mobile without clipping
  * Keeps the actual ticket at 800px for capture quality
  */
-export function TicketCardPreview({ 
-  children, 
-  className = '' 
-}: { 
-  children: React.ReactNode; 
-  className?: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export function TicketCardPreview({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateScale = () => {
       if (!containerRef.current) return;
-
       const containerWidth = containerRef.current.clientWidth;
-      const ticketWidth = 800; // Fixed ticket width
-      const padding = 32; // Account for container padding (px-4 = 16px each side)
+      const ticketWidth = 800;
+      const padding = 32;
       const availableWidth = containerWidth - padding;
-      
-      const newScale = Math.min(1, availableWidth / ticketWidth);
-      setScale(newScale);
+      setScale(Math.min(1, availableWidth / ticketWidth));
     };
-
     updateScale();
-
-    const resizeObserver = new ResizeObserver(updateScale);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-    };
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
   }, []);
 
   return (
     <div 
-      ref={containerRef}
-      className={`w-full ${className}`}
-      style={{
-        display: 'grid',
-        placeItems: 'start center',
+      ref={containerRef} 
+      style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        justifyItems: 'center'
       }}
     >
-      <div
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'top center',
-          width: '800px',
-          marginBottom: `calc(-800px * (1 - ${scale}) * 1.5)`,
-        }}
-      >
-        {children}
+      <div style={{
+        width: '800px',
+        transform: `scale(${scale})`,
+        transformOrigin: 'top center',
+        height: 'auto',
+        marginBottom: `calc(800px * ${scale} - 800px)` /* This is the magic: it pulls the layout up based on scale */
+      }}>
+        <div style={{ height: 'fit-content' }}>
+          {children}
+        </div>
       </div>
     </div>
   );
