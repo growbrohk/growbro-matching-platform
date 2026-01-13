@@ -101,22 +101,9 @@ export default function SuccessfulBookingPage() {
 
     setDownloading(true);
     try {
-      // Dynamically import PDF libraries (only when needed)
-      let html2canvas: any;
-      let jsPDF: any;
-
-      try {
-        html2canvas = (await import('html2canvas')).default;
-        jsPDF = (await import('jspdf')).default;
-      } catch (importError) {
-        toast({
-          title: 'PDF download unavailable',
-          description: 'PDF download feature requires additional packages. Please install html2canvas and jspdf.',
-          variant: 'destructive',
-        });
-        setDownloading(false);
-        return;
-      }
+      // Dynamic imports - only loaded when user clicks download
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
 
       // Capture the ticket card as canvas
       const canvas = await html2canvas(ticketCardRef.current, {
