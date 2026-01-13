@@ -357,55 +357,6 @@ export default function SuccessfulBookingPage() {
           })}
         </div>
 
-        {/* Hidden capture nodes for download - positioned off-screen but visible to html2canvas */}
-        <div 
-          style={{ 
-            position: 'fixed',
-            top: 0,
-            left: '-9999px',
-            width: '800px',
-            height: '0px',
-            overflow: 'hidden',
-            pointerEvents: 'none',
-            visibility: 'hidden',
-            zIndex: -1,
-          }}
-        >
-          {tickets.map((ticket, index) => {
-            if (!ticket.qr_code) return null;
-            
-            const ticketParticipantName = ticket.first_name || ticket.last_name
-              ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim().toUpperCase()
-              : order.buyer_first_name || order.buyer_last_name
-              ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim().toUpperCase()
-              : 'GUEST';
-
-            return (
-              <div 
-                key={`capture-${ticket.id || index}`} 
-                ref={setTicketRef(index)}
-                style={{
-                  width: '800px',
-                  marginBottom: '50px',
-                }}
-              >
-                <TicketCard
-                  eventName={order.event.title}
-                  dateTime={order.event.start_at}
-                  venue={venue}
-                  checkinCode={bookingCode}
-                  qrValue={ticket.qr_code}
-                  participantName={ticketParticipantName}
-                  price={pricePerTicket}
-                  seatNumber={null} // Seat numbers not currently in schema
-                  currency={order.currency || 'HKD'}
-                  captureMode={true}
-                />
-              </div>
-            );
-          })}
-        </div>
-
         {/* Download Button */}
         <div className="mt-6">
           {tickets.length > 1 && (
@@ -436,6 +387,55 @@ export default function SuccessfulBookingPage() {
             )}
           </Button>
         </div>
+      </div>
+
+      {/* Hidden capture nodes for download - positioned off-screen but visible to html2canvas */}
+      <div 
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          left: '-9999px',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          display: 'block',
+          visibility: 'hidden',
+          pointerEvents: 'none'
+        }}
+      >
+        {tickets.map((ticket, index) => {
+          if (!ticket.qr_code) return null;
+          
+          const ticketParticipantName = ticket.first_name || ticket.last_name
+            ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim().toUpperCase()
+            : order.buyer_first_name || order.buyer_last_name
+            ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim().toUpperCase()
+            : 'GUEST';
+
+          return (
+            <div 
+              key={`capture-${ticket.id || index}`} 
+              ref={setTicketRef(index)}
+              style={{
+                width: '800px',
+                position: 'relative',
+              }}
+            >
+              <TicketCard
+                eventName={order.event.title}
+                dateTime={order.event.start_at}
+                venue={venue}
+                checkinCode={bookingCode}
+                qrValue={ticket.qr_code}
+                participantName={ticketParticipantName}
+                price={pricePerTicket}
+                seatNumber={null} // Seat numbers not currently in schema
+                currency={order.currency || 'HKD'}
+                captureMode={true}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
