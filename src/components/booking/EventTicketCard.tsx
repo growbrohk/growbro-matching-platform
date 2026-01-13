@@ -18,6 +18,15 @@ const BRAND = {
   dark: "#0F1F17",
 };
 
+export interface Ticket {
+  id: string;
+  qr_code: string;
+  status?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+}
+
 export interface EventTicketCardProps {
   // Event info
   eventTitle: string;
@@ -31,7 +40,7 @@ export interface EventTicketCardProps {
   
   // Booking info
   bookingCode: string; // order.order_no
-  qrCode: string; // tickets.qr_code
+  tickets: Ticket[]; // Array of tickets with qr_code
   
   // Styling
   className?: string;
@@ -48,7 +57,7 @@ export default function EventTicketCard({
   eventStartTime,
   coverImageUrl,
   bookingCode,
-  qrCode,
+  tickets,
   className = '',
   showQR = true,
 }: EventTicketCardProps) {
@@ -126,30 +135,71 @@ export default function EventTicketCard({
 
           {/* Divider */}
           <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+            {/* QR Codes (above Booking Code) */}
+            {showQR && tickets.length > 0 && (
+              <div className="mb-6 space-y-4">
+                {tickets.map((ticket, index) => {
+                  // Only show QR if qr_code exists
+                  if (!ticket.qr_code) return null;
+                  
+                  const attendeeName = ticket.first_name || ticket.last_name
+                    ? `${ticket.first_name || ''} ${ticket.last_name || ''}`.trim()
+                    : null;
+                  
+                  return (
+                    <div key={ticket.id} className="flex flex-col items-center gap-2">
+                      {/* Ticket label */}
+                      {tickets.length > 1 && (
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Ticket {index + 1} / {tickets.length}
+                        </p>
+                      )}
+                      
+                      {/* QR Code */}
+                      <div className="p-3 bg-white rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                        <QRCodeSVG
+                          value={ticket.qr_code}
+                          size={160}
+                          level="M"
+                          includeMargin={false}
+                        />
+                      </div>
+                      
+                      {/* Attendee name/email (optional) */}
+                      {(attendeeName || ticket.email) && (
+                        <div className="text-center">
+                          {attendeeName && (
+                            <p className="text-xs font-medium" style={{ color: BRAND.dark }}>
+                              {attendeeName}
+                            </p>
+                          )}
+                          {ticket.email && (
+                            <p className="text-xs text-muted-foreground">
+                              {ticket.email}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Instruction text (only on last ticket) */}
+                      {index === tickets.length - 1 && (
+                        <p className="text-xs text-muted-foreground text-center mt-1">
+                          Show this QR code at the event
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Booking Code */}
-            <div className="mb-4">
+            <div>
               <p className="text-xs text-muted-foreground mb-1">Booking Code</p>
               <p className="text-lg font-bold font-mono" style={{ color: BRAND.green }}>
                 {bookingCode}
               </p>
             </div>
-
-            {/* QR Code */}
-            {showQR && qrCode && (
-              <div className="flex flex-col items-center gap-2">
-                <div className="p-3 bg-white rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                  <QRCodeSVG
-                    value={qrCode}
-                    size={160}
-                    level="M"
-                    includeMargin={false}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  Show this QR code at the event
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </CardContent>

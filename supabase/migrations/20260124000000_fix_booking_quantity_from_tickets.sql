@@ -114,6 +114,8 @@ BEGIN
   SELECT COALESCE(jsonb_agg(
     jsonb_build_object(
       'id', t.id,
+      'qr_code', t.qr_code,
+      'status', t.status,
       'first_name', t.first_name,
       'last_name', t.last_name,
       'email', t.email,

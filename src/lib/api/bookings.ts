@@ -76,6 +76,7 @@ export interface OrderWithEvent {
   tickets: Array<{
     id: string;
     qr_code: string;
+    status: string;
     first_name: string | null;
     last_name: string | null;
     email: string | null;
@@ -227,7 +228,8 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,
-      qr_code: ticket.qr_code,
+      qr_code: ticket.qr_code || '', // Ensure qr_code is always a string
+      status: ticket.status,
       first_name: ticket.first_name,
       last_name: ticket.last_name,
       email: ticket.email,
@@ -243,6 +245,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
  * Used for free tickets (amount_total = 0) to ensure they are immediately confirmed
  */
 export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent> {
+  const now = new Date().toISOString();
   const { error } = await supabase
     .from('orders')
     .update({
@@ -250,6 +253,8 @@ export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent>
       fulfillment_status: 'confirmed',
       payment_method: 'free',
       status: 'paid',
+      paid_at: now,
+      confirmed_at: now,
     })
     .eq('id', orderId);
 

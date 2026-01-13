@@ -120,8 +120,8 @@ export default function SuccessfulBookingPage() {
 
       // Capture the ticket card as canvas
       const canvas = await html2canvas(ticketCardRef.current, {
-        backgroundColor: BRAND.beigeSoft,
-        scale: 2, // Higher quality
+        background: BRAND.beigeSoft,
+        useCORS: true,
         logging: false,
       });
 
@@ -186,9 +186,25 @@ export default function SuccessfulBookingPage() {
     return null; // Will redirect
   }
 
-  // Get first ticket QR code (all tickets have same QR for same order)
-  const firstTicket = order.tickets && order.tickets.length > 0 ? order.tickets[0] : null;
-  const qrCode = firstTicket?.qr_code || '';
+  // Get all tickets and booking code
+  const tickets = order.tickets ?? [];
+  const bookingCode = order.order_no || order.id.slice(0, 8).toUpperCase();
+
+  // Safety check: if no tickets found, show error
+  if (tickets.length === 0) {
+    toast({
+      title: 'No tickets found',
+      description: 'Unable to load ticket information. Please contact support.',
+      variant: 'destructive',
+    });
+    return (
+      <div className="min-h-screen pb-24" style={{ backgroundColor: BRAND.beigeSoft }}>
+        <div className="container mx-auto px-4 pt-8 pb-6">
+          <p className="text-center text-muted-foreground">No tickets found for this order.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: BRAND.beigeSoft }}>
@@ -230,8 +246,8 @@ export default function SuccessfulBookingPage() {
             eventTime={order.event.end_at}
             eventStartTime={order.event.start_at}
             coverImageUrl={order.event.cover_image_url}
-            bookingCode={order.order_no || order.id.slice(0, 8).toUpperCase()}
-            qrCode={qrCode}
+            bookingCode={bookingCode}
+            tickets={tickets}
             showQR={true}
           />
         </div>

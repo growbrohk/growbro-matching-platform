@@ -576,10 +576,10 @@ export default function CompleteBookingPage() {
                   // Store orderId in sessionStorage for guest checkout access
                   sessionStorage.setItem('last_order_id', result.orderId);
                   
-                  // FIX: For free tickets, ensure order is confirmed synchronously before navigation
+                  // For free tickets (total === 0): confirm order and navigate to success
                   if (finalTotal === 0) {
                     try {
-                      // Ensure free order is confirmed (RPC should already do this, but verify/update to be safe)
+                      // Update order to paid+confirmed with timestamps (await this update)
                       const updatedOrder = await confirmFreeOrder(result.orderId);
                       
                       console.debug('[booking-route]', {
@@ -633,7 +633,7 @@ export default function CompleteBookingPage() {
               disabled={!isFormValid() || isSubmitting}
               className="px-8 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Processing...' : 'Go to payment'}
+              {isSubmitting ? 'Processing...' : total === 0 ? 'Finish booking' : 'Go to payment'}
             </Button>
           </div>
         </div>
