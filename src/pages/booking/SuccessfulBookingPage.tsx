@@ -16,8 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import EventTicketCard from '@/components/booking/EventTicketCard';
 import { CheckCircle2, Download, Loader2 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -103,6 +101,23 @@ export default function SuccessfulBookingPage() {
 
     setDownloading(true);
     try {
+      // Dynamically import PDF libraries (only when needed)
+      let html2canvas: any;
+      let jsPDF: any;
+
+      try {
+        html2canvas = (await import('html2canvas')).default;
+        jsPDF = (await import('jspdf')).default;
+      } catch (importError) {
+        toast({
+          title: 'PDF download unavailable',
+          description: 'PDF download feature requires additional packages. Please install html2canvas and jspdf.',
+          variant: 'destructive',
+        });
+        setDownloading(false);
+        return;
+      }
+
       // Capture the ticket card as canvas
       const canvas = await html2canvas(ticketCardRef.current, {
         backgroundColor: BRAND.beigeSoft,
@@ -148,7 +163,7 @@ export default function SuccessfulBookingPage() {
       console.error('Error downloading ticket:', error);
       toast({
         title: 'Download failed',
-        description: 'Failed to download ticket. Please try again.',
+        description: error.message || 'Failed to download ticket. Please try again.',
         variant: 'destructive',
       });
     } finally {
