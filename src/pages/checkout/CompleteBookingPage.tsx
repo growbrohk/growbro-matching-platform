@@ -579,7 +579,9 @@ export default function CompleteBookingPage() {
                   // For free tickets (total === 0): confirm order and navigate to success
                   if (finalTotal === 0) {
                     try {
-                      // Update order to paid+confirmed with timestamps (await this update)
+                      // RPC function already sets paid_at, confirmed_at, payment_method='free', 
+                      // and fulfillment_status='confirmed' for free orders.
+                      // This call is a safety net (idempotent - won't update if already confirmed)
                       const updatedOrder = await confirmFreeOrder(result.orderId);
                       
                       console.debug('[booking-route]', {

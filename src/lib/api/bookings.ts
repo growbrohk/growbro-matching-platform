@@ -243,6 +243,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
 /**
  * Confirm free order (set to paid and confirmed)
  * Used for free tickets (amount_total = 0) to ensure they are immediately confirmed
+ * This is idempotent - only updates if not already confirmed to prevent duplicate email triggers
  */
 export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent> {
   const now = new Date().toISOString();
@@ -256,7 +257,8 @@ export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent>
       paid_at: now,
       confirmed_at: now,
     })
-    .eq('id', orderId);
+    .eq('id', orderId)
+    .neq('fulfillment_status', 'confirmed'); // Idempotency: only update if not already confirmed
 
   if (error) {
     throw new Error(error.message || 'Failed to confirm free order');
