@@ -233,7 +233,7 @@ export default function SuccessfulBookingPage() {
                       eventName={order.event.title}
                       dateTime={order.event.start_at}
                       venue={venue}
-                      checkinCode={bookingCode}
+                      checkinCode={ticket.qr_code}
                       qrValue={ticket.qr_code}
                       participantName={ticketParticipantName}
                       price={pricePerTicket}
