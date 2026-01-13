@@ -360,13 +360,15 @@ export default function SuccessfulBookingPage() {
         {/* Hidden capture nodes for download - positioned off-screen but visible to html2canvas */}
         <div 
           style={{ 
-            position: 'absolute',
+            position: 'fixed',
             top: 0,
             left: '-9999px',
             width: '800px',
-            height: 0,
+            height: '0px',
             overflow: 'hidden',
             pointerEvents: 'none',
+            visibility: 'hidden',
+            zIndex: -1,
           }}
         >
           {tickets.map((ticket, index) => {
@@ -384,9 +386,7 @@ export default function SuccessfulBookingPage() {
                 ref={setTicketRef(index)}
                 style={{
                   width: '800px',
-                  marginBottom: '20px',
-                  transform: 'none',
-                  isolation: 'isolate',
+                  marginBottom: '50px',
                 }}
               >
                 <TicketCard
