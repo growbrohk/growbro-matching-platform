@@ -39,7 +39,9 @@ import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
 import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
 // Checkout pages
 import CompleteBookingPage from "./pages/checkout/CompleteBookingPage";
-import BookingSuccessPage from "./pages/booking/BookingSuccessPage";
+import PaymentPage from "./pages/booking/PaymentPage";
+import PendingBookingPage from "./pages/booking/PendingBookingPage";
+import SuccessfulBookingPage from "./pages/booking/SuccessfulBookingPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -304,6 +306,11 @@ function LegacyPosterSpaceRedirectSimple() {
   return null;
 }
 
+function LegacyBookingSuccessRedirect() {
+  const { orderId } = useParams<{ orderId: string }>();
+  return <Navigate to={`/booking/success/${orderId}`} replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -397,8 +404,13 @@ function AppRoutes() {
       {/* Checkout route - Must be before generic orgSlug route */}
       <Route path="/events/:eventId/checkout" element={<CompleteBookingPage />} />
       
-      {/* Booking success route */}
-      <Route path="/booking/:orderId/success" element={<BookingSuccessPage />} />
+      {/* Booking routes - Must be before generic orgSlug route */}
+      <Route path="/booking/payment/:orderId" element={<PaymentPage />} />
+      <Route path="/booking/pending/:orderId" element={<PendingBookingPage />} />
+      <Route path="/booking/success/:orderId" element={<SuccessfulBookingPage />} />
+      
+      {/* Legacy booking success route - redirect to new route */}
+      <Route path="/booking/:orderId/success" element={<LegacyBookingSuccessRedirect />} />
       
       {/* Public Event Page - Must be after all reserved routes */}
       <Route path="/:orgSlug/:eventSlug" element={<PublicEventPage />} />

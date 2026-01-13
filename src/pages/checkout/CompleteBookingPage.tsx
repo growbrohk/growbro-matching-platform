@@ -572,18 +572,29 @@ export default function CompleteBookingPage() {
                   // Clear booking draft
                   clearBookingDraft();
 
-                  // Show success message
-                  toast({
-                    title: 'Booking created successfully',
-                    description: 'Your order has been created. Redirecting to payment...',
-                  });
-
                   // Store orderId in sessionStorage for guest checkout access
                   sessionStorage.setItem('last_order_id', result.orderId);
                   
-                  // TODO: Redirect to payment provider (Stripe) or success page
-                  // For now, redirect to a success page or orders page
-                  navigate(`/booking/${result.orderId}/success`);
+                  // Determine redirect based on order total
+                  // Free tickets (amount = 0) are immediately confirmed and go to success page
+                  // Paid tickets go to payment page
+                  const finalTotal = Math.max(0, subtotal - discount);
+                  
+                  if (finalTotal === 0) {
+                    // Free ticket - already confirmed, go to success page
+                    toast({
+                      title: 'Booking created successfully',
+                      description: 'Your free ticket has been confirmed!',
+                    });
+                    navigate(`/booking/success/${result.orderId}`);
+                  } else {
+                    // Paid ticket - go to payment page
+                    toast({
+                      title: 'Booking created successfully',
+                      description: 'Redirecting to payment...',
+                    });
+                    navigate(`/booking/payment/${result.orderId}`);
+                  }
                 } catch (error: any) {
                   console.error('Error creating booking:', error);
                   toast({

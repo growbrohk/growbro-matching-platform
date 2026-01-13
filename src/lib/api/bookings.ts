@@ -37,8 +37,10 @@ export interface OrderWithEvent {
   total_amount: number;
   currency: string;
   status: 'pending' | 'paid' | 'cancelled' | 'refunded';
-  payment_method: 'stripe' | 'payme' | 'fps' | null;
-  payment_status: 'unpaid' | 'submitted' | 'paid' | 'failed' | 'refunded' | null;
+  payment_method: 'stripe' | 'payme' | 'fps' | 'free' | null;
+  payment_status: 'unpaid' | 'pending' | 'submitted' | 'paid' | 'failed' | 'refunded' | null;
+  fulfillment_status: 'pending_confirmation' | 'confirmed' | 'cancelled' | null;
+  order_no: string | null;
   receipt_url: string | null;
   payment_reference_link: string | null;
   submitted_at: string | null;
@@ -50,6 +52,9 @@ export interface OrderWithEvent {
     start_at: string;
     end_at: string;
     location_text: string | null;
+    venue_name?: string | null;
+    category?: string | null;
+    cover_image_url?: string | null;
     enable_stripe: boolean | null;
     enable_payme: boolean | null;
     enable_fps: boolean | null;
@@ -70,6 +75,7 @@ export interface OrderWithEvent {
   }>;
   tickets: Array<{
     id: string;
+    qr_code: string;
     first_name: string | null;
     last_name: string | null;
     email: string | null;
@@ -185,6 +191,8 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     status: orderData.status,
     payment_method: orderData.payment_method,
     payment_status: orderData.payment_status,
+    fulfillment_status: orderData.fulfillment_status,
+    order_no: orderData.order_no,
     receipt_url: orderData.receipt_url,
     payment_reference_link: orderData.payment_reference_link,
     submitted_at: orderData.submitted_at,
@@ -196,6 +204,9 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       start_at: eventData.start_at,
       end_at: eventData.end_at,
       location_text: eventData.location_text,
+      venue_name: eventData.venue_name,
+      category: eventData.category,
+      cover_image_url: eventData.cover_image_url,
       enable_stripe: eventData.enable_stripe,
       enable_payme: eventData.enable_payme,
       enable_fps: eventData.enable_fps,
@@ -216,6 +227,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,
+      qr_code: ticket.qr_code,
       first_name: ticket.first_name,
       last_name: ticket.last_name,
       email: ticket.email,
@@ -228,6 +240,8 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
 
 /**
  * Update order payment information
+ * For PayMe/FPS: Sets payment_status = 'pending', fulfillment_status = 'pending_confirmation'
+ * For Stripe: Will be handled by webhook (sets payment_status = 'paid', fulfillment_status = 'confirmed')
  */
 export async function updateOrderPayment(
   orderId: string,
@@ -237,9 +251,17 @@ export async function updateOrderPayment(
 ): Promise<void> {
   const updateData: any = {
     payment_method: paymentMethod,
-    payment_status: 'submitted',
     submitted_at: new Date().toISOString(),
   };
+
+  // For PayMe/FPS: Set to pending status
+  if (paymentMethod === 'payme' || paymentMethod === 'fps') {
+    updateData.payment_status = 'pending';
+    updateData.fulfillment_status = 'pending_confirmation';
+  } else {
+    // For Stripe: Will be updated by webhook
+    updateData.payment_status = 'unpaid';
+  }
 
   if (receiptUrl) {
     updateData.receipt_url = receiptUrl;
