@@ -1,53 +1,95 @@
-// Edge Function: Send confirmation email when order becomes confirmed
-// Called by database trigger when fulfillment_status transitions to 'confirmed'
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+/* ============================================================================
+   ENV VARS
+============================================================================ */
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET');
 
-interface RequestBody {
-  order_id: string;
+/* ============================================================================
+   HELPERS
+============================================================================ */
+function generateCorrelationId(): string {
+  return crypto.randomUUID();
 }
 
+function maskHeaderValue(headerName: string, value: string | null): string {
+  if (!value) return '<missing>';
+  const lowerName = headerName.toLowerCase();
+  if (
+    lowerName.includes('secret') ||
+    lowerName.includes('authorization') ||
+    lowerName.includes('key')
+  ) {
+    return value.length > 8
+      ? `${value.substring(0, 4)}***${value.substring(value.length - 4)}`
+      : '***';
+  }
+  return value;
+}
+
+/** ✅ THIS IS THE IMPORTANT PART — HKT FORMATTER */
+function formatEventTimeHKT(dateString: string) {
+  return new Date(dateString).toLocaleString('en-HK', {
+    timeZone: 'Asia/Hong_Kong',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/* ============================================================================
+   EDGE FUNCTION
+============================================================================ */
 Deno.serve(async (req) => {
+  const correlationId = generateCorrelationId();
+  const startTime = Date.now();
+
   try {
-    // Parse request body
-    const body: RequestBody = await req.json();
-    const { order_id } = body;
+    /* ------------------------------------------------------------------------
+       AUTH
+    ------------------------------------------------------------------------ */
+    const providedSecret = req.headers.get('X-Internal-Secret');
+    if (!INTERNAL_FUNCTION_SECRET || providedSecret !== INTERNAL_FUNCTION_SECRET) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', correlation_id: correlationId }),
+        { status: 401 }
+      );
+    }
+
+    /* ------------------------------------------------------------------------
+       BODY
+    ------------------------------------------------------------------------ */
+    const body = await req.json();
+
+    const order_id =
+      body.order_id ||
+      body.record?.id ||
+      body.new?.id ||
+      body.data?.order_id;
 
     if (!order_id) {
       return new Response(
-        JSON.stringify({ error: 'order_id is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'order_id missing', correlation_id: correlationId }),
+        { status: 400 }
       );
     }
 
-    // Validate environment variables
-    if (!RESEND_API_KEY) {
-      console.error('RESEND_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ error: 'Email service not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    /* ------------------------------------------------------------------------
+       SUPABASE
+    ------------------------------------------------------------------------ */
+    const supabase = createClient(
+      SUPABASE_URL!,
+      SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('Supabase credentials not configured');
-      return new Response(
-        JSON.stringify({ error: 'Database service not configured' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Create Supabase client with service role key
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    console.log(`[send-confirmation-email] Processing order_id: ${order_id}`);
-
-    // Fetch order
-    const { data: order, error: orderError } = await supabase
+    const { data: order } = await supabase
       .from('orders')
       .select(`
         id,
@@ -64,170 +106,115 @@ Deno.serve(async (req) => {
       .eq('id', order_id)
       .single();
 
-    if (orderError || !order) {
-      console.error(`[send-confirmation-email] Order fetch error:`, orderError);
+    if (!order || order.fulfillment_status !== 'confirmed') {
       return new Response(
-        JSON.stringify({ error: 'Order not found', details: orderError?.message }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ skipped: true, correlation_id: correlationId }),
+        { status: 200 }
       );
     }
 
-    // Fetch event details separately
-    const { data: event, error: eventError } = await supabase
+    if (order.confirmation_email_sent_at) {
+      return new Response(
+        JSON.stringify({ skipped: 'already_sent', correlation_id: correlationId }),
+        { status: 200 }
+      );
+    }
+
+    if (!order.buyer_email) {
+      return new Response(
+        JSON.stringify({ error: 'Missing buyer_email', correlation_id: correlationId }),
+        { status: 400 }
+      );
+    }
+
+    /* ------------------------------------------------------------------------
+       EVENT
+    ------------------------------------------------------------------------ */
+    const { data: event } = await supabase
       .from('events')
       .select('title, start_at, location_text')
       .eq('id', order.event_id)
       .single();
 
-    if (eventError) {
-      console.error(`[send-confirmation-email] Event fetch error:`, eventError);
-      // Continue anyway - we'll use defaults
-    }
-
-    // Guard rail: Check if order is confirmed
-    if (order.fulfillment_status !== 'confirmed') {
-      console.log(`[send-confirmation-email] Order ${order_id} not confirmed, skipping`);
-      return new Response(
-        JSON.stringify({ skipped: 'not_confirmed', fulfillment_status: order.fulfillment_status }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Guard rail: Check if email already sent (idempotency)
-    if (order.confirmation_email_sent_at) {
-      console.log(`[send-confirmation-email] Order ${order_id} already sent email at ${order.confirmation_email_sent_at}`);
-      return new Response(
-        JSON.stringify({ skipped: 'already_sent', sent_at: order.confirmation_email_sent_at }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Guard rail: Check if buyer_email exists
-    if (!order.buyer_email) {
-      console.error(`[send-confirmation-email] Order ${order_id} missing buyer_email`);
-      // Update order with error
-      await supabase
-        .from('orders')
-        .update({ confirmation_email_error: 'Missing buyer_email' })
-        .eq('id', order_id)
-        .is('confirmation_email_sent_at', null);
-      
-      return new Response(
-        JSON.stringify({ error: 'Missing buyer_email' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Fetch tickets count
-    const { count: ticketsCount, error: ticketsError } = await supabase
+    const { count: ticketsCount } = await supabase
       .from('tickets')
       .select('id', { count: 'exact', head: true })
       .eq('order_id', order_id);
 
-    if (ticketsError) {
-      console.error(`[send-confirmation-email] Tickets count error:`, ticketsError);
-    }
-
-    const ticketsCountValue = ticketsCount || 0;
-
-    // Prepare email data
+    /* ------------------------------------------------------------------------
+       FORMAT DATA (🔥 HKT HERE 🔥)
+    ------------------------------------------------------------------------ */
     const eventTitle = event?.title || 'Event';
-    const eventStartAt = event?.start_at ? new Date(event.start_at).toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    }) : 'TBA';
+    const eventStartAt = event?.start_at
+      ? `${formatEventTimeHKT(event.start_at)} (HKT)`
+      : 'TBA';
     const venue = event?.location_text || 'TBA';
-    const buyerName = order.buyer_first_name || order.buyer_last_name 
-      ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim()
-      : 'Guest';
-    const orderNo = order.order_no || order.id.substring(0, 8).toUpperCase();
-    const successUrl = `https://growbrohk.com/booking/success/${order_id}`;
+
+    const buyerName =
+      `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim() ||
+      'Guest';
+
+    const orderNo = order.order_no || order.id.slice(0, 8).toUpperCase();
     const amount = order.total_amount || 0;
     const currency = order.currency || 'HKD';
+    const ticketQty = ticketsCount || 0;
+    const successUrl = `https://growbrohk.com/booking/success/${order_id}`;
 
-    // Compose email HTML
+    /* ------------------------------------------------------------------------
+       EMAIL HTML
+    ------------------------------------------------------------------------ */
     const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Order Confirmation - ${eventTitle}</title>
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-            <h1 style="color: #2563eb; margin-top: 0;">Order Confirmed!</h1>
-            <p style="font-size: 18px; margin-bottom: 0;">Thank you for your purchase, ${buyerName}!</p>
-          </div>
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial; max-width:600px; margin:auto">
+  <h2>Order Confirmed 🎉</h2>
+  <p>Hi ${buyerName},</p>
 
-          <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h2 style="color: #111827; margin-top: 0; font-size: 24px;">${eventTitle}</h2>
-            
-            <div style="margin: 20px 0;">
-              <p style="margin: 8px 0;"><strong>Order Number:</strong> ${orderNo}</p>
-              <p style="margin: 8px 0;"><strong>Date & Time:</strong> ${eventStartAt}</p>
-              <p style="margin: 8px 0;"><strong>Venue:</strong> ${venue}</p>
-              <p style="margin: 8px 0;"><strong>Tickets:</strong> ${ticketsCountValue} ${ticketsCountValue === 1 ? 'ticket' : 'tickets'}</p>
-              ${amount > 0 ? `<p style="margin: 8px 0;"><strong>Amount Paid:</strong> ${currency} ${amount.toFixed(2)}</p>` : ''}
-            </div>
-          </div>
+  <h3>${eventTitle}</h3>
+  <p><strong>Date & Time:</strong> ${eventStartAt}</p>
+  <p><strong>Venue:</strong> ${venue}</p>
+  <p><strong>Tickets:</strong> ${ticketQty}</p>
+  ${amount > 0 ? `<p><strong>Amount Paid:</strong> ${currency} ${amount.toFixed(2)}</p>` : ''}
 
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${successUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600;">View Order Details</a>
-          </div>
+  <p><strong>Order No:</strong> ${orderNo}</p>
 
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">
-            <p>If you have any questions, please contact the event organizer.</p>
-            <p style="margin-top: 10px;">This is an automated confirmation email. Please do not reply to this message.</p>
-          </div>
-        </body>
-      </html>
-    `;
+  <p>
+    <a href="${successUrl}" style="padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">
+      View Ticket
+    </a>
+  </p>
 
-    // Send email via Resend API
-    const resendResponse = await fetch('https://api.resend.com/emails', {
+  <p style="color:#666;font-size:12px">
+    This is an automated email. Please do not reply.
+  </p>
+</body>
+</html>
+`;
+
+    /* ------------------------------------------------------------------------
+       SEND EMAIL
+    ------------------------------------------------------------------------ */
+    const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        Authorization: `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'growbro Tickets <tickets@growbrohk.com>', // TODO: Update with your verified domain
+        from: 'Growbro Tickets <tickets@growbrohk.com>',
         to: [order.buyer_email],
         subject: `[Confirmation] – ${eventTitle} Ticket`,
         html: emailHtml,
       }),
     });
 
-    const resendData = await resendResponse.json();
+    const resendData = await resendRes.json();
+    if (!resendRes.ok) throw resendData;
 
-    if (!resendResponse.ok) {
-      console.error(`[send-confirmation-email] Resend API error:`, resendData);
-      
-      // Update order with error
-      await supabase
-        .from('orders')
-        .update({ 
-          confirmation_email_error: JSON.stringify(resendData) 
-        })
-        .eq('id', order_id)
-        .is('confirmation_email_sent_at', null);
-
-      return new Response(
-        JSON.stringify({ error: 'Failed to send email', details: resendData }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`[send-confirmation-email] Email sent successfully for order ${order_id}, Resend ID: ${resendData.id}`);
-
-    // Update order with success (idempotent write - only if still null)
-    const { error: updateError } = await supabase
+    /* ------------------------------------------------------------------------
+       UPDATE ORDER
+    ------------------------------------------------------------------------ */
+    await supabase
       .from('orders')
       .update({
         confirmation_email_sent_at: new Date().toISOString(),
@@ -237,27 +224,15 @@ Deno.serve(async (req) => {
       .eq('id', order_id)
       .is('confirmation_email_sent_at', null);
 
-    if (updateError) {
-      console.error(`[send-confirmation-email] Failed to update order:`, updateError);
-      // Don't fail the request if update fails - email was sent
-    }
-
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        order_id,
-        resend_id: resendData.id,
-        sent_at: new Date().toISOString()
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, correlation_id: correlationId }),
+      { status: 200 }
     );
-
-  } catch (error) {
-    console.error('[send-confirmation-email] Unexpected error:', error);
+  } catch (err) {
+    console.error(err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: 'Internal error', correlation_id: correlationId }),
+      { status: 500 }
     );
   }
 });
-
