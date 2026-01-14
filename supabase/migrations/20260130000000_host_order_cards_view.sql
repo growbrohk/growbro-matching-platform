@@ -71,8 +71,9 @@ COMMENT ON VIEW public.host_order_cards IS 'View for hosts to see order cards wi
 -- 3. UPDATE ORDERS RLS POLICY FOR HOST CONFIRMATION
 -- ============================================================================
 
--- Drop existing update policy if it exists
+-- Drop existing update policies if they exist
 DROP POLICY IF EXISTS "Users can update orders for events in their orgs" ON orders;
+DROP POLICY IF EXISTS "Hosts can update fulfillment for orders in their org events" ON orders;
 
 -- Create new policy that allows hosts to update fulfillment_status and confirmed_at
 -- Only for orders where the event belongs to their org
@@ -153,10 +154,19 @@ BEGIN
   -- Actually, let's allow re-confirming if needed, but log it
   IF p_fulfillment_status = 'confirmed' THEN
     -- Update fulfillment_status and confirmed_at
+    -- Also set payment_status='paid' if currently unpaid (safety check)
     UPDATE orders
     SET 
       fulfillment_status = p_fulfillment_status,
       confirmed_at = p_confirmed_at,
+      payment_status = CASE 
+        WHEN payment_status != 'paid' THEN 'paid'
+        ELSE payment_status
+      END,
+      paid_at = CASE 
+        WHEN paid_at IS NULL AND payment_status != 'paid' THEN p_confirmed_at
+        ELSE paid_at
+      END,
       updated_at = NOW()
     WHERE id = p_order_id;
   ELSE

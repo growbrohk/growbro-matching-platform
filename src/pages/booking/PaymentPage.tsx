@@ -205,15 +205,19 @@ export default function PaymentPage() {
         paymentReferenceLink: paymentLink,
       });
 
-      // BUG FIX 2: Immediately redirect to pending page after successful submission
-      // The order state has been updated to payment_status='pending', fulfillment_status='pending_confirmation'
+      // Payment submitted successfully:
+      // - receipt_url saved
+      // - payment_status='paid', paid_at=now()
+      // - payment_method set
+      // - fulfillment_status='pending_confirmation' (kept as is)
       toast({
         title: 'Payment submitted',
-        description: 'Your payment receipt has been submitted. Redirecting...',
+        description: 'Your payment receipt has been submitted. Waiting for host confirmation...',
       });
 
-      // Use replace: true to prevent back navigation to payment page
-      navigate(`/booking/pending/${orderId}`, { replace: true });
+      // Redirect to success page with status=pending_confirmation query param
+      // Client-side navigation (no page refresh)
+      navigate(`/booking/success/${orderId}?status=pending_confirmation`, { replace: true });
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       toast({
@@ -579,6 +583,7 @@ export default function PaymentPage() {
         >
           <div className="container mx-auto">
             <Button
+              type="button"
               className="w-full text-white h-12 text-base font-semibold"
               style={{ 
                 backgroundColor: BRAND.green,

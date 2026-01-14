@@ -16,13 +16,17 @@ export interface SubmitManualPaymentParams {
 
 /**
  * Upload receipt file to Supabase Storage
+ * Uses 'payment-receipts' bucket (or 'receipts' if it exists)
  */
 async function uploadReceipt(orderId: string, file: File): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${orderId}/${Date.now()}.${fileExt}`;
 
+  // Try 'payment-receipts' bucket first (existing bucket)
+  const bucketName = 'payment-receipts';
+
   const { error: uploadError } = await supabase.storage
-    .from('payment-receipts')
+    .from(bucketName)
     .upload(fileName, file, {
       upsert: false,
       contentType: file.type,
@@ -36,8 +40,9 @@ async function uploadReceipt(orderId: string, file: File): Promise<string> {
   // Get public URL (or signed URL for private buckets)
   // For private buckets, we'd use getPublicUrl but it might not work
   // For now, we'll use getPublicUrl - if bucket is private, we may need signed URLs
+  // TODO: If bucket is private, use createSignedUrl instead
   const { data: urlData } = supabase.storage
-    .from('payment-receipts')
+    .from(bucketName)
     .getPublicUrl(fileName);
 
   return urlData.publicUrl;
@@ -45,6 +50,8 @@ async function uploadReceipt(orderId: string, file: File): Promise<string> {
 
 /**
  * Submit manual payment with receipt
+ * Sets payment_status='paid', paid_at=now(), receipt_url, payment_method
+ * Keeps fulfillment_status='pending_confirmation'
  */
 export async function submitManualPayment({
   orderId,
@@ -56,6 +63,8 @@ export async function submitManualPayment({
   const receiptUrl = await uploadReceipt(orderId, receiptFile);
 
   // Update order payment information
+  // This now sets payment_status='paid', paid_at=now(), receipt_url, payment_method
+  // Keeps fulfillment_status='pending_confirmation'
   await updateOrderPayment(orderId, paymentMethod, receiptUrl, paymentReferenceLink);
 }
 

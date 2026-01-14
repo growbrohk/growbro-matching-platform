@@ -12,14 +12,14 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import TicketCard, { TicketCardPreview } from '@/components/booking/TicketCard';
-import { CheckCircle2, FileText } from 'lucide-react';
+import { CheckCircle2, FileText, Clock } from 'lucide-react';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -33,10 +33,14 @@ export default function SuccessfulBookingPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [order, setOrder] = useState<OrderWithEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasRedirected, setHasRedirected] = useState(false);
+  
+  // Check if status=pending_confirmation query param is present
+  const isPendingConfirmation = searchParams.get('status') === 'pending_confirmation';
 
   useEffect(() => {
     if (!orderId) {
@@ -180,20 +184,33 @@ export default function SuccessfulBookingPage() {
           <div
             className="rounded-2xl px-6 py-4 mb-6 flex items-center gap-3"
             style={{
-              backgroundColor: 'rgba(14,122,58,0.1)',
-              border: `1px solid rgba(14,122,58,0.2)`,
+              backgroundColor: isPendingConfirmation 
+                ? 'rgba(251,191,36,0.1)' 
+                : 'rgba(14,122,58,0.1)',
+              border: `1px solid ${isPendingConfirmation 
+                ? 'rgba(251,191,36,0.2)' 
+                : 'rgba(14,122,58,0.2)'}`,
             }}
           >
-            <CheckCircle2 className="h-6 w-6" style={{ color: BRAND.green }} />
+            {isPendingConfirmation ? (
+              <Clock className="h-6 w-6" style={{ color: '#FBBF24' }} />
+            ) : (
+              <CheckCircle2 className="h-6 w-6" style={{ color: BRAND.green }} />
+            )}
             <div>
               <p
                 className="font-semibold text-base"
-                style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}
+                style={{ 
+                  color: isPendingConfirmation ? '#FBBF24' : BRAND.green, 
+                  fontFamily: "'Inter Tight', sans-serif" 
+                }}
               >
-                ✓ Congrats
+                {isPendingConfirmation ? '⏳ Payment Received' : '✓ Congrats'}
               </p>
               <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                Your ticket has been successfully booked
+                {isPendingConfirmation 
+                  ? 'Your payment has been received. Waiting for host confirmation...'
+                  : 'Your ticket has been successfully booked'}
               </p>
             </div>
           </div>

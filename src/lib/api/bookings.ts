@@ -275,7 +275,8 @@ export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent>
 
 /**
  * Update order payment information
- * For PayMe/FPS: Sets payment_status = 'pending', fulfillment_status = 'pending_confirmation'
+ * For PayMe/FPS: Sets payment_status = 'paid', paid_at = now(), receipt_url, payment_method
+ *                Keeps fulfillment_status = 'pending_confirmation'
  * For Stripe: Will be handled by webhook (sets payment_status = 'paid', fulfillment_status = 'confirmed')
  */
 export async function updateOrderPayment(
@@ -284,15 +285,18 @@ export async function updateOrderPayment(
   receiptUrl?: string,
   paymentReferenceLink?: string
 ): Promise<void> {
+  const now = new Date().toISOString();
   const updateData: any = {
     payment_method: paymentMethod,
-    submitted_at: new Date().toISOString(),
+    submitted_at: now,
   };
 
-  // For PayMe/FPS: Set to pending status
+  // For PayMe/FPS: Set to paid status with receipt
   if (paymentMethod === 'payme' || paymentMethod === 'fps') {
-    updateData.payment_status = 'pending';
-    updateData.fulfillment_status = 'pending_confirmation';
+    updateData.payment_status = 'paid';
+    updateData.paid_at = now;
+    // Keep fulfillment_status as 'pending_confirmation' (don't change it)
+    // fulfillment_status will be updated by host when they confirm
   } else {
     // For Stripe: Will be updated by webhook
     updateData.payment_status = 'unpaid';

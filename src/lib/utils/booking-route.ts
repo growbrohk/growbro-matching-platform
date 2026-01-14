@@ -12,6 +12,7 @@ export type BookingRoute = 'success' | 'pending' | 'payment';
  * 
  * Rules:
  * - if payment_status === 'paid' && fulfillment_status === 'confirmed' → success
+ * - else if payment_status === 'paid' && fulfillment_status === 'pending_confirmation' → success (with status query param)
  * - else if payment_method in (payme,fps) && payment_status === 'pending' && fulfillment_status === 'pending_confirmation' → pending
  * - else if amount_total > 0 && payment_status === 'unpaid' → payment
  * - else if amount_total === 0 → success (guardrail fallback for free tickets)
@@ -28,7 +29,13 @@ export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
     return 'success';
   }
 
-  // Rule 2: PayMe/FPS pending confirmation → pending
+  // Rule 2: Paid but pending confirmation (PayMe/FPS manual payment) → success
+  // This handles the case where user has paid but host hasn't confirmed yet
+  if (payment_status === 'paid' && fulfillment_status === 'pending_confirmation') {
+    return 'success';
+  }
+
+  // Rule 3: PayMe/FPS pending confirmation (old flow) → pending
   if (
     (payment_method === 'payme' || payment_method === 'fps') &&
     (payment_status === 'pending' || payment_status === 'submitted') &&
@@ -37,12 +44,12 @@ export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
     return 'pending';
   }
 
-  // Rule 3: Free tickets (amount_total === 0) → success (guardrail fallback)
+  // Rule 4: Free tickets (amount_total === 0) → success (guardrail fallback)
   if (total_amount === 0) {
     return 'success';
   }
 
-  // Rule 4: Paid tickets that need payment → payment
+  // Rule 5: Paid tickets that need payment → payment
   if (total_amount > 0 && payment_status === 'unpaid') {
     return 'payment';
   }
