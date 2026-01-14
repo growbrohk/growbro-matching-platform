@@ -11,6 +11,7 @@ import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
 import { format } from 'date-fns';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
 import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
+import HostEnquiryOrderCard, { type HostOrderCardData } from '@/components/host/HostEnquiryOrderCard';
 import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
@@ -37,6 +38,7 @@ export default function Enquiries() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
   const [messageEnquiries, setMessageEnquiries] = useState<MessageEnquiryRowData[]>([]);
+  const [hostOrders, setHostOrders] = useState<HostOrderCardData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -159,54 +161,36 @@ export default function Enquiries() {
         }
       }
 
-      // Fetch orders (Sales Orders) - orders are linked to events, events have org_id
-      const { data: orders } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          events!inner(
-            id,
-            title,
-            org_id,
-            orgs!inner(
-              name,
-              slug,
-              org_profiles(logo_url, category, location)
-            )
-          )
-        `)
-        .eq('events.org_id', currentOrg.id)
-        .order('created_at', { ascending: false });
+      // Fetch orders (Sales Orders) using host_order_cards view
+      const { data: hostOrderCards, error: ordersError } = await supabase
+        .from('host_order_cards')
+        .select('*')
+        .eq('org_id', currentOrg.id)
+        .order('updated_at', { ascending: false });
 
-      if (orders) {
-        for (const order of orders) {
-          const eventData = order.events as any;
-          const orgData = eventData?.orgs;
-          const profileData = Array.isArray(orgData?.org_profiles) 
-            ? orgData.org_profiles[0] 
-            : orgData?.org_profiles;
-
-          // Don't filter during fetch - filter after fetching all data
-
+      if (ordersError) {
+        console.error('Error fetching host orders:', ordersError);
+      } else if (hostOrderCards) {
+        // Store host orders separately for rendering with HostEnquiryOrderCard
+        setHostOrders(hostOrderCards as HostOrderCardData[]);
+        
+        // Also add to allEnquiries for filtering/sorting compatibility
+        for (const order of hostOrderCards) {
           allEnquiries.push({
-            id: order.id,
+            id: order.order_id,
             type: 'sales_order',
-            status: order.status === 'paid' ? 'confirmed' : order.status === 'pending' ? 'waiting_confirmation' : 'archived',
+            status: order.fulfillment_status === 'confirmed' ? 'confirmed' : order.fulfillment_status === 'pending_confirmation' ? 'waiting_confirmation' : 'archived',
             brand: {
-              name: orgData?.name || 'Unknown',
-              slug: orgData?.slug,
-              logoUrl: profileData?.logo_url,
-              category: profileData?.category,
-              location: profileData?.location,
+              name: 'Event Order',
             },
             item: {
-              name: eventData?.title || 'Event',
-              thumbnailUrl: undefined,
+              name: order.event_title || 'Event',
+              thumbnailUrl: order.event_cover_image_url || undefined,
               type: 'event',
             },
-            previewText: `Order #${order.id.slice(0, 8)}`,
-            date: order.created_at,
-            unread: order.status === 'pending',
+            previewText: `Order ${order.order_no || order.order_id.slice(0, 8)}`,
+            date: order.updated_at,
+            unread: order.fulfillment_status === 'pending_confirmation',
             channel: 'Website',
             productType: 'ticket',
           });
@@ -393,6 +377,21 @@ export default function Enquiries() {
                 return <MessageEnquiryRow key={enquiry.id} data={messageData} />;
               }
               // Fallback to standard card if messageData not found (shouldn't happen)
+              return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
+            }
+            // Render sales orders with HostEnquiryOrderCard
+            if (enquiry.type === 'sales_order') {
+              const orderData = hostOrders.find(o => o.order_id === enquiry.id);
+              if (orderData) {
+                return (
+                  <HostEnquiryOrderCard
+                    key={enquiry.id}
+                    order={orderData}
+                    onConfirmed={fetchEnquiries}
+                  />
+                );
+              }
+              // Fallback to standard card if orderData not found
               return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
             }
             // Render other enquiries with standard card
