@@ -16,16 +16,23 @@ export interface SubmitManualPaymentParams {
 
 /**
  * Upload receipt file to Supabase Storage
- * Uses 'payment-receipts' bucket (or 'receipts' if it exists)
+ * Uses 'payment-receipts' bucket
  */
 async function uploadReceipt(orderId: string, file: File): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${orderId}/${Date.now()}.${fileExt}`;
 
-  // Try 'payment-receipts' bucket first (existing bucket)
   const bucketName = 'payment-receipts';
 
-  const { error: uploadError } = await supabase.storage
+  console.log('[submitManualPayment] Uploading receipt:', {
+    bucketName,
+    fileName,
+    orderId,
+    fileSize: file.size,
+    fileType: file.type,
+  });
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from(bucketName)
     .upload(fileName, file, {
       upsert: false,
@@ -33,19 +40,29 @@ async function uploadReceipt(orderId: string, file: File): Promise<string> {
     });
 
   if (uploadError) {
-    console.error('Error uploading receipt:', uploadError);
-    throw new Error(uploadError.message || 'Failed to upload receipt');
+    console.error('[submitManualPayment] Storage upload error:', {
+      error: uploadError,
+      message: uploadError.message,
+      statusCode: uploadError.statusCode,
+      errorCode: uploadError.error,
+      bucketName,
+      fileName,
+      orderId,
+    });
+    throw new Error(uploadError.message || 'Failed to upload receipt. Please check your connection and try again.');
   }
 
-  // Get public URL (or signed URL for private buckets)
-  // For private buckets, we'd use getPublicUrl but it might not work
-  // For now, we'll use getPublicUrl - if bucket is private, we may need signed URLs
-  // TODO: If bucket is private, use createSignedUrl instead
-  const { data: urlData } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(fileName);
+  console.log('[submitManualPayment] Receipt uploaded successfully:', {
+    path: uploadData?.path,
+    fileName,
+  });
 
-  return urlData.publicUrl;
+  // For private buckets, we store the path (not a public URL)
+  // The path can be used to generate signed URLs when needed
+  // Store the full path: payment-receipts/{orderId}/{timestamp}.{ext}
+  const receiptPath = `${bucketName}/${fileName}`;
+  
+  return receiptPath;
 }
 
 /**
@@ -59,12 +76,38 @@ export async function submitManualPayment({
   receiptFile,
   paymentReferenceLink,
 }: SubmitManualPaymentParams): Promise<void> {
-  // Upload receipt
-  const receiptUrl = await uploadReceipt(orderId, receiptFile);
+  console.log('[submitManualPayment] Starting payment submission:', {
+    orderId,
+    paymentMethod,
+    receiptFileName: receiptFile.name,
+    paymentReferenceLink,
+  });
 
-  // Update order payment information
-  // This now sets payment_status='paid', paid_at=now(), receipt_url, payment_method
-  // Keeps fulfillment_status='pending_confirmation'
-  await updateOrderPayment(orderId, paymentMethod, receiptUrl, paymentReferenceLink);
+  try {
+    // Upload receipt
+    const receiptUrl = await uploadReceipt(orderId, receiptFile);
+    console.log('[submitManualPayment] Receipt uploaded, updating order:', {
+      orderId,
+      receiptUrl,
+    });
+
+    // Update order payment information
+    // This now sets payment_status='paid', paid_at=now(), receipt_url, payment_method
+    // Keeps fulfillment_status='pending_confirmation'
+    await updateOrderPayment(orderId, paymentMethod, receiptUrl, paymentReferenceLink);
+    
+    console.log('[submitManualPayment] Order updated successfully:', {
+      orderId,
+      paymentMethod,
+    });
+  } catch (error: any) {
+    console.error('[submitManualPayment] Error during payment submission:', {
+      orderId,
+      error,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    throw error;
+  }
 }
 

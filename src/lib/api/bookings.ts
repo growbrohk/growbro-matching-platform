@@ -289,6 +289,7 @@ export async function updateOrderPayment(
   const updateData: any = {
     payment_method: paymentMethod,
     submitted_at: now,
+    updated_at: now, // Explicitly set updated_at
   };
 
   // For PayMe/FPS: Set to paid status with receipt
@@ -310,12 +311,33 @@ export async function updateOrderPayment(
     updateData.payment_reference_link = paymentReferenceLink;
   }
 
-  const { error } = await supabase
+  console.log('[updateOrderPayment] Updating order:', {
+    orderId,
+    updateData,
+  });
+
+  const { data, error } = await supabase
     .from('orders')
     .update(updateData)
-    .eq('id', orderId);
+    .eq('id', orderId)
+    .select('id, buyer_user_id, buyer_email, payment_status, payment_method')
+    .single();
 
   if (error) {
-    throw new Error(error.message || 'Failed to update order payment');
+    console.error('[updateOrderPayment] Order update error:', {
+      orderId,
+      error,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      updateData,
+    });
+    throw new Error(error.message || 'Failed to update order payment. Please check your permissions and try again.');
   }
+
+  console.log('[updateOrderPayment] Order updated successfully:', {
+    orderId,
+    updatedOrder: data,
+  });
 }
