@@ -75,26 +75,6 @@ function formatTimeAgo(dateString: string): string {
 }
 
 /**
- * Format event start time in HKT
- */
-function formatEventTimeHKT(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    // Convert to Hong Kong timezone for display
-    const hkDateStr = date.toLocaleString('en-US', { timeZone: 'Asia/Hong_Kong' });
-    const hkDate = new Date(hkDateStr);
-    const month = hkDate.toLocaleDateString('en-US', { month: 'short' });
-    const day = hkDate.getDate();
-    const year = hkDate.getFullYear();
-    const hours = hkDate.getHours().toString().padStart(2, '0');
-    const minutes = hkDate.getMinutes().toString().padStart(2, '0');
-    return `${month} ${day}, ${year} ${hours}:${minutes} HKT`;
-  } catch {
-    return dateString;
-  }
-}
-
-/**
  * Get payment proof URL from order data
  */
 function getPaymentProofUrl(order: HostOrderCardData): string | null {
@@ -112,12 +92,14 @@ function getPaymentProofUrl(order: HostOrderCardData): string | null {
 }
 
 /**
- * Check if payment method requires proof (PayMe/FPS)
+ * Get receipt link text based on payment method
  */
-function requiresProof(paymentMethod: string | null): boolean {
-  if (!paymentMethod) return false;
+function getReceiptLinkText(paymentMethod: string | null): string {
+  if (!paymentMethod) return 'Receipt';
   const method = paymentMethod.toLowerCase();
-  return method === 'payme' || method === 'fps';
+  if (method === 'payme') return 'PayMe Receipt';
+  if (method === 'fps') return 'FPS Receipt';
+  return 'Receipt';
 }
 
 export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiryOrderCardProps) {
@@ -126,18 +108,15 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
   const [showProofDialog, setShowProofDialog] = useState(false);
   
   const paymentProofUrl = getPaymentProofUrl(order);
-  const showViewProof = requiresProof(order.payment_method) && paymentProofUrl;
+  const showReceiptLink = !!paymentProofUrl;
+  const receiptLinkText = getReceiptLinkText(order.payment_method);
   const isConfirmed = order.fulfillment_status === 'confirmed';
+  const isPending = order.fulfillment_status === 'pending_confirmation';
   
   // Format buyer name
   const buyerName = [order.buyer_first_name, order.buyer_last_name]
     .filter(Boolean)
     .join(' ') || 'Guest';
-  
-  // Format order number display (use first 10 chars of order_no or order_id)
-  const orderNoDisplay = order.order_no 
-    ? order.order_no.substring(0, 10).toUpperCase()
-    : order.order_id.substring(0, 10).toUpperCase();
   
   const handleConfirm = async () => {
     if (isConfirmed || isConfirming) return;
@@ -194,119 +173,109 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
   
   return (
     <>
-      <div className="flex gap-4 p-4 bg-white rounded-2xl border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-        {/* LEFT: Event Image */}
-        <div className="flex-shrink-0">
-          <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
-            {order.event_cover_image_url ? (
-              <img
-                src={order.event_cover_image_url}
-                alt={order.event_title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-xs text-gray-400">No photo</span>
-            )}
-          </div>
+      <div className="flex flex-col gap-3 p-3 bg-white rounded-2xl border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+        {/* ROW 1: Header */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-gray-700 truncate min-w-0">
+            Event Ticket — {order.event_title}
+          </span>
+          <span className="text-xs text-gray-400 shrink-0">
+            {formatTimeAgo(order.updated_at)}
+          </span>
         </div>
         
-        {/* MIDDLE: Order Info */}
-        <div className="flex-1 min-w-0">
-          {/* Line 1: Order number and time */}
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm text-gray-500">
-              Event Ticket - {orderNoDisplay}
-            </span>
-            <span className="text-xs text-gray-400">
-              {formatTimeAgo(order.updated_at)}
-            </span>
-          </div>
-          
-          {/* Line 2: Event title */}
-          <div className="mb-2">
-            <h3 className="text-base font-bold text-black truncate">
-              {order.event_title}
-            </h3>
-          </div>
-          
-          {/* Line 3: Buyer info and tickets */}
-          <div className="mb-2">
-            <span className="text-sm text-gray-500">
-              {buyerName}
-              {order.buyer_phone && ` • ${order.buyer_phone}`}
-              {` • ${order.tickets_count} ticket${order.tickets_count !== 1 ? 's' : ''}`}
-              {` • ${formatAmount(order.total_amount, order.currency)}`}
-            </span>
-          </div>
-          
-          {/* Bottom row: Status pill + payment method */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Status pill */}
-            <Badge
-              className={
-                isConfirmed
-                  ? 'bg-green-500 text-white border-green-600'
-                  : 'bg-yellow-100 text-black border-yellow-300'
-              }
-              variant="outline"
-            >
-              {isConfirmed ? 'Confirmed' : 'Pending'}
-            </Badge>
-            
-            {/* Payment method */}
-            {order.payment_method && (
-              <span className="text-sm text-gray-500">
-                {order.payment_method.charAt(0).toUpperCase() + order.payment_method.slice(1)}
-                {showViewProof && (
-                  <>
-                    {' • '}
-                    <button
-                      onClick={() => setShowProofDialog(true)}
-                      className="text-primary hover:underline"
-                    >
-                      View proof
-                    </button>
-                  </>
+        {/* ROW 2: Body */}
+        <div className="flex gap-3">
+          {/* LEFT SECTION */}
+          <div className="flex-1 min-w-0 flex gap-3">
+            {/* Event Photo with Status Overlay */}
+            <div className="flex-shrink-0 relative">
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
+                {order.event_cover_image_url ? (
+                  <img
+                    src={order.event_cover_image_url}
+                    alt={order.event_title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xs text-gray-400">No photo</span>
                 )}
-              </span>
-            )}
-          </div>
-        </div>
-        
-        {/* RIGHT: Amount and Actions */}
-        <div className="flex-shrink-0 flex flex-col items-end gap-2">
-          {/* Amount */}
-          <div className="text-right">
-            <div className="text-lg font-bold text-black">
-              {formatAmount(order.total_amount, order.currency)}
+              </div>
+              {/* Status Pill Overlay */}
+              <Badge
+                className={`absolute bottom-1 left-1 text-xs px-2 py-0.5 ${
+                  isConfirmed
+                    ? 'bg-green-500 text-white border-green-600'
+                    : 'bg-yellow-100 text-black border-yellow-300'
+                }`}
+                variant="outline"
+              >
+                {isConfirmed ? 'Confirmed' : 'Pending'}
+              </Badge>
+            </div>
+            
+            {/* Buyer Info and Details */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1">
+              {/* Receipt Link (inline with status area, same row) */}
+              {showReceiptLink && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowProofDialog(true)}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {receiptLinkText}
+                  </button>
+                </div>
+              )}
+              
+              {/* Buyer Name + Phone */}
+              <div className="text-sm text-gray-700 truncate">
+                {buyerName}
+                {order.buyer_phone && ` • ${order.buyer_phone}`}
+              </div>
+              
+              {/* Tickets Count + Price */}
+              <div className="text-sm text-gray-500 truncate">
+                {order.tickets_count} ticket{order.tickets_count !== 1 ? 's' : ''} • {formatAmount(order.total_amount, order.currency)}
+              </div>
             </div>
           </div>
           
-          {/* Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="text-gray-400"
-            >
-              Details
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleConfirm}
-              disabled={isConfirmed || isConfirming}
-            >
-              {isConfirming ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  Confirming...
-                </>
-              ) : (
-                'Confirm'
+          {/* RIGHT SECTION */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {/* Total Price */}
+            <div className="text-lg font-bold text-black">
+              {formatAmount(order.total_amount, order.currency)}
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="text-gray-400"
+              >
+                Details
+              </Button>
+              {isPending && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleConfirm}
+                  disabled={isConfirming}
+                >
+                  {isConfirming ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      Confirming...
+                    </>
+                  ) : (
+                    'Confirm'
+                  )}
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -315,7 +284,7 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
       <Dialog open={showProofDialog} onOpenChange={setShowProofDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Payment Proof</DialogTitle>
+            <DialogTitle>{receiptLinkText}</DialogTitle>
           </DialogHeader>
           <div className="mt-4">
             {paymentProofUrl ? (
