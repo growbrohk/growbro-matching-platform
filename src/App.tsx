@@ -41,6 +41,7 @@ import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
 import CompleteBookingPage from "./pages/checkout/CompleteBookingPage";
 import PaymentPage from "./pages/booking/PaymentPage";
 import PendingBookingPage from "./pages/booking/PendingBookingPage";
+import PendingConfirmationPage from "./pages/booking/PendingConfirmationPage";
 import SuccessfulBookingPage from "./pages/booking/SuccessfulBookingPage";
 import { AppLayout } from "./components/AppLayout";
 import { Loader2 } from "lucide-react";
@@ -406,7 +407,7 @@ function AppRoutes() {
       
       {/* Booking routes - Must be before generic orgSlug route */}
       <Route path="/booking/payment/:orderId" element={<PaymentPage />} />
-      <Route path="/booking/pending/:orderId" element={<PendingBookingPage />} />
+      <Route path="/booking/pending/:orderId" element={<PendingConfirmationPage />} />
       <Route path="/booking/success/:orderId" element={<SuccessfulBookingPage />} />
       
       {/* Legacy booking success route - redirect to new route */}

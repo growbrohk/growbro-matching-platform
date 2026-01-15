@@ -11,8 +11,8 @@
  * - Does NOT affect print/PDF layout (still 1 ticket per page)
  */
 
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,7 +21,7 @@ import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import TicketCard, { TicketCardPreview } from '@/components/booking/TicketCard';
-import { CheckCircle2, FileText, Clock } from 'lucide-react';
+import { CheckCircle2, FileText } from 'lucide-react';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -35,19 +35,10 @@ export default function SuccessfulBookingPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
 
   const [order, setOrder] = useState<OrderWithEvent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [hasRedirected, setHasRedirected] = useState(false);
-  
-  // Check if status=pending_confirmation query param is present
-  // OR if order has pending_confirmation status with manual payment
-  const isPendingConfirmation = 
-    searchParams.get('status') === 'pending_confirmation' ||
-    (order?.fulfillment_status === 'pending_confirmation' &&
-     order?.total_amount > 0 &&
-     (order?.payment_method === 'payme' || order?.payment_method === 'fps'));
+  const hasRedirectedRef = useRef(false);
 
   useEffect(() => {
     if (!orderId) {
@@ -72,8 +63,31 @@ export default function SuccessfulBookingPage() {
         setOrder(orderData);
         setLoading(false);
 
-        if (hasRedirected) return;
+        // Strict guards - only redirect once after order fetch completes
+        // Never redirect while loading/error
+        if (hasRedirectedRef.current) {
+          return; // Already redirected, prevent multiple redirects
+        }
 
+        // Guard 1: Only allow confirmed/free
+        // If not confirmed and payment_status='submitted', redirect to Pending
+        if (
+          orderData.payment_status === 'submitted' &&
+          orderData.fulfillment_status !== 'confirmed'
+        ) {
+          hasRedirectedRef.current = true;
+          navigate(`/booking/pending/${orderId}`, { replace: true });
+          return;
+        }
+
+        // Guard 2: If unpaid, redirect to Payment
+        if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
+          hasRedirectedRef.current = true;
+          navigate(`/booking/payment/${orderId}`, { replace: true });
+          return;
+        }
+
+        // Guard 3: Use unified routing logic as fallback
         const route = getBookingRoute(orderData);
 
         console.debug('[booking-route]', {
@@ -87,7 +101,7 @@ export default function SuccessfulBookingPage() {
         });
 
         if (route !== 'success') {
-          setHasRedirected(true);
+          hasRedirectedRef.current = true;
           if (route === 'payment') {
             navigate(`/booking/payment/${orderId}`, { replace: true });
           } else if (route === 'pending') {
@@ -97,6 +111,10 @@ export default function SuccessfulBookingPage() {
           }
           return;
         }
+
+        // Order is in correct state for success page:
+        // - fulfillment_status === 'confirmed' OR total_amount <= 0
+        // Continue rendering success UI
       } catch (error: any) {
         console.error('Error fetching order:', error);
         toast({
@@ -105,11 +123,12 @@ export default function SuccessfulBookingPage() {
           variant: 'destructive',
         });
         setLoading(false);
+        // Never redirect on error - show error state instead
       }
     };
 
     fetchOrder();
-  }, [orderId, navigate, toast, hasRedirected]);
+  }, [orderId, navigate, toast]);
 
   const handleDownloadPDF = () => {
     window.print();
@@ -130,13 +149,6 @@ export default function SuccessfulBookingPage() {
 
   const tickets = order.tickets ?? [];
   const bookingCode = order.order_no || order.id.slice(0, 8).toUpperCase();
-
-  // Determine if we should show pending confirmation UI
-  const showPendingConfirmation = 
-    searchParams.get('status') === 'pending_confirmation' ||
-    (order.fulfillment_status === 'pending_confirmation' &&
-     order.total_amount > 0 &&
-     (order.payment_method === 'payme' || order.payment_method === 'fps'));
 
   if (tickets.length === 0) {
     toast({
@@ -198,95 +210,32 @@ export default function SuccessfulBookingPage() {
           <div
             className="rounded-2xl px-6 py-4 mb-6 flex items-center gap-3"
             style={{
-              backgroundColor: showPendingConfirmation 
-                ? 'rgba(251,191,36,0.1)' 
-                : 'rgba(14,122,58,0.1)',
-              border: `1px solid ${showPendingConfirmation 
-                ? 'rgba(251,191,36,0.2)' 
-                : 'rgba(14,122,58,0.2)'}`,
+              backgroundColor: 'rgba(14,122,58,0.1)',
+              border: `1px solid rgba(14,122,58,0.2)`,
             }}
           >
-            {showPendingConfirmation ? (
-              <Clock className="h-6 w-6" style={{ color: '#FBBF24' }} />
-            ) : (
-              <CheckCircle2 className="h-6 w-6" style={{ color: BRAND.green }} />
-            )}
+            <CheckCircle2 className="h-6 w-6" style={{ color: BRAND.green }} />
             <div>
               <p
                 className="font-semibold text-base"
                 style={{ 
-                  color: showPendingConfirmation ? '#FBBF24' : BRAND.green, 
+                  color: BRAND.green, 
                   fontFamily: "'Inter Tight', sans-serif" 
                 }}
               >
-                {showPendingConfirmation ? 'Registration received ✅' : '✓ Congrats'}
+                ✓ Congrats
               </p>
-              {showPendingConfirmation ? (
-                <>
-                  <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                    Waiting for host confirmation
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    Tickets will be sent in confirmation email once payment confirmed!
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Your ticket has been successfully booked
-                </p>
-              )}
+              <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                Your ticket has been successfully booked
+              </p>
             </div>
           </div>
-
-          {/* Pending Confirmation Details Panel */}
-          {showPendingConfirmation && (
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium mb-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      We've received your payment proof. The host will confirm your booking shortly.
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                    <div className="flex justify-between">
-                      <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Event</span>
-                      <span className="text-sm font-medium" style={{ color: BRAND.dark }}>{order.event.title}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Date & Time</span>
-                      <span className="text-sm font-medium" style={{ color: BRAND.dark }}>
-                        {formatEventDate(order.event.start_at)} {formatEventTime(order.event.start_at, order.event.end_at)}
-                      </span>
-                    </div>
-                    {venue && (
-                      <div className="flex justify-between">
-                        <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Venue</span>
-                        <span className="text-sm font-medium" style={{ color: BRAND.dark }}>{venue}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Quantity</span>
-                      <span className="text-sm font-medium" style={{ color: BRAND.dark }}>{tickets.length} ticket{tickets.length > 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Order No.</span>
-                      <span className="text-sm font-medium" style={{ color: BRAND.dark }}>{bookingCode}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Ticket Cards */}
         <div className="container mx-auto px-4">
-          {/* Only show tickets if confirmed, not pending confirmation */}
-          {!showPendingConfirmation && (
-            /* ✅ UPDATED: removed space-y-0 so we control spacing per ticket */
-            <div className="print-container">
+          {/* ✅ UPDATED: removed space-y-0 so we control spacing per ticket */}
+          <div className="print-container">
               {tickets.map((ticket, index) => {
                 if (!ticket.qr_code) return null;
 
@@ -328,12 +277,10 @@ export default function SuccessfulBookingPage() {
                 </div>
               );
             })}
-            </div>
-          )}
+          </div>
 
-          {/* Download Button - Only show if not pending confirmation */}
-          {!showPendingConfirmation && (
-            <div className="mt-6 no-print">
+          {/* Download Button */}
+          <div className="mt-6 no-print">
             <Button
               className="w-full h-12 text-base font-semibold"
               style={{
@@ -346,44 +293,7 @@ export default function SuccessfulBookingPage() {
               <FileText className="mr-2 h-5 w-5" />
               Download PDF / Print
             </Button>
-            </div>
-          )}
-
-          {/* Action Buttons for Pending Confirmation */}
-          {showPendingConfirmation && (
-            <div className="mt-6 space-y-3 no-print">
-              <Button
-                className="w-full h-12 text-base font-semibold"
-                style={{
-                  backgroundColor: BRAND.green,
-                  color: 'white',
-                  fontFamily: "'Inter Tight', sans-serif",
-                }}
-                onClick={() => navigate('/events')}
-              >
-                Back to Events
-              </Button>
-              {/* Optional: Contact Host button - placeholder for now */}
-              {/* <Button
-                variant="outline"
-                className="w-full h-12 text-base font-semibold"
-                style={{
-                  borderColor: 'rgba(14,122,58,0.14)',
-                  color: BRAND.green,
-                  fontFamily: "'Inter Tight', sans-serif",
-                }}
-                onClick={() => {
-                  // TODO: Implement contact host functionality
-                  toast({
-                    title: 'Contact Host',
-                    description: 'Contact functionality will be available soon.',
-                  });
-                }}
-              >
-                Contact Host
-              </Button> */}
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </>

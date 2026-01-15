@@ -99,6 +99,7 @@ export default function PaymentPage() {
           if (route === 'success') {
             navigate(`/booking/success/${orderId}`, { replace: true });
           } else if (route === 'pending') {
+            // Navigate to PendingConfirmationPage (not PendingBookingPage)
             navigate(`/booking/pending/${orderId}`, { replace: true });
           } else {
             // Fallback to success
@@ -275,28 +276,13 @@ export default function PaymentPage() {
         description: 'Your payment receipt has been submitted. Waiting for host confirmation...',
       });
 
-      // Use unified routing logic to determine correct page
-      const route = getBookingRoute(updatedOrder);
-      
-      console.debug('[PaymentPage] After payment submission:', {
-        orderId,
-        payment_status: updatedOrder.payment_status,
-        fulfillment_status: updatedOrder.fulfillment_status,
-        payment_method: updatedOrder.payment_method,
-        route,
-      });
-
-      // Redirect based on route
-      if (route === 'pending') {
-        navigate(`/booking/pending/${orderId}`, { replace: true });
-      } else if (route === 'success') {
-        navigate(`/booking/success/${orderId}`, { replace: true });
-      } else {
-        // Stay on payment page if unexpected state
-        console.warn('[PaymentPage] Unexpected route after payment submission:', route);
-        // Still redirect to pending as fallback since payment was submitted
-        navigate(`/booking/pending/${orderId}`, { replace: true });
-      }
+      // After submit_payment_receipt succeeds:
+      // - receipt_url saved
+      // - payment_status='submitted' (NOT 'paid')
+      // - submitted_at set
+      // - payment_method set
+      // Navigate to PendingConfirmationPage (replace:true)
+      navigate(`/booking/pending/${orderId}`, { replace: true });
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       toast({
