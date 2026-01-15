@@ -51,6 +51,9 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get trigger_reason from body (defaults to 'order_created' for backward compatibility)
+    const trigger_reason = body.trigger_reason || 'order_created';
+
     /* ------------------------------------------------------------------------
        SUPABASE
     ------------------------------------------------------------------------ */
@@ -101,7 +104,7 @@ Deno.serve(async (req) => {
       .eq('order_id', order_id);
 
     /* ------------------------------------------------------------------------
-       DETERMINE MESSAGE BODY BASED ON FULFILLMENT_STATUS
+       DETERMINE MESSAGE BODY BASED ON TRIGGER_REASON AND FULFILLMENT_STATUS
     ------------------------------------------------------------------------ */
     // fulfillment_status is the single source of truth
     const fulfillmentStatus = order.fulfillment_status || 'pending_confirmation';
@@ -109,16 +112,23 @@ Deno.serve(async (req) => {
     let messageBody: string;
     let statusDisplay: string;
 
-    if (fulfillmentStatus === 'confirmed') {
-      messageBody = '✅ Order confirmed — your ticket is ready.';
-      statusDisplay = 'Confirmed';
-    } else if (fulfillmentStatus === 'pending_confirmation') {
-      messageBody = '✅ Order received — pending confirmation.';
-      statusDisplay = 'Pending';
+    // For payment_submitted trigger, use specific message
+    if (trigger_reason === 'payment_submitted') {
+      messageBody = '💰 Payment receipt submitted — pending verification.';
+      statusDisplay = 'Payment Submitted';
     } else {
-      // For cancelled or other statuses, still create a message
-      messageBody = `✅ Order ${fulfillmentStatus}.`;
-      statusDisplay = fulfillmentStatus;
+      // For order_created trigger (or default), use fulfillment_status-based message
+      if (fulfillmentStatus === 'confirmed') {
+        messageBody = '✅ Order confirmed — your ticket is ready.';
+        statusDisplay = 'Confirmed';
+      } else if (fulfillmentStatus === 'pending_confirmation') {
+        messageBody = '✅ Order received — pending confirmation.';
+        statusDisplay = 'Pending';
+      } else {
+        // For cancelled or other statuses, still create a message
+        messageBody = `✅ Order ${fulfillmentStatus}.`;
+        statusDisplay = fulfillmentStatus;
+      }
     }
 
     /* ------------------------------------------------------------------------
@@ -143,6 +153,38 @@ Deno.serve(async (req) => {
     const conversationId = conversationData as string;
 
     /* ------------------------------------------------------------------------
+       IDEMPOTENCY CHECK: Check if message already exists for this trigger_reason
+    ------------------------------------------------------------------------ */
+    if (trigger_reason === 'payment_submitted') {
+      const { data: existingMessage, error: checkError } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('sender_type', 'system')
+        .eq('metadata->>trigger_reason', 'payment_submitted')
+        .limit(1)
+        .single();
+
+      // If message already exists (and no error), return success without creating duplicate
+      if (existingMessage && !checkError) {
+        console.log(`[order-created-message] Payment submitted message already exists for order ${order_id}. Skipping.`);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            conversation_id: conversationId,
+            message_id: existingMessage.id,
+            trigger_reason: trigger_reason,
+            fulfillment_status: fulfillmentStatus,
+            status_display: statusDisplay,
+            skipped: true,
+            correlation_id: correlationId 
+          }),
+          { status: 200 }
+        );
+      }
+    }
+
+    /* ------------------------------------------------------------------------
        INSERT SYSTEM MESSAGE
     ------------------------------------------------------------------------ */
     const { data: message, error: messageError } = await supabase
@@ -152,6 +194,7 @@ Deno.serve(async (req) => {
         sender_type: 'system',
         body: messageBody,
         metadata: {
+          trigger_reason: trigger_reason,
           fulfillment_status: fulfillmentStatus,
           status_display: statusDisplay,
           order_id: order_id,
@@ -166,10 +209,28 @@ Deno.serve(async (req) => {
       .single();
 
     if (messageError) {
+      // If error is due to unique constraint violation, treat as success (idempotency)
+      if (messageError.code === '23505' && trigger_reason === 'payment_submitted') {
+        console.log(`[order-created-message] Unique constraint violation for payment_submitted message (order ${order_id}). Treating as success.`);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            conversation_id: conversationId,
+            trigger_reason: trigger_reason,
+            fulfillment_status: fulfillmentStatus,
+            status_display: statusDisplay,
+            skipped: true,
+            correlation_id: correlationId 
+          }),
+          { status: 200 }
+        );
+      }
+
       return new Response(
         JSON.stringify({ 
           error: 'Failed to create message', 
           details: messageError.message,
+          code: messageError.code,
           correlation_id: correlationId 
         }),
         { status: 500 }
@@ -181,6 +242,7 @@ Deno.serve(async (req) => {
         success: true, 
         conversation_id: conversationId,
         message_id: message.id,
+        trigger_reason: trigger_reason,
         fulfillment_status: fulfillmentStatus,
         status_display: statusDisplay,
         correlation_id: correlationId 
