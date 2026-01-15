@@ -3,7 +3,7 @@
  * Used in both FREE route and Per-Ticket mode to ensure consistent UI and validation
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +36,11 @@ const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+// Normalize email: lowercase and trim
+const normalizeEmail = (email: string): string => {
+  return email.trim().toLowerCase();
+};
+
 export function ContactInfoCard({
   contactInfo,
   onUpdate,
@@ -52,21 +57,35 @@ export function ContactInfoCard({
   const [showDialog, setShowDialog] = useState(false);
   const [editingInfo, setEditingInfo] = useState<ContactInfo>(contactInfo);
 
+  // Sync editingInfo when contactInfo prop changes (but not when dialog is open)
+  useEffect(() => {
+    if (!showDialog) {
+      setEditingInfo(contactInfo);
+    }
+  }, [contactInfo, showDialog]);
+
   const hasContactInfo =
     contactInfo.firstName || contactInfo.lastName || contactInfo.phone || contactInfo.email;
 
-  const isContactValid = (): boolean => {
+  // Validate editingInfo (draft state), not contactInfo (prop)
+  const isEditingValid = (info: ContactInfo): boolean => {
     return (
-      (!requiredFields.firstName || contactInfo.firstName.trim() !== '') &&
-      (!requiredFields.lastName || contactInfo.lastName.trim() !== '') &&
-      (!requiredFields.email || isValidEmail(contactInfo.email)) &&
-      (!requiredFields.phone || !showPhone || contactInfo.phone.trim() !== '')
+      (!requiredFields.firstName || info.firstName.trim() !== '') &&
+      (!requiredFields.lastName || info.lastName.trim() !== '') &&
+      (!requiredFields.email || isValidEmail(info.email)) &&
+      (!requiredFields.phone || !showPhone || info.phone.trim() !== '')
     );
   };
 
   const handleSave = () => {
-    if (isContactValid()) {
-      onUpdate(editingInfo);
+    // Validate editingInfo, not contactInfo
+    if (isEditingValid(editingInfo)) {
+      // Normalize email before saving
+      const normalizedInfo: ContactInfo = {
+        ...editingInfo,
+        email: normalizeEmail(editingInfo.email),
+      };
+      onUpdate(normalizedInfo);
       setShowDialog(false);
     }
   };
@@ -229,15 +248,12 @@ export function ContactInfoCard({
             </Button>
             <Button
               type="button"
-              onClick={handleSave}
-              disabled={
-                !(
-                  (!requiredFields.firstName || editingInfo.firstName.trim() !== '') &&
-                  (!requiredFields.lastName || editingInfo.lastName.trim() !== '') &&
-                  (!requiredFields.email || isValidEmail(editingInfo.email)) &&
-                  (!requiredFields.phone || !showPhone || editingInfo.phone.trim() !== '')
-                )
-              }
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSave();
+              }}
+              disabled={!isEditingValid(editingInfo)}
               className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Save

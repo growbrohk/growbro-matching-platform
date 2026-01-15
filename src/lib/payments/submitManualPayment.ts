@@ -89,6 +89,34 @@ export async function submitManualPayment({
   });
 
   try {
+    // Fetch order first to get buyer_email for debugging
+    const { data: orderData, error: orderError } = await supabase
+      .from('orders')
+      .select('buyer_email, buyer_user_id')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError) {
+      console.warn('[submitManualPayment] Could not fetch order for debugging:', orderError);
+    } else {
+      console.log('[submitManualPayment] Order buyer_email:', {
+        orderId,
+        buyer_email: orderData.buyer_email,
+        buyer_user_id: orderData.buyer_user_id,
+        normalized_buyer_email: orderData.buyer_email ? orderData.buyer_email.trim().toLowerCase() : null,
+      });
+    }
+
+    // Get current user email from JWT for debugging
+    const { data: { user } } = await supabase.auth.getUser();
+    const jwtEmail = user?.email;
+    console.log('[submitManualPayment] Current user email from JWT:', {
+      orderId,
+      jwt_email: jwtEmail,
+      normalized_jwt_email: jwtEmail ? jwtEmail.trim().toLowerCase() : null,
+      user_id: user?.id,
+    });
+
     // Upload receipt
     const receiptUrl = await uploadReceipt(orderId, receiptFile);
     console.log('[submitManualPayment] Receipt uploaded, submitting via RPC:', {
@@ -113,6 +141,10 @@ export async function submitManualPayment({
         code: rpcError.code,
         details: rpcError.details,
         hint: rpcError.hint,
+        order_buyer_email: orderData?.buyer_email,
+        normalized_order_buyer_email: orderData?.buyer_email ? orderData.buyer_email.trim().toLowerCase() : null,
+        jwt_email: jwtEmail,
+        normalized_jwt_email: jwtEmail ? jwtEmail.trim().toLowerCase() : null,
       });
       throw new Error(rpcError.message || 'Failed to submit payment receipt. Please check your permissions and try again.');
     }

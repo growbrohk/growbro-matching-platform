@@ -28,6 +28,8 @@ DECLARE
   v_total_amount DECIMAL(10,2);
   v_current_payment_status TEXT;
   v_current_fulfillment_status TEXT;
+  v_normalized_buyer_email TEXT;
+  v_normalized_jwt_email TEXT;
 BEGIN
   -- STEP 1: Fetch order and validate it exists
   SELECT 
@@ -76,6 +78,7 @@ BEGIN
   -- STEP 5: Authorize caller
   -- If orders.buyer_user_id is not null: require auth.uid() = buyer_user_id
   -- Else guest: allow only if p_order_id is within last 1 hour AND buyer_email is present
+  -- IMPORTANT: Normalize emails (lowercase, trim) before comparison to avoid case/whitespace mismatches
   IF v_buyer_user_id IS NOT NULL THEN
     -- Authenticated user: must match buyer_user_id
     IF auth.uid() IS NULL OR auth.uid() != v_buyer_user_id THEN
@@ -83,15 +86,19 @@ BEGIN
     END IF;
   ELSE
     -- Guest order: require email match AND order created in last 1 hour
+    -- Normalize emails: lowercase and trim
+    v_normalized_buyer_email := LOWER(TRIM(COALESCE(v_buyer_email, '')));
+    v_normalized_jwt_email := LOWER(TRIM(COALESCE(auth.jwt() ->> 'email', '')));
+    
     IF auth.uid() IS NOT NULL THEN
-      -- Authenticated guest checkout: email must match
-      IF v_buyer_email IS NULL OR (auth.jwt() ->> 'email') IS NULL OR v_buyer_email != (auth.jwt() ->> 'email') THEN
-        RAISE EXCEPTION 'Unauthorized: Email does not match order buyer_email';
+      -- Authenticated guest checkout: email must match (normalized)
+      IF v_normalized_buyer_email = '' OR v_normalized_jwt_email = '' OR v_normalized_buyer_email != v_normalized_jwt_email THEN
+        RAISE EXCEPTION 'Unauthorized: Email does not match order buyer_email (buyer_email: %, jwt_email: %)', v_normalized_buyer_email, v_normalized_jwt_email;
       END IF;
     ELSE
       -- Anonymous guest: require email match AND order created in last 1 hour
-      IF v_buyer_email IS NULL OR (auth.jwt() ->> 'email') IS NULL OR v_buyer_email != (auth.jwt() ->> 'email') THEN
-        RAISE EXCEPTION 'Unauthorized: Email does not match order buyer_email';
+      IF v_normalized_buyer_email = '' OR v_normalized_jwt_email = '' OR v_normalized_buyer_email != v_normalized_jwt_email THEN
+        RAISE EXCEPTION 'Unauthorized: Email does not match order buyer_email (buyer_email: %, jwt_email: %)', v_normalized_buyer_email, v_normalized_jwt_email;
       END IF;
       
       -- Check order age (must be within 1 hour)
@@ -134,6 +141,9 @@ COMMENT ON FUNCTION public.submit_payment_receipt IS
 
 -- Drop existing buyer update policy that allows updating payment_status/paid_at
 DROP POLICY IF EXISTS "Buyers can update their own order payment info" ON orders;
+
+-- Drop the contact info policy if it already exists (for idempotency)
+DROP POLICY IF EXISTS "Buyers can update their own order contact info" ON orders;
 
 -- Create new restrictive policy that ONLY allows updating non-sensitive buyer contact fields
 -- This policy does NOT allow updating payment_status, paid_at, confirmed_at, status, total_amount, fulfillment_status

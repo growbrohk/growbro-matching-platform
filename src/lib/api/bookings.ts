@@ -116,6 +116,17 @@ export async function createBooking(
     }));
   }
 
+  // Normalize email: lowercase and trim before sending to RPC
+  const normalizedEmail = contactInfo.email ? contactInfo.email.trim().toLowerCase() : null;
+  
+  console.log('[createBooking] Creating order with contact info:', {
+    eventId: draft.eventId,
+    buyer_email: contactInfo.email,
+    normalized_buyer_email: normalizedEmail,
+    buyer_first_name: contactInfo.firstName,
+    buyer_last_name: contactInfo.lastName,
+  });
+
   // Call RPC function - NO p_total_amount parameter (removed for security)
   // Server computes total_amount from ticket_types.price × quantity
   const { data: orderId, error } = await supabase.rpc('create_event_booking' as any, {
@@ -124,7 +135,7 @@ export async function createBooking(
     p_buyer_user_id: buyerUserId,
     p_buyer_first_name: contactInfo.firstName || null,
     p_buyer_last_name: contactInfo.lastName || null,
-    p_buyer_email: contactInfo.email || null,
+    p_buyer_email: normalizedEmail,
     p_buyer_phone: contactInfo.phone || null,
     p_currency: draft.currency || 'HKD',
     p_attendees: attendeesArray,

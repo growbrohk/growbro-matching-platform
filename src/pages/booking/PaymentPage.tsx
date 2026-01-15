@@ -28,6 +28,9 @@ import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
+import type { ContactInfo } from '@/lib/types/booking';
+import { supabase } from '@/integrations/supabase/client';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -51,6 +54,12 @@ export default function PaymentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
   const redirectedRef = useRef(false);
+  const [contactInfo, setContactInfo] = useState<ContactInfo>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+  });
 
   useEffect(() => {
     if (!orderId) {
@@ -73,6 +82,15 @@ export default function PaymentPage() {
         }
 
         setOrder(orderData);
+        
+        // Initialize contact info from order
+        setContactInfo({
+          firstName: orderData.buyer_first_name || '',
+          lastName: orderData.buyer_last_name || '',
+          email: orderData.buyer_email || '',
+          phone: orderData.buyer_phone || '',
+        });
+        
         setLoading(false);
 
         // Use unified routing logic with loading guard
@@ -303,6 +321,56 @@ export default function PaymentPage() {
     }
   };
 
+  // Handle contact info update
+  const handleContactInfoUpdate = async (info: ContactInfo) => {
+    if (!orderId) return;
+    
+    try {
+      // Update order contact info via Supabase (RLS policy allows buyers to update their own orders)
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          buyer_first_name: info.firstName || null,
+          buyer_last_name: info.lastName || null,
+          buyer_email: info.email.trim().toLowerCase() || null, // Normalize email
+          buyer_phone: info.phone || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('Error updating contact info:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to update contact info. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Update local state
+      setContactInfo(info);
+      
+      // Refresh order to get latest data
+      const updatedOrder = await getOrderWithEvent(orderId);
+      if (updatedOrder) {
+        setOrder(updatedOrder);
+      }
+
+      toast({
+        title: 'Contact info updated',
+        description: 'Your contact information has been saved.',
+      });
+    } catch (error: any) {
+      console.error('Error updating contact info:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update contact info.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCTAClick = () => {
     if (selectedPaymentMethod === 'stripe') {
       handleStripePayment();
@@ -386,6 +454,32 @@ export default function PaymentPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Contact Info Section */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
+            <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
+              Contact info
+            </h3>
+          </div>
+          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            Please ensure your contact information is correct for payment receipts and order updates
+          </p>
+          <ContactInfoCard
+            contactInfo={contactInfo}
+            onUpdate={handleContactInfoUpdate}
+            title="Contact info"
+            description="This information will be used for payment receipts and order updates"
+            showPhone={true}
+            requiredFields={{
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: false, // Phone optional on payment page
+            }}
+          />
+        </div>
       </div>
 
       {/* Payment Methods */}
