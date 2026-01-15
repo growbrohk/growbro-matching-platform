@@ -18,6 +18,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, Plus, ChevronUp, ChevronDown, X, Copy } from 'lucide-react';
 import {
   BookingDraft,
@@ -52,6 +53,14 @@ export default function CompleteBookingPage() {
     email: '',
   });
   const [attendees, setAttendees] = useState<AttendeeInfo[]>([]);
+  // Order Contact (Primary Booker) - always collected in Per-Ticket mode
+  const [orderContact, setOrderContact] = useState<ContactInfo>({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+  });
+  const [useAttendee1AsContact, setUseAttendee1AsContact] = useState(true);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -114,6 +123,15 @@ export default function CompleteBookingPage() {
               // Load saved attendees if available
               if (draft.attendees && draft.attendees.length === totalTickets) {
                 setAttendees(draft.attendees);
+                // Initialize Order Contact from Attendee 1 if available
+                if (draft.attendees.length > 0 && draft.attendees[0].email) {
+                  setOrderContact({
+                    firstName: draft.attendees[0].firstName,
+                    lastName: draft.attendees[0].lastName,
+                    email: draft.attendees[0].email,
+                    phone: draft.attendees[0].phone,
+                  });
+                }
               } else {
                 setAttendees(initialAttendees);
               }
@@ -143,6 +161,20 @@ export default function CompleteBookingPage() {
     );
   };
 
+  // Validate Order Contact (for Per-Ticket mode)
+  const isOrderContactValid = (): boolean => {
+    if (!event || event.collect_attendee_info !== 'per_ticket') {
+      return true; // Not required for primary-only mode
+    }
+    
+    // Order Contact email is always required (for guest receipt submission)
+    return (
+      orderContact.firstName.trim() !== '' &&
+      orderContact.lastName.trim() !== '' &&
+      isValidEmail(orderContact.email)
+    );
+  };
+
   // Validate attendees (for per-ticket collection)
   const areAttendeesValid = (): boolean => {
     if (!event || event.collect_attendee_info !== 'per_ticket') {
@@ -158,10 +190,10 @@ export default function CompleteBookingPage() {
     );
   };
 
-  // Check if form is valid (either contact info or all attendees)
+  // Check if form is valid (either contact info or all attendees + order contact)
   const isFormValid = (): boolean => {
     if (event?.collect_attendee_info === 'per_ticket') {
-      return areAttendeesValid();
+      return areAttendeesValid() && isOrderContactValid();
     }
     return isContactValid();
   };
@@ -180,11 +212,41 @@ export default function CompleteBookingPage() {
     updated[index] = { ...updated[index], [field]: value };
     setAttendees(updated);
     
+    // If toggle is ON and this is Attendee 1, sync to Order Contact
+    if (useAttendee1AsContact && index === 0) {
+      setOrderContact({
+        ...orderContact,
+        [field]: value,
+      });
+    }
+    
     // Save to booking draft
     if (bookingDraft) {
       const updatedDraft = { ...bookingDraft, attendees: updated };
       setBookingDraft(updatedDraft);
       saveBookingDraft(updatedDraft);
+    }
+  };
+
+  // Handle Order Contact update
+  const handleOrderContactUpdate = (field: keyof ContactInfo, value: string) => {
+    setOrderContact({
+      ...orderContact,
+      [field]: value,
+    });
+  };
+
+  // Handle toggle change: Use Attendee 1 as Order Contact
+  const handleToggleUseAttendee1 = (checked: boolean) => {
+    setUseAttendee1AsContact(checked);
+    if (checked && attendees.length > 0) {
+      // Copy Attendee 1 info to Order Contact
+      setOrderContact({
+        firstName: attendees[0].firstName,
+        lastName: attendees[0].lastName,
+        email: attendees[0].email,
+        phone: attendees[0].phone,
+      });
     }
   };
 
@@ -321,8 +383,115 @@ export default function CompleteBookingPage() {
           </p>
 
           {event?.collect_attendee_info === 'per_ticket' ? (
-            /* Per-Ticket Attendee Forms */
+            /* Per-Ticket Mode: Order Contact + Attendee Forms */
             <div className="space-y-4">
+              {/* Order Contact (Primary Booker) Section */}
+              <Card
+                className="border rounded-2xl"
+                style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
+              >
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                    Order Contact (Primary Booker)
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    This is the contact person for payment receipts and order updates
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Toggle: Use Attendee 1 as Order Contact */}
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="use-attendee-1"
+                      checked={useAttendee1AsContact}
+                      onCheckedChange={handleToggleUseAttendee1}
+                    />
+                    <label
+                      htmlFor="use-attendee-1"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      style={{ color: '#0F1F17' }}
+                    >
+                      Use Attendee 1 as Order Contact
+                    </label>
+                  </div>
+
+                  {/* Order Contact Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="order-contact-firstName" className="text-sm">
+                        First name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="order-contact-firstName"
+                        type="text"
+                        value={orderContact.firstName}
+                        onChange={(e) => handleOrderContactUpdate('firstName', e.target.value)}
+                        className="mt-1"
+                        placeholder="Enter first name"
+                        disabled={useAttendee1AsContact}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="order-contact-lastName" className="text-sm">
+                        Last name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="order-contact-lastName"
+                        type="text"
+                        value={orderContact.lastName}
+                        onChange={(e) => handleOrderContactUpdate('lastName', e.target.value)}
+                        className="mt-1"
+                        placeholder="Enter last name"
+                        disabled={useAttendee1AsContact}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="order-contact-email" className="text-sm">
+                      Email address <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="order-contact-email"
+                      type="email"
+                      value={orderContact.email}
+                      onChange={(e) => handleOrderContactUpdate('email', e.target.value)}
+                      className="mt-1"
+                      placeholder="Enter email address"
+                      disabled={useAttendee1AsContact}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This email will be used for payment receipt submission authorization
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="order-contact-phone" className="text-sm">
+                      Phone number <span className="text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="order-contact-phone"
+                      type="tel"
+                      value={orderContact.phone}
+                      onChange={(e) => handleOrderContactUpdate('phone', e.target.value)}
+                      className="mt-1"
+                      placeholder="Enter phone number"
+                      disabled={useAttendee1AsContact}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Attendee Forms */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
+                  <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                    Attendee Information
+                  </h3>
+                </div>
+                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Please provide information for each attendee
+                </p>
+              </div>
               {attendees.map((attendee, index) => {
                 const lineIndex = bookingDraft?.lines.findIndex(
                   (line) => line.ticketTypeId === attendee.ticketTypeId
@@ -561,9 +730,14 @@ export default function CompleteBookingPage() {
                   }
 
                   // Create booking (server computes total_amount from ticket_types.price)
+                  // For Per-Ticket mode, use Order Contact as buyer contact info
+                  const buyerContactInfo = event?.collect_attendee_info === 'per_ticket' 
+                    ? orderContact 
+                    : contactInfo;
+                  
                   const result = await createBooking(
                     finalDraft,
-                    contactInfo,
+                    buyerContactInfo,
                     event?.collect_attendee_info === 'per_ticket' ? attendees : undefined
                   );
 

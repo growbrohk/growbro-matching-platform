@@ -1,18 +1,17 @@
--- Migration: Fix server-side amount calculation (P0 Security Fix)
--- Removes client-provided p_total_amount and computes all amounts server-side from ticket_types.price
--- This prevents clients from tampering with total_amount to bypass payment
-
+-- Migration: Fix Per-Ticket Order Contact flow
+-- 
+-- Problem:
+-- - In Per-Ticket mode, create_event_booking derived orders.buyer_email from attendees[0].email
+-- - Guest receipt submission failed with "Unauthorized: Email does not match order buyer_email"
+-- - No stable "Order Contact (Primary Booker)" email was collected
+--
+-- Solution:
+-- - Update create_event_booking to ALWAYS prefer p_buyer_email over attendees[0].email
+-- - Frontend now collects explicit "Order Contact (Primary Booker)" section in Per-Ticket mode
+-- - orders.buyer_email is now stable and matches UI-collected Order Contact email
+--
 -- ============================================================================
--- DROP OLD FUNCTION (with old signature that includes p_total_amount)
--- ============================================================================
--- Drop all overloads of create_event_booking to avoid ambiguity
--- CASCADE ensures all dependent objects are handled
--- We'll recreate with the new secure signature immediately after
-
-DROP FUNCTION IF EXISTS create_event_booking CASCADE;
-
--- ============================================================================
--- CREATE NEW FUNCTION (without p_total_amount parameter)
+-- UPDATE create_event_booking FUNCTION
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION create_event_booking(
@@ -87,7 +86,7 @@ BEGIN
   -- Order is valid if ANY of these is true:
   -- 1. buyer_user_id is provided (authenticated user)
   -- 2. buyer_email is provided (primary booker mode)
-  -- 3. attendees[0].email is provided (Per-Ticket mode)
+  -- 3. attendees[0].email is provided (Per-Ticket mode fallback)
   
   IF p_buyer_user_id IS NULL THEN
     -- Guest booking: Must have email from either buyer_email OR first attendee
