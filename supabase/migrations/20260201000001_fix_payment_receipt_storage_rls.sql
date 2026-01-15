@@ -1,7 +1,15 @@
 -- Migration: Fix storage RLS policies for payment receipt upload
--- This file should be run with elevated permissions (superuser or service_role)
--- Run via: supabase db execute --file supabase/migrations/20260201000001_fix_payment_receipt_storage_rls.sql
--- Or via Supabase Dashboard SQL Editor with service_role key
+-- 
+-- ⚠️ IMPORTANT: This file CANNOT be run via normal migrations due to permissions.
+-- Storage policies require superuser/service_role permissions.
+--
+-- ✅ RECOMMENDED: Run this SQL via Supabase Dashboard SQL Editor
+--   1. Go to: https://supabase.com/dashboard/project/[YOUR_PROJECT]/sql/new
+--   2. Copy and paste the entire contents of this file
+--   3. Click "Run" (Dashboard SQL Editor runs with service_role automatically)
+--
+-- ❌ DO NOT run via: supabase migration up (will fail with permission error)
+-- ❌ DO NOT run via: supabase db execute (unless you have superuser access)
 
 -- ============================================================================
 -- FIX STORAGE POLICY FOR PAYMENT RECEIPTS
