@@ -252,17 +252,19 @@ export default function PaymentPage() {
 
       // Payment submitted successfully:
       // - receipt_url saved
-      // - payment_status='paid', paid_at=now()
+      // - payment_status='submitted' (NOT 'paid')
+      // - submitted_at set
       // - payment_method set
       // - fulfillment_status='pending_confirmation' (kept as is)
+      // - paid_at is NULL (host must confirm to set it)
       toast({
         title: 'Payment submitted',
         description: 'Your payment receipt has been submitted. Waiting for host confirmation...',
       });
 
-      // Redirect to success page with status=pending_confirmation query param
-      // Client-side navigation (no page refresh)
-      navigate(`/booking/success/${orderId}?status=pending_confirmation`, { replace: true });
+      // Redirect to pending page (not success page)
+      // Order is now in 'submitted' state, waiting for host verification
+      navigate(`/booking/pending/${orderId}`, { replace: true });
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       toast({

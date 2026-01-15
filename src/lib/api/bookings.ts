@@ -267,10 +267,13 @@ export async function confirmFreeOrder(orderId: string): Promise<OrderWithEvent>
 }
 
 /**
- * Update order payment information
- * For PayMe/FPS: Sets payment_status = 'paid', paid_at = now(), receipt_url, payment_method
- *                Keeps fulfillment_status = 'pending_confirmation'
- * For Stripe: Will be handled by webhook (sets payment_status = 'paid', fulfillment_status = 'confirmed')
+ * @deprecated Use submitManualPayment() from '@/lib/payments/submitManualPayment' instead.
+ * 
+ * This function directly updates orders which is no longer allowed for security reasons.
+ * For PayMe/FPS payments, use submitManualPayment() which calls submit_payment_receipt RPC.
+ * The RPC sets payment_status='submitted' (not 'paid') and only host confirmation can mark as paid.
+ * 
+ * This function is kept for backward compatibility but should not be used for new code.
  */
 export async function updateOrderPayment(
   orderId: string,
@@ -278,59 +281,9 @@ export async function updateOrderPayment(
   receiptUrl?: string,
   paymentReferenceLink?: string
 ): Promise<void> {
-  const now = new Date().toISOString();
-  const updateData: any = {
-    payment_method: paymentMethod,
-    submitted_at: now,
-    updated_at: now, // Explicitly set updated_at
-  };
-
-  // For PayMe/FPS: Set to paid status with receipt
-  if (paymentMethod === 'payme' || paymentMethod === 'fps') {
-    updateData.payment_status = 'paid';
-    updateData.paid_at = now;
-    // Keep fulfillment_status as 'pending_confirmation' (don't change it)
-    // fulfillment_status will be updated by host when they confirm
-  } else {
-    // For Stripe: Will be updated by webhook
-    updateData.payment_status = 'unpaid';
-  }
-
-  if (receiptUrl) {
-    updateData.receipt_url = receiptUrl;
-  }
-
-  if (paymentReferenceLink) {
-    updateData.payment_reference_link = paymentReferenceLink;
-  }
-
-  console.log('[updateOrderPayment] Updating order:', {
-    orderId,
-    updateData,
-  });
-
-  const { data, error } = await supabase
-    .from('orders')
-    .update(updateData)
-    .eq('id', orderId)
-    .select('id, buyer_user_id, buyer_email, payment_status, payment_method')
-    .single();
-
-  if (error) {
-    console.error('[updateOrderPayment] Order update error:', {
-      orderId,
-      error,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
-      updateData,
-    });
-    throw new Error(error.message || 'Failed to update order payment. Please check your permissions and try again.');
-  }
-
-  console.log('[updateOrderPayment] Order updated successfully:', {
-    orderId,
-    updatedOrder: data,
-  });
+  // This function is deprecated and will fail due to RLS restrictions
+  // Use submitManualPayment() instead for PayMe/FPS
+  throw new Error(
+    'updateOrderPayment is deprecated. Use submitManualPayment() from @/lib/payments/submitManualPayment instead.'
+  );
 }

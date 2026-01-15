@@ -1,9 +1,14 @@
 /**
  * Submit manual payment (PayMe/FPS) with receipt upload
+ * 
+ * SECURITY: Uses submit_payment_receipt RPC which:
+ * - Sets payment_status='submitted' (NOT 'paid')
+ * - Sets submitted_at, receipt_url, payment_method
+ * - Does NOT set paid_at or fulfillment_status='confirmed'
+ * - Only host confirmation can mark order as paid
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import { updateOrderPayment } from '@/lib/api/bookings';
 
 export type ManualPaymentMethod = 'payme' | 'fps';
 
@@ -67,8 +72,8 @@ async function uploadReceipt(orderId: string, file: File): Promise<string> {
 
 /**
  * Submit manual payment with receipt
- * Sets payment_status='paid', paid_at=now(), receipt_url, payment_method
- * Keeps fulfillment_status='pending_confirmation'
+ * Uses submit_payment_receipt RPC which sets payment_status='submitted'
+ * Does NOT mark order as paid - host must confirm via update_order_fulfillment
  */
 export async function submitManualPayment({
   orderId,
@@ -86,19 +91,36 @@ export async function submitManualPayment({
   try {
     // Upload receipt
     const receiptUrl = await uploadReceipt(orderId, receiptFile);
-    console.log('[submitManualPayment] Receipt uploaded, updating order:', {
+    console.log('[submitManualPayment] Receipt uploaded, submitting via RPC:', {
       orderId,
       receiptUrl,
     });
 
-    // Update order payment information
-    // This now sets payment_status='paid', paid_at=now(), receipt_url, payment_method
-    // Keeps fulfillment_status='pending_confirmation'
-    await updateOrderPayment(orderId, paymentMethod, receiptUrl, paymentReferenceLink);
+    // Call RPC function to submit payment receipt
+    // This sets payment_status='submitted' but does NOT mark as paid
+    const { error: rpcError } = await supabase.rpc('submit_payment_receipt', {
+      p_order_id: orderId,
+      p_payment_method: paymentMethod,
+      p_receipt_url: receiptUrl,
+      p_payment_reference_link: paymentReferenceLink || null,
+    });
+
+    if (rpcError) {
+      console.error('[submitManualPayment] RPC error:', {
+        orderId,
+        error: rpcError,
+        message: rpcError.message,
+        code: rpcError.code,
+        details: rpcError.details,
+        hint: rpcError.hint,
+      });
+      throw new Error(rpcError.message || 'Failed to submit payment receipt. Please check your permissions and try again.');
+    }
     
-    console.log('[submitManualPayment] Order updated successfully:', {
+    console.log('[submitManualPayment] Payment receipt submitted successfully:', {
       orderId,
       paymentMethod,
+      payment_status: 'submitted', // Status set by RPC
     });
   } catch (error: any) {
     console.error('[submitManualPayment] Error during payment submission:', {
