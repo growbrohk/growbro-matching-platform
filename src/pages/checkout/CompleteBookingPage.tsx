@@ -560,14 +560,11 @@ export default function CompleteBookingPage() {
                     saveBookingDraft(finalDraft);
                   }
 
-                  // Create booking
-                  const discount = promoState.applied ? promoState.discountAmount : 0;
-                  const finalTotal = Math.max(0, subtotal - discount);
+                  // Create booking (server computes total_amount from ticket_types.price)
                   const result = await createBooking(
                     finalDraft,
                     contactInfo,
-                    event?.collect_attendee_info === 'per_ticket' ? attendees : undefined,
-                    discount
+                    event?.collect_attendee_info === 'per_ticket' ? attendees : undefined
                   );
 
                   // Clear booking draft
@@ -576,12 +573,23 @@ export default function CompleteBookingPage() {
                   // Store orderId in sessionStorage for guest checkout access
                   sessionStorage.setItem('last_order_id', result.orderId);
                   
-                  // For free tickets (total === 0): confirm order and navigate to success
-                  if (finalTotal === 0) {
+                  // Fetch order from DB to get server-computed total_amount
+                  // This is the SECURITY FIX: routing decision uses server-computed amount, not client
+                  const order = await getOrderWithEvent(result.orderId);
+                  
+                  if (!order) {
+                    throw new Error('Failed to fetch order after creation');
+                  }
+                  
+                  // Use server-computed total_amount to decide routing
+                  const serverTotalAmount = Number(order.total_amount);
+                  
+                  // For free tickets (server-computed total_amount = 0): navigate to success
+                  if (serverTotalAmount <= 0) {
+                    // RPC function already sets paid_at, confirmed_at, payment_method='free', 
+                    // and fulfillment_status='confirmed' for free orders.
+                    // This call is a safety net (idempotent - won't update if already confirmed)
                     try {
-                      // RPC function already sets paid_at, confirmed_at, payment_method='free', 
-                      // and fulfillment_status='confirmed' for free orders.
-                      // This call is a safety net (idempotent - won't update if already confirmed)
                       const updatedOrder = await confirmFreeOrder(result.orderId);
                       
                       console.debug('[booking-route]', {
@@ -592,26 +600,21 @@ export default function CompleteBookingPage() {
                         payment_method: updatedOrder.payment_method,
                         route: 'success',
                       });
-
-                      toast({
-                        title: 'Booking created successfully',
-                        description: 'Your free ticket has been confirmed!',
-                      });
-                      navigate(`/booking/success/${result.orderId}`, { replace: true });
                     } catch (error: any) {
                       console.error('Error confirming free order:', error);
-                      // Even if update fails, try to navigate to success (RPC should have set it correctly)
-                      toast({
-                        title: 'Booking created',
-                        description: 'Your booking has been created.',
-                      });
-                      navigate(`/booking/success/${result.orderId}`, { replace: true });
+                      // Continue anyway - RPC should have set it correctly
                     }
+
+                    toast({
+                      title: 'Booking created successfully',
+                      description: 'Your free ticket has been confirmed!',
+                    });
+                    navigate(`/booking/success/${result.orderId}`, { replace: true });
                   } else {
                     // Paid ticket - go to payment page
                     console.debug('[booking-route]', {
                       orderId: result.orderId,
-                      amount_total: finalTotal,
+                      amount_total: serverTotalAmount,
                       route: 'payment',
                     });
 
