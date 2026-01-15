@@ -257,14 +257,46 @@ export default function PaymentPage() {
       // - payment_method set
       // - fulfillment_status='pending_confirmation' (kept as is)
       // - paid_at is NULL (host must confirm to set it)
+      
+      // Re-fetch order to get latest payment_status and submitted_at
+      const updatedOrder = await getOrderWithEvent(orderId);
+      
+      if (!updatedOrder) {
+        throw new Error('Failed to fetch updated order');
+      }
+
+      // Verify payment_status is now 'submitted'
+      if (updatedOrder.payment_status !== 'submitted') {
+        console.warn('[PaymentPage] Expected payment_status=submitted, got:', updatedOrder.payment_status);
+      }
+
       toast({
         title: 'Payment submitted',
         description: 'Your payment receipt has been submitted. Waiting for host confirmation...',
       });
 
-      // Redirect to pending page (not success page)
-      // Order is now in 'submitted' state, waiting for host verification
-      navigate(`/booking/pending/${orderId}`, { replace: true });
+      // Use unified routing logic to determine correct page
+      const route = getBookingRoute(updatedOrder);
+      
+      console.debug('[PaymentPage] After payment submission:', {
+        orderId,
+        payment_status: updatedOrder.payment_status,
+        fulfillment_status: updatedOrder.fulfillment_status,
+        payment_method: updatedOrder.payment_method,
+        route,
+      });
+
+      // Redirect based on route
+      if (route === 'pending') {
+        navigate(`/booking/pending/${orderId}`, { replace: true });
+      } else if (route === 'success') {
+        navigate(`/booking/success/${orderId}`, { replace: true });
+      } else {
+        // Stay on payment page if unexpected state
+        console.warn('[PaymentPage] Unexpected route after payment submission:', route);
+        // Still redirect to pending as fallback since payment was submitted
+        navigate(`/booking/pending/${orderId}`, { replace: true });
+      }
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       toast({

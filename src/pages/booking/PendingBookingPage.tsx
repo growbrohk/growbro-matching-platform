@@ -20,6 +20,27 @@ import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import { Clock, Loader2 } from 'lucide-react';
 
+/**
+ * Format submitted_at timestamp for display
+ * Shows date and time in Hong Kong timezone
+ */
+function formatSubmittedAt(submittedAt: string | null): string {
+  if (!submittedAt) return 'N/A';
+  
+  const date = new Date(submittedAt);
+  const TIMEZONE = 'Asia/Hong_Kong';
+  
+  return date.toLocaleString('en-US', {
+    timeZone: TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 const BRAND = {
   green: "#0E7A3A",
   greenSoft: "#2F9B63",
@@ -188,6 +209,32 @@ export default function PendingBookingPage() {
                 <p className="text-sm capitalize">
                   {order.payment_method === 'payme' ? 'PayMe' : 'FPS'}
                 </p>
+              </div>
+
+              {/* Submitted At */}
+              {order.submitted_at && (
+                <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Submitted At</p>
+                  <p className="text-sm" style={{ color: BRAND.dark }}>
+                    {formatSubmittedAt(order.submitted_at)}
+                  </p>
+                </div>
+              )}
+
+              {/* Payment Status Badge */}
+              <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Status</p>
+                <div 
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{ 
+                    backgroundColor: 'rgba(251,191,36,0.1)',
+                    color: '#FBBF24',
+                    border: '1px solid rgba(251,191,36,0.2)'
+                  }}
+                >
+                  <Clock className="h-3 w-3" />
+                  Pending
+                </div>
               </div>
             </div>
           </CardContent>

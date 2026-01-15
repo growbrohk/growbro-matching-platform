@@ -12,10 +12,12 @@ export type BookingRoute = 'success' | 'pending' | 'payment';
  * 
  * Rules:
  * - if payment_status === 'paid' && fulfillment_status === 'confirmed' → success
- * - else if payment_status === 'paid' && fulfillment_status === 'pending_confirmation' → success (with status query param)
+ * - else if payment_status === 'submitted' → pending (PayMe/FPS receipt uploaded, waiting for host)
  * - else if payment_method in (payme,fps) && payment_status === 'pending' && fulfillment_status === 'pending_confirmation' → pending
  * - else if amount_total > 0 && payment_status === 'unpaid' → payment
- * - else if amount_total === 0 → success (guardrail fallback for free tickets)
+ * - else if amount_total === 0 && fulfillment_status === 'confirmed' → success (free tickets, confirmed)
+ * - else if amount_total === 0 → success (free tickets, auto-confirmed)
+ * - else → payment (fallback)
  */
 export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
   if (!order) {
@@ -29,23 +31,24 @@ export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
     return 'success';
   }
 
-  // Rule 2: Paid but pending confirmation (PayMe/FPS manual payment) → success
-  // This handles the case where user has paid but host hasn't confirmed yet
-  if (payment_status === 'paid' && fulfillment_status === 'pending_confirmation') {
-    return 'success';
+  // Rule 2: Payment submitted (PayMe/FPS receipt uploaded) → pending
+  // This is the NEW flow: receipt upload sets payment_status='submitted', waiting for host confirmation
+  if (payment_status === 'submitted') {
+    return 'pending';
   }
 
-  // Rule 3: PayMe/FPS pending confirmation (old flow) → pending
+  // Rule 3: PayMe/FPS pending confirmation (legacy flow with payment_status='pending') → pending
   if (
     (payment_method === 'payme' || payment_method === 'fps') &&
-    (payment_status === 'pending' || payment_status === 'submitted') &&
+    payment_status === 'pending' &&
     fulfillment_status === 'pending_confirmation'
   ) {
     return 'pending';
   }
 
-  // Rule 4: Free tickets (amount_total === 0) → success (guardrail fallback)
-  if (total_amount === 0) {
+  // Rule 4: Free tickets (amount_total === 0) → success
+  // Free tickets are auto-confirmed, so they go straight to success
+  if (total_amount === 0 || (total_amount <= 0 && fulfillment_status === 'confirmed')) {
     return 'success';
   }
 
@@ -54,8 +57,8 @@ export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
     return 'payment';
   }
 
-  // Default fallback: if already paid but not confirmed, or other states → success
-  // This handles edge cases where order might be in transition
-  return 'success';
+  // Default fallback: if payment_status='paid' but not confirmed, or other edge cases → payment
+  // This ensures we don't show success page prematurely
+  return 'payment';
 }
 
