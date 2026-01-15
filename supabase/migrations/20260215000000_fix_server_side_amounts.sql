@@ -125,13 +125,15 @@ BEGIN
     END IF;
     
     -- Get unit_price from ticket_types table (server-side source of truth)
+    -- SECURITY: Verify ticket_type belongs to the event (prevents mixing ticket types from different events)
     SELECT price INTO v_unit_price
     FROM ticket_types
-    WHERE id = (v_line->>'ticket_type_id')::UUID;
+    WHERE id = (v_line->>'ticket_type_id')::UUID
+      AND event_id = p_event_id;
     
-    -- Validate ticket type exists
+    -- Validate ticket type exists and belongs to the event
     IF v_unit_price IS NULL THEN
-      RAISE EXCEPTION 'Ticket type not found: %', (v_line->>'ticket_type_id');
+      RAISE EXCEPTION 'Ticket type not found or does not belong to this event: %', (v_line->>'ticket_type_id');
     END IF;
     
     -- Compute subtotal server-side
@@ -225,9 +227,16 @@ BEGIN
   FOR v_line IN SELECT * FROM jsonb_array_elements(p_order_lines)
   LOOP
     -- Re-fetch unit_price from DB (for clarity and consistency)
+    -- SECURITY: Verify ticket_type belongs to the event (prevents mixing ticket types from different events)
     SELECT price INTO v_unit_price
     FROM ticket_types
-    WHERE id = (v_line->>'ticket_type_id')::UUID;
+    WHERE id = (v_line->>'ticket_type_id')::UUID
+      AND event_id = p_event_id;
+    
+    -- Validate ticket type exists and belongs to the event
+    IF v_unit_price IS NULL THEN
+      RAISE EXCEPTION 'Ticket type not found or does not belong to this event: %', (v_line->>'ticket_type_id');
+    END IF;
     
     -- Compute subtotal server-side
     v_subtotal := v_unit_price * (v_line->>'quantity')::INTEGER;
