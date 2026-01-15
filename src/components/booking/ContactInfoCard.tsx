@@ -72,7 +72,7 @@ export function ContactInfoCard({
     return (
       (!requiredFields.firstName || info.firstName.trim() !== '') &&
       (!requiredFields.lastName || info.lastName.trim() !== '') &&
-      (!requiredFields.email || isValidEmail(info.email)) &&
+      (!requiredFields.email || (info.email.trim() !== '' && isValidEmail(info.email))) &&
       (!requiredFields.phone || !showPhone || info.phone.trim() !== '')
     );
   };
@@ -80,10 +80,10 @@ export function ContactInfoCard({
   const handleSave = () => {
     // Validate editingInfo, not contactInfo
     if (isEditingValid(editingInfo)) {
-      // Normalize email before saving
+      // Normalize email before saving (only if not empty)
       const normalizedInfo: ContactInfo = {
         ...editingInfo,
-        email: normalizeEmail(editingInfo.email),
+        email: editingInfo.email.trim() ? normalizeEmail(editingInfo.email) : '',
       };
       onUpdate(normalizedInfo);
       setShowDialog(false);

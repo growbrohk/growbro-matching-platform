@@ -62,12 +62,10 @@ async function uploadReceipt(orderId: string, file: File): Promise<string> {
     fileName,
   });
 
-  // For private buckets, we store the path (not a public URL)
-  // The path can be used to generate signed URLs when needed
-  // Store the full path: payment-receipts/{orderId}/{timestamp}.{ext}
-  const receiptPath = `${bucketName}/${fileName}`;
-  
-  return receiptPath;
+  // Store just the object path (without bucket prefix) for consistency
+  // Host view will use this path to generate signed URLs
+  // Format: {orderId}/{timestamp}.{ext}
+  return fileName;
 }
 
 /**

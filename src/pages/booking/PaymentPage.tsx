@@ -338,17 +338,27 @@ export default function PaymentPage() {
     if (!orderId) return;
     
     try {
-      // Update order contact info via Supabase (RLS policy allows buyers to update their own orders)
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          buyer_first_name: info.firstName || null,
-          buyer_last_name: info.lastName || null,
-          buyer_email: info.email.trim().toLowerCase() || null, // Normalize email
-          buyer_phone: info.phone || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', orderId);
+      // Get edit_token from localStorage
+      const editToken = localStorage.getItem(`order_edit_token:${orderId}`);
+      
+      if (!editToken) {
+        toast({
+          title: 'Session error',
+          description: "This browser session can't update contact info. Please use the same device/session you used to create the order.",
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Update order contact info via RPC (uses edit_token, works for incognito)
+      const { error } = await supabase.rpc('update_order_contact_info' as any, {
+        p_order_id: orderId,
+        p_edit_token: editToken,
+        p_buyer_first_name: info.firstName || null,
+        p_buyer_last_name: info.lastName || null,
+        p_buyer_email: info.email.trim() ? info.email.trim().toLowerCase() : null,
+        p_buyer_phone: info.phone || null,
+      });
 
       if (error) {
         console.error('Error updating contact info:', error);
@@ -488,7 +498,7 @@ export default function PaymentPage() {
             requiredFields={{
               firstName: true,
               lastName: true,
-              email: true,
+              email: false, // Email optional for incognito users
               phone: false, // Phone optional on payment page
             }}
           />
