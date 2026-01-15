@@ -88,10 +88,10 @@ BEGIN
   END IF;
 
   -- ============================================================================
-  -- STEP 2: VALIDATE EVENT EXISTS AND IS ACTIVE
+  -- STEP 2: VALIDATE EVENT EXISTS AND IS PUBLISHED
   -- ============================================================================
-  IF NOT EXISTS (SELECT 1 FROM events WHERE id = p_event_id AND is_active = true) THEN
-    RAISE EXCEPTION 'Event not found or not active';
+  IF NOT EXISTS (SELECT 1 FROM events WHERE id = p_event_id AND status = 'published') THEN
+    RAISE EXCEPTION 'Event not found or not published';
   END IF;
 
   -- ============================================================================

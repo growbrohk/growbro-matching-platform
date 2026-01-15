@@ -1,181 +1,13 @@
--- Migration: Remove all receipt/payment token generation and validation
+-- Migration: Ensure create_event_booking uses status='published' instead of events.is_active
 -- 
--- Goal:
--- - Remove edit_token column from orders table
--- - Remove token generation trigger and function
--- - Remove token validation from receipt submission functions
--- - Make receipt upload completely unauthenticated (host confirmation is the only security boundary)
+-- Issue:
+-- - Some migrations were checking events.is_active which doesn't exist
+-- - Events table uses status column, where status='published' means active/bookable
 --
--- ============================================================================
--- PART A: DROP TRIGGER AND FUNCTION FOR TOKEN GENERATION
--- ============================================================================
-
--- Drop trigger first
-DROP TRIGGER IF EXISTS trg_set_order_edit_token ON public.orders;
-
--- Drop function
-DROP FUNCTION IF EXISTS public.set_order_edit_token();
-
--- ============================================================================
--- PART B: UPDATE FUNCTIONS TO REMOVE TOKEN VALIDATION
--- ============================================================================
-
--- Update submit_payment_receipt: Remove all token validation
--- Receipt upload is now completely unauthenticated
-DROP FUNCTION IF EXISTS public.submit_payment_receipt(UUID, TEXT, TEXT, TEXT, TEXT);
-
-CREATE OR REPLACE FUNCTION public.submit_payment_receipt(
-  p_order_id UUID,
-  p_payment_method TEXT,
-  p_receipt_url TEXT,
-  p_payment_reference_link TEXT DEFAULT NULL
-)
-RETURNS void
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_order RECORD;
-  v_total_amount DECIMAL(10,2);
-  v_current_payment_status TEXT;
-  v_current_fulfillment_status TEXT;
-BEGIN
-  -- STEP 1: Fetch order and validate it exists
-  SELECT 
-    id,
-    total_amount,
-    payment_status,
-    fulfillment_status
-  INTO v_order
-  FROM orders
-  WHERE id = p_order_id;
-
-  IF v_order IS NULL THEN
-    RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-
-  v_total_amount := v_order.total_amount;
-  v_current_payment_status := v_order.payment_status;
-  v_current_fulfillment_status := v_order.fulfillment_status;
-
-  -- STEP 2: Validate payment_method
-  IF p_payment_method NOT IN ('payme', 'fps') THEN
-    RAISE EXCEPTION 'Invalid payment_method: %. Must be ''payme'' or ''fps''', p_payment_method;
-  END IF;
-
-  -- STEP 3: Validate receipt_url is not empty
-  IF p_receipt_url IS NULL OR TRIM(p_receipt_url) = '' THEN
-    RAISE EXCEPTION 'receipt_url cannot be empty';
-  END IF;
-
-  -- STEP 4: Validate total_amount > 0 (free orders should never submit receipts)
-  IF v_total_amount <= 0 THEN
-    RAISE EXCEPTION 'Cannot submit receipt for free orders (total_amount = %)', v_total_amount;
-  END IF;
-
-  -- STEP 5: Validate payment_status transition
-  -- Only allow transition to submitted if:
-  -- - current payment_status in ('unpaid','failed') OR (submitted -> allow updating receipt_url, but keep payment_status='submitted')
-  -- - fulfillment_status != 'cancelled'
-  IF v_current_payment_status NOT IN ('unpaid', 'failed', 'submitted') THEN
-    RAISE EXCEPTION 'Cannot submit receipt. Current payment_status is %, expected unpaid, failed, or submitted', v_current_payment_status;
-  END IF;
-
-  IF v_current_fulfillment_status = 'cancelled' THEN
-    RAISE EXCEPTION 'Cannot submit receipt for cancelled orders';
-  END IF;
-
-  -- STEP 6: Update order
-  -- Set: payment_method, receipt_url, payment_reference_link, submitted_at, payment_status='submitted'
-  -- DO NOT set: paid_at, status='paid', fulfillment_status='confirmed'
-  -- No token validation - receipt upload is unauthenticated
-  UPDATE orders
-  SET 
-    payment_method = p_payment_method,
-    receipt_url = p_receipt_url,
-    payment_reference_link = p_payment_reference_link,
-    submitted_at = NOW(),
-    payment_status = 'submitted',
-    updated_at = NOW()
-  WHERE id = p_order_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-
-  RAISE NOTICE 'Payment receipt submitted for order %: payment_method=%, payment_status=submitted', p_order_id, p_payment_method;
-END;
-$$;
-
--- Grant execute permission to anon and authenticated (no auth gates)
-GRANT EXECUTE ON FUNCTION public.submit_payment_receipt(UUID, TEXT, TEXT, TEXT) TO authenticated, anon;
-
-COMMENT ON FUNCTION public.submit_payment_receipt IS 
-  'Submits a payment receipt for PayMe/FPS orders. No authentication required - receipt upload is unauthenticated. Sets payment_status=''submitted'' but does NOT mark as paid. Only host confirmation can mark as paid.';
-
--- Update update_order_contact_info: Remove all token validation
-DROP FUNCTION IF EXISTS public.update_order_contact_info(UUID, TEXT, TEXT, TEXT, TEXT, TEXT);
-
-CREATE OR REPLACE FUNCTION public.update_order_contact_info(
-  p_order_id UUID,
-  p_buyer_first_name TEXT DEFAULT NULL,
-  p_buyer_last_name TEXT DEFAULT NULL,
-  p_buyer_email TEXT DEFAULT NULL,
-  p_buyer_phone TEXT DEFAULT NULL
-)
-RETURNS void
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_order RECORD;
-BEGIN
-  -- STEP 1: Fetch order and validate it exists
-  SELECT 
-    id
-  INTO v_order
-  FROM orders
-  WHERE id = p_order_id;
-
-  IF v_order IS NULL THEN
-    RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-
-  -- STEP 2: Update order contact info
-  -- No token validation - contact info update is unauthenticated
-  -- Normalize email if provided (lowercase, trim)
-  UPDATE orders
-  SET 
-    buyer_first_name = NULLIF(TRIM(p_buyer_first_name), ''),
-    buyer_last_name = NULLIF(TRIM(p_buyer_last_name), ''),
-    buyer_email = CASE 
-      WHEN p_buyer_email IS NOT NULL AND TRIM(p_buyer_email) != '' 
-      THEN LOWER(TRIM(p_buyer_email))
-      ELSE NULL
-    END,
-    buyer_phone = NULLIF(TRIM(p_buyer_phone), ''),
-    updated_at = NOW()
-  WHERE id = p_order_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Order not found: %', p_order_id;
-  END IF;
-
-  RAISE NOTICE 'Contact info updated for order %', p_order_id;
-END;
-$$;
-
--- Grant execute permission to anon and authenticated (no auth gates)
-GRANT EXECUTE ON FUNCTION public.update_order_contact_info(UUID, TEXT, TEXT, TEXT, TEXT) TO authenticated, anon;
-
-COMMENT ON FUNCTION public.update_order_contact_info IS 
-  'Updates order contact info (buyer_first_name, buyer_last_name, buyer_email, buyer_phone). No authentication required - works for incognito/anon users.';
-
--- Update create_event_booking: Remove edit_token from return value
--- Drop old function signature
-DROP FUNCTION IF EXISTS create_event_booking(uuid, jsonb, uuid, text, text, text, text, text, jsonb) CASCADE;
+-- Fix:
+-- - Ensure create_event_booking function uses status = 'published' check
+-- - This migration ensures correctness regardless of migration order
+-- - Keep ticket_types.is_active checks unchanged (that column exists)
 
 CREATE OR REPLACE FUNCTION create_event_booking(
   p_event_id UUID,
@@ -188,7 +20,7 @@ CREATE OR REPLACE FUNCTION create_event_booking(
   p_currency TEXT DEFAULT 'HKD',
   p_attendees JSONB DEFAULT NULL -- Array of {ticket_type_id, first_name, last_name, email, phone} for per-ticket mode
 )
-RETURNS UUID  -- Changed back to UUID (no longer returning edit_token)
+RETURNS UUID
 SECURITY DEFINER
 SET search_path = public
 LANGUAGE plpgsql
@@ -250,6 +82,7 @@ BEGIN
   -- ============================================================================
   -- STEP 2: VALIDATE EVENT EXISTS AND IS PUBLISHED
   -- ============================================================================
+  -- ✅ FIXED: Use status='published' instead of is_active (which doesn't exist)
   IF NOT EXISTS (SELECT 1 FROM events WHERE id = p_event_id AND status = 'published') THEN
     RAISE EXCEPTION 'Event not found or not published';
   END IF;
@@ -328,7 +161,7 @@ BEGIN
     CASE WHEN v_total_amount <= 0 THEN NOW() ELSE NULL END,
     CASE WHEN v_total_amount <= 0 THEN NOW() ELSE NULL END
   )
-  RETURNING id INTO v_order_id;  -- No longer fetching edit_token
+  RETURNING id INTO v_order_id;
 
   -- ============================================================================
   -- STEP 7: CREATE ORDER ITEMS AND TICKETS (using SERVER-COMPUTED prices)
@@ -431,23 +264,15 @@ BEGIN
   END LOOP;
 
   -- ============================================================================
-  -- STEP 8: RETURN ORDER ID ONLY (no edit_token)
+  -- STEP 8: RETURN ORDER ID
   -- ============================================================================
   RETURN v_order_id;
 END;
 $$;
 
+-- Safety hardening: explicitly set search_path
+ALTER FUNCTION create_event_booking(uuid,jsonb,uuid,text,text,text,text,text,jsonb) SET search_path = public;
+
 COMMENT ON FUNCTION create_event_booking IS 
-  'Creates an event booking with order, order items, and tickets. Returns UUID (order_id). All amounts are computed server-side from ticket_types.price.';
-
--- ============================================================================
--- PART C: DROP INDEX AND COLUMN
--- ============================================================================
-
--- Drop index on edit_token
-DROP INDEX IF EXISTS idx_orders_edit_token;
-
--- Drop edit_token column from orders table
-ALTER TABLE public.orders
-DROP COLUMN IF EXISTS edit_token;
+  'Creates an event booking with order, order items, and tickets. Returns UUID (order_id). All amounts are computed server-side from ticket_types.price. Uses events.status=''published'' to validate event availability.';
 
