@@ -221,11 +221,20 @@ export default function SuccessfulBookingPage() {
               >
                 {showPendingConfirmation ? 'Registration received ✅' : '✓ Congrats'}
               </p>
-              <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                {showPendingConfirmation 
-                  ? 'Waiting for host confirmation'
-                  : 'Your ticket has been successfully booked'}
-              </p>
+              {showPendingConfirmation ? (
+                <>
+                  <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    Waiting for host confirmation
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                    Tickets will be sent in confirmation email once payment confirmed!
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Your ticket has been successfully booked
+                </p>
+              )}
             </div>
           </div>
 
@@ -274,24 +283,8 @@ export default function SuccessfulBookingPage() {
 
         {/* Ticket Cards */}
         <div className="container mx-auto px-4">
-          {/* Show pending confirmation message instead of tickets if pending */}
-          {showPendingConfirmation ? (
-            <Card className="mb-6">
-              <CardContent className="pt-6 pb-8">
-                <div className="text-center space-y-4">
-                  <Clock className="h-16 w-16 mx-auto" style={{ color: '#FBBF24' }} />
-                  <div>
-                    <p className="text-lg font-semibold mb-2" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
-                      Ticket will appear after confirmation
-                    </p>
-                    <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      Once the host confirms your booking, your ticket QR code will be available here.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
+          {/* Only show tickets if confirmed, not pending confirmation */}
+          {!showPendingConfirmation && (
             /* ✅ UPDATED: removed space-y-0 so we control spacing per ticket */
             <div className="print-container">
               {tickets.map((ticket, index) => {
