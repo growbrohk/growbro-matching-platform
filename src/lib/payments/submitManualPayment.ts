@@ -89,32 +89,21 @@ export async function submitManualPayment({
   });
 
   try {
-    // Fetch order first to get buyer_email for debugging
-    const { data: orderData, error: orderError } = await supabase
-      .from('orders')
-      .select('buyer_email, buyer_user_id')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError) {
-      console.warn('[submitManualPayment] Could not fetch order for debugging:', orderError);
-    } else {
-      console.log('[submitManualPayment] Order buyer_email:', {
+    // Get edit_token from localStorage
+    const editToken = localStorage.getItem(`order_edit_token:${orderId}`);
+    
+    if (!editToken) {
+      const errorMsg = "This browser session can't submit receipts. Please use the same device/session you used to create the order.";
+      console.error('[submitManualPayment] Edit token missing:', {
         orderId,
-        buyer_email: orderData.buyer_email,
-        buyer_user_id: orderData.buyer_user_id,
-        normalized_buyer_email: orderData.buyer_email ? orderData.buyer_email.trim().toLowerCase() : null,
+        error: errorMsg,
       });
+      throw new Error(errorMsg);
     }
 
-    // Get current user email from JWT for debugging
-    const { data: { user } } = await supabase.auth.getUser();
-    const jwtEmail = user?.email;
-    console.log('[submitManualPayment] Current user email from JWT:', {
+    console.log('[submitManualPayment] Edit token found in localStorage:', {
       orderId,
-      jwt_email: jwtEmail,
-      normalized_jwt_email: jwtEmail ? jwtEmail.trim().toLowerCase() : null,
-      user_id: user?.id,
+      editTokenPresent: true,
     });
 
     // Upload receipt
@@ -126,8 +115,10 @@ export async function submitManualPayment({
 
     // Call RPC function to submit payment receipt
     // This sets payment_status='submitted' but does NOT mark as paid
+    // Uses edit_token for authorization instead of JWT email
     const { error: rpcError } = await supabase.rpc('submit_payment_receipt', {
       p_order_id: orderId,
+      p_edit_token: editToken,
       p_payment_method: paymentMethod,
       p_receipt_url: receiptUrl,
       p_payment_reference_link: paymentReferenceLink || null,
@@ -141,10 +132,6 @@ export async function submitManualPayment({
         code: rpcError.code,
         details: rpcError.details,
         hint: rpcError.hint,
-        order_buyer_email: orderData?.buyer_email,
-        normalized_order_buyer_email: orderData?.buyer_email ? orderData.buyer_email.trim().toLowerCase() : null,
-        jwt_email: jwtEmail,
-        normalized_jwt_email: jwtEmail ? jwtEmail.trim().toLowerCase() : null,
       });
       throw new Error(rpcError.message || 'Failed to submit payment receipt. Please check your permissions and try again.');
     }

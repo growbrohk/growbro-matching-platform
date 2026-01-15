@@ -60,15 +60,6 @@ export default function PaymentPage() {
     email: '',
     phone: '',
   });
-  const [authStatus, setAuthStatus] = useState<{
-    isAuthenticated: boolean;
-    email: string | null;
-    matchesOrder: boolean;
-  }>({
-    isAuthenticated: false,
-    email: null,
-    matchesOrder: false,
-  });
 
   useEffect(() => {
     if (!orderId) {
@@ -100,20 +91,6 @@ export default function PaymentPage() {
           phone: orderData.buyer_phone || '',
         });
         
-        // Check authentication status
-        const checkAuthStatus = async () => {
-          const { data: { user } } = await supabase.auth.getUser();
-          const normalizedOrderEmail = orderData.buyer_email?.trim().toLowerCase() || null;
-          const normalizedUserEmail = user?.email?.trim().toLowerCase() || null;
-          
-          setAuthStatus({
-            isAuthenticated: !!user,
-            email: normalizedUserEmail,
-            matchesOrder: normalizedOrderEmail === normalizedUserEmail,
-          });
-        };
-        
-        await checkAuthStatus();
         setLoading(false);
 
         // Use unified routing logic with loading guard
@@ -283,55 +260,7 @@ export default function PaymentPage() {
       return;
     }
 
-    // Check authentication: For guest orders, user must be authenticated with matching email
-    if (!order.buyer_user_id && order.buyer_email) {
-      const { data: { user } } = await supabase.auth.getUser();
-      const normalizedOrderEmail = order.buyer_email.trim().toLowerCase();
-      const normalizedUserEmail = user?.email?.trim().toLowerCase();
-      
-      // If not authenticated or email doesn't match, send magic link
-      if (!user || normalizedUserEmail !== normalizedOrderEmail) {
-        console.log('[PaymentPage] User not authenticated or email mismatch, sending magic link:', {
-          order_email: normalizedOrderEmail,
-          user_email: normalizedUserEmail,
-          is_authenticated: !!user,
-        });
-
-        try {
-          // Send magic link to order email
-          const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-            email: normalizedOrderEmail,
-            options: {
-              emailRedirectTo: `${window.location.origin}/booking/payment/${orderId}`,
-            },
-          });
-
-          if (magicLinkError) {
-            console.error('[PaymentPage] Error sending magic link:', magicLinkError);
-            toast({
-              title: 'Authentication required',
-              description: `Please sign in with ${normalizedOrderEmail} to submit your payment receipt. We've sent you a magic link email.`,
-              variant: 'destructive',
-            });
-            return;
-          }
-
-          toast({
-            title: 'Check your email',
-            description: `We've sent a magic link to ${normalizedOrderEmail}. Please click the link in your email to sign in and submit your payment receipt.`,
-          });
-          return;
-        } catch (error: any) {
-          console.error('[PaymentPage] Error in authentication flow:', error);
-          toast({
-            title: 'Authentication required',
-            description: `Please sign in with ${normalizedOrderEmail} to submit your payment receipt.`,
-            variant: 'destructive',
-          });
-          return;
-        }
-      }
-    }
+    // No authentication required - edit_token is used for authorization
 
     setIsSubmitting(true);
     try {
@@ -385,28 +314,13 @@ export default function PaymentPage() {
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       
-      // Check if error is email mismatch - provide helpful message
-      if (error.message && error.message.includes('Email does not match')) {
-        const normalizedOrderEmail = order.buyer_email?.trim().toLowerCase();
+      // Check if error is missing edit token
+      if (error.message && error.message.includes("can't submit")) {
         toast({
-          title: 'Authentication required',
-          description: `Please sign in with ${normalizedOrderEmail} to submit your payment receipt. We've sent you a magic link email.`,
+          title: 'Session error',
+          description: error.message,
           variant: 'destructive',
         });
-        
-        // Try sending magic link if not already sent
-        if (normalizedOrderEmail) {
-          try {
-            await supabase.auth.signInWithOtp({
-              email: normalizedOrderEmail,
-              options: {
-                emailRedirectTo: `${window.location.origin}/booking/payment/${orderId}`,
-              },
-            });
-          } catch (linkError) {
-            console.error('Error sending magic link:', linkError);
-          }
-        }
       } else {
         toast({
           title: 'Error',
@@ -453,17 +367,6 @@ export default function PaymentPage() {
       const updatedOrder = await getOrderWithEvent(orderId);
       if (updatedOrder) {
         setOrder(updatedOrder);
-        
-        // Refresh auth status after updating email
-        const { data: { user } } = await supabase.auth.getUser();
-        const normalizedOrderEmail = updatedOrder.buyer_email?.trim().toLowerCase() || null;
-        const normalizedUserEmail = user?.email?.trim().toLowerCase() || null;
-        
-        setAuthStatus({
-          isAuthenticated: !!user,
-          email: normalizedUserEmail,
-          matchesOrder: normalizedOrderEmail === normalizedUserEmail,
-        });
       }
 
       toast({
@@ -575,35 +478,6 @@ export default function PaymentPage() {
           <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
             Please ensure your contact information is correct for payment receipts and order updates
           </p>
-          
-          {/* Authentication Status Warning */}
-          {order.buyer_email && !order.buyer_user_id && (
-            <div className="mb-4 p-3 rounded-lg border" style={{ 
-              borderColor: authStatus.matchesOrder ? 'rgba(14,122,58,0.2)' : 'rgba(239,68,68,0.2)',
-              backgroundColor: authStatus.matchesOrder ? 'rgba(14,122,58,0.05)' : 'rgba(239,68,68,0.05)',
-            }}>
-              {authStatus.matchesOrder ? (
-                <p className="text-sm" style={{ color: BRAND.green }}>
-                  ✓ Signed in as {authStatus.email}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium" style={{ color: '#dc2626' }}>
-                    ⚠ Authentication required
-                  </p>
-                  <p className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                    You need to sign in with {order.buyer_email} to submit your payment receipt. 
-                    {!authStatus.isAuthenticated && (
-                      <span> We'll send you a magic link when you click "I've Paid".</span>
-                    )}
-                    {authStatus.isAuthenticated && authStatus.email && (
-                      <span> Currently signed in as {authStatus.email}. Please sign out and sign in with {order.buyer_email}.</span>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
           
           <ContactInfoCard
             contactInfo={contactInfo}

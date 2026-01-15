@@ -129,7 +129,8 @@ export async function createBooking(
 
   // Call RPC function - NO p_total_amount parameter (removed for security)
   // Server computes total_amount from ticket_types.price × quantity
-  const { data: orderId, error } = await supabase.rpc('create_event_booking' as any, {
+  // Returns JSONB with {order_id, edit_token}
+  const { data: rpcResult, error } = await supabase.rpc('create_event_booking' as any, {
     p_event_id: draft.eventId,
     p_order_lines: orderLines,
     p_buyer_user_id: buyerUserId,
@@ -146,8 +147,26 @@ export async function createBooking(
     throw new Error(error.message || 'Failed to create booking');
   }
 
+  // Parse RPC result (JSONB with order_id and edit_token)
+  const result = rpcResult as { order_id: string; edit_token: string };
+  const orderId = result.order_id;
+  const editToken = result.edit_token;
+
+  if (!orderId || !editToken) {
+    console.error('Invalid RPC response:', rpcResult);
+    throw new Error('Failed to create booking: invalid response from server');
+  }
+
+  // Store edit_token in localStorage for guest receipt submission
+  localStorage.setItem(`order_edit_token:${orderId}`, editToken);
+
+  console.log('[createBooking] Order created with edit_token stored:', {
+    orderId,
+    editTokenStored: true,
+  });
+
   return {
-    orderId: orderId as string,
+    orderId,
     success: true,
   };
 }
