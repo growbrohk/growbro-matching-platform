@@ -225,6 +225,14 @@ export default function PaymentPage() {
       return;
     }
 
+    // GUARD: Prevent receipt submission for free orders
+    // This should never happen due to routing, but add explicit check for safety
+    if (order.total_amount <= 0) {
+      console.warn('[PaymentPage] Attempted to submit receipt for free order, redirecting to success');
+      navigate(`/booking/success/${orderId}`, { replace: true });
+      return;
+    }
+
     if (selectedPaymentMethod !== 'payme' && selectedPaymentMethod !== 'fps') {
       toast({
         title: 'Invalid payment method',

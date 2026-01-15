@@ -39,6 +39,7 @@ import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bo
 import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
+import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
@@ -53,14 +54,8 @@ export default function CompleteBookingPage() {
     email: '',
   });
   const [attendees, setAttendees] = useState<AttendeeInfo[]>([]);
-  // Order Contact (Primary Booker) - always collected in Per-Ticket mode
-  const [orderContact, setOrderContact] = useState<ContactInfo>({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    email: '',
-  });
-  const [useAttendee1AsContact, setUseAttendee1AsContact] = useState(true);
+  // Checkbox: Use Contact info as Attendee 1 (default ON)
+  const [useContactAsAttendee1, setUseContactAsAttendee1] = useState(true);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -123,9 +118,9 @@ export default function CompleteBookingPage() {
               // Load saved attendees if available
               if (draft.attendees && draft.attendees.length === totalTickets) {
                 setAttendees(draft.attendees);
-                // Initialize Order Contact from Attendee 1 if available
-                if (draft.attendees.length > 0 && draft.attendees[0].email) {
-                  setOrderContact({
+                // If checkbox is ON and Attendee 1 has data, sync Contact info from Attendee 1
+                if (useContactAsAttendee1 && draft.attendees.length > 0 && draft.attendees[0].email) {
+                  setContactInfo({
                     firstName: draft.attendees[0].firstName,
                     lastName: draft.attendees[0].lastName,
                     email: draft.attendees[0].email,
@@ -161,19 +156,8 @@ export default function CompleteBookingPage() {
     );
   };
 
-  // Validate Order Contact (for Per-Ticket mode)
-  const isOrderContactValid = (): boolean => {
-    if (!event || event.collect_attendee_info !== 'per_ticket') {
-      return true; // Not required for primary-only mode
-    }
-    
-    // Order Contact email is always required (for guest receipt submission)
-    return (
-      orderContact.firstName.trim() !== '' &&
-      orderContact.lastName.trim() !== '' &&
-      isValidEmail(orderContact.email)
-    );
-  };
+  // Contact info validation (used for both FREE route and Per-Ticket mode)
+  // In Per-Ticket mode, Contact info is used as Order Contact (buyer_email)
 
   // Validate attendees (for per-ticket collection)
   const areAttendeesValid = (): boolean => {
@@ -190,19 +174,38 @@ export default function CompleteBookingPage() {
     );
   };
 
-  // Check if form is valid (either contact info or all attendees + order contact)
+  // Check if form is valid (either contact info or all attendees + contact info)
   const isFormValid = (): boolean => {
     if (event?.collect_attendee_info === 'per_ticket') {
-      return areAttendeesValid() && isOrderContactValid();
+      return areAttendeesValid() && isContactValid();
     }
     return isContactValid();
   };
 
-  // Handle contact info save
-  const handleSaveContact = () => {
-    if (isContactValid()) {
-      saveContactInfo(contactInfo);
-      setShowContactDialog(false);
+
+  // Handle contact info update
+  const handleContactInfoUpdate = (info: ContactInfo) => {
+    setContactInfo(info);
+    saveContactInfo(info);
+    
+    // If checkbox is ON, sync Contact info to Attendee 1
+    if (useContactAsAttendee1 && attendees.length > 0) {
+      const updated = [...attendees];
+      updated[0] = {
+        ...updated[0],
+        firstName: info.firstName,
+        lastName: info.lastName,
+        email: info.email,
+        phone: info.phone,
+      };
+      setAttendees(updated);
+      
+      // Save to booking draft
+      if (bookingDraft) {
+        const updatedDraft = { ...bookingDraft, attendees: updated };
+        setBookingDraft(updatedDraft);
+        saveBookingDraft(updatedDraft);
+      }
     }
   };
 
@@ -212,12 +215,16 @@ export default function CompleteBookingPage() {
     updated[index] = { ...updated[index], [field]: value };
     setAttendees(updated);
     
-    // If toggle is ON and this is Attendee 1, sync to Order Contact
-    if (useAttendee1AsContact && index === 0) {
-      setOrderContact({
-        ...orderContact,
-        [field]: value,
-      });
+    // If checkbox is ON and this is Attendee 1, sync to Contact info
+    if (useContactAsAttendee1 && index === 0) {
+      const updatedContact: ContactInfo = {
+        firstName: updated[0].firstName,
+        lastName: updated[0].lastName,
+        email: updated[0].email,
+        phone: updated[0].phone,
+      };
+      setContactInfo(updatedContact);
+      saveContactInfo(updatedContact);
     }
     
     // Save to booking draft
@@ -228,25 +235,27 @@ export default function CompleteBookingPage() {
     }
   };
 
-  // Handle Order Contact update
-  const handleOrderContactUpdate = (field: keyof ContactInfo, value: string) => {
-    setOrderContact({
-      ...orderContact,
-      [field]: value,
-    });
-  };
-
-  // Handle toggle change: Use Attendee 1 as Order Contact
-  const handleToggleUseAttendee1 = (checked: boolean) => {
-    setUseAttendee1AsContact(checked);
+  // Handle toggle change: Use Contact info as Attendee 1
+  const handleToggleUseContactAsAttendee1 = (checked: boolean) => {
+    setUseContactAsAttendee1(checked);
     if (checked && attendees.length > 0) {
-      // Copy Attendee 1 info to Order Contact
-      setOrderContact({
-        firstName: attendees[0].firstName,
-        lastName: attendees[0].lastName,
-        email: attendees[0].email,
-        phone: attendees[0].phone,
-      });
+      // Copy Contact info to Attendee 1
+      const updated = [...attendees];
+      updated[0] = {
+        ...updated[0],
+        firstName: contactInfo.firstName,
+        lastName: contactInfo.lastName,
+        email: contactInfo.email,
+        phone: contactInfo.phone,
+      };
+      setAttendees(updated);
+      
+      // Save to booking draft
+      if (bookingDraft) {
+        const updatedDraft = { ...bookingDraft, attendees: updated };
+        setBookingDraft(updatedDraft);
+        saveBookingDraft(updatedDraft);
+      }
     }
   };
 
@@ -383,102 +392,51 @@ export default function CompleteBookingPage() {
           </p>
 
           {event?.collect_attendee_info === 'per_ticket' ? (
-            /* Per-Ticket Mode: Order Contact + Attendee Forms */
+            /* Per-Ticket Mode: Contact Info + Attendee Forms */
             <div className="space-y-4">
-              {/* Order Contact (Primary Booker) Section */}
-              <Card
-                className="border rounded-2xl"
-                style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
-              >
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold" style={{ color: '#0F1F17' }}>
-                    Order Contact (Primary Booker)
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    This is the contact person for payment receipts and order updates
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Toggle: Use Attendee 1 as Order Contact */}
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="use-attendee-1"
-                      checked={useAttendee1AsContact}
-                      onCheckedChange={handleToggleUseAttendee1}
-                    />
-                    <label
-                      htmlFor="use-attendee-1"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                      style={{ color: '#0F1F17' }}
-                    >
-                      Use Attendee 1 as Order Contact
-                    </label>
-                  </div>
+              {/* Contact Info Section (same as FREE route) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
+                  <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                    Contact info
+                  </h3>
+                </div>
+                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  This is the contact person for payment receipts and order updates
+                </p>
+                
+                {/* Checkbox: Use Contact info as Attendee 1 */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="use-contact-as-attendee-1"
+                    checked={useContactAsAttendee1}
+                    onCheckedChange={handleToggleUseContactAsAttendee1}
+                  />
+                  <label
+                    htmlFor="use-contact-as-attendee-1"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    style={{ color: '#0F1F17' }}
+                  >
+                    Use Contact info as Attendee 1
+                  </label>
+                </div>
 
-                  {/* Order Contact Fields */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="order-contact-firstName" className="text-sm">
-                        First name <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="order-contact-firstName"
-                        type="text"
-                        value={orderContact.firstName}
-                        onChange={(e) => handleOrderContactUpdate('firstName', e.target.value)}
-                        className="mt-1"
-                        placeholder="Enter first name"
-                        disabled={useAttendee1AsContact}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="order-contact-lastName" className="text-sm">
-                        Last name <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="order-contact-lastName"
-                        type="text"
-                        value={orderContact.lastName}
-                        onChange={(e) => handleOrderContactUpdate('lastName', e.target.value)}
-                        className="mt-1"
-                        placeholder="Enter last name"
-                        disabled={useAttendee1AsContact}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="order-contact-email" className="text-sm">
-                      Email address <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="order-contact-email"
-                      type="email"
-                      value={orderContact.email}
-                      onChange={(e) => handleOrderContactUpdate('email', e.target.value)}
-                      className="mt-1"
-                      placeholder="Enter email address"
-                      disabled={useAttendee1AsContact}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This email will be used for payment receipt submission authorization
-                    </p>
-                  </div>
-                  <div>
-                    <Label htmlFor="order-contact-phone" className="text-sm">
-                      Phone number <span className="text-muted-foreground">(optional)</span>
-                    </Label>
-                    <Input
-                      id="order-contact-phone"
-                      type="tel"
-                      value={orderContact.phone}
-                      onChange={(e) => handleOrderContactUpdate('phone', e.target.value)}
-                      className="mt-1"
-                      placeholder="Enter phone number"
-                      disabled={useAttendee1AsContact}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Contact Info Card (shared component) */}
+                <ContactInfoCard
+                  contactInfo={contactInfo}
+                  onUpdate={handleContactInfoUpdate}
+                  title="Contact info"
+                  description="This is the contact person for payment receipts and order updates"
+                  showPhone={true}
+                  requiredFields={{
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                    phone: false, // Phone optional for Order Contact
+                  }}
+                />
+              </div>
 
               {/* Attendee Forms */}
               <div className="space-y-4">
@@ -586,7 +544,7 @@ export default function CompleteBookingPage() {
               })}
             </div>
           ) : (
-            /* Primary Contact Info (Original) */
+            /* Primary Contact Info (FREE route) */
             <>
               {!hasContactInfo && (
                 <div className="flex items-center gap-2 flex-wrap">
@@ -612,48 +570,20 @@ export default function CompleteBookingPage() {
                 </div>
               )}
 
-              {/* Contact Card */}
-              {hasContactInfo && (
-                <div className="border rounded-2xl p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">First name</Label>
-                        <p className="text-sm mt-1" style={{ color: contactInfo.firstName ? '#0F1F17' : '#0E7A3A' }}>
-                          {contactInfo.firstName || 'Please enter'}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Last name</Label>
-                        <p className="text-sm mt-1" style={{ color: contactInfo.lastName ? '#0F1F17' : '#0E7A3A' }}>
-                          {contactInfo.lastName || 'Please enter'}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Phone number</Label>
-                        <p className="text-sm mt-1" style={{ color: contactInfo.phone ? '#0F1F17' : '#0E7A3A' }}>
-                          {contactInfo.phone || 'Please enter'}
-                        </p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Email address</Label>
-                        <p className="text-sm mt-1" style={{ color: contactInfo.email ? '#0F1F17' : '#0E7A3A' }}>
-                          {contactInfo.email || 'Please enter'}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowContactDialog(true)}
-                      className="ml-2"
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                </div>
-              )}
+              {/* Contact Info Card (shared component) */}
+              <ContactInfoCard
+                contactInfo={contactInfo}
+                onUpdate={handleContactInfoUpdate}
+                title="Contact info"
+                description="We'll contact you only if there's any updates to your booking"
+                showPhone={true}
+                requiredFields={{
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                }}
+              />
             </>
           )}
         </div>
@@ -730,14 +660,11 @@ export default function CompleteBookingPage() {
                   }
 
                   // Create booking (server computes total_amount from ticket_types.price)
-                  // For Per-Ticket mode, use Order Contact as buyer contact info
-                  const buyerContactInfo = event?.collect_attendee_info === 'per_ticket' 
-                    ? orderContact 
-                    : contactInfo;
-                  
+                  // ALWAYS use contactInfo as buyer contact info (p_buyer_*)
+                  // This ensures consistency: Contact info is always used as orders.buyer_email
                   const result = await createBooking(
                     finalDraft,
-                    buyerContactInfo,
+                    contactInfo, // Always use contactInfo (same for FREE route and Per-Ticket mode)
                     event?.collect_attendee_info === 'per_ticket' ? attendees : undefined
                   );
 
@@ -818,7 +745,7 @@ export default function CompleteBookingPage() {
         </div>
       </div>
 
-      {/* Contact Info Dialog */}
+      {/* Contact Info Dialog (fallback for Add button) */}
       <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
         <DialogContent>
           <DialogHeader>
@@ -826,9 +753,9 @@ export default function CompleteBookingPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="firstName">First name</Label>
+              <Label htmlFor="dialog-firstName">First name</Label>
               <Input
-                id="firstName"
+                id="dialog-firstName"
                 type="text"
                 value={contactInfo.firstName}
                 onChange={(e) =>
@@ -838,9 +765,9 @@ export default function CompleteBookingPage() {
               />
             </div>
             <div>
-              <Label htmlFor="lastName">Last name</Label>
+              <Label htmlFor="dialog-lastName">Last name</Label>
               <Input
-                id="lastName"
+                id="dialog-lastName"
                 type="text"
                 value={contactInfo.lastName}
                 onChange={(e) =>
@@ -850,9 +777,9 @@ export default function CompleteBookingPage() {
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone number</Label>
+              <Label htmlFor="dialog-phone">Phone number</Label>
               <Input
-                id="phone"
+                id="dialog-phone"
                 type="tel"
                 value={contactInfo.phone}
                 onChange={(e) =>
@@ -862,9 +789,9 @@ export default function CompleteBookingPage() {
               />
             </div>
             <div>
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="dialog-email">Email address</Label>
               <Input
-                id="email"
+                id="dialog-email"
                 type="email"
                 value={contactInfo.email}
                 onChange={(e) =>
@@ -884,7 +811,12 @@ export default function CompleteBookingPage() {
             </Button>
             <Button
               type="button"
-              onClick={handleSaveContact}
+              onClick={() => {
+                if (isContactValid()) {
+                  handleContactInfoUpdate(contactInfo);
+                  setShowContactDialog(false);
+                }
+              }}
               disabled={!isContactValid()}
               className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
