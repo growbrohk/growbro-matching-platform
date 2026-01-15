@@ -25,6 +25,7 @@ import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import { getBookingRoute } from '@/lib/utils/booking-route';
+import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -48,6 +49,7 @@ export default function PaymentPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
   const redirectedRef = useRef(false);
 
   useEffect(() => {
@@ -127,31 +129,74 @@ export default function PaymentPage() {
     setSelectedPaymentMethod(method);
   };
 
-  const handleReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
-      if (!validTypes.includes(file.type)) {
-        toast({
-          title: 'Invalid file type',
-          description: 'Please upload an image (JPEG, PNG, WebP) or PDF file.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      
-      // Validate file size (10MB)
+    if (!file) {
+      return;
+    }
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload an image (JPEG, PNG, WebP) or PDF file.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Handle PDF files: keep as-is, enforce <= 10MB
+    if (file.type === 'application/pdf') {
       if (file.size > 10 * 1024 * 1024) {
         toast({
           title: 'File too large',
-          description: 'Please upload a file smaller than 10MB.',
+          description: 'Please upload a PDF file smaller than 10MB.',
           variant: 'destructive',
         });
         return;
       }
-      
       setReceiptFile(file);
+      return;
+    }
+
+    // Handle image files: compress to WebP
+    if (file.type.startsWith('image/')) {
+      setIsCompressing(true);
+      try {
+        const compressedFile = await compressReceiptImage(file);
+        
+        // Enforce hard cap: post-compression <= 1MB
+        if (compressedFile.size > 1024 * 1024) {
+          toast({
+            title: 'Compression failed',
+            description: 'Image is too large even after compression. Please try another image or upload as PDF.',
+            variant: 'destructive',
+          });
+          setIsCompressing(false);
+          return;
+        }
+        
+        setReceiptFile(compressedFile);
+        
+        // Show compression success message
+        const originalSizeKB = Math.round(file.size / 1024);
+        const compressedSizeKB = Math.round(compressedFile.size / 1024);
+        toast({
+          title: 'Image compressed',
+          description: `Compressed from ${originalSizeKB} KB to ${compressedSizeKB} KB`,
+        });
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        toast({
+          title: 'Compression failed',
+          description: 'Compression failed, please try another image or upload PDF',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsCompressing(false);
+      }
+      return;
     }
   };
 
@@ -457,8 +502,14 @@ export default function PaymentPage() {
                               onChange={handleReceiptChange}
                               className="cursor-pointer"
                               style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                              disabled={isCompressing}
                             />
-                            {receiptFile && selectedPaymentMethod === 'payme' && (
+                            {isCompressing && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Compressing image...
+                              </p>
+                            )}
+                            {receiptFile && selectedPaymentMethod === 'payme' && !isCompressing && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 Selected: {receiptFile.name}
                               </p>
@@ -546,8 +597,14 @@ export default function PaymentPage() {
                               onChange={handleReceiptChange}
                               className="cursor-pointer"
                               style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                              disabled={isCompressing}
                             />
-                            {receiptFile && selectedPaymentMethod === 'fps' && (
+                            {isCompressing && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Compressing image...
+                              </p>
+                            )}
+                            {receiptFile && selectedPaymentMethod === 'fps' && !isCompressing && (
                               <p className="text-xs text-muted-foreground mt-1">
                                 Selected: {receiptFile.name}
                               </p>
@@ -590,7 +647,7 @@ export default function PaymentPage() {
                 fontFamily: "'Inter Tight', sans-serif"
               }}
               onClick={handleCTAClick}
-              disabled={isSubmitting || !selectedPaymentMethod || (selectedPaymentMethod !== 'stripe' && !receiptFile)}
+              disabled={isSubmitting || isCompressing || !selectedPaymentMethod || (selectedPaymentMethod !== 'stripe' && !receiptFile)}
             >
               {isSubmitting ? (
                 <>
