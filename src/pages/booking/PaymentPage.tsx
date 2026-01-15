@@ -260,7 +260,7 @@ export default function PaymentPage() {
       return;
     }
 
-    // No authentication required - edit_token is used for authorization
+    // No authentication required - receipt upload is unauthenticated
 
     setIsSubmitting(true);
     try {
@@ -314,14 +314,7 @@ export default function PaymentPage() {
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       
-      // Check if error is missing edit token
-      if (error.message && error.message.includes("can't submit")) {
-        toast({
-          title: 'Session error',
-          description: error.message,
-          variant: 'destructive',
-        });
-      } else {
+      {
         toast({
           title: 'Error',
           description: error.message || 'Failed to submit payment. Please try again.',
@@ -338,22 +331,9 @@ export default function PaymentPage() {
     if (!orderId) return;
     
     try {
-      // Get edit_token from localStorage
-      const editToken = localStorage.getItem(`order_edit_token:${orderId}`);
-      
-      if (!editToken) {
-        toast({
-          title: 'Session error',
-          description: "This browser session can't update contact info. Please use the same device/session you used to create the order.",
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Update order contact info via RPC (uses edit_token, works for incognito)
+      // Update order contact info via RPC (no authentication required)
       const { error } = await supabase.rpc('update_order_contact_info' as any, {
         p_order_id: orderId,
-        p_edit_token: editToken,
         p_buyer_first_name: info.firstName || null,
         p_buyer_last_name: info.lastName || null,
         p_buyer_email: info.email.trim() ? info.email.trim().toLowerCase() : null,

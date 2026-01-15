@@ -6,6 +6,7 @@
  * - Sets submitted_at, receipt_url, payment_method
  * - Does NOT set paid_at or fulfillment_status='confirmed'
  * - Only host confirmation can mark order as paid
+ * - No authentication required - receipt upload is unauthenticated
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -87,23 +88,6 @@ export async function submitManualPayment({
   });
 
   try {
-    // Get edit_token from localStorage
-    const editToken = localStorage.getItem(`order_edit_token:${orderId}`);
-    
-    if (!editToken) {
-      const errorMsg = "This browser session can't submit receipts. Please use the same device/session you used to create the order.";
-      console.error('[submitManualPayment] Edit token missing:', {
-        orderId,
-        error: errorMsg,
-      });
-      throw new Error(errorMsg);
-    }
-
-    console.log('[submitManualPayment] Edit token found in localStorage:', {
-      orderId,
-      editTokenPresent: true,
-    });
-
     // Upload receipt
     const receiptUrl = await uploadReceipt(orderId, receiptFile);
     console.log('[submitManualPayment] Receipt uploaded, submitting via RPC:', {
@@ -113,10 +97,9 @@ export async function submitManualPayment({
 
     // Call RPC function to submit payment receipt
     // This sets payment_status='submitted' but does NOT mark as paid
-    // Uses edit_token for authorization instead of JWT email
+    // No authentication required - receipt upload is unauthenticated
     const { error: rpcError } = await supabase.rpc('submit_payment_receipt', {
       p_order_id: orderId,
-      p_edit_token: editToken,
       p_payment_method: paymentMethod,
       p_receipt_url: receiptUrl,
       p_payment_reference_link: paymentReferenceLink || null,
