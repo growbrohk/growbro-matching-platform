@@ -86,6 +86,7 @@ CREATE POLICY "Users can create connection requests for their orgs"
 -- UPDATE: 
 -- - Accept/reject: only the NON-requester side can update from pending -> accepted/rejected
 -- - Block: either side can set status='blocked', but blocked_by_org_id must be one of user's orgs
+-- Note: Immutability of org_a_id, org_b_id, requested_by_org_id is enforced by trigger
 CREATE POLICY "Users can update connections for their orgs"
   ON connections FOR UPDATE
   USING (
@@ -96,18 +97,14 @@ CREATE POLICY "Users can update connections for their orgs"
     )
   )
   WITH CHECK (
-    -- Prevent changes to immutable fields
-    OLD.org_a_id = NEW.org_a_id
-    AND OLD.org_b_id = NEW.org_b_id
-    AND OLD.requested_by_org_id = NEW.requested_by_org_id
     -- Ensure blocked_by_org_id is set correctly if blocking
-    AND (
-      NEW.status <> 'blocked' 
+    (
+      connections.status <> 'blocked' 
       OR (
-        NEW.blocked_by_org_id IN (NEW.org_a_id, NEW.org_b_id)
+        connections.blocked_by_org_id IN (connections.org_a_id, connections.org_b_id)
         AND EXISTS (
           SELECT 1 FROM org_members
-          WHERE org_members.org_id = NEW.blocked_by_org_id
+          WHERE org_members.org_id = connections.blocked_by_org_id
           AND org_members.user_id = auth.uid()
         )
       )
@@ -115,7 +112,40 @@ CREATE POLICY "Users can update connections for their orgs"
   );
 
 -- ============================================================================
--- 4. RPC FUNCTIONS
+-- 4. TRIGGER TO PREVENT CHANGES TO IMMUTABLE FIELDS
+-- ============================================================================
+
+-- Trigger function to prevent changes to immutable fields
+CREATE OR REPLACE FUNCTION prevent_connection_immutable_changes()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Prevent changes to immutable fields
+  IF OLD.org_a_id IS DISTINCT FROM NEW.org_a_id THEN
+    RAISE EXCEPTION 'Cannot change org_a_id';
+  END IF;
+  
+  IF OLD.org_b_id IS DISTINCT FROM NEW.org_b_id THEN
+    RAISE EXCEPTION 'Cannot change org_b_id';
+  END IF;
+  
+  IF OLD.requested_by_org_id IS DISTINCT FROM NEW.requested_by_org_id THEN
+    RAISE EXCEPTION 'Cannot change requested_by_org_id';
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- Create trigger
+CREATE TRIGGER connections_prevent_immutable_changes
+  BEFORE UPDATE ON connections
+  FOR EACH ROW
+  EXECUTE FUNCTION prevent_connection_immutable_changes();
+
+-- ============================================================================
+-- 5. RPC FUNCTIONS
 -- ============================================================================
 
 -- Function A: request_connection
@@ -329,7 +359,7 @@ END;
 $$;
 
 -- ============================================================================
--- 5. COMMENTS
+-- 6. COMMENTS
 -- ============================================================================
 
 COMMENT ON TABLE connections IS 'Org-to-org connection requests and relationships. Uses canonical ordering (org_a_id < org_b_id) to prevent duplicates.';
