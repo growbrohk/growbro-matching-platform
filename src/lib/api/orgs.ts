@@ -172,12 +172,31 @@ export async function getOrgStats(orgId: string): Promise<{
     .in('status', ['pending', 'confirmed']);
 
   // Connect: use RPC to get accepted connections count
-  const { data: connectCount, error: connectError } = await supabase.rpc('get_connected_count', {
+  // Try member RPC first, fallback to public RPC if user is not a member
+  let connectCount = 0;
+  let connectError = null;
+  
+  const { data: memberCount, error: memberError } = await (supabase.rpc as any)('get_connected_count', {
     p_org_id: orgId,
   });
+  
+  if (!memberError) {
+    connectCount = memberCount || 0;
+  } else {
+    // Fallback to public RPC if member RPC fails (e.g., user not member of org)
+    const { data: publicCount, error: publicError } = await (supabase.rpc as any)('get_connected_count_public', {
+      p_org_id: orgId,
+    });
+    
+    if (!publicError) {
+      connectCount = publicCount || 0;
+    } else {
+      connectError = publicError;
+    }
+  }
 
-  // Fallback to 0 if RPC fails (e.g., user not member of org when viewing public profile)
-  const finalConnectCount = connectError ? 0 : (connectCount || 0);
+  // Fallback to 0 if both RPCs fail
+  const finalConnectCount = connectError ? 0 : connectCount;
 
   return {
     catalogCount,

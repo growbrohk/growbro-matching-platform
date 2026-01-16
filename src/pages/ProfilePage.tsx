@@ -8,6 +8,7 @@ import ProfileGrid from '@/components/profile/ProfileGrid';
 import { getOrgStats } from '@/lib/api/orgs';
 import { supabase } from '@/integrations/supabase/client';
 import { OrgProfile } from '@/contexts/AuthContext';
+import { useConnectedCount } from '@/hooks/use-connected-count';
 
 export default function ProfilePage() {
   const { currentOrg } = useAuth();
@@ -19,6 +20,10 @@ export default function ProfilePage() {
     collabsCount: 0,
     connectCount: 0,
   });
+  
+  // Fetch connected count using hook for real-time updates
+  const { data: connectedCountData } = useConnectedCount(currentOrg?.id);
+  const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -76,7 +81,8 @@ export default function ProfilePage() {
           profile={profile}
           stats={stats}
           mode="owner"
-          onConnectClick={() => navigate(`/app/org/${currentOrg.id}/connections`)}
+          connectedCount={connectedCount}
+          onConnectStatClick={() => navigate(`/app/org/${currentOrg.id}/connections`)}
         />
       </div>
       

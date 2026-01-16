@@ -31,7 +31,7 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
     queryFn: async (): Promise<ConnectionStatusData | null> => {
       if (!currentOrg || !otherOrgId) return null;
 
-      const { data, error } = await supabase.rpc('get_connection_status', {
+      const { data, error } = await (supabase.rpc as any)('get_connection_status', {
         p_my_org_id: currentOrg.id,
         p_target_org_id: otherOrgId,
       });
@@ -74,7 +74,7 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
         throw new Error('Missing org information');
       }
 
-      const { data, error } = await supabase.rpc('request_connection', {
+      const { data, error } = await (supabase.rpc as any)('request_connection', {
         p_requester_org_id: currentOrg.id,
         p_target_org_id: otherOrgId,
       });
@@ -89,7 +89,10 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
       queryClient.invalidateQueries({ queryKey: ['pending-connections-count', currentOrg?.id] });
       if (otherOrgId) {
         queryClient.invalidateQueries({ queryKey: ['pending-connections-count', otherOrgId] });
+        queryClient.invalidateQueries({ queryKey: ['connected-count', otherOrgId] });
       }
+      queryClient.invalidateQueries({ queryKey: ['connected-count', currentOrg?.id] });
+      queryClient.invalidateQueries({ queryKey: ['connected-orgs', currentOrg?.id] });
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Failed to send connection request';
@@ -112,7 +115,7 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
         throw new Error('Connection ID not available');
       }
 
-      const { error } = await supabase.rpc('respond_to_connection', {
+      const { error } = await (supabase.rpc as any)('respond_to_connection', {
         p_connection_id: connectionId,
         p_action: action,
       });
@@ -128,10 +131,15 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['connectionStatus', currentOrg?.id, otherOrgId] });
       queryClient.invalidateQueries({ queryKey: ['pending-connections-count', currentOrg?.id] });
+      if (otherOrgId) {
+        queryClient.invalidateQueries({ queryKey: ['pending-connections-count', otherOrgId] });
+        queryClient.invalidateQueries({ queryKey: ['connected-count', otherOrgId] });
+      }
       queryClient.invalidateQueries({ queryKey: ['connected-count', currentOrg?.id] });
-      queryClient.invalidateQueries({ queryKey: ['connected-count', otherOrgId] });
       queryClient.invalidateQueries({ queryKey: ['connected-orgs', currentOrg?.id] });
-      queryClient.invalidateQueries({ queryKey: ['connected-orgs', otherOrgId] });
+      if (otherOrgId) {
+        queryClient.invalidateQueries({ queryKey: ['connected-orgs', otherOrgId] });
+      }
     },
     onError: (error: any) => {
       toast.error(error.message || 'Failed to respond to connection request');
@@ -149,9 +157,9 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
       requestConnectionMutation.mutate();
     } else if (connectionState === 'incoming_pending') {
       respondToConnectionMutation.mutate('accept');
-    } else if (connectionState === 'accepted' && otherOrgId) {
-      // Navigate to connections page when Connected
-      navigate(`/app/org/${otherOrgId}/connections`);
+    } else if (connectionState === 'accepted' && currentOrg) {
+      // Navigate to MY org's connections page when Connected (privacy-safe)
+      navigate(`/app/org/${currentOrg.id}/connections`);
     }
   };
 
@@ -227,6 +235,9 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
     connectionState === 'blocked' ||
     requestConnectionMutation.isPending ||
     respondToConnectionMutation.isPending;
+  
+  // Connected button should be clickable (not disabled)
+  const isConnectedButton = connectionState === 'accepted';
 
   const isProcessing = requestConnectionMutation.isPending || respondToConnectionMutation.isPending;
 
@@ -265,7 +276,8 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
         // Show Connect button (or Requested/Connected/Blocked)
         <Button
           onClick={handleConnectClick}
-          disabled={isButtonDisabled}
+          disabled={isConnectedButton ? false : isButtonDisabled}
+          variant={connectionState === 'accepted' ? 'outline' : 'default'}
           className="flex-1 h-12 rounded-2xl font-bold"
           style={{
             backgroundColor: connectionState === 'outgoing_pending' || connectionState === 'accepted' || connectionState === 'blocked'
@@ -274,6 +286,7 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
             color: connectionState === 'outgoing_pending' || connectionState === 'accepted' || connectionState === 'blocked'
               ? 'rgba(15,31,23,0.6)'
               : 'white',
+            borderColor: connectionState === 'accepted' ? 'rgba(14,122,58,0.2)' : undefined,
           }}
         >
           {isProcessing ? (

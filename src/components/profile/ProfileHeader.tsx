@@ -21,9 +21,11 @@ export interface ProfileHeaderProps {
   };
   mode: 'owner' | 'public';
   onConnectClick?: () => void;
+  connectedCount?: number; // Optional override for connectCount from hook
+  onConnectStatClick?: () => void; // Optional handler for clicking Connect stat
 }
 
-export default function ProfileHeader({ org, profile, stats, mode, onConnectClick }: ProfileHeaderProps) {
+export default function ProfileHeader({ org, profile, stats, mode, onConnectClick, connectedCount, onConnectStatClick }: ProfileHeaderProps) {
   const brandName = org.name || 'Untitled';
   
   // Format Instagram handle - extract username from URL if needed
@@ -111,11 +113,11 @@ export default function ProfileHeader({ org, profile, stats, mode, onConnectClic
           </span>
         </div>
         <div 
-          className={`flex items-baseline gap-1 ${onConnectClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
-          onClick={onConnectClick}
+          className={`flex items-baseline gap-1 ${onConnectStatClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
+          onClick={onConnectStatClick}
         >
           <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
-            {stats.connectCount}
+            {connectedCount !== undefined ? connectedCount : stats.connectCount}
           </span>
           <span className="text-sm font-normal" style={{ color: '#0F1F17' }}>
             Connect

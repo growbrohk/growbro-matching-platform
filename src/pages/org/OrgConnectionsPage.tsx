@@ -18,10 +18,16 @@ export default function OrgConnectionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Use provided orgId or fallback to currentOrg
+  // Use provided orgId from route param, fallback to currentOrg
+  // IMPORTANT: Always use route param if available to ensure correct org context
   const targetOrgId = orgId || currentOrg?.id;
 
-  const { data: connectedOrgs = [], isLoading: isLoadingConnected } = useConnectedOrgs(targetOrgId);
+  const { data: connectedOrgs = [], isLoading: isLoadingConnected, error: connectedOrgsError } = useConnectedOrgs(targetOrgId);
+  
+  // Log error for debugging if RPC fails (e.g., user not member of org)
+  if (connectedOrgsError) {
+    console.warn('Error loading connected orgs:', connectedOrgsError);
+  }
   const { data: pendingData } = usePendingConnectionsCount();
 
   // Group connected orgs by category

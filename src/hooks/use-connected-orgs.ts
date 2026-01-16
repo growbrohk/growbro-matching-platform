@@ -20,7 +20,7 @@ export function useConnectedOrgs(orgId?: string) {
     queryFn: async (): Promise<ConnectedOrg[]> => {
       if (!targetOrgId) return [];
 
-      const { data, error } = await supabase.rpc('get_connected_orgs', {
+      const { data, error } = await (supabase.rpc as any)('get_connected_orgs', {
         p_org_id: targetOrgId,
       });
 

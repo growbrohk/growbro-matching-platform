@@ -6,6 +6,7 @@ import ProfileActions from '@/components/profile/ProfileActions';
 import ProfileGrid from '@/components/profile/ProfileGrid';
 import { getOrgBySlugWithProfile, getOrgStats } from '@/lib/api/orgs';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConnectedCount } from '@/hooks/use-connected-count';
 
 export default function PublicProfile() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
@@ -21,6 +22,10 @@ export default function PublicProfile() {
 
   // Check if user is a member of this org
   const isMemberOfOrg = org && orgMemberships.some((m) => m.org_id === org.id);
+  
+  // Fetch connected count for viewed org using hook (public mode)
+  const { data: connectedCountData } = useConnectedCount(org?.id, true);
+  const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
 
   useEffect(() => {
     if (!orgSlug) {
@@ -86,7 +91,8 @@ export default function PublicProfile() {
           profile={org.profile}
           stats={stats}
           mode="public"
-          onConnectClick={
+          connectedCount={connectedCount}
+          onConnectStatClick={
             isMemberOfOrg
               ? () => navigate(`/app/org/${org.id}/connections`)
               : undefined
