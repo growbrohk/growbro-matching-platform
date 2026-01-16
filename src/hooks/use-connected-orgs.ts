@@ -12,7 +12,7 @@ export interface ConnectedOrg {
 }
 
 export function useConnectedOrgs(orgId?: string) {
-  const { currentOrg } = useAuth();
+  const { currentOrg, orgMemberships } = useAuth();
   const targetOrgId = orgId || currentOrg?.id;
 
   return useQuery({
@@ -26,7 +26,24 @@ export function useConnectedOrgs(orgId?: string) {
 
       if (error) {
         console.error('Error fetching connected orgs:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          targetOrgId,
+          isMember: orgMemberships.some((m) => m.org_id === targetOrgId),
+        });
         return [];
+      }
+
+      // Log for debugging when count suggests there should be data but array is empty
+      if (!data || data.length === 0) {
+        console.warn('get_connected_orgs returned empty array', {
+          targetOrgId,
+          data,
+          isMember: orgMemberships.some((m) => m.org_id === targetOrgId),
+        });
       }
 
       return (data || []) as ConnectedOrg[];
