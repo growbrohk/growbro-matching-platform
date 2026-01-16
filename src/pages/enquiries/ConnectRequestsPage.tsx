@@ -34,8 +34,8 @@ export default function ConnectRequestsPage() {
       console.log('[ConnectRequests] Fetching pending requests for orgId:', currentOrg.id);
       const { data: existingConnections, error } = await supabase
         .from('connections')
-        .select('org_a_id, org_b_id, status, requested_by_org_id')
-        .or(`org_a_id.eq.${currentOrg.id},org_b_id.eq.${currentOrg.id}`)
+        .select('org_low_id, org_high_id, status, requested_by_org_id')
+        .or(`org_low_id.eq.${currentOrg.id},org_high_id.eq.${currentOrg.id}`)
         .eq('status', 'pending')
         .eq('requested_by_org_id', currentOrg.id);
 
@@ -48,7 +48,7 @@ export default function ConnectRequestsPage() {
       if (existingConnections) {
         const pendingRequestedOrgIds = new Set<string>();
         existingConnections.forEach((conn) => {
-          const otherOrgId = conn.org_a_id === currentOrg.id ? conn.org_b_id : conn.org_a_id;
+          const otherOrgId = conn.org_low_id === currentOrg.id ? conn.org_high_id : conn.org_low_id;
           pendingRequestedOrgIds.add(otherOrgId);
         });
         setRequestedOrgIds(pendingRequestedOrgIds);
@@ -68,8 +68,8 @@ export default function ConnectRequestsPage() {
       // Get all org IDs that current org has connections with (any status)
       const { data: existingConnections, error } = await supabase
         .from('connections')
-        .select('org_a_id, org_b_id, status, requested_by_org_id')
-        .or(`org_a_id.eq.${currentOrg.id},org_b_id.eq.${currentOrg.id}`);
+        .select('org_low_id, org_high_id, status, requested_by_org_id')
+        .or(`org_low_id.eq.${currentOrg.id},org_high_id.eq.${currentOrg.id}`);
 
       if (error) {
         console.error('[SuggestedOrgs] Error fetching existing connections:', error);
@@ -81,7 +81,7 @@ export default function ConnectRequestsPage() {
       
       if (existingConnections) {
         existingConnections.forEach((conn) => {
-          const otherOrgId = conn.org_a_id === currentOrg.id ? conn.org_b_id : conn.org_a_id;
+          const otherOrgId = conn.org_low_id === currentOrg.id ? conn.org_high_id : conn.org_low_id;
           connectedOrgIds.add(otherOrgId);
         });
       }
