@@ -24,6 +24,11 @@ export default function OrgConnectionsPage() {
 
   const { data: connectedOrgs = [], isLoading: isLoadingConnected, error: connectedOrgsError } = useConnectedOrgs(targetOrgId);
   
+  // Temporary log to verify RPC output shape
+  if (connectedOrgs && connectedOrgs.length > 0) {
+    console.log('get_connected_orgs keys', Object.keys(connectedOrgs[0]));
+  }
+  
   // Log error for debugging if RPC fails (e.g., user not member of org)
   if (connectedOrgsError) {
     console.warn('Error loading connected orgs:', connectedOrgsError);
@@ -59,8 +64,8 @@ export default function OrgConnectionsPage() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (org) =>
-          org.other_org_name.toLowerCase().includes(query) ||
-          org.other_org_handle.toLowerCase().includes(query)
+          org.name.toLowerCase().includes(query) ||
+          org.handle.toLowerCase().includes(query)
       );
     }
 
@@ -144,11 +149,11 @@ export default function OrgConnectionsPage() {
                   <div className="flex items-center gap-3">
                     {firstOrg && (
                       <Avatar className="h-12 w-12 flex-shrink-0">
-                        {firstOrg.other_org_avatar_url ? (
-                          <AvatarImage src={firstOrg.other_org_avatar_url} alt={firstOrg.other_org_name} />
+                        {firstOrg.avatar_url ? (
+                          <AvatarImage src={firstOrg.avatar_url} alt={firstOrg.name} />
                         ) : null}
                         <AvatarFallback className="bg-muted text-muted-foreground">
-                          {getInitials(firstOrg.other_org_name)}
+                          {getInitials(firstOrg.name)}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -158,8 +163,8 @@ export default function OrgConnectionsPage() {
                       </div>
                       <div className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
                         {count === 1
-                          ? `${firstOrg?.other_org_name || '1 account'}`
-                          : `${firstOrg?.other_org_name || '1 account'} and ${count - 1} others`}
+                          ? `${firstOrg?.name || '1 account'}`
+                          : `${firstOrg?.name || '1 account'} and ${count - 1} others`}
                       </div>
                     </div>
                   </div>
@@ -192,7 +197,7 @@ export default function OrgConnectionsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: '#0E7A3A' }} />
           </div>
-        ) : filteredOrgs.length === 0 ? (
+        ) : !isLoadingConnected && filteredOrgs.length === 0 ? (
           <Card className="rounded-2xl border p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
             <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
               {searchQuery
@@ -206,27 +211,27 @@ export default function OrgConnectionsPage() {
           <div className="space-y-2">
             {filteredOrgs.map((org) => (
               <Card
-                key={org.other_org_id}
+                key={org.org_id}
                 className="rounded-2xl border p-4 cursor-pointer hover:shadow-md transition-shadow"
                 style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                onClick={() => navigate(`/profile/${org.other_org_handle}`)}
+                onClick={() => navigate(`/profile/${org.handle}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Avatar className="h-12 w-12 flex-shrink-0">
-                      {org.other_org_avatar_url ? (
-                        <AvatarImage src={org.other_org_avatar_url} alt={org.other_org_name} />
+                      {org.avatar_url ? (
+                        <AvatarImage src={org.avatar_url} alt={org.name} />
                       ) : null}
                       <AvatarFallback className="bg-muted text-muted-foreground">
-                        {getInitials(org.other_org_name)}
+                        {getInitials(org.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-sm" style={{ color: '#0F1F17' }}>
-                        {org.other_org_name}
+                        {org.name}
                       </div>
                       <div className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                        {org.other_org_handle}
+                        {org.handle}
                       </div>
                     </div>
                   </div>
@@ -237,7 +242,7 @@ export default function OrgConnectionsPage() {
                     style={{ backgroundColor: 'rgba(15,31,23,0.1)', color: '#0F1F17' }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/messages/new?toOrg=${org.other_org_id}`);
+                      navigate(`/messages/new?toOrg=${org.org_id}`);
                     }}
                   >
                     <MessageSquare className="h-4 w-4 mr-2" />
