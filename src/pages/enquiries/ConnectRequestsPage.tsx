@@ -31,12 +31,19 @@ export default function ConnectRequestsPage() {
     if (!currentOrg) return;
 
     const fetchPendingRequests = async () => {
-      const { data: existingConnections } = await supabase
+      console.log('[ConnectRequests] Fetching pending requests for orgId:', currentOrg.id);
+      const { data: existingConnections, error } = await supabase
         .from('connections')
         .select('org_a_id, org_b_id, status, requested_by_org_id')
         .or(`org_a_id.eq.${currentOrg.id},org_b_id.eq.${currentOrg.id}`)
         .eq('status', 'pending')
         .eq('requested_by_org_id', currentOrg.id);
+
+      if (error) {
+        console.error('[ConnectRequests] Error fetching pending requests:', error);
+      } else {
+        console.log('[ConnectRequests] Pending requests data:', existingConnections);
+      }
 
       if (existingConnections) {
         const pendingRequestedOrgIds = new Set<string>();
@@ -57,11 +64,18 @@ export default function ConnectRequestsPage() {
     queryFn: async () => {
       if (!currentOrg) return [];
 
+      console.log('[SuggestedOrgs] Fetching existing connections for orgId:', currentOrg.id);
       // Get all org IDs that current org has connections with (any status)
-      const { data: existingConnections } = await supabase
+      const { data: existingConnections, error } = await supabase
         .from('connections')
         .select('org_a_id, org_b_id, status, requested_by_org_id')
         .or(`org_a_id.eq.${currentOrg.id},org_b_id.eq.${currentOrg.id}`);
+
+      if (error) {
+        console.error('[SuggestedOrgs] Error fetching existing connections:', error);
+      } else {
+        console.log('[SuggestedOrgs] Existing connections data:', existingConnections);
+      }
 
       const connectedOrgIds = new Set<string>();
       
