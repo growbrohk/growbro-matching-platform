@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
 import { Card, CardContent } from '@/components/ui/card';
-import { OrderRow } from '@/components/OrderRow';
+import { OrderListRowCompact } from '@/components/OrderListRowCompact';
 import { ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
 
 /**
  * DashboardPage - Mobile-first dashboard matching screenshot layout
@@ -19,6 +21,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentOrg } = useAuth();
+  const queryClient = useQueryClient();
   
   // Get range from URL or default to '30d'
   const rangeParam = searchParams.get('range') as RangeKey | null;
@@ -221,21 +224,35 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-200 text-sm font-medium" style={{ color: '#0F1F17' }}>
-          <div className="col-span-5">product</div>
-          <div className="col-span-3">details</div>
-          <div className="col-span-2 text-center">qty</div>
-          <div className="col-span-2 text-right">status</div>
-        </div>
-
         {/* Order Rows */}
         {pendingOrders.length === 0 ? (
           <div className="py-8 text-center text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
             No pending orders
           </div>
         ) : (
-          pendingOrders.map((order) => <OrderRow key={order.id} order={order} />)
+          pendingOrders.map((order) => {
+            const timestamp = order.created_at
+              ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
+              : '';
+            const showConfirm = order.payment_status === 'submitted' || order.fulfillment_status === 'pending_confirmation';
+            
+            return (
+              <OrderListRowCompact
+                key={order.id}
+                name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
+                createdAtLabel={timestamp}
+                imageUrl={order.previewImageUrl}
+                priceLabel={formatMoney(order.total_amount)}
+                onDetails={() => navigate(`/app/orders/${order.id}`)}
+                onConfirm={() => {
+                  // Invalidate queries to refresh data
+                  queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+                }}
+                showConfirm={showConfirm}
+                orderId={order.id}
+              />
+            );
+          })
         )}
       </div>
       </div>
