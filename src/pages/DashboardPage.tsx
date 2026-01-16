@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
 import { Card, CardContent } from '@/components/ui/card';
 import { OrderRow } from '@/components/OrderRow';
@@ -17,9 +17,24 @@ import { useAuth } from '@/contexts/AuthContext';
  */
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentOrg } = useAuth();
-  const [selectedRange, setSelectedRange] = useState<RangeKey>('today');
+  
+  // Get range from URL or default to '30d'
+  const rangeParam = searchParams.get('range') as RangeKey | null;
+  const initialRange: RangeKey = rangeParam && ['today', '7d', '30d', '90d'].includes(rangeParam) 
+    ? rangeParam 
+    : '30d';
+  
+  const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
   const { data: dashboardData, isLoading } = useOrdersDashboard(selectedRange);
+
+  // Update URL when range changes
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set('range', selectedRange);
+    setSearchParams(params, { replace: true });
+  }, [selectedRange, searchParams, setSearchParams]);
 
   // Fetch enquiries count (unresolved)
   // TODO: Replace with actual enquiries table query if table exists
@@ -74,14 +89,26 @@ export default function DashboardPage() {
   const { revenueTotal = 0, ordersCount = 0, pendingOrders = [] } = dashboardData || {};
 
   return (
-    <div className="w-full space-y-6">
-      {/* Title */}
-      <h1 className="text-3xl font-bold uppercase tracking-tight" style={{ color: '#0F1F17' }}>
-        DASHBOARD
-      </h1>
+    <>
+      <style>{`
+        .pill-filter-container::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      <div className="w-full space-y-6">
+        {/* Title */}
+        <h1 className="text-3xl font-bold uppercase tracking-tight" style={{ color: '#0F1F17' }}>
+          DASHBOARD
+        </h1>
 
-      {/* Pill Filter Row */}
-      <div className="flex gap-2 flex-wrap">
+        {/* Pill Filter Row - Single row, no wrap, scrollable if needed */}
+        <div 
+          className="pill-filter-container flex gap-2.5 flex-nowrap overflow-x-auto"
+          style={{
+            scrollbarWidth: 'none', // Firefox
+            msOverflowStyle: 'none', // IE/Edge
+          }}
+        >
         {rangeOptions.map((option) => {
           const isSelected = selectedRange === option.key;
           return (
@@ -89,7 +116,8 @@ export default function DashboardPage() {
               key={option.key}
               onClick={() => setSelectedRange(option.key)}
               className={cn(
-                'px-4 py-2 rounded-full text-sm font-medium transition-colors',
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0',
+                'min-h-[36px]',
                 isSelected
                   ? 'bg-gray-800 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -122,7 +150,7 @@ export default function DashboardPage() {
           {/* Orders Card */}
           <button
             onClick={handleOrdersClick}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors"
+            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {ordersCount}
@@ -130,34 +158,36 @@ export default function DashboardPage() {
             <div className="text-xs font-medium mb-1" style={{ color: '#0F1F17' }}>
               orders
             </div>
-            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
+            <div className="text-xs pr-7" style={{ color: 'rgba(15,31,23,0.6)' }}>
               products & tickets
             </div>
-            <div className="flex justify-end mt-2">
-              <ChevronRight className="h-5 w-5" style={{ color: '#0F1F17' }} />
-            </div>
+            <ChevronRight 
+              className="h-4 w-4 absolute right-3 bottom-3" 
+              style={{ color: '#0F1F17' }} 
+            />
           </button>
 
           {/* Collab Card */}
           <button
             onClick={handleCollabClick}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors"
+            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {collabCount}
             </div>
-            <div className="text-xs font-medium mb-1" style={{ color: '#0F1F17' }}>
+            <div className="text-xs font-medium mb-1 pr-7" style={{ color: '#0F1F17' }}>
               collab
             </div>
-            <div className="flex justify-end mt-2">
-              <ChevronRight className="h-5 w-5" style={{ color: '#0F1F17' }} />
-            </div>
+            <ChevronRight 
+              className="h-4 w-4 absolute right-3 bottom-3" 
+              style={{ color: '#0F1F17' }} 
+            />
           </button>
 
           {/* Enquiries Card */}
           <button
             onClick={handleEnquiriesClick}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors"
+            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {enquiriesCount}
@@ -165,12 +195,13 @@ export default function DashboardPage() {
             <div className="text-xs font-medium mb-1" style={{ color: '#0F1F17' }}>
               enquiries
             </div>
-            <div className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
+            <div className="text-xs pr-7" style={{ color: 'rgba(15,31,23,0.6)' }}>
               unresolved
             </div>
-            <div className="flex justify-end mt-2">
-              <ChevronRight className="h-5 w-5" style={{ color: '#0F1F17' }} />
-            </div>
+            <ChevronRight 
+              className="h-4 w-4 absolute right-3 bottom-3" 
+              style={{ color: '#0F1F17' }} 
+            />
           </button>
         </div>
       </div>
@@ -207,6 +238,7 @@ export default function DashboardPage() {
           pendingOrders.map((order) => <OrderRow key={order.id} order={order} />)
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
