@@ -126,3 +126,7 @@ GRANT EXECUTE ON FUNCTION public.get_connected_orgs_public(uuid) TO anon, authen
 GRANT EXECUTE ON FUNCTION public.get_connected_orgs(uuid) TO authenticated;
 
 COMMIT;
+
+-- IMPORTANT:
+-- orgs table does NOT have a `type` column.
+-- Do NOT reference o.type here or the RPC will fail silently in prod.
