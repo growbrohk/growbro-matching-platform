@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import ProfileHeader from '@/components/profile/ProfileHeader';
@@ -10,6 +11,7 @@ import { OrgProfile } from '@/contexts/AuthContext';
 
 export default function ProfilePage() {
   const { currentOrg } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<OrgProfile | null>(null);
   const [stats, setStats] = useState({
@@ -74,6 +76,7 @@ export default function ProfilePage() {
           profile={profile}
           stats={stats}
           mode="owner"
+          onConnectClick={() => navigate(`/app/org/${currentOrg.id}/connections`)}
         />
       </div>
       

@@ -27,6 +27,7 @@ import CollabSearch from "./pages/collab/CollabSearch";
 import CollabResults from "./pages/collab/CollabResults";
 import Enquiries from "./pages/Enquiries";
 import ConnectRequestsPage from "./pages/enquiries/ConnectRequestsPage";
+import OrgConnectionsPage from "./pages/org/OrgConnectionsPage";
 // Poster Space pages
 import SpaceDetail from "./pages/booking/SpaceDetail";
 // Public pages
@@ -379,6 +380,9 @@ function AppRoutes() {
       {/* Enquiries page (canonical route) */}
       <Route path="/app/enquiries" element={<ProtectedRoute><AppLayout><Enquiries /></AppLayout></ProtectedRoute>} />
       <Route path="/app/enquiries/connect-requests" element={<ProtectedRoute><AppLayout><ConnectRequestsPage /></AppLayout></ProtectedRoute>} />
+      
+      {/* Org Connections page */}
+      <Route path="/app/org/:orgId/connections" element={<ProtectedRoute><AppLayout><OrgConnectionsPage /></AppLayout></ProtectedRoute>} />
       {/* Legacy routes redirect to Enquiries */}
       <Route path="/app/notifications" element={<Navigate to="/app/enquiries" replace />} />
       <Route path="/app/orders" element={<Navigate to="/app/enquiries" replace />} />

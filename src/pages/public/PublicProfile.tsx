@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import ProfileHeader from '@/components/profile/ProfileHeader';
 import ProfileActions from '@/components/profile/ProfileActions';
 import ProfileGrid from '@/components/profile/ProfileGrid';
 import { getOrgBySlugWithProfile, getOrgStats } from '@/lib/api/orgs';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function PublicProfile() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const navigate = useNavigate();
+  const { currentOrg, orgMemberships } = useAuth();
   const [loading, setLoading] = useState(true);
   const [org, setOrg] = useState<any>(null);
   const [stats, setStats] = useState({
@@ -15,6 +18,9 @@ export default function PublicProfile() {
     collabsCount: 0,
     connectCount: 0,
   });
+
+  // Check if user is a member of this org
+  const isMemberOfOrg = org && orgMemberships.some((m) => m.org_id === org.id);
 
   useEffect(() => {
     if (!orgSlug) {
@@ -80,6 +86,11 @@ export default function PublicProfile() {
           profile={org.profile}
           stats={stats}
           mode="public"
+          onConnectClick={
+            isMemberOfOrg
+              ? () => navigate(`/app/org/${org.id}/connections`)
+              : undefined
+          }
         />
         
         <ProfileActions mode="public" otherOrgId={org.id} />

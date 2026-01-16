@@ -20,9 +20,10 @@ export interface ProfileHeaderProps {
     connectCount: number;
   };
   mode: 'owner' | 'public';
+  onConnectClick?: () => void;
 }
 
-export default function ProfileHeader({ org, profile, stats, mode }: ProfileHeaderProps) {
+export default function ProfileHeader({ org, profile, stats, mode, onConnectClick }: ProfileHeaderProps) {
   const brandName = org.name || 'Untitled';
   
   // Format Instagram handle - extract username from URL if needed
@@ -109,7 +110,10 @@ export default function ProfileHeader({ org, profile, stats, mode }: ProfileHead
             Collabs
           </span>
         </div>
-        <div className="flex items-baseline gap-1">
+        <div 
+          className={`flex items-baseline gap-1 ${onConnectClick ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''}`}
+          onClick={onConnectClick}
+        >
           <span className="text-base md:text-lg font-bold" style={{ color: '#0F1F17' }}>
             {stats.connectCount}
           </span>

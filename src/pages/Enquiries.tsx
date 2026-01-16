@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Mail, SlidersHorizontal, ChevronRight } from 'lucide-react';
+import { Mail, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
@@ -17,6 +15,7 @@ import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enqu
 import HostEnquiryOrderCard, { type HostOrderCardData } from '@/components/host/HostEnquiryOrderCard';
 import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 import { usePendingConnectionsCount } from '@/hooks/use-pending-connections-count';
+import ConnectRequestsPreviewCard from '@/components/connections/ConnectRequestsPreviewCard';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
 
@@ -347,68 +346,12 @@ export default function Enquiries() {
       </div>
 
       {/* Connect Requests Card */}
-      {pendingConnectionsData && pendingConnectionsData.count > 0 && (
-        <Card
-          className="rounded-2xl border p-4 cursor-pointer hover:shadow-md transition-shadow"
-          style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+      {pendingConnectionsData && (
+        <ConnectRequestsPreviewCard
+          pendingCount={pendingConnectionsData.count}
+          connections={pendingConnectionsData.connections}
           onClick={() => navigate('/app/enquiries/connect-requests')}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {/* Avatar stack (up to 3) */}
-              <div className="flex -space-x-2 flex-shrink-0">
-                {pendingConnectionsData.connections.slice(0, 3).map((conn, idx) => {
-                  const orgName = conn.other_org_name;
-                  const logoUrl = conn.other_org_logo_url;
-                  const initials = orgName
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2);
-
-                  return (
-                    <Avatar
-                      key={conn.connection_id}
-                      className="h-10 w-10 border-2 border-background"
-                      style={{ zIndex: 3 - idx }}
-                    >
-                      {logoUrl ? (
-                        <AvatarImage src={logoUrl} alt={orgName} />
-                      ) : null}
-                      <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  );
-                })}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm" style={{ color: '#0F1F17' }}>
-                  Connect requests
-                </div>
-                <div className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                  {pendingConnectionsData.connections.length > 0 && (
-                    <>
-                      {pendingConnectionsData.connections[0].other_org_slug || 
-                       pendingConnectionsData.connections[0].other_org_name}
-                      {pendingConnectionsData.count > 1 && ` + ${pendingConnectionsData.count - 1} others`}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Badge
-                variant="destructive"
-                className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs font-semibold"
-              >
-                {pendingConnectionsData.count}
-              </Badge>
-              <ChevronRight className="h-5 w-5" style={{ color: 'rgba(15,31,23,0.6)' }} />
-            </div>
-          </div>
-        </Card>
+        />
       )}
 
       {/* Enquiries List */}

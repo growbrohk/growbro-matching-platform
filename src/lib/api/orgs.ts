@@ -171,31 +171,18 @@ export async function getOrgStats(orgId: string): Promise<{
     .or(`brand_org_id.eq.${orgId},venue_org_id.eq.${orgId}`)
     .in('status', ['pending', 'confirmed']);
 
-  // Connect: unique org IDs collaborated with
-  const { data: bookingsData } = await supabase
-    .from('bookings')
-    .select('brand_org_id, venue_org_id')
-    .or(`brand_org_id.eq.${orgId},venue_org_id.eq.${orgId}`);
+  // Connect: use RPC to get accepted connections count
+  const { data: connectCount, error: connectError } = await supabase.rpc('get_connected_count', {
+    p_org_id: orgId,
+  });
 
-  const connectedOrgIds = new Set<string>();
-  if (bookingsData) {
-    bookingsData.forEach((booking) => {
-      if (booking.brand_org_id === orgId) {
-        if (booking.venue_org_id !== orgId) {
-          connectedOrgIds.add(booking.venue_org_id);
-        }
-      } else if (booking.venue_org_id === orgId) {
-        if (booking.brand_org_id !== orgId) {
-          connectedOrgIds.add(booking.brand_org_id);
-        }
-      }
-    });
-  }
+  // Fallback to 0 if RPC fails (e.g., user not member of org when viewing public profile)
+  const finalConnectCount = connectError ? 0 : (connectCount || 0);
 
   return {
     catalogCount,
     collabsCount: collabsCount || 0,
-    connectCount: connectedOrgIds.size,
+    connectCount: finalConnectCount,
   };
 }
 
