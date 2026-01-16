@@ -307,7 +307,7 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         .reduce((sum, o) => sum + o.total_amount, 0);
 
       // Counts
-      const ordersCount = rawOrders.length; // Total count of all orders (for dashboard stats)
+      const ordersCount = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid') for dashboard stats
       const pendingCount = orders.filter((o) => o.payment_status === 'submitted').length;
       const completedCount = orders.filter(
         (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'

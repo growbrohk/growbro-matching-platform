@@ -158,11 +158,8 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {ordersCount}
             </div>
-            <div className="text-xs font-medium mb-1" style={{ color: '#0F1F17' }}>
+            <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               orders
-            </div>
-            <div className="text-xs pr-7" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              products & tickets
             </div>
             <ChevronRight 
               className="h-4 w-4 absolute right-3 bottom-3" 
@@ -195,11 +192,8 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {enquiriesCount}
             </div>
-            <div className="text-xs font-medium mb-1" style={{ color: '#0F1F17' }}>
+            <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               enquiries
-            </div>
-            <div className="text-xs pr-7" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              unresolved
             </div>
             <ChevronRight 
               className="h-4 w-4 absolute right-3 bottom-3" 
