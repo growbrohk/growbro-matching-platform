@@ -13,7 +13,7 @@ type OrderTab = 'pending' | 'completed' | 'all';
  * Tab definitions:
  * - Pending: payment_status = 'submitted'
  * - Completed: payment_status = 'paid' OR fulfillment_status = 'confirmed'
- * - All: no extra status filter (still within selected date range)
+ * - All: pending OR confirmed orders only (excludes cancelled/refunded/failed)
  */
 export default function OrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams();

@@ -15,6 +15,8 @@ export interface Order {
   event_id: string | null;
   order_type: 'event' | 'product' | null;
   metadata: Record<string, any> | null;
+  displayName: string;
+  previewImageUrl: string | null;
 }
 
 export interface OrdersDashboardData {
@@ -170,7 +172,7 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
 
       // Orders are already filtered by event_id server-side
       // For product orders: TODO - need to check product.org_id (skip for now)
-      const orders = (ordersData || [])
+      const rawOrders = (ordersData || [])
         .filter((order: any) => {
           // Only include event orders for now
           // Product orders would need separate query with product.org_id join
@@ -187,7 +189,113 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
           event_id: order.event_id || null,
           order_type: order.order_type || 'event',
           metadata: order.metadata || null,
-        })) as Order[];
+        }));
+
+      // Helper function to check if order is pending or confirmed
+      const isPendingOrConfirmed = (order: any) => {
+        const isPending = order.payment_status === 'submitted' || order.fulfillment_status === 'pending_confirmation';
+        const isConfirmed = order.fulfillment_status === 'confirmed' || order.payment_status === 'paid';
+        return isPending || isConfirmed;
+      };
+
+      // Filter orders: "All" tab should only show pending/confirmed (exclude cancelled/refunded/failed)
+      const activeOrders = rawOrders.filter(isPendingOrConfirmed);
+
+      // Batch fetch events data
+      const uniqueEventIds = [...new Set(rawOrders.map((o: any) => o.event_id).filter(Boolean))];
+      const eventsMap = new Map<string, { title: string; instagram_preview_image_url: string | null }>();
+      
+      if (uniqueEventIds.length > 0) {
+        const { data: eventsData } = await supabase
+          .from('events')
+          .select('id, title, instagram_preview_image_url')
+          .in('id', uniqueEventIds);
+        
+        (eventsData || []).forEach((event: any) => {
+          eventsMap.set(event.id, {
+            title: event.title,
+            instagram_preview_image_url: event.instagram_preview_image_url || null,
+          });
+        });
+      }
+
+      // Batch fetch order_items
+      const orderIds = rawOrders.map((o: any) => o.id);
+      const orderItemsMap = new Map<string, Array<{ ticket_type_id: string; quantity: number }>>();
+      
+      if (orderIds.length > 0) {
+        const { data: orderItemsData } = await supabase
+          .from('order_items')
+          .select('order_id, ticket_type_id, quantity')
+          .in('order_id', orderIds);
+        
+        (orderItemsData || []).forEach((item: any) => {
+          if (!orderItemsMap.has(item.order_id)) {
+            orderItemsMap.set(item.order_id, []);
+          }
+          orderItemsMap.get(item.order_id)!.push({
+            ticket_type_id: item.ticket_type_id,
+            quantity: item.quantity,
+          });
+        });
+      }
+
+      // Batch fetch ticket_types
+      const ticketTypeIds = new Set<string>();
+      orderItemsMap.forEach((items) => {
+        items.forEach((item) => ticketTypeIds.add(item.ticket_type_id));
+      });
+      
+      const ticketTypesMap = new Map<string, { name: string }>();
+      
+      if (ticketTypeIds.size > 0) {
+        const { data: ticketTypesData } = await supabase
+          .from('ticket_types')
+          .select('id, name')
+          .in('id', Array.from(ticketTypeIds));
+        
+        (ticketTypesData || []).forEach((tt: any) => {
+          ticketTypesMap.set(tt.id, { name: tt.name });
+        });
+      }
+
+      // Build displayName and previewImageUrl for each order
+      const orders: Order[] = rawOrders.map((order: any) => {
+        const event = order.event_id ? eventsMap.get(order.event_id) : null;
+        const orderItems = orderItemsMap.get(order.id) || [];
+        
+        // Build display name
+        let displayName = '';
+        if (orderItems.length > 0 && event) {
+          // Has order items (tickets)
+          const firstTicketType = ticketTypesMap.get(orderItems[0].ticket_type_id);
+          if (firstTicketType) {
+            const ticketName = firstTicketType.name;
+            if (orderItems.length > 1) {
+              displayName = `${event.title} — ${ticketName} +${orderItems.length - 1} more`;
+            } else {
+              displayName = `${event.title} — ${ticketName}`;
+            }
+          } else {
+            displayName = event.title;
+          }
+        } else if (event) {
+          // Event only, no order items
+          displayName = event.title;
+        } else {
+          // Fallback
+          displayName = `Order ${order.order_no || order.id.slice(0, 6)}`;
+        }
+
+        // Get preview image URL
+        const previewImageUrl = event?.instagram_preview_image_url || null;
+
+        return {
+          ...order,
+          displayName,
+          previewImageUrl,
+        };
+      });
 
       // Calculate revenue: SUM(total_amount) for paid/confirmed orders
       const revenueTotal = orders
@@ -197,12 +305,12 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         .reduce((sum, o) => sum + o.total_amount, 0);
 
       // Counts
-      const ordersCount = orders.length;
+      const ordersCount = rawOrders.length; // Total count of all orders (for dashboard stats)
       const pendingCount = orders.filter((o) => o.payment_status === 'submitted').length;
       const completedCount = orders.filter(
         (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
       ).length;
-      const allCount = orders.length;
+      const allCount = orders.filter(isPendingOrConfirmed).length; // Only count pending/confirmed orders for "All" tab
 
       // Top 3 pending orders for dashboard
       const pendingOrders = orders
@@ -213,7 +321,7 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         revenueTotal,
         ordersCount,
         pendingOrders,
-        allOrders: orders, // Return all orders for OrdersPage
+        allOrders: orders.filter(isPendingOrConfirmed), // Return only pending/confirmed orders for OrdersPage "All" tab
         pendingCount,
         completedCount,
         allCount,

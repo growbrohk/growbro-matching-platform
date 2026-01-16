@@ -2,6 +2,7 @@ import { Order } from '@/hooks/useOrdersDashboard';
 import { format } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 
 interface OrderRowProps {
   order: Order;
@@ -12,27 +13,35 @@ interface OrderRowProps {
  * Matches the screenshot layout: product | details | qty | status
  */
 export function OrderRow({ order }: OrderRowProps) {
+  const [imageError, setImageError] = useState(false);
+
   // Format created_at timestamp
   const timestamp = order.created_at
     ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
     : '';
 
-  // Get product/event name from metadata or use placeholder
-  const productName =
-    order.metadata?.product_name ||
-    order.metadata?.event_name ||
-    order.order_type === 'event'
-      ? `Event Order`
-      : `Product #${order.id.slice(0, 8)}`;
+  // Use displayName from order (computed in hook)
+  const productName = order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`;
 
   // Quantity: default to 1 for now (can be enhanced with order_items join later)
   const quantity = order.metadata?.quantity || 1;
+
+  const showImage = order.previewImageUrl && !imageError;
 
   return (
     <div className="flex items-center gap-4 py-3 border-b border-gray-200">
       {/* Product Column */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="w-12 h-12 rounded bg-gray-200 flex-shrink-0" />
+        {showImage ? (
+          <img
+            src={order.previewImageUrl!}
+            alt={productName}
+            className="w-12 h-12 rounded bg-gray-200 flex-shrink-0 object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-12 h-12 rounded bg-gray-200 flex-shrink-0" />
+        )}
         <div className="min-w-0 flex-1">
           <div className="font-medium text-sm truncate" style={{ color: '#0F1F17' }}>
             {productName}
