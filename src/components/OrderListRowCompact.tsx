@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { PillButton } from '@/components/PillButton';
 
 export interface OrderListRowCompactProps {
   name: string;
@@ -113,20 +114,19 @@ export function OrderListRowCompact({
       </div>
 
       {/* RIGHT BLOCK: Details + Confirm */}
-      <div className="flex items-center justify-end gap-4 flex-shrink-0 pl-4 whitespace-nowrap">
-        <button
+      <div className="flex items-center justify-end gap-2 flex-shrink-0 pl-4 whitespace-nowrap">
+        <PillButton
+          variant="light"
           onClick={onDetails}
-          className="text-sm hover:underline"
-          style={{ color: '#0F1F17', textDecoration: 'underline' }}
         >
           details
-        </button>
+        </PillButton>
         {showConfirm && (
-          <button
+          <PillButton
+            variant="dark"
             onClick={handleConfirm}
             disabled={isConfirming}
-            className="text-sm hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            style={{ color: '#0F1F17', textDecoration: 'underline' }}
+            className="flex items-center gap-1.5"
           >
             {isConfirming ? (
               <>
@@ -136,7 +136,7 @@ export function OrderListRowCompact({
             ) : (
               'confirm'
             )}
-          </button>
+          </PillButton>
         )}
       </div>
     </div>
