@@ -69,7 +69,10 @@ export default function OrdersPage() {
         );
       case 'all':
       default:
-        return allOrders;
+        // All tab: only show orders where payment_status IN ('submitted','paid')
+        return allOrders.filter((o) => 
+          o.payment_status === 'submitted' || o.payment_status === 'paid'
+        );
     }
   };
 
@@ -87,7 +90,7 @@ export default function OrdersPage() {
       </h1>
 
       {/* Tab Row (Pill Filter) */}
-      <div className="flex gap-1 bg-gray-200 rounded-full p-1">
+      <div className="flex gap-1 bg-gray-200 rounded-full p-1 flex-nowrap">
         {tabs.map((tab) => {
           const isSelected = selectedTab === tab.key;
           return (
@@ -95,13 +98,16 @@ export default function OrdersPage() {
               key={tab.key}
               onClick={() => setSelectedTab(tab.key)}
               className={cn(
-                'flex-1 px-4 py-2 rounded-full text-sm font-medium transition-colors',
+                'flex-1 min-w-0 px-4 py-2 rounded-full text-sm font-medium transition-colors',
                 isSelected
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               )}
             >
-              {tab.label} {tab.count}
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                <span className="truncate">{tab.label}</span>
+                <span className="shrink-0">{tab.count}</span>
+              </span>
             </button>
           );
         })}

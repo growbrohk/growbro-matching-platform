@@ -198,8 +198,10 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         return isPending || isConfirmed;
       };
 
-      // Filter orders: "All" tab should only show pending/confirmed (exclude cancelled/refunded/failed)
-      const activeOrders = rawOrders.filter(isPendingOrConfirmed);
+      // Helper function for "All" tab: only orders where payment_status IN ('submitted','paid')
+      const isAllTabOrder = (order: any) => {
+        return order.payment_status === 'submitted' || order.payment_status === 'paid';
+      };
 
       // Batch fetch events data
       const uniqueEventIds = [...new Set(rawOrders.map((o: any) => o.event_id).filter(Boolean))];
@@ -310,7 +312,7 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
       const completedCount = orders.filter(
         (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
       ).length;
-      const allCount = orders.filter(isPendingOrConfirmed).length; // Only count pending/confirmed orders for "All" tab
+      const allCount = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid')
 
       // Top 3 pending orders for dashboard
       const pendingOrders = orders
@@ -321,7 +323,7 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         revenueTotal,
         ordersCount,
         pendingOrders,
-        allOrders: orders.filter(isPendingOrConfirmed), // Return only pending/confirmed orders for OrdersPage "All" tab
+        allOrders: orders.filter(isAllTabOrder), // Return only orders with payment_status IN ('submitted','paid') for OrdersPage "All" tab
         pendingCount,
         completedCount,
         allCount,
