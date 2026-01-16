@@ -58,17 +58,15 @@ export function useConnectedOrgs(orgId?: string, isPublic: boolean = false) {
       });
 
       if (error) {
-        console.error('[useConnectedOrgs] Public RPC error:', error);
-        console.error('[useConnectedOrgs] Error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-          targetOrgId,
-          isMember: isMemberOfTargetOrg,
-          usePublicRPC,
+        console.error('[useConnectedOrgs] Supabase error raw:', error);
+        console.error('[useConnectedOrgs] Supabase error json:', JSON.stringify(error, null, 2));
+        console.error('[useConnectedOrgs] Supabase error fields:', {
+          message: (error as any)?.message,
+          details: (error as any)?.details,
+          hint: (error as any)?.hint,
+          code: (error as any)?.code,
         });
-        return [];
+        throw error;
       }
 
       console.log('[useConnectedOrgs] Public RPC success, data:', data);

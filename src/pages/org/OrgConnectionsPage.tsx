@@ -197,6 +197,15 @@ export default function OrgConnectionsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin" style={{ color: '#0E7A3A' }} />
           </div>
+        ) : connectedOrgsError ? (
+          <Card className="rounded-2xl border p-8 text-center" style={{ borderColor: 'rgba(220,38,38,0.3)', backgroundColor: 'rgba(220,38,38,0.05)' }}>
+            <p className="text-sm font-semibold mb-2" style={{ color: '#DC2626' }}>
+              Error loading connected orgs
+            </p>
+            <p className="text-xs" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              {connectedOrgsError instanceof Error ? connectedOrgsError.message : 'Failed to fetch connections. Please try again.'}
+            </p>
+          </Card>
         ) : !isLoadingConnected && filteredOrgs.length === 0 ? (
           <Card className="rounded-2xl border p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
             <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
