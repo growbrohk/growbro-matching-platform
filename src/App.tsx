@@ -17,6 +17,8 @@ import Inventory from "./pages/dashboard/inventory/Inventory";
 import EventsList from "./pages/events/EventsList.new";
 import EventForm from "./pages/events/EventForm.new";
 import Dashboard from "./pages/Dashboard";
+import DashboardPage from "./pages/DashboardPage";
+import OrdersPage from "./pages/OrdersPage";
 import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
@@ -344,7 +346,7 @@ function AppRoutes() {
         - Products/Events/Spaces are subtabs inside Catalog
         - Old routes redirect to new Catalog structure
       */}
-      <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
       
       {/* Catalog page with subtabs (Products | Events | Spaces) */}
       <Route path="/app/catalog" element={<ProtectedRoute><AppLayout><Catalog /></AppLayout></ProtectedRoute>} />
@@ -383,9 +385,31 @@ function AppRoutes() {
       
       {/* Org Connections page */}
       <Route path="/app/org/:orgId/connections" element={<ProtectedRoute><AppLayout><OrgConnectionsPage /></AppLayout></ProtectedRoute>} />
+      
+      {/* Orders page - new mobile-first orders list */}
+      <Route 
+        path="/app/orders" 
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <OrdersPage />
+            </AppLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/app/orders/:orderId" 
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <OrdersPage />
+            </AppLayout>
+          </ProtectedRoute>
+        } 
+      />
+      
       {/* Legacy routes redirect to Enquiries */}
       <Route path="/app/notifications" element={<Navigate to="/app/enquiries" replace />} />
-      <Route path="/app/orders" element={<Navigate to="/app/enquiries" replace />} />
       
       {/* Messaging routes (fullscreen, no AppLayout) */}
       <Route path="/messages/new" element={<ProtectedRoute><MessagesComposerPage /></ProtectedRoute>} />
