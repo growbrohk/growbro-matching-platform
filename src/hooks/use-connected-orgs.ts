@@ -11,16 +11,36 @@ export interface ConnectedOrg {
   accepted_at: string;
 }
 
-export function useConnectedOrgs(orgId?: string) {
+export function useConnectedOrgs(orgId?: string, isPublic: boolean = false) {
   const { currentOrg, orgMemberships } = useAuth();
   const targetOrgId = orgId || currentOrg?.id;
+  
+  // Determine if we should use public RPC
+  // Use public RPC if:
+  // 1. Explicitly marked as public, OR
+  // 2. User is not a member of the target org
+  const isMemberOfTargetOrg = targetOrgId && orgMemberships.some((m) => m.org_id === targetOrgId);
+  const usePublicRPC = isPublic || !isMemberOfTargetOrg;
 
   return useQuery({
-    queryKey: ['connected-orgs', targetOrgId],
+    queryKey: ['connected-orgs', targetOrgId, usePublicRPC ? 'public' : 'member'],
     queryFn: async (): Promise<ConnectedOrg[]> => {
       if (!targetOrgId) return [];
 
-      const { data, error } = await (supabase.rpc as any)('get_connected_orgs', {
+      // Try member RPC first if user is a member, fallback to public RPC
+      if (!usePublicRPC) {
+        const { data, error } = await (supabase.rpc as any)('get_connected_orgs', {
+          p_org_id: targetOrgId,
+        });
+
+        if (!error) {
+          return (data ?? []) as ConnectedOrg[];
+        }
+        // If member RPC fails, fallback to public RPC
+      }
+
+      // Use public RPC
+      const { data, error } = await (supabase.rpc as any)('get_connected_orgs_public', {
         p_org_id: targetOrgId,
       });
 
@@ -32,7 +52,8 @@ export function useConnectedOrgs(orgId?: string) {
           hint: error.hint,
           code: error.code,
           targetOrgId,
-          isMember: orgMemberships.some((m) => m.org_id === targetOrgId),
+          isMember: isMemberOfTargetOrg,
+          usePublicRPC,
         });
         return [];
       }
