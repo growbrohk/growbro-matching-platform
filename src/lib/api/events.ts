@@ -235,6 +235,23 @@ export async function updateEvent(data: UpdateEventData): Promise<Event> {
 }
 
 /**
+ * Get all events for an organization
+ */
+export async function getEvents(orgId: string): Promise<Event[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch events');
+  }
+
+  return (data || []) as Event[];
+}
+
+/**
  * Get a single event by ID
  */
 export async function getEvent(eventId: string): Promise<Event | null> {
