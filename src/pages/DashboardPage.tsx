@@ -9,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
+import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLinkModal';
+import { supabase } from '@/integrations/supabase/client';
 
 /**
  * DashboardPage - Mobile-first dashboard matching screenshot layout
@@ -31,6 +33,7 @@ export default function DashboardPage() {
   
   const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
   const { data: dashboardData, isLoading } = useOrdersDashboard(selectedRange);
+  const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
 
   // Update URL when range changes
   useEffect(() => {
@@ -52,9 +55,101 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  // Fetch collab count
-  // TODO: Replace with actual collab table query if table exists
-  const collabCount = 0; // Placeholder
+  // Calculate date range for tracking clicks
+  const getDateRange = (rangeKey: RangeKey): { start: Date; end: Date } => {
+    const end = new Date();
+    const start = new Date();
+    switch (rangeKey) {
+      case 'today':
+        start.setHours(0, 0, 0, 0);
+        break;
+      case '7d':
+        start.setDate(start.getDate() - 7);
+        break;
+      case '30d':
+        start.setDate(start.getDate() - 30);
+        break;
+      case '90d':
+        start.setDate(start.getDate() - 90);
+        break;
+    }
+    return { start, end };
+  };
+
+  // Fetch channels count (tracking_links where host_org_id=currentOrg.id and affiliate_org_id is null and is_active=true)
+  const { data: channelsCount = 0 } = useQuery({
+    queryKey: ['tracking-channels-count', currentOrg?.id],
+    queryFn: async () => {
+      if (!currentOrg) return 0;
+      const { count, error } = await (supabase.from('tracking_links' as any) as any)
+        .select('*', { count: 'exact', head: true })
+        .eq('host_org_id', currentOrg.id)
+        .is('affiliate_org_id', null)
+        .eq('is_active', true);
+      if (error) {
+        console.error('Error fetching channels count:', error);
+        return 0;
+      }
+      return count || 0;
+    },
+    enabled: !!currentOrg,
+  });
+
+  // Fetch collab count (tracking_links where host_org_id=currentOrg.id and affiliate_org_id is not null and is_active=true)
+  const { data: collabCount = 0 } = useQuery({
+    queryKey: ['tracking-collab-count', currentOrg?.id],
+    queryFn: async () => {
+      if (!currentOrg) return 0;
+      const { count, error } = await (supabase.from('tracking_links' as any) as any)
+        .select('*', { count: 'exact', head: true })
+        .eq('host_org_id', currentOrg.id)
+        .not('affiliate_org_id', 'is', null)
+        .eq('is_active', true);
+      if (error) {
+        console.error('Error fetching collab count:', error);
+        return 0;
+      }
+      return count || 0;
+    },
+    enabled: !!currentOrg,
+  });
+
+  // Fetch clicks count (tracking_clicks joined to tracking_links, filtered by time range and org membership)
+  const { start: clicksStart, end: clicksEnd } = getDateRange(selectedRange);
+  const { data: clicksCount = 0 } = useQuery({
+    queryKey: ['tracking-clicks-count', currentOrg?.id, selectedRange],
+    queryFn: async () => {
+      if (!currentOrg) return 0;
+      const startISO = clicksStart.toISOString();
+      const endISO = clicksEnd.toISOString();
+      
+      // Query clicks where tracking_link belongs to current org (as host or affiliate)
+      const { data, error } = await (supabase.from('tracking_clicks' as any) as any)
+        .select(`
+          id,
+          tracking_links!inner(
+            host_org_id,
+            affiliate_org_id
+          )
+        `)
+        .gte('clicked_at', startISO)
+        .lte('clicked_at', endISO);
+
+      if (error) {
+        console.error('Error fetching clicks count:', error);
+        return 0;
+      }
+
+      // Filter client-side to only count clicks where user's org is host or affiliate
+      const filteredClicks = (data || []).filter((click: any) => {
+        const link = click.tracking_links;
+        return link.host_org_id === currentOrg.id || link.affiliate_org_id === currentOrg.id;
+      });
+
+      return filteredClicks.length;
+    },
+    enabled: !!currentOrg,
+  });
 
   const rangeOptions: { key: RangeKey; label: string }[] = [
     { key: 'today', label: 'today' },
@@ -171,9 +266,7 @@ export default function DashboardPage() {
             pipeline
           </h2>
           <button
-            onClick={() => {
-              // TODO: Open tracking form modal/page
-            }}
+            onClick={() => setIsTrackingModalOpen(true)}
             className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors flex items-center justify-center flex-shrink-0"
             style={{ color: '#0F1F17' }}
             aria-label="Add tracking"
@@ -190,7 +283,7 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              0
+              {channelsCount}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               channels
@@ -209,7 +302,7 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              0
+              {collabCount}
             </div>
             <div className="text-xs font-medium mb-1 pr-7" style={{ color: '#0F1F17' }}>
               collab
@@ -228,7 +321,7 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              0
+              {clicksCount}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               clicks
@@ -298,6 +391,9 @@ export default function DashboardPage() {
         )}
       </div>
       </div>
+
+      {/* Tracking Link Modal */}
+      <CreateTrackingLinkModal open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen} />
     </>
   );
 }

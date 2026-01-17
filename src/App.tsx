@@ -39,6 +39,7 @@ import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import PublicProfile from "./pages/public/PublicProfile";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
+import TrackingRedirectHandler from "./pages/public/TrackingRedirectHandler";
 import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
 import MessagesThreadPage from "./pages/messages/MessagesThreadPage";
 // Checkout pages
@@ -331,6 +332,9 @@ function AppRoutes() {
       
       {/* Tracking redirect route */}
       <Route path="/t/:shortCode" element={<TrackingRedirect />} />
+      
+      {/* New tracking link redirect route */}
+      <Route path="/r/:slug" element={<TrackingRedirectHandler />} />
       
       {/* Legacy routes - backward compatibility redirects */}
       <Route path="/o/:orgSlug/spaces/:spaceId" element={<LegacyPosterSpaceRedirect />} />

@@ -127,6 +127,21 @@ export async function createBooking(
     buyer_last_name: contactInfo.lastName,
   });
 
+  // Extract tid (tracking_link_id) from URL query params if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const tidParam = urlParams.get('tid');
+  let trackingLinkId: string | null = null;
+  
+  // Validate tid is a valid UUID
+  if (tidParam) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(tidParam)) {
+      trackingLinkId = tidParam;
+    } else {
+      console.warn('Invalid tid parameter format, ignoring:', tidParam);
+    }
+  }
+
   // Call RPC function - NO p_total_amount parameter (removed for security)
   // Server computes total_amount from ticket_types.price × quantity
   // Returns UUID (order_id) - no longer returns edit_token
@@ -140,6 +155,7 @@ export async function createBooking(
     p_buyer_phone: contactInfo.phone || null,
     p_currency: draft.currency || 'HKD',
     p_attendees: attendeesArray,
+    p_tracking_link_id: trackingLinkId, // Optional tracking link attribution
   });
 
   if (error) {
