@@ -41,7 +41,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [customUrl, setCustomUrl] = useState('');
-  const [affiliateOrgId, setAffiliateOrgId] = useState<string>('');
+  const [affiliateOrgId, setAffiliateOrgId] = useState<string>('none');
   const [slug, setSlug] = useState('');
   const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -188,7 +188,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
           label: label || null,
           destination_url: destinationUrl,
           host_org_id: currentOrg.id,
-          affiliate_org_id: affiliateOrgId || null,
+          affiliate_org_id: affiliateOrgId === "none" ? null : affiliateOrgId || null,
           is_active: true,
         })
         .select('id, slug')
@@ -227,7 +227,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setSelectedEventId('');
     setSelectedProductId('');
     setCustomUrl('');
-    setAffiliateOrgId('');
+    setAffiliateOrgId('none');
     setSlug('');
     setCreatedLink(null);
     setCopied(false);
@@ -373,12 +373,12 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
             {/* Affiliate Partner */}
             <div className="space-y-2">
               <Label htmlFor="affiliate">Affiliate Partner (optional)</Label>
-              <Select value={affiliateOrgId} onValueChange={setAffiliateOrgId}>
+              <Select value={affiliateOrgId || "none"} onValueChange={setAffiliateOrgId}>
                 <SelectTrigger id="affiliate">
                   <SelectValue placeholder="Select affiliate partner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {connectedOrgs.map((org) => (
                     <SelectItem key={org.org_id} value={org.org_id}>
                       {org.name}
