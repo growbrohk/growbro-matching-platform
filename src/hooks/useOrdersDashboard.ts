@@ -21,10 +21,12 @@ export interface Order {
 
 export interface OrdersDashboardData {
   revenueTotal: number;
-  ordersCount: number;
+  ordersCount: number; // Legacy - same as ordersCountSubmittedPaid
+  ordersCountSubmittedPaid: number; // Count orders where payment_status IN ('submitted','paid') within selected range
+  pendingCountSubmitted: number; // Count orders where payment_status='submitted' within selected range
   pendingOrders: Order[];
   allOrders: Order[]; // All orders for OrdersPage filtering
-  pendingCount: number;
+  pendingCount: number; // Legacy - same as pendingCountSubmitted
   completedCount: number;
   allCount: number;
 }
@@ -89,6 +91,8 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         return {
           revenueTotal: 0,
           ordersCount: 0,
+          ordersCountSubmittedPaid: 0,
+          pendingCountSubmitted: 0,
           pendingOrders: [],
           allOrders: [],
           pendingCount: 0,
@@ -145,6 +149,8 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         return {
           revenueTotal: 0,
           ordersCount: 0,
+          ordersCountSubmittedPaid: 0,
+          pendingCountSubmitted: 0,
           pendingOrders: [],
           allOrders: [],
           pendingCount: 0,
@@ -162,6 +168,8 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         return {
           revenueTotal: 0,
           ordersCount: 0,
+          ordersCountSubmittedPaid: 0,
+          pendingCountSubmitted: 0,
           pendingOrders: [],
           allOrders: [],
           pendingCount: 0,
@@ -307,8 +315,8 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         .reduce((sum, o) => sum + o.total_amount, 0);
 
       // Counts
-      const ordersCount = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid') for dashboard stats
-      const pendingCount = orders.filter((o) => o.payment_status === 'submitted').length;
+      const ordersCountSubmittedPaid = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid') for dashboard stats
+      const pendingCountSubmitted = orders.filter((o) => o.payment_status === 'submitted').length;
       const completedCount = orders.filter(
         (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
       ).length;
@@ -321,10 +329,12 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
 
       return {
         revenueTotal,
-        ordersCount,
+        ordersCount: ordersCountSubmittedPaid, // Legacy support
+        ordersCountSubmittedPaid,
+        pendingCountSubmitted,
         pendingOrders,
         allOrders: orders.filter(isAllTabOrder), // Return only orders with payment_status IN ('submitted','paid') for OrdersPage "All" tab
-        pendingCount,
+        pendingCount: pendingCountSubmitted, // Legacy support
         completedCount,
         allCount,
       };

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
 import { Card, CardContent } from '@/components/ui/card';
 import { OrderListRowCompact } from '@/components/OrderListRowCompact';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -89,7 +89,12 @@ export default function DashboardPage() {
     );
   }
 
-  const { revenueTotal = 0, ordersCount = 0, pendingOrders = [] } = dashboardData || {};
+  const { 
+    revenueTotal = 0, 
+    ordersCountSubmittedPaid = 0, 
+    pendingCountSubmitted = 0,
+    pendingOrders = [] 
+  } = dashboardData || {};
 
   return (
     <>
@@ -132,34 +137,63 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Revenue Card */}
-      <Card className="rounded-xl">
-        <CardContent className="p-6 flex items-center justify-between">
-          <div className="text-4xl font-bold" style={{ color: '#0F1F17' }}>
-            {formatMoney(revenueTotal)}
-          </div>
-          <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-            total revenue
-          </div>
-        </CardContent>
-      </Card>
+      {/* Top Summary: Two Cards in One Row */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Revenue Card */}
+        <Card className="rounded-xl">
+          <CardContent className="p-6">
+            <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+              {formatMoney(revenueTotal)}
+            </div>
+            <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+              total revenue
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Quick Actions Section */}
+        {/* Orders Card */}
+        <Card className="rounded-xl">
+          <CardContent className="p-6">
+            <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+              {ordersCountSubmittedPaid}
+            </div>
+            <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+              orders
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Pipeline Section */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold" style={{ color: '#0F1F17' }}>
-          quick actions
-        </h2>
-        <div className="grid grid-cols-3 gap-3">
-          {/* Orders Card */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold" style={{ color: '#0F1F17' }}>
+            pipeline
+          </h2>
           <button
-            onClick={handleOrdersClick}
+            onClick={() => {
+              // TODO: Open tracking form modal/page
+            }}
+            className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors flex items-center justify-center flex-shrink-0"
+            style={{ color: '#0F1F17' }}
+            aria-label="Add tracking"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Channels Card */}
+          <button
+            onClick={() => {
+              // Placeholder - can navigate or do nothing
+            }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {ordersCount}
+              0
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
-              orders
+              channels
             </div>
             <ChevronRight 
               className="h-4 w-4 absolute right-3 bottom-3" 
@@ -169,11 +203,13 @@ export default function DashboardPage() {
 
           {/* Collab Card */}
           <button
-            onClick={handleCollabClick}
+            onClick={() => {
+              // Placeholder - can navigate or do nothing
+            }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {collabCount}
+              0
             </div>
             <div className="text-xs font-medium mb-1 pr-7" style={{ color: '#0F1F17' }}>
               collab
@@ -184,16 +220,18 @@ export default function DashboardPage() {
             />
           </button>
 
-          {/* Enquiries Card */}
+          {/* Clicks Card */}
           <button
-            onClick={handleEnquiriesClick}
+            onClick={() => {
+              // Placeholder - can navigate or do nothing
+            }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {enquiriesCount}
+              0
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
-              enquiries
+              clicks
             </div>
             <ChevronRight 
               className="h-4 w-4 absolute right-3 bottom-3" 
@@ -206,9 +244,19 @@ export default function DashboardPage() {
       {/* Pending Orders Section */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold" style={{ color: '#0F1F17' }}>
-            pending orders
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold" style={{ color: '#0F1F17' }}>
+              pending orders
+            </h2>
+            {pendingCountSubmitted > 0 && (
+              <span 
+                className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium text-white"
+                style={{ backgroundColor: '#EF4444' }}
+              >
+                {pendingCountSubmitted}
+              </span>
+            )}
+          </div>
           <button
             onClick={handleViewAllPending}
             className="text-sm hover:underline"
