@@ -24,14 +24,22 @@ export default function TrackingRedirectHandler() {
 
       try {
         // 1. Look up tracking link by slug
+        // Use maybeSingle() instead of single() to avoid 406 errors when RLS blocks access
         const { data: trackingLink, error: lookupError } = await (supabase.from('tracking_links' as any) as any)
           .select('id, destination_url')
-          .eq('slug', slug)
+          .eq('slug', String(slug))
           .eq('is_active', true)
-          .single();
+          .maybeSingle();
 
-        if (lookupError || !trackingLink) {
-          // Slug not found or inactive, redirect to homepage
+        if (lookupError) {
+          // Query error, log and redirect
+          console.error('Error looking up tracking link:', lookupError);
+          navigate('/', { replace: true });
+          return;
+        }
+
+        if (!trackingLink) {
+          // Tracking link not found or inactive, redirect to homepage
           console.warn('Tracking link not found:', slug);
           navigate('/', { replace: true });
           return;
