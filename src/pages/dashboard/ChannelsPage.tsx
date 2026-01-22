@@ -13,6 +13,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { QrCodeModal } from '@/components/channels/QrCodeModal';
 import { EditChannelModal } from '@/components/channels/EditChannelModal';
 import { ChannelRow } from '@/hooks/useChannelRows';
@@ -225,9 +231,9 @@ export default function ChannelsPage() {
       </div>
 
       {/* Sort and Filter Controls */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center">
         {/* Sort Tabs */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <span className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
             Sort by:
           </span>
@@ -272,27 +278,34 @@ export default function ChannelsPage() {
         </div>
 
         {/* Filter Button */}
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setFilterDrawerOpen(true)}
-            className="relative h-8 px-3"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            <span className="ml-2">Filter</span>
-            {activeFilterCount > 0 && (
-              <Badge
-                variant="default"
-                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFilterDrawerOpen(true)}
+                aria-label="Filter"
+                className="relative h-8 w-8 p-0"
               >
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
-        </div>
+                <SlidersHorizontal className="h-4 w-4" />
+                {activeFilterCount > 0 && (
+                  <Badge
+                    variant="default"
+                    className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                    style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                  >
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Filter</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Results Count */}
