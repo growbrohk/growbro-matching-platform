@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useChannelRows } from '@/hooks/useChannelRows';
-import { Loader2, ExternalLink, QrCode } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Loader2, ExternalLink, QrCode, Pencil } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,6 +13,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { QrCodeModal } from '@/components/channels/QrCodeModal';
+import { EditChannelModal } from '@/components/channels/EditChannelModal';
+import { ChannelRow } from '@/hooks/useChannelRows';
 
 /**
  * Format money as HKD currency
@@ -26,8 +29,21 @@ function formatHKD(amount: number): string {
 
 export default function ChannelsPage() {
   const { data: channels, isLoading, error } = useChannelRows();
+  const queryClient = useQueryClient();
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
+
+  const handleEditClick = (channel: ChannelRow) => {
+    setSelectedChannel(channel);
+    setEditModalOpen(true);
+  };
+
+  const handleEditSuccess = () => {
+    // Invalidate and refetch channel data
+    queryClient.invalidateQueries({ queryKey: ['channel-rows'] });
+  };
 
   if (isLoading) {
     return (
@@ -97,6 +113,7 @@ export default function ChannelsPage() {
               <TableHead style={{ color: '#0F1F17' }}>QR code</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Collab partner</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Status</TableHead>
+              <TableHead style={{ color: '#0F1F17' }}>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -154,6 +171,18 @@ export default function ChannelsPage() {
                     {channel.status}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditClick(channel)}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -171,6 +200,21 @@ export default function ChannelsPage() {
             }
           }}
           slug={selectedSlug}
+        />
+      )}
+
+      {/* Edit Channel Modal */}
+      {selectedChannel && (
+        <EditChannelModal
+          open={editModalOpen}
+          onOpenChange={(open) => {
+            setEditModalOpen(open);
+            if (!open) {
+              setSelectedChannel(null);
+            }
+          }}
+          channel={selectedChannel}
+          onSuccess={handleEditSuccess}
         />
       )}
     </div>
