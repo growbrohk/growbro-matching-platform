@@ -231,81 +231,85 @@ export default function ChannelsPage() {
       </div>
 
       {/* Sort and Filter Controls */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center">
-        {/* Sort Tabs */}
-        <div className="flex items-center gap-2 flex-1">
-          <span className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+      <div className="flex items-center justify-between gap-3 w-full">
+        {/* Sort Tabs - LEFT */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-sm font-medium shrink-0" style={{ color: 'rgba(15,31,23,0.72)' }}>
             Sort by:
           </span>
-          <div className="inline-flex items-center gap-0 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)', padding: '2px' }}>
-            <Button
-              type="button"
-              variant={sortKey === 'clicks' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleSortClick('clicks')}
-              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'clicks' ? '' : 'hover:bg-transparent'}`}
-            >
-              Clicks
-              {sortKey === 'clicks' && (
-                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant={sortKey === 'orders' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleSortClick('orders')}
-              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'orders' ? '' : 'hover:bg-transparent'}`}
-            >
-              Orders
-              {sortKey === 'orders' && (
-                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant={sortKey === 'revenue' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleSortClick('revenue')}
-              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'revenue' ? '' : 'hover:bg-transparent'}`}
-            >
-              Revenue
-              {sortKey === 'revenue' && (
-                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
-              )}
-            </Button>
+          <div className="min-w-0 overflow-x-auto whitespace-nowrap">
+            <div className="inline-flex items-center gap-0 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)', padding: '2px' }}>
+              <Button
+                type="button"
+                variant={sortKey === 'clicks' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleSortClick('clicks')}
+                className={`h-8 px-3 text-xs rounded-md ${sortKey === 'clicks' ? '' : 'hover:bg-transparent'}`}
+              >
+                Clicks
+                {sortKey === 'clicks' && (
+                  <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant={sortKey === 'orders' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleSortClick('orders')}
+                className={`h-8 px-3 text-xs rounded-md ${sortKey === 'orders' ? '' : 'hover:bg-transparent'}`}
+              >
+                Orders
+                {sortKey === 'orders' && (
+                  <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant={sortKey === 'revenue' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleSortClick('revenue')}
+                className={`h-8 px-3 text-xs rounded-md ${sortKey === 'revenue' ? '' : 'hover:bg-transparent'}`}
+              >
+                Revenue
+                {sortKey === 'revenue' && (
+                  <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Filter Button */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setFilterDrawerOpen(true)}
-                aria-label="Filter"
-                className="relative h-8 w-8 p-0"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                {activeFilterCount > 0 && (
-                  <Badge
-                    variant="default"
-                    className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-                    style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-                  >
-                    {activeFilterCount}
-                  </Badge>
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Filter</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* Filter Button - RIGHT */}
+        <div className="shrink-0">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterDrawerOpen(true)}
+                  aria-label="Filter"
+                  className="relative h-8 w-8 p-0 shrink-0"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  {activeFilterCount > 0 && (
+                    <Badge
+                      variant="default"
+                      className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                      style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                    >
+                      {activeFilterCount}
+                    </Badge>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Filter</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
 
       {/* Results Count */}
