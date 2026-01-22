@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useChannelRows } from '@/hooks/useChannelRows';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, ExternalLink, QrCode, Pencil, Search, ArrowUpDown } from 'lucide-react';
+import { Loader2, ExternalLink, QrCode, Pencil, Search, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -13,16 +13,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { QrCodeModal } from '@/components/channels/QrCodeModal';
 import { EditChannelModal } from '@/components/channels/EditChannelModal';
 import { ChannelRow } from '@/hooks/useChannelRows';
+import { ChannelsFilterDrawer } from '@/components/channels/ChannelsFilterDrawer';
 
 /**
  * Format money as HKD currency
@@ -56,6 +50,16 @@ export default function ChannelsPage() {
   const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>('all');
   const [qrCodeFilter, setQrCodeFilter] = useState<QrCodeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  // Calculate active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (collabPartnerFilter !== 'all') count++;
+    if (qrCodeFilter !== 'all') count++;
+    if (statusFilter !== 'all') count++;
+    return count;
+  }, [collabPartnerFilter, qrCodeFilter, statusFilter]);
 
   const handleEditClick = (channel: ChannelRow) => {
     setSelectedChannel(channel);
@@ -267,40 +271,27 @@ export default function ChannelsPage() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={collabPartnerFilter} onValueChange={(value) => setCollabPartnerFilter(value as CollabPartnerFilter)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Collab partner" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="without">Without collab partner</SelectItem>
-              <SelectItem value="with">With collab partner</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={qrCodeFilter} onValueChange={(value) => setQrCodeFilter(value as QrCodeFilter)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="QR Code" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="with">With QR Code</SelectItem>
-              <SelectItem value="without">Without QR Code</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Filter Button */}
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFilterDrawerOpen(true)}
+            className="relative h-8 px-3"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="ml-2">Filter</span>
+            {activeFilterCount > 0 && (
+              <Badge
+                variant="default"
+                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+              >
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
         </div>
       </div>
 
@@ -434,6 +425,21 @@ export default function ChannelsPage() {
           onSuccess={handleEditSuccess}
         />
       )}
+
+      {/* Filter Drawer */}
+      <ChannelsFilterDrawer
+        open={filterDrawerOpen}
+        onOpenChange={setFilterDrawerOpen}
+        collabPartnerFilter={collabPartnerFilter}
+        qrCodeFilter={qrCodeFilter}
+        statusFilter={statusFilter}
+        onApply={(collabPartner, qrCode, status) => {
+          setCollabPartnerFilter(collabPartner);
+          setQrCodeFilter(qrCode);
+          setStatusFilter(status);
+          setFilterDrawerOpen(false);
+        }}
+      />
     </div>
   );
 }
