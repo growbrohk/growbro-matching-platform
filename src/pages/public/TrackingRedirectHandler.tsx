@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
+const CLICK_TRACK_TIMEOUT_MS = 1500;
+
 /**
  * Tracking Redirect Handler
  * Handles /r/:slug routes:
@@ -52,7 +54,7 @@ export default function TrackingRedirectHandler() {
         // Ensure Supabase client is ready and wait for click to be logged
         if (supabase) {
           try {
-            // Wait for the insert to complete (with 3 second timeout)
+            // Wait for the insert to complete (with timeout)
             const insertPromise = (supabase.from('tracking_clicks' as any) as any)
               .insert({
                 tracking_link_id: trackingLink.id,
@@ -61,14 +63,14 @@ export default function TrackingRedirectHandler() {
               });
 
             const timeoutPromise = new Promise((resolve) => {
-              setTimeout(() => resolve({ error: { message: 'Timeout' } }), 3000);
+              setTimeout(() => resolve({ error: { message: 'Timeout' } }), CLICK_TRACK_TIMEOUT_MS);
             });
 
             const result: any = await Promise.race([insertPromise, timeoutPromise]);
             
             if (result?.error) {
               if (result.error.message === 'Timeout') {
-                console.warn('Click logging timed out after 3s, redirecting anyway');
+                console.warn(`Click logging timed out after ${CLICK_TRACK_TIMEOUT_MS}ms, redirecting anyway`);
               } else {
                 console.error('Failed to log tracking click:', result.error);
                 console.error('Error details:', {
