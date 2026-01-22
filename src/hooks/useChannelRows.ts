@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 export interface ChannelRow {
   tracking_link_id: string;
   label: string;
+  slug: string;
+  qr_enabled: boolean;
   clicks: number;
   orders: number;
   revenue: number;

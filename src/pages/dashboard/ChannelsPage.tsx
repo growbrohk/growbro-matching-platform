@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useChannelRows } from '@/hooks/useChannelRows';
-import { Loader2, ExternalLink } from 'lucide-react';
+import { Loader2, ExternalLink, QrCode } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -9,6 +10,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { QrCodeModal } from '@/components/channels/QrCodeModal';
 
 /**
  * Format money as HKD currency
@@ -23,6 +26,8 @@ function formatHKD(amount: number): string {
 
 export default function ChannelsPage() {
   const { data: channels, isLoading, error } = useChannelRows();
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -89,6 +94,7 @@ export default function ChannelsPage() {
               <TableHead style={{ color: '#0F1F17' }}>Orders</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Revenue</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Destination</TableHead>
+              <TableHead style={{ color: '#0F1F17' }}>QR code</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Collab partner</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Status</TableHead>
             </TableRow>
@@ -114,6 +120,25 @@ export default function ChannelsPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </TableCell>
+                <TableCell>
+                  {channel.qr_enabled ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedSlug(channel.slug);
+                        setQrModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1"
+                    >
+                      <QrCode className="h-4 w-4" />
+                      View
+                    </Button>
+                  ) : (
+                    <span style={{ color: '#0F1F17' }}>—</span>
+                  )}
+                </TableCell>
                 <TableCell style={{ color: '#0F1F17' }}>
                   {channel.collab_partner_name || '—'}
                 </TableCell>
@@ -134,6 +159,20 @@ export default function ChannelsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* QR Code Modal */}
+      {selectedSlug && (
+        <QrCodeModal
+          open={qrModalOpen}
+          onOpenChange={(open) => {
+            setQrModalOpen(open);
+            if (!open) {
+              setSelectedSlug(null);
+            }
+          }}
+          slug={selectedSlug}
+        />
+      )}
     </div>
   );
 }
