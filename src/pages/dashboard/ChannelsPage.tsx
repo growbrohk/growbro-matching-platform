@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useChannelRows } from '@/hooks/useChannelRows';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, ExternalLink, QrCode, Pencil } from 'lucide-react';
+import { Loader2, ExternalLink, QrCode, Pencil, Search, ArrowUpDown } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,6 +12,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { QrCodeModal } from '@/components/channels/QrCodeModal';
 import { EditChannelModal } from '@/components/channels/EditChannelModal';
 import { ChannelRow } from '@/hooks/useChannelRows';
@@ -27,6 +35,12 @@ function formatHKD(amount: number): string {
   return `HK$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+type SortKey = 'clicks' | 'orders' | 'revenue';
+type SortDirection = 'asc' | 'desc';
+type CollabPartnerFilter = 'all' | 'without' | 'with';
+type QrCodeFilter = 'all' | 'with' | 'without';
+type StatusFilter = 'all' | 'active' | 'inactive';
+
 export default function ChannelsPage() {
   const { data: channels, isLoading, error } = useChannelRows();
   const queryClient = useQueryClient();
@@ -34,6 +48,14 @@ export default function ChannelsPage() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
+  
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('clicks');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>('all');
+  const [qrCodeFilter, setQrCodeFilter] = useState<QrCodeFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const handleEditClick = (channel: ChannelRow) => {
     setSelectedChannel(channel);
@@ -43,6 +65,90 @@ export default function ChannelsPage() {
   const handleEditSuccess = () => {
     // Invalidate and refetch channel data
     queryClient.invalidateQueries({ queryKey: ['channel-rows'] });
+  };
+
+  // Filter and sort channels client-side
+  const filteredAndSortedChannels = useMemo(() => {
+    if (!channels) return [];
+
+    let filtered = [...channels];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((channel) => {
+        const labelMatch = channel.label?.toLowerCase().includes(query) ?? false;
+        const slugMatch = channel.slug?.toLowerCase().includes(query) ?? false;
+        const destinationMatch = channel.destination_url?.toLowerCase().includes(query) ?? false;
+        const collabMatch = channel.collab_partner_name?.toLowerCase().includes(query) ?? false;
+        return labelMatch || slugMatch || destinationMatch || collabMatch;
+      });
+    }
+
+    // Apply collab partner filter
+    if (collabPartnerFilter === 'without') {
+      filtered = filtered.filter(
+        (channel) => !channel.collab_partner_org_id && !channel.collab_partner_name
+      );
+    } else if (collabPartnerFilter === 'with') {
+      filtered = filtered.filter(
+        (channel) => !!channel.collab_partner_org_id || !!channel.collab_partner_name
+      );
+    }
+
+    // Apply QR code filter
+    if (qrCodeFilter === 'with') {
+      filtered = filtered.filter((channel) => channel.qr_enabled === true);
+    } else if (qrCodeFilter === 'without') {
+      filtered = filtered.filter((channel) => channel.qr_enabled === false);
+    }
+
+    // Apply status filter
+    if (statusFilter === 'active') {
+      filtered = filtered.filter((channel) => channel.status === 'active');
+    } else if (statusFilter === 'inactive') {
+      filtered = filtered.filter((channel) => channel.status === 'inactive');
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: number = 0;
+      let bValue: number = 0;
+
+      switch (sortKey) {
+        case 'clicks':
+          aValue = a.clicks ?? 0;
+          bValue = b.clicks ?? 0;
+          break;
+        case 'orders':
+          aValue = a.orders ?? 0;
+          bValue = b.orders ?? 0;
+          break;
+        case 'revenue':
+          aValue = a.revenue ?? 0;
+          bValue = b.revenue ?? 0;
+          break;
+      }
+
+      if (sortDirection === 'desc') {
+        return bValue - aValue;
+      } else {
+        return aValue - bValue;
+      }
+    });
+
+    return filtered;
+  }, [channels, searchQuery, sortKey, sortDirection, collabPartnerFilter, qrCodeFilter, statusFilter]);
+
+  const handleSortClick = (key: SortKey) => {
+    if (sortKey === key) {
+      // Toggle direction if clicking the same sort key
+      setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc');
+    } else {
+      // Set new sort key with default desc direction
+      setSortKey(key);
+      setSortDirection('desc');
+    }
   };
 
   if (isLoading) {
@@ -88,6 +194,8 @@ export default function ChannelsPage() {
     );
   }
 
+  const totalChannels = channels.length;
+
   return (
     <div className="w-full space-y-6">
       {/* Page Header */}
@@ -98,6 +206,107 @@ export default function ChannelsPage() {
         <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
           Tracking channels overview
         </p>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" style={{ color: 'rgba(15,31,23,0.6)' }} />
+        <Input
+          type="text"
+          placeholder="Search event / product / link…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Sort and Filter Controls */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        {/* Sort Tabs */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            Sort by:
+          </span>
+          <div className="inline-flex items-center gap-0 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)', padding: '2px' }}>
+            <Button
+              type="button"
+              variant={sortKey === 'clicks' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSortClick('clicks')}
+              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'clicks' ? '' : 'hover:bg-transparent'}`}
+            >
+              Clicks
+              {sortKey === 'clicks' && (
+                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant={sortKey === 'orders' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSortClick('orders')}
+              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'orders' ? '' : 'hover:bg-transparent'}`}
+            >
+              Orders
+              {sortKey === 'orders' && (
+                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant={sortKey === 'revenue' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleSortClick('revenue')}
+              className={`h-8 px-3 text-xs rounded-md ${sortKey === 'revenue' ? '' : 'hover:bg-transparent'}`}
+            >
+              Revenue
+              {sortKey === 'revenue' && (
+                <ArrowUpDown className={`h-3 w-3 ml-1 transition-transform ${sortDirection === 'asc' ? 'rotate-180' : ''}`} />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={collabPartnerFilter} onValueChange={(value) => setCollabPartnerFilter(value as CollabPartnerFilter)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Collab partner" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="without">Without collab partner</SelectItem>
+              <SelectItem value="with">With collab partner</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={qrCodeFilter} onValueChange={(value) => setQrCodeFilter(value as QrCodeFilter)}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="QR Code" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="with">With QR Code</SelectItem>
+              <SelectItem value="without">Without QR Code</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Results Count */}
+      <div className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+        Showing {filteredAndSortedChannels.length} of {totalChannels}
       </div>
 
       {/* Table */}
@@ -117,7 +326,14 @@ export default function ChannelsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {channels.map((channel) => (
+            {filteredAndSortedChannels.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                  No channels match your search and filters
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredAndSortedChannels.map((channel) => (
               <TableRow key={channel.tracking_link_id}>
                 <TableCell style={{ color: '#0F1F17' }}>{channel.label}</TableCell>
                 <TableCell style={{ color: '#0F1F17' }}>{channel.clicks.toLocaleString()}</TableCell>
@@ -184,7 +400,8 @@ export default function ChannelsPage() {
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
