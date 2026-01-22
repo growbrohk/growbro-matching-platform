@@ -278,7 +278,7 @@ export default function DashboardPage() {
           {/* Channels Card */}
           <button
             onClick={() => {
-              // Placeholder - can navigate or do nothing
+              navigate('/app/dashboard/channels');
             }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >

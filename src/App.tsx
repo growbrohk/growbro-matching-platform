@@ -19,6 +19,7 @@ import EventForm from "./pages/events/EventForm.new";
 import Dashboard from "./pages/Dashboard";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
+import ChannelsPage from "./pages/dashboard/ChannelsPage";
 import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
@@ -317,6 +318,11 @@ function LegacyBookingSuccessRedirect() {
   return <Navigate to={`/booking/success/${orderId}`} replace />;
 }
 
+function ChannelsEditRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/app/dashboard/channels/${id}/edit`} replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -351,6 +357,13 @@ function AppRoutes() {
         - Old routes redirect to new Catalog structure
       */}
       <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
+      
+      {/* Channels page */}
+      <Route path="/app/dashboard/channels" element={<ProtectedRoute><AppLayout><ChannelsPage /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/dashboard/channels/:id/edit" element={<ProtectedRoute><AppLayout><div className="p-6"><p>Edit channel (placeholder)</p></div></AppLayout></ProtectedRoute>} />
+      {/* Redirect canonical /dashboard/channels to /app/dashboard/channels */}
+      <Route path="/dashboard/channels" element={<Navigate to="/app/dashboard/channels" replace />} />
+      <Route path="/dashboard/channels/:id/edit" element={<ChannelsEditRedirect />} />
       
       {/* Catalog page with subtabs (Products | Events | Spaces) */}
       <Route path="/app/catalog" element={<ProtectedRoute><AppLayout><Catalog /></AppLayout></ProtectedRoute>} />
