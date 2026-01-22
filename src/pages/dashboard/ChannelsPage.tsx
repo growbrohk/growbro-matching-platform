@@ -51,11 +51,18 @@ export default function ChannelsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
   
-  // Initialize collabPartnerFilter from URL query params
+  // Initialize filters from URL query params
   const getInitialCollabFilter = (): CollabPartnerFilter => {
     const collabParam = searchParams.get('collab');
     if (collabParam === 'with') return 'with';
     if (collabParam === 'without') return 'without';
+    return 'all';
+  };
+
+  const getInitialStatusFilter = (): StatusFilter => {
+    const statusParam = searchParams.get('status');
+    if (statusParam === 'active') return 'active';
+    if (statusParam === 'inactive') return 'inactive';
     return 'all';
   };
   
@@ -65,17 +72,18 @@ export default function ChannelsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>(getInitialCollabFilter);
   const [qrCodeFilter, setQrCodeFilter] = useState<QrCodeFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(getInitialStatusFilter);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
-  // Sync URL query params when collabPartnerFilter changes (user action)
+  // Sync URL query params when filters change (user action)
   useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    let urlChanged = false;
+
+    // Handle collab filter
     const collabParam = searchParams.get('collab');
-    const expectedParam = collabPartnerFilter === 'all' ? null : collabPartnerFilter;
-    
-    // Only update URL if it differs from current filter state
-    if (collabParam !== expectedParam) {
-      const params = new URLSearchParams(searchParams);
+    const expectedCollabParam = collabPartnerFilter === 'all' ? null : collabPartnerFilter;
+    if (collabParam !== expectedCollabParam) {
       if (collabPartnerFilter === 'all') {
         params.delete('collab');
       } else if (collabPartnerFilter === 'with') {
@@ -83,22 +91,51 @@ export default function ChannelsPage() {
       } else if (collabPartnerFilter === 'without') {
         params.set('collab', 'without');
       }
+      urlChanged = true;
+    }
+
+    // Handle status filter
+    const statusParam = searchParams.get('status');
+    const expectedStatusParam = statusFilter === 'all' ? null : statusFilter;
+    if (statusParam !== expectedStatusParam) {
+      if (statusFilter === 'all') {
+        params.delete('status');
+      } else if (statusFilter === 'active') {
+        params.set('status', 'active');
+      } else if (statusFilter === 'inactive') {
+        params.set('status', 'inactive');
+      }
+      urlChanged = true;
+    }
+
+    // Only update URL if something changed
+    if (urlChanged) {
       setSearchParams(params, { replace: true });
     }
-  }, [collabPartnerFilter, searchParams, setSearchParams]);
+  }, [collabPartnerFilter, statusFilter, searchParams, setSearchParams]);
 
   // Sync filter state when URL query params change (e.g., browser back/forward)
   useEffect(() => {
+    // Sync collab filter
     const collabParam = searchParams.get('collab');
-    let newFilter: CollabPartnerFilter = 'all';
-    if (collabParam === 'with') newFilter = 'with';
-    else if (collabParam === 'without') newFilter = 'without';
+    let newCollabFilter: CollabPartnerFilter = 'all';
+    if (collabParam === 'with') newCollabFilter = 'with';
+    else if (collabParam === 'without') newCollabFilter = 'without';
     
-    // Only update if different to avoid unnecessary re-renders and loops
-    if (newFilter !== collabPartnerFilter) {
-      setCollabPartnerFilter(newFilter);
+    if (newCollabFilter !== collabPartnerFilter) {
+      setCollabPartnerFilter(newCollabFilter);
     }
-  }, [searchParams, collabPartnerFilter]);
+
+    // Sync status filter
+    const statusParam = searchParams.get('status');
+    let newStatusFilter: StatusFilter = 'all';
+    if (statusParam === 'active') newStatusFilter = 'active';
+    else if (statusParam === 'inactive') newStatusFilter = 'inactive';
+    
+    if (newStatusFilter !== statusFilter) {
+      setStatusFilter(newStatusFilter);
+    }
+  }, [searchParams, collabPartnerFilter, statusFilter]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {

@@ -297,7 +297,7 @@ export default function DashboardPage() {
           {/* Collab Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/channels?collab=with');
+              navigate('/app/dashboard/channels?collab=with&status=active');
             }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
