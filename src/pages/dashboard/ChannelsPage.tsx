@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useChannelRows } from '@/hooks/useChannelRows';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, ExternalLink, QrCode, Pencil, Search, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
@@ -44,19 +45,60 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 export default function ChannelsPage() {
   const { data: channels, isLoading, error } = useChannelRows();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<ChannelRow | null>(null);
   
+  // Initialize collabPartnerFilter from URL query params
+  const getInitialCollabFilter = (): CollabPartnerFilter => {
+    const collabParam = searchParams.get('collab');
+    if (collabParam === 'with') return 'with';
+    if (collabParam === 'without') return 'without';
+    return 'all';
+  };
+  
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('clicks');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>('all');
+  const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>(getInitialCollabFilter);
   const [qrCodeFilter, setQrCodeFilter] = useState<QrCodeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+  // Sync URL query params when collabPartnerFilter changes (user action)
+  useEffect(() => {
+    const collabParam = searchParams.get('collab');
+    const expectedParam = collabPartnerFilter === 'all' ? null : collabPartnerFilter;
+    
+    // Only update URL if it differs from current filter state
+    if (collabParam !== expectedParam) {
+      const params = new URLSearchParams(searchParams);
+      if (collabPartnerFilter === 'all') {
+        params.delete('collab');
+      } else if (collabPartnerFilter === 'with') {
+        params.set('collab', 'with');
+      } else if (collabPartnerFilter === 'without') {
+        params.set('collab', 'without');
+      }
+      setSearchParams(params, { replace: true });
+    }
+  }, [collabPartnerFilter, searchParams, setSearchParams]);
+
+  // Sync filter state when URL query params change (e.g., browser back/forward)
+  useEffect(() => {
+    const collabParam = searchParams.get('collab');
+    let newFilter: CollabPartnerFilter = 'all';
+    if (collabParam === 'with') newFilter = 'with';
+    else if (collabParam === 'without') newFilter = 'without';
+    
+    // Only update if different to avoid unnecessary re-renders and loops
+    if (newFilter !== collabPartnerFilter) {
+      setCollabPartnerFilter(newFilter);
+    }
+  }, [searchParams, collabPartnerFilter]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
