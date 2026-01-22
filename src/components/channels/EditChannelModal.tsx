@@ -30,6 +30,7 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
   const [qrEnabled, setQrEnabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [destinationError, setDestinationError] = useState<string>('');
 
   // Initialize form when channel changes
   useEffect(() => {
@@ -48,6 +49,7 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
     setQrEnabled(false);
     setCopied(false);
     setIsSubmitting(false);
+    setDestinationError('');
     onOpenChange(false);
   };
 
@@ -63,7 +65,9 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
       return;
     }
 
-    if (!destinationUrl.trim()) {
+    const trimmedDestination = destinationUrl.trim();
+    if (!trimmedDestination) {
+      setDestinationError('Destination URL is required');
       toast({
         title: 'Error',
         description: 'Destination URL is required',
@@ -71,6 +75,23 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
       });
       return;
     }
+
+    // Validate destination format: must start with /, http://, or https://
+    if (
+      !trimmedDestination.startsWith('/') &&
+      !trimmedDestination.startsWith('http://') &&
+      !trimmedDestination.startsWith('https://')
+    ) {
+      setDestinationError('Destination must start with / or http(s)://');
+      toast({
+        title: 'Error',
+        description: 'Destination must start with / or http(s)://',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setDestinationError('');
 
     setIsSubmitting(true);
 
@@ -80,7 +101,7 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
       const { data, error } = await supabase.rpc('update_tracking_link_safe', {
         p_tracking_link_id: channel.tracking_link_id,
         p_label: label.trim() || null,
-        p_destination_url: destinationUrl.trim(),
+        p_destination_url: trimmedDestination,
         p_is_active: isActive,
         p_qr_enabled: qrEnabled,
       });
@@ -168,12 +189,18 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
             <Label htmlFor="edit-destination-url">Destination URL</Label>
             <Input
               id="edit-destination-url"
-              type="url"
+              type="text"
               value={destinationUrl}
-              onChange={(e) => setDestinationUrl(e.target.value)}
-              placeholder="https://example.com"
+              onChange={(e) => {
+                setDestinationUrl(e.target.value);
+                setDestinationError('');
+              }}
+              placeholder="/path or https://example.com"
               required
             />
+            {destinationError && (
+              <p className="text-sm text-destructive">{destinationError}</p>
+            )}
           </div>
 
           {/* Slug (Read-only) */}
