@@ -283,7 +283,7 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {channelsCount}
+              {channelsCount + collabCount}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               channels
