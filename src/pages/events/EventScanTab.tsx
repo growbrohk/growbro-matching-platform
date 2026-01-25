@@ -214,7 +214,12 @@ export function EventScanTab({ eventId }: { eventId: string }) {
   const checkInTicket = async (identifier: string) => {
     try {
       // First, find the ticket by qr_code or id
-      const { data: ticket, error: fetchError } = await supabase
+      // Use maybeSingle() instead of single() to avoid 400 error when ticket not found
+      let ticket: any = null;
+      let fetchError: any = null;
+
+      // Try querying by qr_code first
+      const { data: ticketByQr, error: errorByQr } = await supabase
         .from('tickets')
         .select(`
           id,
@@ -232,10 +237,53 @@ export function EventScanTab({ eventId }: { eventId: string }) {
             name
           )
         `)
-        .or(`qr_code.eq.${identifier},id.eq.${identifier}`)
-        .single();
+        .eq('qr_code', identifier)
+        .maybeSingle();
 
-      if (fetchError || !ticket) {
+      // If found by qr_code, use it
+      if (ticketByQr) {
+        ticket = ticketByQr;
+      } else if (errorByQr) {
+        // If there's an error (not just "not found"), log it but continue to try by id
+        console.warn('Error querying by qr_code:', errorByQr);
+      }
+
+      // If not found by qr_code, try by id
+      if (!ticket) {
+        const { data: ticketById, error: errorById } = await supabase
+          .from('tickets')
+          .select(`
+            id,
+            qr_code,
+            status,
+            scanned_at,
+            first_name,
+            last_name,
+            order_id,
+            order:orders!inner(
+              id,
+              event_id
+            ),
+            ticket_type:ticket_types(
+              name
+            )
+          `)
+          .eq('id', identifier)
+          .maybeSingle();
+
+        if (errorById) {
+          fetchError = errorById;
+        } else if (ticketById) {
+          ticket = ticketById;
+        }
+      }
+
+      if (fetchError) {
+        console.error('Error fetching ticket:', fetchError);
+        throw new Error(`Failed to lookup ticket: ${fetchError.message}`);
+      }
+
+      if (!ticket) {
         throw new Error('Ticket not found');
       }
 
