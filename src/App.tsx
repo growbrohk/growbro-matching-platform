@@ -16,6 +16,7 @@ import Inventory from "./pages/dashboard/inventory/Inventory";
 // Old events system deprecated - using new placeholder pages
 import EventsList from "./pages/events/EventsList.new";
 import EventForm from "./pages/events/EventForm.new";
+import EventDetail from "./pages/events/EventDetail";
 import Dashboard from "./pages/Dashboard";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -384,7 +385,8 @@ function AppRoutes() {
       
       {/* Events CRUD routes */}
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/events/:id" element={<ProtectedRoute><AppLayout><EventDetail /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/events/:id/edit" element={<ProtectedRoute><AppLayout><EventDetail /></AppLayout></ProtectedRoute>} />
       
       {/* Redirect old list routes to Catalog with appropriate tabs */}
       <Route path="/app/events" element={<Navigate to="/app/catalog?tab=events" replace />} />

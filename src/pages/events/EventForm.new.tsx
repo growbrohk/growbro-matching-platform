@@ -131,7 +131,7 @@ export default function EventForm() {
             description: 'Event not found', 
             variant: 'destructive' 
           });
-          navigate('/app/events');
+          navigate('/app/catalog?tab=events');
           return;
         }
 
@@ -142,7 +142,7 @@ export default function EventForm() {
             description: 'You do not have access to this event', 
             variant: 'destructive' 
           });
-          navigate('/app/events');
+          navigate('/app/catalog?tab=events');
           return;
         }
 
@@ -679,7 +679,12 @@ export default function EventForm() {
         title: 'Success', 
         description: isEditMode ? 'Event updated successfully' : 'Event created successfully' 
       });
-      navigate('/app/events');
+      // If editing, stay on the same page (EventDetail will handle navigation)
+      if (isEditMode && id) {
+        navigate(`/app/events/${id}?tab=edit`);
+      } else {
+        navigate('/app/catalog?tab=events');
+      }
     } catch (error: any) {
       toast({ 
         title: 'Error', 
@@ -712,7 +717,7 @@ export default function EventForm() {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={() => navigate('/app/events')}
+            onClick={() => navigate('/app/catalog?tab=events')}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Events
@@ -1528,7 +1533,13 @@ export default function EventForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate('/app/events')}
+              onClick={() => {
+                if (isEditMode && id) {
+                  navigate(`/app/events/${id}?tab=tickets`);
+                } else {
+                  navigate('/app/catalog?tab=events');
+                }
+              }}
               disabled={saving}
             >
               Cancel

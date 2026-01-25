@@ -210,7 +210,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
             <Card
               key={event.id}
               className="cursor-pointer hover:shadow-md transition-shadow w-full min-w-0"
-              onClick={() => navigate(`/app/events/${event.id}/edit`)}
+              onClick={() => navigate(`/app/events/${event.id}?tab=tickets`)}
             >
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
@@ -236,7 +236,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/app/events/${event.id}/edit`);
+                      navigate(`/app/events/${event.id}?tab=tickets`);
                     }}
                   >
                     <Edit className="h-4 w-4" />
