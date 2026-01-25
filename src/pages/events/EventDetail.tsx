@@ -10,7 +10,7 @@ import { EventScanTab } from './EventScanTab';
 import { getEvent } from '@/lib/api/events';
 import { useToast } from '@/hooks/use-toast';
 
-type EventDetailTab = 'tickets' | 'edit' | 'scan';
+type EventDetailTab =  'edit'| 'tickets' | 'scan';
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
