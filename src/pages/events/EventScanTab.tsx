@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export function EventScanTab({ eventId }: { eventId: string }) {
   const [scanning, setScanning] = useState(false);
+  const [initializing, setInitializing] = useState(false);
   const [lastScanResult, setLastScanResult] = useState<{
     success: boolean;
     message: string;
@@ -17,6 +18,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     ticketType?: string;
   } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const qrReaderRef = useRef<HTMLDivElement>(null);
   const { refetch } = useEventTickets(eventId);
   const { toast } = useToast();
 
@@ -33,35 +35,136 @@ export function EventScanTab({ eventId }: { eventId: string }) {
             scannerRef.current = null;
           });
       }
+      if (qrReaderRef.current) {
+        qrReaderRef.current.style.display = 'none';
+      }
     };
   }, []);
 
   const startScanning = async () => {
+    if (!qrReaderRef.current) {
+      toast({
+        title: 'Error',
+        description: 'Scanner container not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
+      setInitializing(true);
+      setLastScanResult(null);
+      
+      // Ensure the div is visible before initializing
+      // Force visibility styles to override any tab hiding
+      qrReaderRef.current.style.display = 'block';
+      qrReaderRef.current.style.visibility = 'visible';
+      qrReaderRef.current.style.minHeight = '300px';
+      qrReaderRef.current.style.width = '100%';
+      qrReaderRef.current.style.position = 'relative';
+      
+      // Wait for next frame to ensure styles are applied
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify element is actually visible
+      const rect = qrReaderRef.current.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(qrReaderRef.current);
+      
+      console.log('Scanner container check:', {
+        display: computedStyle.display,
+        visibility: computedStyle.visibility,
+        width: rect.width,
+        height: rect.height,
+        top: rect.top,
+        left: rect.left
+      });
+      
+      if (rect.width === 0 || rect.height === 0 || computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+        throw new Error('Scanner container is not visible. Please ensure the Scan tab is active and try again.');
+      }
+
+      // Stop any existing scanner first
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+        } catch (e) {
+          // Ignore stop errors
+        }
+        scannerRef.current = null;
+      }
+
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
 
+      // Try to get available cameras
+      let cameraId: string | null = null;
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          // Prefer back camera (environment), fallback to first available
+          const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
+          cameraId = backCamera?.id || devices[0].id;
+        }
+      } catch (err) {
+        console.warn('Could not enumerate cameras, using default:', err);
+      }
+
+      const cameraConfig = cameraId 
+        ? { deviceId: { exact: cameraId } }
+        : { facingMode: 'environment' }; // Fallback to facingMode
+
       await scanner.start(
-        { facingMode: 'environment' }, // Use back camera
+        cameraConfig,
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const minEdgePercentage = 0.7;
+            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+            const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+            return {
+              width: qrboxSize,
+              height: qrboxSize
+            };
+          },
+          aspectRatio: 1.0,
         },
         (decodedText) => {
           handleScanSuccess(decodedText);
         },
         (errorMessage) => {
           // Ignore scanning errors (they're frequent during scanning)
+          // Only log if it's a real error, not just "not found"
+          if (!errorMessage.includes('NotFoundException') && !errorMessage.includes('No MultiFormat Readers')) {
+            console.debug('Scan error:', errorMessage);
+          }
         }
       );
 
       setScanning(true);
-      setLastScanResult(null);
+      setInitializing(false);
     } catch (error: any) {
       console.error('Error starting scanner:', error);
+      setInitializing(false);
+      setScanning(false);
+      
+      // Hide the div if initialization failed
+      if (qrReaderRef.current) {
+        qrReaderRef.current.style.display = 'none';
+      }
+      
+      let errorMessage = 'Failed to start camera. ';
+      if (error.name === 'NotAllowedError' || error.message?.includes('permission')) {
+        errorMessage += 'Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError' || error.message?.includes('camera')) {
+        errorMessage += 'No camera found. Please ensure your device has a camera.';
+      } else {
+        errorMessage += error.message || 'Please check permissions.';
+      }
+      
       toast({
         title: 'Error',
-        description: error.message || 'Failed to start camera. Please check permissions.',
+        description: errorMessage,
         variant: 'destructive',
       });
     }
@@ -78,6 +181,12 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       }
     }
     setScanning(false);
+    setInitializing(false);
+    
+    // Hide the div when stopping
+    if (qrReaderRef.current) {
+      qrReaderRef.current.style.display = 'none';
+    }
   };
 
   const extractTicketIdentifier = (payload: string): string | null => {
@@ -236,21 +345,23 @@ export function EventScanTab({ eventId }: { eventId: string }) {
           {/* Scanner Container */}
           <div className="space-y-4">
             <div
+              ref={qrReaderRef}
               id="qr-reader"
               className="w-full rounded-lg overflow-hidden border-2"
               style={{
                 borderColor: scanning ? 'rgba(14,122,58,0.3)' : 'rgba(14,122,58,0.14)',
                 minHeight: '300px',
-                display: scanning ? 'block' : 'none',
+                display: 'none', // Hidden by default, shown when scanning starts
               }}
             />
 
-            {!scanning && (
+            {!scanning && !initializing && (
               <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                 <Camera className="h-16 w-16 mb-4" style={{ color: '#0E7A3A', opacity: 0.3 }} />
                 <p className="text-muted-foreground mb-4">Camera not active</p>
                 <Button
                   onClick={startScanning}
+                  disabled={initializing}
                   style={{ backgroundColor: '#0E7A3A', color: 'white' }}
                 >
                   <Camera className="h-4 w-4 mr-2" />
@@ -259,14 +370,23 @@ export function EventScanTab({ eventId }: { eventId: string }) {
               </div>
             )}
 
-            {scanning && (
-              <Button
-                onClick={stopScanning}
-                variant="outline"
-                className="w-full"
-              >
-                Stop Scanning
-              </Button>
+            {(scanning || initializing) && (
+              <div className="space-y-2">
+                {initializing && (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" style={{ color: '#0E7A3A' }} />
+                    <span className="text-sm text-muted-foreground">Initializing camera...</span>
+                  </div>
+                )}
+                <Button
+                  onClick={stopScanning}
+                  variant="outline"
+                  className="w-full"
+                  disabled={initializing}
+                >
+                  Stop Scanning
+                </Button>
+              </div>
             )}
           </div>
 
