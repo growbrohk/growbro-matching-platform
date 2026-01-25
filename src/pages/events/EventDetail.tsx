@@ -119,8 +119,8 @@ export default function EventDetail() {
         }}>
           <div className="px-4 py-3">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="tickets">Tickets</TabsTrigger>
               <TabsTrigger value="edit">Edit</TabsTrigger>
+              <TabsTrigger value="tickets">Tickets</TabsTrigger>
               <TabsTrigger value="scan">Scan</TabsTrigger>
             </TabsList>
           </div>
