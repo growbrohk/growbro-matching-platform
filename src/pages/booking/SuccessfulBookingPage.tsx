@@ -70,51 +70,78 @@ export default function SuccessfulBookingPage() {
         }
 
         // Guard 1: If order is confirmed, allow access (highest priority)
-        // Confirmed orders should show tickets regardless of payment_status
+        // Confirmed orders should show tickets regardless of payment_status or total_amount
         // This ensures PayMe/FPS orders can view tickets after host confirmation
+        // This is the PRIMARY check - if order is confirmed, show tickets immediately
         if (orderData.fulfillment_status === 'confirmed') {
           // Order is confirmed - allow access to success page
-          // Continue to render success UI below
+          // Skip all other guards and continue to render success UI
+          console.debug('[booking-route]', {
+            orderId,
+            amount_total: orderData.total_amount,
+            payment_status: orderData.payment_status,
+            fulfillment_status: orderData.fulfillment_status,
+            payment_method: orderData.payment_method,
+            route: 'success',
+            currentPage: 'success',
+            reason: 'fulfillment_status is confirmed - allowing access (paid orders with total_amount > 0 are allowed)',
+          });
+          // Continue to render success UI below - no redirect needed
+          // This ensures confirmed orders (including paid orders after host confirmation) can view tickets
+          // Explicitly return early to prevent any fallthrough to other guards
+          return;
         }
         // Guard 2: If not confirmed and payment_status='submitted', redirect to Pending
-        else if (
-          orderData.payment_status === 'submitted' &&
-          orderData.fulfillment_status !== 'confirmed'
-        ) {
+        // Note: We're already in an else branch, so fulfillment_status !== 'confirmed' is guaranteed
+        else if (orderData.payment_status === 'submitted') {
           hasRedirectedRef.current = true;
           navigate(`/booking/pending/${orderId}`, { replace: true });
           return;
         }
         // Guard 3: If unpaid and not confirmed, redirect to Payment
+        // Only redirect if payment_status is explicitly 'unpaid'
+        // Note: We're already in an else branch, so fulfillment_status !== 'confirmed' is guaranteed
         else if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
+          console.debug('[booking-route] Redirecting to payment:', {
+            orderId,
+            amount_total: orderData.total_amount,
+            payment_status: orderData.payment_status,
+            fulfillment_status: orderData.fulfillment_status,
+            payment_method: orderData.payment_method,
+            currentPage: 'success',
+            reason: 'Order is unpaid and not confirmed - redirecting to payment page',
+          });
           hasRedirectedRef.current = true;
           navigate(`/booking/payment/${orderId}`, { replace: true });
           return;
         }
+        // Guard 4: Use unified routing logic as fallback for edge cases
+        // This should only execute if order is NOT confirmed
+        else {
+          const route = getBookingRoute(orderData);
 
-        // Guard 3: Use unified routing logic as fallback
-        const route = getBookingRoute(orderData);
+          console.debug('[booking-route]', {
+            orderId,
+            amount_total: orderData.total_amount,
+            payment_status: orderData.payment_status,
+            fulfillment_status: orderData.fulfillment_status,
+            payment_method: orderData.payment_method,
+            route,
+            currentPage: 'success',
+            reason: 'fallback routing logic',
+          });
 
-        console.debug('[booking-route]', {
-          orderId,
-          amount_total: orderData.total_amount,
-          payment_status: orderData.payment_status,
-          fulfillment_status: orderData.fulfillment_status,
-          payment_method: orderData.payment_method,
-          route,
-          currentPage: 'success',
-        });
-
-        if (route !== 'success') {
-          hasRedirectedRef.current = true;
-          if (route === 'payment') {
-            navigate(`/booking/payment/${orderId}`, { replace: true });
-          } else if (route === 'pending') {
-            navigate(`/booking/pending/${orderId}`, { replace: true });
-          } else {
-            navigate(`/booking/payment/${orderId}`, { replace: true });
+          if (route !== 'success') {
+            hasRedirectedRef.current = true;
+            if (route === 'payment') {
+              navigate(`/booking/payment/${orderId}`, { replace: true });
+            } else if (route === 'pending') {
+              navigate(`/booking/pending/${orderId}`, { replace: true });
+            } else {
+              navigate(`/booking/payment/${orderId}`, { replace: true });
+            }
+            return;
           }
-          return;
         }
 
         // Order is in correct state for success page:
