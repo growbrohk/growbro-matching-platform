@@ -69,9 +69,15 @@ export default function SuccessfulBookingPage() {
           return; // Already redirected, prevent multiple redirects
         }
 
-        // Guard 1: Only allow confirmed/free
-        // If not confirmed and payment_status='submitted', redirect to Pending
-        if (
+        // Guard 1: If order is confirmed, allow access (highest priority)
+        // Confirmed orders should show tickets regardless of payment_status
+        // This ensures PayMe/FPS orders can view tickets after host confirmation
+        if (orderData.fulfillment_status === 'confirmed') {
+          // Order is confirmed - allow access to success page
+          // Continue to render success UI below
+        }
+        // Guard 2: If not confirmed and payment_status='submitted', redirect to Pending
+        else if (
           orderData.payment_status === 'submitted' &&
           orderData.fulfillment_status !== 'confirmed'
         ) {
@@ -79,9 +85,8 @@ export default function SuccessfulBookingPage() {
           navigate(`/booking/pending/${orderId}`, { replace: true });
           return;
         }
-
-        // Guard 2: If unpaid, redirect to Payment
-        if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
+        // Guard 3: If unpaid and not confirmed, redirect to Payment
+        else if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
           hasRedirectedRef.current = true;
           navigate(`/booking/payment/${orderId}`, { replace: true });
           return;

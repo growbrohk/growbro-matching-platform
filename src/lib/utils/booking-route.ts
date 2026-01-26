@@ -11,7 +11,8 @@ export type BookingRoute = 'success' | 'pending' | 'payment';
  * Determines the correct route for an order based on its state
  * 
  * Rules:
- * - if payment_status === 'paid' && fulfillment_status === 'confirmed' → success
+ * - if fulfillment_status === 'confirmed' → success (confirmed orders should show tickets, regardless of payment_status)
+ * - else if payment_status === 'paid' && fulfillment_status === 'confirmed' → success
  * - else if payment_status === 'submitted' → pending (PayMe/FPS receipt uploaded, waiting for host)
  * - else if payment_method in (payme,fps) && payment_status === 'pending' && fulfillment_status === 'pending_confirmation' → pending
  * - else if amount_total > 0 && payment_status === 'unpaid' → payment
@@ -26,8 +27,10 @@ export function getBookingRoute(order: OrderWithEvent | null): BookingRoute {
 
   const { payment_status, fulfillment_status, payment_method, total_amount } = order;
 
-  // Rule 1: Paid and confirmed → success
-  if (payment_status === 'paid' && fulfillment_status === 'confirmed') {
+  // Rule 1: Confirmed orders → success (highest priority)
+  // If order is confirmed, tickets should be viewable regardless of payment_status
+  // This ensures PayMe/FPS orders can view tickets after host confirmation, even if payment_status update is delayed
+  if (fulfillment_status === 'confirmed') {
     return 'success';
   }
 
