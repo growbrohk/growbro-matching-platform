@@ -539,11 +539,31 @@ export default function PublicEventForm({
                               <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
                                 ${tt.price.toFixed(2)}
                               </span>
-                              {tt.quota < 999999 && (
-                                <span className="text-xs text-muted-foreground">
-                                  {tt.quota} available
-                                </span>
-                              )}
+                              {(() => {
+                                // Show remaining count logic:
+                                // 1. If show_remaining_count is false, don't show
+                                // 2. If threshold_to_show is set, only show when remaining_count <= threshold_to_show
+                                // 3. Otherwise, show if remaining_count is available
+                                const showRemaining = tt.show_remaining_count !== false;
+                                const remainingCount = tt.remaining_count !== undefined ? tt.remaining_count : (tt.quota < 999999 ? tt.quota : undefined);
+                                
+                                if (!showRemaining || remainingCount === undefined) {
+                                  return null;
+                                }
+                                
+                                if (tt.threshold_to_show !== null && tt.threshold_to_show !== undefined) {
+                                  // Only show if remaining_count <= threshold_to_show
+                                  if (remainingCount > tt.threshold_to_show) {
+                                    return null;
+                                  }
+                                }
+                                
+                                return (
+                                  <span className="text-xs text-muted-foreground">
+                                    {remainingCount} {remainingCount === 1 ? 'remaining' : 'remaining'}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             {isUnavailable && (
                               <p className="text-xs text-red-600 mt-1">

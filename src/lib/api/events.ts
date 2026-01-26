@@ -86,6 +86,8 @@ export interface CreateTicketTypeData {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
+  show_remaining_count?: boolean;
+  threshold_to_show?: number | null;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -323,6 +325,12 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   if (data.available_end_at !== undefined) {
     updateFields.available_end_at = data.available_end_at;
   }
+  if (data.show_remaining_count !== undefined) {
+    updateFields.show_remaining_count = data.show_remaining_count;
+  }
+  if (data.threshold_to_show !== undefined) {
+    updateFields.threshold_to_show = data.threshold_to_show;
+  }
 
   if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
@@ -386,19 +394,34 @@ export async function deleteTicketType(ticketTypeId: string): Promise<void> {
 
 /**
  * Get all ticket types for an event
+ * Optionally includes remaining_count if useRemainingCount is true
  */
-export async function getTicketTypes(eventId: string): Promise<TicketType[]> {
-  const { data, error } = await supabase
-    .from('ticket_types')
-    .select('*')
-    .eq('event_id', eventId)
-    .order('created_at', { ascending: true });
+export async function getTicketTypes(eventId: string, useRemainingCount: boolean = false): Promise<TicketType[]> {
+  if (useRemainingCount) {
+    // Use RPC function to get ticket types with remaining count
+    const { data, error } = await supabase.rpc('get_ticket_types_with_remaining', {
+      p_event_id: eventId
+    });
 
-  if (error) {
-    throw new Error(error.message || 'Failed to fetch ticket types');
+    if (error) {
+      throw new Error(error.message || 'Failed to fetch ticket types');
+    }
+
+    return (data || []) as TicketType[];
+  } else {
+    // Standard query without remaining count
+    const { data, error } = await supabase
+      .from('ticket_types')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to fetch ticket types');
+    }
+
+    return (data || []) as TicketType[];
   }
-
-  return (data || []) as TicketType[];
 }
 
 /**

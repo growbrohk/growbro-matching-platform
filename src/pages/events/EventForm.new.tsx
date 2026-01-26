@@ -61,6 +61,8 @@ interface TicketTypeForm {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: Date | null;
   available_end_at?: Date | null;
+  show_remaining_count?: boolean;
+  threshold_to_show?: number | null;
 }
 
 export default function EventForm() {
@@ -179,6 +181,8 @@ export default function EventForm() {
           availability_mode: t.availability_mode || 'always',
           available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
           available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
+          show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
+          threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
         })));
 
         // Show sections if they have data
@@ -234,6 +238,8 @@ export default function EventForm() {
       availability_mode: 'always',
       available_start_at: null,
       available_end_at: null,
+      show_remaining_count: true,
+      threshold_to_show: null,
     }]);
     setShowTicketTypesSection(true);
   };
@@ -249,7 +255,7 @@ export default function EventForm() {
     setTicketTypes(ticketTypes.filter((_, i) => i !== index));
   };
 
-  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean | Date) => {
+  const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean | Date | number) => {
     setTicketTypes(ticketTypes.map((tt, i) => 
       i === index ? { ...tt, [field]: value } : tt
     ));
@@ -574,6 +580,8 @@ export default function EventForm() {
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
               available_end_at: availableEndAt,
+              show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
+              threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
             });
           } else {
             // Create new
@@ -593,6 +601,8 @@ export default function EventForm() {
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
               available_end_at: availableEndAt,
+              show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
+              threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
             });
           }
         }
@@ -1365,6 +1375,47 @@ export default function EventForm() {
                           )}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Remaining Count Display Settings */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex-1">
+                          <Label htmlFor={`show-remaining-count-${index}`} className="text-sm font-medium">
+                            Show remaining count
+                          </Label>
+                          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                            Display how many tickets are left to customers
+                          </p>
+                        </div>
+                        <Switch
+                          id={`show-remaining-count-${index}`}
+                          checked={tt.show_remaining_count !== undefined ? tt.show_remaining_count : true}
+                          onCheckedChange={(checked) => updateTicketTypeForm(index, 'show_remaining_count', checked)}
+                        />
+                      </div>
+                      {tt.show_remaining_count !== false && (
+                        <div className="mt-3">
+                          <Label htmlFor={`threshold-to-show-${index}`} className="text-xs font-medium">
+                            Only show when remaining ≤ (optional)
+                          </Label>
+                          <p className="text-xs mt-1 mb-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                            Leave blank to always show. Set a number to only show count when tickets are running low.
+                          </p>
+                          <Input
+                            id={`threshold-to-show-${index}`}
+                            type="number"
+                            min="0"
+                            value={tt.threshold_to_show !== null && tt.threshold_to_show !== undefined ? tt.threshold_to_show.toString() : ''}
+                            onChange={(e) => {
+                              const value = e.target.value.trim();
+                              updateTicketTypeForm(index, 'threshold_to_show', value === '' ? null : parseInt(value, 10));
+                            }}
+                            placeholder="e.g., 10 (only show when ≤ 10 remaining)"
+                            className="mt-1"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

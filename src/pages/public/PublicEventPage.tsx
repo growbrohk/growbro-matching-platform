@@ -56,8 +56,8 @@ export default function PublicEventPage() {
       const orgData = await getOrgBySlug(orgSlug);
       setOrg(orgData);
 
-      // Fetch ticket types
-      const types = await getTicketTypes(eventData.id);
+      // Fetch ticket types with remaining count
+      const types = await getTicketTypes(eventData.id, true);
       setTicketTypes(types);
     } catch (error) {
       console.error('Error fetching event:', error);
