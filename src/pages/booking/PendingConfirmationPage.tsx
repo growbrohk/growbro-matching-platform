@@ -270,12 +270,17 @@ export default function PendingConfirmationPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        // FIX: Ensure the URL is absolute
-                        const url = order.receipt_url?.startsWith('http') 
-                          ? order.receipt_url 
-                          : `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/receipts/${order.receipt_url}`;
+                        // 1. Base URL for your Supabase project
+                        const baseUrl = "https://pbtupzbqtuxzznwummep.supabase.co/storage/v1/object/public/payment-receipts";
                         
-                        window.open(url, '_blank');
+                        // 2. Ensure we don't have leading slashes that create double-slashes in the URL
+                        const cleanPath = order.receipt_url!.replace(/^\/+/, '');
+                        
+                        // 3. Combine them
+                        const finalUrl = `${baseUrl}/${cleanPath}`;
+                        
+                        console.debug('Opening receipt:', finalUrl);
+                        window.open(finalUrl, '_blank');
                       }}
                       style={{ borderColor: 'rgba(14,122,58,0.14)' }}
                     >
