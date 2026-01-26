@@ -3,12 +3,8 @@
  *
  * Shows ticket with QR code.
  * Only accessible when:
- * - payment_status = 'paid'
- * - fulfillment_status = 'confirmed'
- *
- * UPDATED:
- * - Added padding (spacing) below each ticket on screen
- * - Does NOT affect print/PDF layout (still 1 ticket per page)
+ * - payment_status = 'paid' OR 'submitted' (if confirmed)
+ * - fulfillment_status = 'confirmed' OR total_amount = 0
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -63,90 +59,49 @@ export default function SuccessfulBookingPage() {
         setOrder(orderData);
         setLoading(false);
 
-        // Strict guards - only redirect once after order fetch completes
-        // Never redirect while loading/error
-        if (hasRedirectedRef.current) {
-          return; // Already redirected, prevent multiple redirects
+        // Prevent multiple redirect attempts in one mount cycle
+        if (hasRedirectedRef.current) return;
+
+        // --- ROUTING LOGIC START ---
+        
+        const isConfirmed = orderData.fulfillment_status === 'confirmed';
+        const isPaid = orderData.payment_status === 'paid';
+        const isFree = orderData.total_amount <= 0;
+
+        // GUARD 1: SUCCESS STATE (The "Safe Zone")
+        // If the order is confirmed, paid, or free, STAY HERE.
+        if (isConfirmed || isPaid || isFree) {
+          console.debug('[booking-route] Valid success state detected. Access granted.');
+          return; 
         }
 
-        // Guard 1: If order is confirmed, allow access (highest priority)
-        // Confirmed orders should show tickets regardless of payment_status or total_amount
-        // This ensures PayMe/FPS orders can view tickets after host confirmation
-        // This is the PRIMARY check - if order is confirmed, show tickets immediately
-        if (orderData.fulfillment_status === 'confirmed') {
-          // Order is confirmed - allow access to success page
-          // Skip all other guards and continue to render success UI
-          console.debug('[booking-route]', {
-            orderId,
-            amount_total: orderData.total_amount,
-            payment_status: orderData.payment_status,
-            fulfillment_status: orderData.fulfillment_status,
-            payment_method: orderData.payment_method,
-            route: 'success',
-            currentPage: 'success',
-            reason: 'fulfillment_status is confirmed - allowing access (paid orders with total_amount > 0 are allowed)',
-          });
-          // Continue to render success UI below - no redirect needed
-          // This ensures confirmed orders (including paid orders after host confirmation) can view tickets
-          // Explicitly return early to prevent any fallthrough to other guards
-          return;
-        }
-        // Guard 2: If not confirmed and payment_status='submitted', redirect to Pending
-        // Note: We're already in an else branch, so fulfillment_status !== 'confirmed' is guaranteed
-        else if (orderData.payment_status === 'submitted') {
+        // GUARD 2: PENDING STATE
+        // If payment is submitted but not yet confirmed by the host (e.g., PayMe/FPS)
+        if (orderData.payment_status === 'submitted') {
           hasRedirectedRef.current = true;
           navigate(`/booking/pending/${orderId}`, { replace: true });
           return;
         }
-        // Guard 3: If unpaid and not confirmed, redirect to Payment
-        // Only redirect if payment_status is explicitly 'unpaid'
-        // Note: We're already in an else branch, so fulfillment_status !== 'confirmed' is guaranteed
-        else if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
-          console.debug('[booking-route] Redirecting to payment:', {
-            orderId,
-            amount_total: orderData.total_amount,
-            payment_status: orderData.payment_status,
-            fulfillment_status: orderData.fulfillment_status,
-            payment_method: orderData.payment_method,
-            currentPage: 'success',
-            reason: 'Order is unpaid and not confirmed - redirecting to payment page',
-          });
+
+        // GUARD 3: PAYMENT STATE
+        // If explicitly unpaid and not a free event
+        if (orderData.total_amount > 0 && orderData.payment_status === 'unpaid') {
           hasRedirectedRef.current = true;
           navigate(`/booking/payment/${orderId}`, { replace: true });
           return;
         }
-        // Guard 4: Use unified routing logic as fallback for edge cases
-        // This should only execute if order is NOT confirmed
-        else {
-          const route = getBookingRoute(orderData);
 
-          console.debug('[booking-route]', {
-            orderId,
-            amount_total: orderData.total_amount,
-            payment_status: orderData.payment_status,
-            fulfillment_status: orderData.fulfillment_status,
-            payment_method: orderData.payment_method,
-            route,
-            currentPage: 'success',
-            reason: 'fallback routing logic',
-          });
-
-          if (route !== 'success') {
-            hasRedirectedRef.current = true;
-            if (route === 'payment') {
-              navigate(`/booking/payment/${orderId}`, { replace: true });
-            } else if (route === 'pending') {
-              navigate(`/booking/pending/${orderId}`, { replace: true });
-            } else {
-              navigate(`/booking/payment/${orderId}`, { replace: true });
-            }
-            return;
-          }
+        // GUARD 4: FALLBACK
+        // Use utility logic if none of the explicit conditions above matched
+        const fallbackRoute = getBookingRoute(orderData);
+        if (fallbackRoute !== 'success') {
+          console.debug(`[booking-route] Fallback redirecting to: ${fallbackRoute}`);
+          hasRedirectedRef.current = true;
+          navigate(`/booking/${fallbackRoute}/${orderId}`, { replace: true });
         }
+        
+        // --- ROUTING LOGIC END ---
 
-        // Order is in correct state for success page:
-        // - fulfillment_status === 'confirmed' OR total_amount <= 0
-        // Continue rendering success UI
       } catch (error: any) {
         console.error('Error fetching order:', error);
         toast({
@@ -155,7 +110,6 @@ export default function SuccessfulBookingPage() {
           variant: 'destructive',
         });
         setLoading(false);
-        // Never redirect on error - show error state instead
       }
     };
 
@@ -183,11 +137,6 @@ export default function SuccessfulBookingPage() {
   const bookingCode = order.order_no || order.id.slice(0, 8).toUpperCase();
 
   if (tickets.length === 0) {
-    toast({
-      title: 'No tickets found',
-      description: 'Unable to load ticket information. Please contact support.',
-      variant: 'destructive',
-    });
     return (
       <div className="min-h-screen pb-20" style={{ backgroundColor: BRAND.beigeSoft }}>
         <div className="container mx-auto px-4 pt-8 pb-6">
@@ -204,7 +153,6 @@ export default function SuccessfulBookingPage() {
 
   return (
     <>
-      {/* Print styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -229,7 +177,6 @@ export default function SuccessfulBookingPage() {
       />
 
       <div className="min-h-screen pb-20" style={{ backgroundColor: BRAND.beigeSoft }}>
-        {/* Header */}
         <div className="container mx-auto px-4 pt-8 pb-6 no-print">
           <h1
             className="text-2xl font-bold mb-6"
@@ -238,7 +185,6 @@ export default function SuccessfulBookingPage() {
             Ticket
           </h1>
 
-          {/* Success Banner */}
           <div
             className="rounded-2xl px-6 py-4 mb-6 flex items-center gap-3"
             style={{
@@ -248,13 +194,7 @@ export default function SuccessfulBookingPage() {
           >
             <CheckCircle2 className="h-6 w-6" style={{ color: BRAND.green }} />
             <div>
-              <p
-                className="font-semibold text-base"
-                style={{ 
-                  color: BRAND.green, 
-                  fontFamily: "'Inter Tight', sans-serif" 
-                }}
-              >
+              <p className="font-semibold text-base" style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
                 ✓ Congrats
               </p>
               <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
@@ -264,12 +204,10 @@ export default function SuccessfulBookingPage() {
           </div>
         </div>
 
-        {/* Ticket Cards */}
         <div className="container mx-auto px-4">
-          {/* ✅ UPDATED: removed space-y-0 so we control spacing per ticket */}
           <div className="print-container">
-              {tickets.map((ticket, index) => {
-                if (!ticket.qr_code) return null;
+            {tickets.map((ticket, index) => {
+              if (!ticket.qr_code) return null;
 
               const ticketParticipantName =
                 ticket.first_name || ticket.last_name
@@ -279,20 +217,12 @@ export default function SuccessfulBookingPage() {
                   : 'GUEST';
 
               return (
-                // ✅ UPDATED: add bottom spacing on screen, but print removes it via CSS
-                <div
-                  key={ticket.id || index}
-                  className="ticket-page-break mb-12 no-print:last:mb-0"
-                >
+                <div key={ticket.id || index} className="ticket-page-break mb-12 no-print:last:mb-0">
                   {tickets.length > 1 && (
-                    <p
-                      className="text-sm text-muted-foreground mb-2 text-center no-print"
-                      style={{ marginBottom: '0.5rem' }}
-                    >
+                    <p className="text-sm text-muted-foreground mb-2 text-center no-print">
                       Ticket {index + 1} of {tickets.length}
                     </p>
                   )}
-
                   <TicketCardPreview>
                     <TicketCard
                       eventName={order.event.title}
@@ -311,7 +241,6 @@ export default function SuccessfulBookingPage() {
             })}
           </div>
 
-          {/* Download Button */}
           <div className="mt-6 no-print">
             <Button
               className="w-full h-12 text-base font-semibold"
