@@ -269,7 +269,14 @@ export default function PendingConfirmationPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(order.receipt_url!, '_blank')}
+                      onClick={() => {
+                        // FIX: Ensure the URL is absolute
+                        const url = order.receipt_url?.startsWith('http') 
+                          ? order.receipt_url 
+                          : `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/receipts/${order.receipt_url}`;
+                        
+                        window.open(url, '_blank');
+                      }}
                       style={{ borderColor: 'rgba(14,122,58,0.14)' }}
                     >
                       <FileText className="h-4 w-4 mr-2" />
