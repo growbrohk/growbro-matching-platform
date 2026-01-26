@@ -136,10 +136,21 @@ Deno.serve(async (req) => {
       .eq('id', order.event_id)
       .single();
 
-    const { count: ticketsCount } = await supabase
+    const { count: ticketsCount, data: ticketsData } = await supabase
       .from('tickets')
-      .select('id', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('order_id', order_id);
+
+    // Ensure tickets exist before sending email
+    if (!ticketsCount || ticketsCount === 0) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'No tickets found for order', 
+          correlation_id: correlationId 
+        }),
+        { status: 400 }
+      );
+    }
 
     /* ------------------------------------------------------------------------
        FORMAT DATA (🔥 HKT HERE 🔥)
@@ -158,7 +169,11 @@ Deno.serve(async (req) => {
     const amount = order.total_amount || 0;
     const currency = order.currency || 'HKD';
     const ticketQty = ticketsCount || 0;
-    const successUrl = `https://growbrohk.com/booking/success/${order_id}`;
+    
+    // ✅ TICKET-BASED URL: Links to ticket QR code page (same for free and paid events)
+    // This URL shows the ticket QR codes for the order, NOT payment pages
+    // Works for both free events and paid events (PayMe/FPS/Stripe) after confirmation
+    const ticketUrl = `https://growbrohk.com/booking/success/${order_id}`;
 
     /* ------------------------------------------------------------------------
        EMAIL HTML
@@ -179,7 +194,7 @@ Deno.serve(async (req) => {
   <p><strong>Order No:</strong> ${orderNo}</p>
 
   <p>
-    <a href="${successUrl}" style="padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">
+    <a href="${ticketUrl}" style="padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">
       View Ticket
     </a>
   </p>
