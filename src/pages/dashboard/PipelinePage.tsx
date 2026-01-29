@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePipelineRows } from '@/hooks/usePipelineRows';
 import { useQueryClient } from '@tanstack/react-query';
@@ -93,24 +93,7 @@ export default function PipelinePage() {
 
   // Expansion state
   const [expandedTypeKeys, setExpandedTypeKeys] = useState<Set<string>>(new Set(['event', 'product', 'custom'])); // Default expanded
-  const [expandedDestKeys, setExpandedDestKeys] = useState<Set<string>>(new Set()); // Will be populated
-
-  // Initialize expandedDestKeys with all destination keys
-  useEffect(() => {
-    if (pipelines && pipelines.length > 0) {
-      const destKeys = new Set<string>();
-      pipelines.forEach((p) => {
-        if (p.destination_type === 'event' && p.event_id) {
-          destKeys.add(`event-${p.event_id}`);
-        } else if (p.destination_type === 'product' && p.product_id) {
-          destKeys.add(`product-${p.product_id}`);
-        } else if (p.destination_type === 'custom') {
-          destKeys.add(`custom-${normalizeUrl(p.destination_url)}`);
-        }
-      });
-      setExpandedDestKeys(destKeys);
-    }
-  }, [pipelines]);
+  const [expandedDestKeys, setExpandedDestKeys] = useState<Set<string>>(new Set()); // Default collapsed - empty set
 
   const handleEditClick = (pipeline: PipelineRow) => {
     setSelectedPipeline(pipeline);
@@ -454,7 +437,7 @@ export default function PipelinePage() {
                           )}
                           <span>{typeLabel}</span>
                           <Badge variant="secondary" className="ml-2">
-                            {typeCount} active
+                            {typeCount}
                           </Badge>
                         </button>
                       </TableCell>
@@ -477,7 +460,7 @@ export default function PipelinePage() {
                               )}
                               <span>{destGroup.destinationTitle}</span>
                               <Badge variant="outline" className="ml-2">
-                                {destGroup.totalActive} active
+                                {destGroup.totalActive}
                               </Badge>
                             </button>
                           </TableCell>
