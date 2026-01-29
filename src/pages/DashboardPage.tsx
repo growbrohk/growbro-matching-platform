@@ -278,7 +278,7 @@ export default function DashboardPage() {
           {/* Channels Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/channels');
+              navigate('/app/dashboard/pipelines');
             }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
@@ -297,7 +297,7 @@ export default function DashboardPage() {
           {/* Collab Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/channels?collab=with&status=active');
+              navigate('/app/dashboard/pipelines?collab=with&status=active');
             }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >

@@ -20,7 +20,7 @@ import EventDetail from "./pages/events/EventDetail";
 import Dashboard from "./pages/Dashboard";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
-import ChannelsPage from "./pages/dashboard/ChannelsPage";
+import PipelinePage from "./pages/dashboard/PipelinePage";
 import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
@@ -359,11 +359,12 @@ function AppRoutes() {
       */}
       <Route path="/app/dashboard" element={<ProtectedRoute><AppLayout><DashboardPage /></AppLayout></ProtectedRoute>} />
       
-      {/* Channels page */}
-      <Route path="/app/dashboard/channels" element={<ProtectedRoute><AppLayout><ChannelsPage /></AppLayout></ProtectedRoute>} />
-      <Route path="/app/dashboard/channels/:id/edit" element={<ProtectedRoute><AppLayout><div className="p-6"><p>Edit channel (placeholder)</p></div></AppLayout></ProtectedRoute>} />
-      {/* Redirect canonical /dashboard/channels to /app/dashboard/channels */}
-      <Route path="/dashboard/channels" element={<Navigate to="/app/dashboard/channels" replace />} />
+      {/* Pipelines page */}
+      <Route path="/app/dashboard/pipelines" element={<ProtectedRoute><AppLayout><PipelinePage /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/dashboard/channels" element={<Navigate to="/app/dashboard/pipelines" replace />} />
+      <Route path="/app/dashboard/channels/:id/edit" element={<ProtectedRoute><AppLayout><div className="p-6"><p>Edit pipeline (placeholder)</p></div></AppLayout></ProtectedRoute>} />
+      {/* Redirect canonical /dashboard/channels to /app/dashboard/pipelines */}
+      <Route path="/dashboard/channels" element={<Navigate to="/app/dashboard/pipelines" replace />} />
       <Route path="/dashboard/channels/:id/edit" element={<ChannelsEditRedirect />} />
       
       {/* Catalog page with subtabs (Products | Events | Spaces) */}

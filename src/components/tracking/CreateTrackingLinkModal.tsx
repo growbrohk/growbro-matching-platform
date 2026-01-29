@@ -276,6 +276,14 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         status: initialStatus,
       };
 
+      // Set event_id or product_id based on destination_type
+      if (finalDestinationType === 'event' && selectedEventId) {
+        insertData.event_id = selectedEventId;
+      } else if (finalDestinationType === 'product' && selectedProductId) {
+        insertData.product_id = selectedProductId;
+      }
+      // For 'custom', both event_id and product_id remain null
+
       // Add affiliate-specific fields
       if (pipelineType === 'affiliate') {
         insertData.affiliate_org_id = affiliateOrgId;
