@@ -80,8 +80,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
   // Generate slug from label when label changes
   useEffect(() => {
-    if (label && !slug) {
+    if (label && label.trim()) {
       generateSlugFromLabel(label);
+    } else {
+      setSlug('');
     }
   }, [label]);
 
@@ -171,10 +173,19 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       return;
     }
 
+    if (!label || !label.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter a label',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!slug) {
       toast({
         title: 'Error',
-        description: 'Please enter a slug',
+        description: 'Slug generation failed. Please try again.',
         variant: 'destructive',
       });
       return;
@@ -352,7 +363,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   };
 
   const destinationUrl = getDestinationUrl();
-  const previewUrl = slug ? `${window.location.origin}/r/${slug}` : '';
+  const previewUrl = slug ? `https://www.growbrohk.com/r/${slug}` : '';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -408,13 +419,30 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
             {/* Label */}
             <div className="space-y-2">
-              <Label htmlFor="label">Label (optional)</Label>
+              <Label htmlFor="label">Label</Label>
               <Input
                 id="label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="e.g., Instagram Post"
+                required
               />
+              {slug && (pipelineType === 'tracking' || pipelineType === 'affiliate') && (
+                <div className="space-y-1 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Slug: <code className="font-mono">{slug}</code>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Affiliate link: <code className="font-mono">{previewUrl}</code>
+                  </p>
+                  {isGeneratingSlug && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Generating slug...</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Destination Type */}
@@ -545,35 +573,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
               </>
             )}
 
-            {/* Slug - Show for tracking and affiliate */}
-            {(pipelineType === 'tracking' || pipelineType === 'affiliate') && (
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      /r/
-                    </span>
-                    <Input
-                      id="slug"
-                      value={slug}
-                      onChange={(e) => setSlug(e.target.value)}
-                      className="pl-10"
-                      placeholder="link-slug"
-                      disabled={isGeneratingSlug}
-                    />
-                  </div>
-                  {isGeneratingSlug && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-                {previewUrl && (
-                  <p className="text-xs text-muted-foreground">
-                    Preview: <code className="font-mono">{previewUrl}</code>
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* QR Code - Show for tracking and affiliate */}
             {(pipelineType === 'tracking' || pipelineType === 'affiliate') && (
@@ -600,6 +599,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 type="submit" 
                 disabled={
                   isSubmitting || 
+                  !label.trim() ||
                   !slug || 
                   !destinationUrl || 
                   (pipelineType === 'affiliate' && (!affiliateOrgId || !commissionRate || !startDate || !endDate)) ||
