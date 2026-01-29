@@ -263,6 +263,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         slug,
         label: label || null,
         destination_url: destinationUrl,
+        destination_type: destinationType,
         host_org_id: currentOrg.id,
         type: pipelineType,
         status: initialStatus,

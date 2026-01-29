@@ -1539,6 +1539,7 @@ export type Database = {
           affiliate_org_id: string | null
           commission_rate: number | null
           created_at: string
+          destination_type: string
           destination_url: string
           end_date: string | null
           host_org_id: string
@@ -1553,6 +1554,7 @@ export type Database = {
           affiliate_org_id?: string | null
           commission_rate?: number | null
           created_at?: string
+          destination_type?: string
           destination_url: string
           end_date?: string | null
           host_org_id: string
@@ -1567,6 +1569,7 @@ export type Database = {
           affiliate_org_id?: string | null
           commission_rate?: number | null
           created_at?: string
+          destination_type?: string
           destination_url?: string
           end_date?: string | null
           host_org_id?: string
