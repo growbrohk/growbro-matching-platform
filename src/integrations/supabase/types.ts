@@ -1537,33 +1537,48 @@ export type Database = {
       tracking_links: {
         Row: {
           affiliate_org_id: string | null
+          commission_rate: number | null
           created_at: string
           destination_url: string
+          end_date: string | null
           host_org_id: string
           id: string
-          is_active: boolean
           label: string | null
+          qr_enabled: boolean
           slug: string
+          start_date: string | null
+          status: string
+          type: string
         }
         Insert: {
           affiliate_org_id?: string | null
+          commission_rate?: number | null
           created_at?: string
           destination_url: string
+          end_date?: string | null
           host_org_id: string
           id?: string
-          is_active?: boolean
           label?: string | null
+          qr_enabled?: boolean
           slug: string
+          start_date?: string | null
+          status?: string
+          type?: string
         }
         Update: {
           affiliate_org_id?: string | null
+          commission_rate?: number | null
           created_at?: string
           destination_url?: string
+          end_date?: string | null
           host_org_id?: string
           id?: string
-          is_active?: boolean
           label?: string | null
+          qr_enabled?: boolean
           slug?: string
+          start_date?: string | null
+          status?: string
+          type?: string
         }
         Relationships: [
           {
