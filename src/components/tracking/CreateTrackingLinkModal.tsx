@@ -367,7 +367,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md overflow-visible">
         <DialogHeader>
           <DialogTitle>Create Pipeline</DialogTitle>
           <DialogDescription>
@@ -468,7 +468,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                   <SelectTrigger id="event">
                     <SelectValue placeholder="Choose an event" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[9999]">
                     {events
                       .filter((e) => e.status === 'published')
                       .map((event) => (
@@ -489,7 +489,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                   <SelectTrigger id="product">
                     <SelectValue placeholder="Choose a product" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="z-[9999]">
                     {products.map((product) => (
                       <SelectItem key={product.id} value={product.id}>
                         {product.title}
