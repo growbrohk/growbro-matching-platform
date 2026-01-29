@@ -24,6 +24,7 @@ import { QrCodeModal } from '@/components/channels/QrCodeModal';
 import { EditChannelModal } from '@/components/channels/EditChannelModal';
 import { PipelineRow } from '@/hooks/usePipelineRows';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Format money as HKD currency
@@ -55,11 +56,7 @@ type SortDirection = 'asc' | 'desc';
 interface DestinationKeyGroup {
   destinationKey: string; // event_id, product_id, or normalized URL
   destinationTitle: string; // event title, product title, or normalized URL
-  pipelineTypes: {
-    type: 'tracking' | 'affiliate';
-    pipelines: PipelineRow[];
-    count: number;
-  }[];
+  pipelines: PipelineRow[]; // Direct array of pipelines, sorted
   totalActive: number;
 }
 
@@ -70,10 +67,20 @@ interface DestinationTypeGroup {
 }
 
 export default function PipelinePage() {
-  const { data: pipelines, isLoading, error } = usePipelineRows();
+  const { currentOrg } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  
+  // Get mode from URL query param, default to 'host'
+  const modeParam = searchParams.get('mode');
+  const mode: 'host' | 'collab' = (modeParam === 'collab' ? 'collab' : 'host');
+  
+  const { data: pipelines, isLoading, error } = usePipelineRows({ 
+    mode, 
+    orgId: currentOrg?.id || '' 
+  });
+  
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -87,7 +94,6 @@ export default function PipelinePage() {
   // Expansion state
   const [expandedTypeKeys, setExpandedTypeKeys] = useState<Set<string>>(new Set(['event', 'product', 'custom'])); // Default expanded
   const [expandedDestKeys, setExpandedDestKeys] = useState<Set<string>>(new Set()); // Will be populated
-  const [expandedPipelineKeys, setExpandedPipelineKeys] = useState<Set<string>>(new Set()); // Default collapsed
 
   // Initialize expandedDestKeys with all destination keys
   useEffect(() => {
@@ -146,7 +152,7 @@ export default function PipelinePage() {
     });
   }, [pipelines, searchQuery]);
 
-  // Group pipelines into 3-level hierarchy
+  // Group pipelines into 2-level hierarchy
   const groupedData = useMemo(() => {
     if (!filteredPipelines || filteredPipelines.length === 0) return [];
 
@@ -214,7 +220,7 @@ export default function PipelinePage() {
         byDestKey.get(destKey)!.push(p);
       });
 
-      // Build destination key groups
+      // Build destination key groups - pipelines are already sorted
       const destKeyGroups: DestinationKeyGroup[] = [];
       byDestKey.forEach((destPipelines, destKey) => {
         const firstPipeline = destPipelines[0];
@@ -224,25 +230,10 @@ export default function PipelinePage() {
           ? (firstPipeline.product_title || firstPipeline.product_id || 'Unknown Product')
           : normalizeUrl(firstPipeline.destination_url);
 
-        const byPipelineType = new Map<'tracking' | 'affiliate', PipelineRow[]>();
-        destPipelines.forEach((p) => {
-          const pType = p.type;
-          if (!byPipelineType.has(pType)) {
-            byPipelineType.set(pType, []);
-          }
-          byPipelineType.get(pType)!.push(p);
-        });
-
-        const pipelineTypes = Array.from(byPipelineType.entries()).map(([type, pipes]) => ({
-          type,
-          pipelines: pipes,
-          count: pipes.length,
-        }));
-
         destKeyGroups.push({
           destinationKey: destKey,
           destinationTitle: destTitle,
-          pipelineTypes,
+          pipelines: destPipelines, // Direct array, already sorted
           totalActive: destPipelines.length,
         });
       });
@@ -295,17 +286,6 @@ export default function PipelinePage() {
     });
   };
 
-  const togglePipelineExpansion = (pipelineKey: string) => {
-    setExpandedPipelineKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(pipelineKey)) {
-        next.delete(pipelineKey);
-      } else {
-        next.add(pipelineKey);
-      }
-      return next;
-    });
-  };
 
   if (isLoading) {
     return (
@@ -335,15 +315,15 @@ export default function PipelinePage() {
       <div className="w-full space-y-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-            Pipelines
+            {mode === 'collab' ? 'Collab Pipelines' : 'Pipelines'}
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            Pipelines overview
+            {mode === 'collab' ? 'Affiliate pipelines overview' : 'Pipelines overview'}
           </p>
         </div>
         <div className="py-12 text-center">
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
-            No pipelines found
+            {mode === 'collab' ? 'No collab pipelines found' : 'No pipelines found'}
           </p>
         </div>
       </div>
@@ -355,10 +335,10 @@ export default function PipelinePage() {
       {/* Page Header */}
       <div>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-          Pipelines
+          {mode === 'collab' ? 'Collab Pipelines' : 'Pipelines'}
         </h1>
         <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          Pipelines overview
+          {mode === 'collab' ? 'Affiliate pipelines overview' : 'Pipelines overview'}
         </p>
       </div>
 
@@ -436,7 +416,7 @@ export default function PipelinePage() {
               <TableHead style={{ color: '#0F1F17' }}>Orders</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Clicks</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Destination</TableHead>
-              <TableHead style={{ color: '#0F1F17' }}>Affiliate org</TableHead>
+              <TableHead style={{ color: '#0F1F17' }}>{mode === 'collab' ? 'Host org' : 'Affiliate org'}</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Commission rate</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Link</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>QR Code</TableHead>
@@ -503,115 +483,87 @@ export default function PipelinePage() {
                           </TableCell>
                         </TableRow>
 
-                        {expandedDestKeys.has(destGroup.destinationKey) && destGroup.pipelineTypes.map((ptGroup) => {
-                          const pipelineKey = `${destGroup.destinationKey}-${ptGroup.type}`;
-                          const isPipelineExpanded = expandedPipelineKeys.has(pipelineKey);
-                          const ptTypeLabel = ptGroup.type === 'tracking' ? 'Tracking' : 'Affiliate';
-
-                          return (
-                            <React.Fragment key={`pipeline-type-${pipelineKey}`}>
-                              {/* Level 3: Pipeline Type Headers */}
-                              <TableRow className="bg-gray-50">
-                                <TableCell colSpan={10} className="py-2 pl-16">
-                                  <button
-                                    onClick={() => togglePipelineExpansion(pipelineKey)}
-                                    className="flex items-center gap-2 w-full text-left text-sm font-medium"
-                                    style={{ color: '#0F1F17' }}
-                                  >
-                                    {isPipelineExpanded ? (
-                                      <ChevronDown className="h-3 w-3" />
-                                    ) : (
-                                      <ChevronRight className="h-3 w-3" />
-                                    )}
-                                    <span>{ptTypeLabel}</span>
-                                    <Badge variant="outline" className="ml-2 text-xs">
-                                      {ptGroup.count}
-                                    </Badge>
-                                  </button>
-                                </TableCell>
-                              </TableRow>
-
-                              {/* Leaf Rows: Actual Pipelines */}
-                              {isPipelineExpanded && ptGroup.pipelines.map((pipeline) => (
-                                <TableRow key={pipeline.tracking_link_id}>
-                                  <TableCell style={{ color: '#0F1F17' }}>{pipeline.label}</TableCell>
-                                  <TableCell style={{ color: '#0F1F17' }}>{formatHKD(pipeline.revenue)}</TableCell>
-                                  <TableCell style={{ color: '#0F1F17' }}>{pipeline.orders.toLocaleString()}</TableCell>
-                                  <TableCell style={{ color: '#0F1F17' }}>{pipeline.clicks.toLocaleString()}</TableCell>
-                                  <TableCell>
-                                    <a
-                                      href={pipeline.destination_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm hover:underline"
-                                      style={{ color: '#0E7A3A' }}
-                                    >
-                                      {pipeline.destination_url.length > 40 
-                                        ? `${pipeline.destination_url.substring(0, 40)}...` 
-                                        : pipeline.destination_url}
-                                      <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                  </TableCell>
-                                  <TableCell style={{ color: '#0F1F17' }}>
-                                    {pipeline.type === 'affiliate' ? (pipeline.affiliate_org_name || '—') : '—'}
-                                  </TableCell>
-                                  <TableCell style={{ color: '#0F1F17' }}>
-                                    {pipeline.type === 'affiliate' && pipeline.commission_rate !== null
-                                      ? `${(pipeline.commission_rate * 100).toFixed(1)}%`
-                                      : '—'}
-                                  </TableCell>
-                                  <TableCell>
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleCopyLink(pipeline.slug)}
-                                            className="h-7 px-2"
-                                          >
-                                            <Copy className="h-3 w-3" />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          <p>Copy link</p>
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  </TableCell>
-                                  <TableCell>
+                        {/* Leaf Rows: Actual Pipelines - rendered directly under destination key */}
+                        {expandedDestKeys.has(destGroup.destinationKey) && destGroup.pipelines.map((pipeline) => (
+                          <TableRow key={pipeline.tracking_link_id}>
+                            <TableCell style={{ color: '#0F1F17' }}>{pipeline.label}</TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>{formatHKD(pipeline.revenue)}</TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>{pipeline.orders.toLocaleString()}</TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>{pipeline.clicks.toLocaleString()}</TableCell>
+                            <TableCell>
+                              <a
+                                href={pipeline.destination_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm hover:underline"
+                                style={{ color: '#0E7A3A' }}
+                              >
+                                {pipeline.destination_url.length > 40 
+                                  ? `${pipeline.destination_url.substring(0, 40)}...` 
+                                  : pipeline.destination_url}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>
+                              {mode === 'collab' 
+                                ? (pipeline.host_org_name || '—')
+                                : (pipeline.type === 'affiliate' ? (pipeline.affiliate_org_name || '—') : '—')
+                              }
+                            </TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>
+                              {pipeline.type === 'affiliate' && pipeline.commission_rate !== null
+                                ? `${(pipeline.commission_rate * 100).toFixed(1)}%`
+                                : '—'}
+                            </TableCell>
+                            <TableCell>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
                                     <Button
                                       type="button"
-                                      variant="outline"
+                                      variant="ghost"
                                       size="sm"
-                                      onClick={() => {
-                                        setSelectedSlug(pipeline.slug);
-                                        setQrModalOpen(true);
-                                      }}
-                                      className="inline-flex items-center gap-1"
+                                      onClick={() => handleCopyLink(pipeline.slug)}
+                                      className="h-7 px-2"
                                     >
-                                      <QrCode className="h-4 w-4" />
-                                      View
+                                      <Copy className="h-3 w-3" />
                                     </Button>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant={pipeline.status === 'active' ? 'default' : 'secondary'}
-                                      className={
-                                        pipeline.status === 'active'
-                                          ? 'bg-green-600 text-white'
-                                          : 'bg-gray-300 text-gray-700'
-                                      }
-                                    >
-                                      {pipeline.status}
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </React.Fragment>
-                          );
-                        })}
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Copy link</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedSlug(pipeline.slug);
+                                  setQrModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1"
+                              >
+                                <QrCode className="h-4 w-4" />
+                                View
+                              </Button>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={pipeline.status === 'active' ? 'default' : 'secondary'}
+                                className={
+                                  pipeline.status === 'active'
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-gray-300 text-gray-700'
+                                }
+                              >
+                                {pipeline.status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </React.Fragment>
                     ))}
                   </React.Fragment>

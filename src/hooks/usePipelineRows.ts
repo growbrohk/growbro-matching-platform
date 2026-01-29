@@ -20,27 +20,32 @@ export interface PipelineRow {
   product_title: string | null;
   affiliate_org_id: string | null;
   affiliate_org_name: string | null;
+  host_org_id: string | null;
+  host_org_name: string | null;
   commission_rate: number | null;
   status: 'active' | 'inactive' | 'pending';
 }
 
+export interface UsePipelineRowsOptions {
+  mode: 'host' | 'collab';
+  orgId: string;
+}
+
 /**
- * Hook to fetch pipeline rows for the host org
- * Filters by host_org_id = currentOrg.id and status = 'active'
+ * Hook to fetch pipeline rows
+ * Filters by host_org_id or affiliate_org_id based on mode
  * Includes event and product titles for grouping
  */
-export function usePipelineRows() {
-  const { currentOrg } = useAuth();
-
+export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
   return useQuery({
-    queryKey: ['pipeline-rows', currentOrg?.id],
+    queryKey: ['pipeline-rows', orgId, mode],
     queryFn: async (): Promise<PipelineRow[]> => {
-      if (!currentOrg) {
+      if (!orgId) {
         return [];
       }
 
-      // Fetch tracking links where current org is the host
-      const { data: links, error: linksError } = await (supabase.from('tracking_links' as any) as any)
+      // Build query based on mode
+      let query = (supabase.from('tracking_links' as any) as any)
         .select(`
           id,
           label,
@@ -55,12 +60,20 @@ export function usePipelineRows() {
           commission_rate,
           host_org_id
         `)
-        .eq('host_org_id', currentOrg.id)
         .eq('status', 'active')
         .in('type', ['tracking', 'affiliate']);
 
+      // Apply filter based on mode
+      if (mode === 'host') {
+        query = query.eq('host_org_id', orgId);
+      } else {
+        query = query.eq('affiliate_org_id', orgId);
+      }
+
+      const { data: links, error: linksError } = await query;
+
       if (linksError) {
-        console.error('Error fetching pipeline rows:', linksError);
+        console.error(`Error fetching pipeline rows (${mode}):`, linksError);
         throw linksError;
       }
 
@@ -68,15 +81,17 @@ export function usePipelineRows() {
         return [];
       }
 
-      // Collect unique event_ids and product_ids
+      // Collect unique event_ids, product_ids, and org IDs
       const eventIds = new Set<string>();
       const productIds = new Set<string>();
       const affiliateOrgIds = new Set<string>();
+      const hostOrgIds = new Set<string>();
 
       links.forEach((link: any) => {
         if (link.event_id) eventIds.add(link.event_id);
         if (link.product_id) productIds.add(link.product_id);
         if (link.affiliate_org_id) affiliateOrgIds.add(link.affiliate_org_id);
+        if (link.host_org_id) hostOrgIds.add(link.host_org_id);
       });
 
       // Fetch event titles
@@ -119,6 +134,20 @@ export function usePipelineRows() {
         if (!orgsError && orgs) {
           orgs.forEach((org: any) => {
             affiliateOrgNameMap.set(org.id, org.name);
+          });
+        }
+      }
+
+      // Fetch host org names
+      const hostOrgNameMap = new Map<string, string>();
+      if (hostOrgIds.size > 0) {
+        const { data: orgs, error: orgsError } = await (supabase.from('orgs' as any) as any)
+          .select('id, name')
+          .in('id', Array.from(hostOrgIds));
+
+        if (!orgsError && orgs) {
+          orgs.forEach((org: any) => {
+            hostOrgNameMap.set(org.id, org.name);
           });
         }
       }
@@ -167,12 +196,15 @@ export function usePipelineRows() {
         product_title: link.product_id ? productTitleMap.get(link.product_id) || null : null,
         affiliate_org_id: link.affiliate_org_id,
         affiliate_org_name: link.affiliate_org_id ? affiliateOrgNameMap.get(link.affiliate_org_id) || null : null,
+        host_org_id: link.host_org_id,
+        host_org_name: link.host_org_id ? hostOrgNameMap.get(link.host_org_id) || null : null,
         commission_rate: link.commission_rate,
         status: link.status,
       }));
 
       return pipelineRows;
     },
-    enabled: !!currentOrg,
+    enabled: !!orgId,
   });
 }
+
