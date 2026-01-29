@@ -76,7 +76,8 @@ export default function DashboardPage() {
     return { start, end };
   };
 
-  // Fetch channels count (tracking_links where host_org_id=currentOrg.id and affiliate_org_id is null and status='active')
+  // Fetch channels count (tracking_links where host_org_id=currentOrg.id, type IN ('tracking', 'affiliate'), and status='active')
+  // Only counts links where currentOrg is the host, NOT where currentOrg is the affiliate partner
   const { data: channelsCount = 0 } = useQuery({
     queryKey: ['tracking-channels-count', currentOrg?.id],
     queryFn: async () => {
@@ -84,7 +85,7 @@ export default function DashboardPage() {
       const { count, error } = await (supabase.from('tracking_links' as any) as any)
         .select('*', { count: 'exact', head: true })
         .eq('host_org_id', currentOrg.id)
-        .is('affiliate_org_id', null)
+        .in('type', ['tracking', 'affiliate'])
         .eq('status', 'active');
       if (error) {
         console.error('Error fetching channels count:', error);
@@ -282,7 +283,7 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {channelsCount + collabCount}
+              {channelsCount}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
               channels
