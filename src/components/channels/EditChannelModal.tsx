@@ -102,7 +102,7 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
         p_tracking_link_id: channel.tracking_link_id,
         p_label: label.trim() || null,
         p_destination_url: trimmedDestination,
-        p_is_active: isActive,
+        p_status: isActive ? 'active' : 'inactive',
         p_qr_enabled: qrEnabled,
       });
 

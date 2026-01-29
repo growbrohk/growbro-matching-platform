@@ -8,7 +8,7 @@ const CLICK_TRACK_TIMEOUT_MS = 1500;
 /**
  * Tracking Redirect Handler
  * Handles /r/:slug routes:
- * 1. Looks up tracking_links by slug where is_active=true
+ * 1. Looks up tracking_links by slug where status='active'
  * 2. Inserts click record into tracking_clicks
  * 3. Redirects to destination_url with ?tid=<tracking_link_id> appended
  */
@@ -30,7 +30,7 @@ export default function TrackingRedirectHandler() {
         const { data: trackingLink, error: lookupError } = await (supabase.from('tracking_links' as any) as any)
           .select('id, destination_url')
           .eq('slug', String(slug))
-          .eq('is_active', true)
+          .eq('status', 'active')
           .maybeSingle();
 
         if (lookupError) {

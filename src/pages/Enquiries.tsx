@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
 import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
 import HostEnquiryOrderCard, { type HostOrderCardData } from '@/components/host/HostEnquiryOrderCard';
+import AffiliateRequestCard from '@/components/enquiries/AffiliateRequestCard';
 import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 import { usePendingConnectionsCount } from '@/hooks/use-pending-connections-count';
 import ConnectRequestsPreviewCard from '@/components/connections/ConnectRequestsPreviewCard';
@@ -44,6 +45,7 @@ export default function Enquiries() {
   const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
   const [messageEnquiries, setMessageEnquiries] = useState<MessageEnquiryRowData[]>([]);
   const [hostOrders, setHostOrders] = useState<HostOrderCardData[]>([]);
+  const [affiliateRequests, setAffiliateRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -232,6 +234,75 @@ export default function Enquiries() {
         }
       }
 
+      // Fetch affiliate requests (where current org is affiliate)
+      const { data: affiliateRequestsData, error: affiliateError } = await supabase
+        .from('affiliate_requests')
+        .select(`
+          id,
+          tracking_link_id,
+          host_org_id,
+          affiliate_org_id,
+          status,
+          created_at,
+          tracking_links!inner(
+            slug,
+            label,
+            destination_url,
+            commission_rate,
+            start_date,
+            end_date
+          ),
+          orgs!affiliate_requests_host_org_id_fkey(
+            name,
+            slug
+          )
+        `)
+        .eq('affiliate_org_id', currentOrg.id)
+        .order('created_at', { ascending: false });
+
+      if (affiliateError) {
+        console.error('Error fetching affiliate requests:', affiliateError);
+      } else if (affiliateRequestsData) {
+        // Transform data to match expected structure
+        const transformedRequests = affiliateRequestsData.map((req: any) => ({
+          id: req.id,
+          tracking_link_id: req.tracking_link_id,
+          host_org_id: req.host_org_id,
+          affiliate_org_id: req.affiliate_org_id,
+          status: req.status,
+          created_at: req.created_at,
+          tracking_link: req.tracking_links,
+          host_org: Array.isArray(req.orgs) ? req.orgs[0] : req.orgs,
+        }));
+        setAffiliateRequests(transformedRequests);
+
+        // Also add to allEnquiries for filtering/sorting compatibility
+        for (const req of transformedRequests) {
+          if (req.status === 'pending') {
+            allEnquiries.push({
+              id: req.id,
+              type: 'request',
+              status: 'pending',
+              brand: {
+                name: req.host_org.name,
+                slug: req.host_org.slug,
+              },
+              item: {
+                name: req.tracking_link.label || req.tracking_link.destination_url,
+                type: 'event', // Could be event/product/custom
+              },
+              period: {
+                start: req.tracking_link.start_date,
+                end: req.tracking_link.end_date,
+              },
+              previewText: `Commission: ${(req.tracking_link.commission_rate * 100).toFixed(1)}%`,
+              date: req.created_at,
+              unread: req.status === 'pending',
+            });
+          }
+        }
+      }
+
       // Sort by date (newest first)
       allEnquiries.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
@@ -383,7 +454,25 @@ export default function Enquiries() {
         </Card>
       ) : (
         <div className="space-y-3">
+          {/* Render affiliate requests first (if pending) */}
+          {affiliateRequests
+            .filter(req => req.status === 'pending' && (filter === 'all' || filter === 'requests'))
+            .map((req) => (
+              <AffiliateRequestCard
+                key={req.id}
+                request={req}
+                onStatusChange={fetchEnquiries}
+              />
+            ))}
+          
+          {/* Render other enquiries */}
           {filteredEnquiries.map((enquiry) => {
+            // Skip affiliate requests that are already rendered above
+            const isAffiliateRequest = affiliateRequests.some(req => req.id === enquiry.id);
+            if (isAffiliateRequest && enquiry.type === 'request') {
+              return null; // Already rendered above
+            }
+
             // Render message enquiries with WhatsApp-style component
             if (enquiry.type === 'message') {
               const messageData = messageEnquiries.find(m => m.conversation_id === enquiry.id);
