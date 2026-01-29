@@ -124,8 +124,12 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     }
   };
 
-  const handleDestinationTypeChange = (type: DestinationType) => {
-    setDestinationType(type);
+  const handleDestinationTypeChange = (type: string) => {
+    // Ensure type is valid
+    const validType: DestinationType = (type === 'event' || type === 'product' || type === 'custom') 
+      ? type as DestinationType 
+      : 'custom';
+    setDestinationType(validType);
     setSelectedEventId('');
     setSelectedProductId('');
     setCustomUrl('');
@@ -258,12 +262,15 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       // Determine initial status based on type
       const initialStatus = pipelineType === 'tracking' ? 'active' : 'pending';
 
+      // Ensure destination_type is explicitly set (should never be undefined/null)
+      const finalDestinationType: DestinationType = destinationType || 'custom';
+
       // Create tracking link
       const insertData: any = {
         slug,
         label: label || null,
         destination_url: destinationUrl,
-        destination_type: destinationType,
+        destination_type: finalDestinationType,
         host_org_id: currentOrg.id,
         type: pipelineType,
         status: initialStatus,
@@ -446,9 +453,13 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
             {/* Destination Type */}
             <div className="space-y-2">
               <Label htmlFor="destination-type">Destination</Label>
-              <Select value={destinationType} onValueChange={(v) => handleDestinationTypeChange(v as DestinationType)}>
+              <Select 
+                key={`destination-select-${open}`}
+                value={destinationType} 
+                onValueChange={handleDestinationTypeChange}
+              >
                 <SelectTrigger id="destination-type">
-                  <SelectValue />
+                  <SelectValue placeholder="Select destination type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="event">Event</SelectItem>
