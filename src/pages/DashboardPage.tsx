@@ -95,15 +95,14 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  // Fetch collab count (tracking_links where host_org_id=currentOrg.id and affiliate_org_id is not null and is_active=true)
+  // Fetch collab count (tracking_links where affiliate_org_id=currentOrg.id and is_active=true)
   const { data: collabCount = 0 } = useQuery({
     queryKey: ['tracking-collab-count', currentOrg?.id],
     queryFn: async () => {
       if (!currentOrg) return 0;
       const { count, error } = await (supabase.from('tracking_links' as any) as any)
         .select('*', { count: 'exact', head: true })
-        .eq('host_org_id', currentOrg.id)
-        .not('affiliate_org_id', 'is', null)
+        .eq('affiliate_org_id', currentOrg.id)
         .eq('is_active', true);
       if (error) {
         console.error('Error fetching collab count:', error);
