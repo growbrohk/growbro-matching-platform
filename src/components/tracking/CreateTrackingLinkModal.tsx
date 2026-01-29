@@ -545,26 +545,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
               </>
             )}
 
-            {/* Tracking link: Show affiliate partner as optional */}
-            {pipelineType === 'tracking' && (
-              <div className="space-y-2">
-                <Label htmlFor="affiliate">Affiliate Partner (optional)</Label>
-                <Select value={affiliateOrgId || "none"} onValueChange={(v) => setAffiliateOrgId(v === "none" ? undefined : v)}>
-                  <SelectTrigger id="affiliate">
-                    <SelectValue placeholder="Select affiliate partner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {connectedOrgs.map((org) => (
-                      <SelectItem key={org.org_id} value={org.org_id}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             {/* Slug - Show for tracking and affiliate */}
             {(pipelineType === 'tracking' || pipelineType === 'affiliate') && (
               <div className="space-y-2">
