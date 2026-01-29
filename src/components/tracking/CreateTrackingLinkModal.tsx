@@ -65,14 +65,14 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     enabled: !!currentOrg && open,
   });
 
-  // Fetch products for current org
-  const { data: products = [] } = useQuery({
+  // Fetch products for current org (host org, not affiliate org)
+  const { data: products = [], isLoading: isProductsLoading } = useQuery({
     queryKey: ['products', currentOrg?.id],
     queryFn: async () => {
       if (!currentOrg) return [];
       return getProducts(currentOrg.id);
     },
-    enabled: !!currentOrg && open,
+    enabled: !!currentOrg && open && destinationType === 'product',
   });
 
   // Fetch connected orgs for affiliate selection
@@ -498,7 +498,17 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                     className="!z-[9999]" 
                     style={{ zIndex: 9999 }}
                   >
-                    {products.map((product) => (
+                    {isProductsLoading && (
+                      <SelectItem disabled value="__loading">
+                        Loading…
+                      </SelectItem>
+                    )}
+                    {!isProductsLoading && products.length === 0 && (
+                      <SelectItem disabled value="__empty">
+                        No products found
+                      </SelectItem>
+                    )}
+                    {!isProductsLoading && products.map((product) => (
                       <SelectItem key={product.id} value={product.id}>
                         {product.title}
                       </SelectItem>
