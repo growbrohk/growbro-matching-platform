@@ -55,7 +55,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [copied, setCopied] = useState(false);
 
   // Fetch events for current org
-  const { data: events = [] } = useQuery({
+  const { data: events = [], isLoading: isEventsLoading } = useQuery({
     queryKey: ['events', currentOrg?.id],
     queryFn: async () => {
       if (!currentOrg) return [];
@@ -470,7 +470,17 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                     className="!z-[9999]" 
                     style={{ zIndex: 9999 }}
                   >
-                    {events
+                    {isEventsLoading && (
+                      <SelectItem disabled value="__loading">
+                        Loading…
+                      </SelectItem>
+                    )}
+                    {!isEventsLoading && events.filter((e) => e.status === 'published').length === 0 && (
+                      <SelectItem disabled value="__empty">
+                        No events found
+                      </SelectItem>
+                    )}
+                    {!isEventsLoading && events
                       .filter((e) => e.status === 'published')
                       .map((event) => (
                         <SelectItem key={event.id} value={event.id}>
