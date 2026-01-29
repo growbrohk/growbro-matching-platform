@@ -1544,7 +1544,6 @@ export type Database = {
           host_org_id: string
           id: string
           label: string | null
-          qr_enabled: boolean
           slug: string
           start_date: string | null
           status: string
@@ -1559,7 +1558,6 @@ export type Database = {
           host_org_id: string
           id?: string
           label?: string | null
-          qr_enabled?: boolean
           slug: string
           start_date?: string | null
           status?: string
@@ -1574,7 +1572,6 @@ export type Database = {
           host_org_id?: string
           id?: string
           label?: string | null
-          qr_enabled?: boolean
           slug?: string
           start_date?: string | null
           status?: string

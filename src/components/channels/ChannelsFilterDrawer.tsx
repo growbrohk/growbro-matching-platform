@@ -16,48 +16,42 @@ import {
 import { Button } from '@/components/ui/button';
 
 type CollabPartnerFilter = 'all' | 'without' | 'with';
-type QrCodeFilter = 'all' | 'with' | 'without';
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 interface ChannelsFilterDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   collabPartnerFilter: CollabPartnerFilter;
-  qrCodeFilter: QrCodeFilter;
   statusFilter: StatusFilter;
-  onApply: (collabPartner: CollabPartnerFilter, qrCode: QrCodeFilter, status: StatusFilter) => void;
+  onApply: (collabPartner: CollabPartnerFilter, status: StatusFilter) => void;
 }
 
 export function ChannelsFilterDrawer({
   open,
   onOpenChange,
   collabPartnerFilter,
-  qrCodeFilter,
   statusFilter,
   onApply,
 }: ChannelsFilterDrawerProps) {
   // Draft state for filters (local to drawer)
   const [draftCollabPartner, setDraftCollabPartner] = useState<CollabPartnerFilter>(collabPartnerFilter);
-  const [draftQrCode, setDraftQrCode] = useState<QrCodeFilter>(qrCodeFilter);
   const [draftStatus, setDraftStatus] = useState<StatusFilter>(statusFilter);
 
   // Reset draft state when drawer opens or when props change
   useEffect(() => {
     if (open) {
       setDraftCollabPartner(collabPartnerFilter);
-      setDraftQrCode(qrCodeFilter);
       setDraftStatus(statusFilter);
     }
-  }, [open, collabPartnerFilter, qrCodeFilter, statusFilter]);
+  }, [open, collabPartnerFilter, statusFilter]);
 
   const handleReset = () => {
     setDraftCollabPartner('all');
-    setDraftQrCode('all');
     setDraftStatus('all');
   };
 
   const handleApply = () => {
-    onApply(draftCollabPartner, draftQrCode, draftStatus);
+    onApply(draftCollabPartner, draftStatus);
   };
 
   return (
@@ -83,26 +77,6 @@ export function ChannelsFilterDrawer({
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="without">Without collab partner</SelectItem>
                 <SelectItem value="with">With collab partner</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* QR Code Filter */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-              QR Code
-            </label>
-            <Select
-              value={draftQrCode}
-              onValueChange={(value) => setDraftQrCode(value as QrCodeFilter)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="QR Code" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="with">With QR Code</SelectItem>
-                <SelectItem value="without">Without QR Code</SelectItem>
               </SelectContent>
             </Select>
           </div>

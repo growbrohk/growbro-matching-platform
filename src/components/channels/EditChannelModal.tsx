@@ -27,7 +27,6 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
   const [label, setLabel] = useState('');
   const [destinationUrl, setDestinationUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
-  const [qrEnabled, setQrEnabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [destinationError, setDestinationError] = useState<string>('');
@@ -38,7 +37,6 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
       setLabel(channel.label || '');
       setDestinationUrl(channel.destination_url || '');
       setIsActive(channel.status === 'active');
-      setQrEnabled(channel.qr_enabled || false);
     }
   }, [channel]);
 
@@ -46,7 +44,6 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
     setLabel('');
     setDestinationUrl('');
     setIsActive(true);
-    setQrEnabled(false);
     setCopied(false);
     setIsSubmitting(false);
     setDestinationError('');
@@ -103,7 +100,6 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
         p_label: label.trim() || null,
         p_destination_url: trimmedDestination,
         p_status: isActive ? 'active' : 'inactive',
-        p_qr_enabled: qrEnabled,
       });
 
       if (error) throw error;
@@ -252,21 +248,6 @@ export function EditChannelModal({ open, onOpenChange, channel, onSuccess }: Edi
               id="edit-is-active"
               checked={isActive}
               onCheckedChange={setIsActive}
-            />
-          </div>
-
-          {/* QR Enabled */}
-          <div className="flex items-center justify-between space-x-2 py-2">
-            <div className="space-y-0.5">
-              <Label htmlFor="edit-qr-enabled">QR Code Enabled</Label>
-              <p className="text-xs text-muted-foreground">
-                Enable QR code generation for this tracking link
-              </p>
-            </div>
-            <Switch
-              id="edit-qr-enabled"
-              checked={qrEnabled}
-              onCheckedChange={setQrEnabled}
             />
           </div>
 

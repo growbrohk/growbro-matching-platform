@@ -39,7 +39,6 @@ function formatHKD(amount: number): string {
 type SortKey = 'clicks' | 'orders' | 'revenue';
 type SortDirection = 'asc' | 'desc';
 type CollabPartnerFilter = 'all' | 'without' | 'with';
-type QrCodeFilter = 'all' | 'with' | 'without';
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 export default function ChannelsPage() {
@@ -71,7 +70,6 @@ export default function ChannelsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('clicks');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [collabPartnerFilter, setCollabPartnerFilter] = useState<CollabPartnerFilter>(getInitialCollabFilter);
-  const [qrCodeFilter, setQrCodeFilter] = useState<QrCodeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(getInitialStatusFilter);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
@@ -141,10 +139,9 @@ export default function ChannelsPage() {
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (collabPartnerFilter !== 'all') count++;
-    if (qrCodeFilter !== 'all') count++;
     if (statusFilter !== 'all') count++;
     return count;
-  }, [collabPartnerFilter, qrCodeFilter, statusFilter]);
+  }, [collabPartnerFilter, statusFilter]);
 
   const handleEditClick = (channel: ChannelRow) => {
     setSelectedChannel(channel);
@@ -185,13 +182,6 @@ export default function ChannelsPage() {
       );
     }
 
-    // Apply QR code filter
-    if (qrCodeFilter === 'with') {
-      filtered = filtered.filter((channel) => channel.qr_enabled === true);
-    } else if (qrCodeFilter === 'without') {
-      filtered = filtered.filter((channel) => channel.qr_enabled === false);
-    }
-
     // Apply status filter
     if (statusFilter === 'active') {
       filtered = filtered.filter((channel) => channel.status === 'active');
@@ -227,7 +217,7 @@ export default function ChannelsPage() {
     });
 
     return filtered;
-  }, [channels, searchQuery, sortKey, sortDirection, collabPartnerFilter, qrCodeFilter, statusFilter]);
+  }, [channels, searchQuery, sortKey, sortDirection, collabPartnerFilter, statusFilter]);
 
   const handleSortClick = (key: SortKey) => {
     if (sortKey === key) {
@@ -441,23 +431,19 @@ export default function ChannelsPage() {
                   </a>
                 </TableCell>
                 <TableCell>
-                  {channel.qr_enabled ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedSlug(channel.slug);
-                        setQrModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-1"
-                    >
-                      <QrCode className="h-4 w-4" />
-                      View
-                    </Button>
-                  ) : (
-                    <span style={{ color: '#0F1F17' }}>—</span>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedSlug(channel.slug);
+                      setQrModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1"
+                  >
+                    <QrCode className="h-4 w-4" />
+                    View
+                  </Button>
                 </TableCell>
                 <TableCell style={{ color: '#0F1F17' }}>
                   {channel.collab_partner_name || '—'}
@@ -527,11 +513,9 @@ export default function ChannelsPage() {
         open={filterDrawerOpen}
         onOpenChange={setFilterDrawerOpen}
         collabPartnerFilter={collabPartnerFilter}
-        qrCodeFilter={qrCodeFilter}
         statusFilter={statusFilter}
-        onApply={(collabPartner, qrCode, status) => {
+        onApply={(collabPartner, status) => {
           setCollabPartnerFilter(collabPartner);
-          setQrCodeFilter(qrCode);
           setStatusFilter(status);
           setFilterDrawerOpen(false);
         }}

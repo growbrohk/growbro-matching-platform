@@ -49,7 +49,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [slug, setSlug] = useState('');
-  const [qrEnabled, setQrEnabled] = useState<boolean>(false);
   const [isGeneratingSlug, setIsGeneratingSlug] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -267,7 +266,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         host_org_id: currentOrg.id,
         type: pipelineType,
         status: initialStatus,
-        qr_enabled: qrEnabled,
       };
 
       // Add affiliate-specific fields
@@ -340,7 +338,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setStartDate('');
     setEndDate('');
     setSlug('');
-    setQrEnabled(false);
     setCreatedLink(null);
     setCopied(false);
     onOpenChange(false);
@@ -589,23 +586,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                   />
                 </div>
               </>
-            )}
-
-
-            {/* QR Code - Show for tracking and affiliate */}
-            {(pipelineType === 'tracking' || pipelineType === 'affiliate') && (
-              <div className="space-y-2">
-                <Label htmlFor="qr-code">QR Code</Label>
-                <Select value={qrEnabled ? 'generate' : 'none'} onValueChange={(v) => setQrEnabled(v === 'generate')}>
-                  <SelectTrigger id="qr-code">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    <SelectItem value="generate">Generate a QR Code</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             )}
 
             {/* Submit */}
