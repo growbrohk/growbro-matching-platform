@@ -380,41 +380,43 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md overflow-visible">
-        <DialogHeader>
-          <DialogTitle>Create Pipeline</DialogTitle>
-          <DialogDescription>
-            Create pipelines to increase exposure & income
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-md overflow-hidden max-h-[85vh]">
+        <div className="flex flex-col max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle>Create Pipeline</DialogTitle>
+            <DialogDescription>
+              Create pipelines to increase exposure & income
+            </DialogDescription>
+          </DialogHeader>
 
-        {createdLink ? (
-          <div className="space-y-4 py-4">
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <Label className="text-xs text-muted-foreground mb-2 block">Your tracking link</Label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-sm font-mono break-all">{createdLink}</code>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyLink}
-                  className="flex-shrink-0"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
+          <div className="flex-1 overflow-y-auto px-1 py-4">
+            {createdLink ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <Label className="text-xs text-muted-foreground mb-2 block">Your tracking link</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-sm font-mono break-all">{createdLink}</code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyLink}
+                      className="flex-shrink-0"
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <Button onClick={handleClose} className="w-full">
+                  Done
                 </Button>
               </div>
-            </div>
-            <Button onClick={handleClose} className="w-full">
-              Done
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 py-4">
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
             {/* Pipeline Type */}
             <div className="space-y-2">
               <Label htmlFor="pipeline-type">Type</Label>
@@ -645,8 +647,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 )}
               </Button>
             </div>
-          </form>
-        )}
+              </form>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
