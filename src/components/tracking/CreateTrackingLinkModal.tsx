@@ -579,7 +579,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 {/* Affiliate Period */}
                 <div className="space-y-2">
                   <Label>Affiliate Period</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div className="space-y-1 min-w-0">
                       <Label htmlFor="start-date" className="text-xs text-muted-foreground">Start Date</Label>
                       <Input
@@ -588,7 +588,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                         required={pipelineType === 'affiliate'}
-                        className="w-full min-w-0"
+                        className="w-full min-w-0 text-sm"
                       />
                     </div>
                     <div className="space-y-1 min-w-0">
@@ -599,7 +599,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         required={pipelineType === 'affiliate'}
-                        className="w-full min-w-0"
+                        className="w-full min-w-0 text-sm"
                       />
                     </div>
                   </div>
