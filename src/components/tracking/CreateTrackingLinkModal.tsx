@@ -389,7 +389,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-1 py-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 py-4">
             {createdLink ? (
               <div className="space-y-4">
                 <div className="rounded-lg border p-4 bg-muted/50">
@@ -557,6 +557,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                   value={customUrl}
                   onChange={(e) => setCustomUrl(e.target.value)}
                   placeholder="https://example.com"
+                  className="w-full min-w-0"
                 />
               </div>
             )}
@@ -578,8 +579,8 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 {/* Affiliate Period */}
                 <div className="space-y-2">
                   <Label>Affiliate Period</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="space-y-1 min-w-0">
                       <Label htmlFor="start-date" className="text-xs text-muted-foreground">Start Date</Label>
                       <Input
                         id="start-date"
@@ -587,9 +588,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                         required={pipelineType === 'affiliate'}
+                        className="w-full min-w-0"
                       />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0">
                       <Label htmlFor="end-date" className="text-xs text-muted-foreground">End Date</Label>
                       <Input
                         id="end-date"
@@ -597,6 +599,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         required={pipelineType === 'affiliate'}
+                        className="w-full min-w-0"
                       />
                     </div>
                   </div>
