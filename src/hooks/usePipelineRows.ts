@@ -165,18 +165,25 @@ export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
         clicksMap.set(click.tracking_link_id, (clicksMap.get(click.tracking_link_id) || 0) + 1);
       });
 
-      // Get orders and revenue
-      const { data: ordersData } = await (supabase.from('orders' as any) as any)
-        .select('tracking_link_id, total_amount')
-        .in('tracking_link_id', linkIds)
-        .eq('payment_status', 'paid');
+      // Get orders and revenue from pipeline_order_metrics view
+      const { data: metricsData, error: metricsError } = await (supabase.from('pipeline_order_metrics' as any) as any)
+        .select('tracking_link_id, orders_count, host_revenue, affiliate_revenue')
+        .in('tracking_link_id', linkIds);
+
+      if (metricsError) {
+        console.error(`Error fetching pipeline metrics:`, metricsError);
+      }
 
       const ordersMap = new Map<string, number>();
       const revenueMap = new Map<string, number>();
-      (ordersData || []).forEach((order: any) => {
-        const linkId = order.tracking_link_id;
-        ordersMap.set(linkId, (ordersMap.get(linkId) || 0) + 1);
-        revenueMap.set(linkId, (revenueMap.get(linkId) || 0) + (order.total_amount || 0));
+      (metricsData || []).forEach((metric: any) => {
+        const linkId = metric.tracking_link_id;
+        ordersMap.set(linkId, metric.orders_count || 0);
+        // Use host_revenue for host mode, affiliate_revenue for collab mode
+        const revenue = mode === 'host' 
+          ? (metric.host_revenue || 0)
+          : (metric.affiliate_revenue || 0);
+        revenueMap.set(linkId, revenue);
       });
 
       // Build pipeline rows
