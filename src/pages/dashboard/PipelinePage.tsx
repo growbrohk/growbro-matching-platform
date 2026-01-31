@@ -474,18 +474,51 @@ export default function PipelinePage() {
                             <TableCell style={{ color: '#0F1F17' }}>{pipeline.orders.toLocaleString()}</TableCell>
                             <TableCell style={{ color: '#0F1F17' }}>{pipeline.clicks.toLocaleString()}</TableCell>
                             <TableCell>
-                              <a
-                                href={pipeline.destination_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-sm hover:underline"
-                                style={{ color: '#0E7A3A' }}
-                              >
-                                {pipeline.destination_url.length > 40 
-                                  ? `${pipeline.destination_url.substring(0, 40)}...` 
-                                  : pipeline.destination_url}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
+                              {(() => {
+                                // Determine display text based on destination_type
+                                let displayText: string;
+                                const isCustomUrl = pipeline.destination_type === 'custom';
+                                const isEvent = pipeline.destination_type === 'event';
+                                const isProduct = pipeline.destination_type === 'product';
+
+                                if (isEvent && pipeline.event_title) {
+                                  displayText = pipeline.event_title;
+                                } else if (isProduct && pipeline.product_title) {
+                                  displayText = pipeline.product_title;
+                                } else {
+                                  // Fallback to destination_url for custom URLs or when names are missing
+                                  displayText = pipeline.destination_url.length > 40 
+                                    ? `${pipeline.destination_url.substring(0, 40)}...` 
+                                    : pipeline.destination_url;
+                                }
+
+                                // For custom URLs, use external link behavior
+                                if (isCustomUrl) {
+                                  return (
+                                    <a
+                                      href={pipeline.destination_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-sm hover:underline"
+                                      style={{ color: '#0E7A3A' }}
+                                    >
+                                      {displayText}
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  );
+                                }
+
+                                // For events and products, use internal link (no target="_blank")
+                                return (
+                                  <a
+                                    href={pipeline.destination_url}
+                                    className="inline-flex items-center gap-1 text-sm hover:underline"
+                                    style={{ color: '#0E7A3A' }}
+                                  >
+                                    {displayText}
+                                  </a>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell style={{ color: '#0F1F17' }}>
                               {mode === 'collab' 
