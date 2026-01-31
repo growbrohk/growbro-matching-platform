@@ -21,6 +21,7 @@ import Dashboard from "./pages/Dashboard";
 import DashboardPage from "./pages/DashboardPage";
 import OrdersPage from "./pages/OrdersPage";
 import PipelinePage from "./pages/dashboard/PipelinePage";
+import PipelineRevenuePage from "./pages/dashboard/PipelineRevenuePage";
 import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
@@ -361,6 +362,7 @@ function AppRoutes() {
       
       {/* Pipelines page */}
       <Route path="/app/dashboard/pipelines" element={<ProtectedRoute><AppLayout><PipelinePage /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/dashboard/pipeline-revenue" element={<ProtectedRoute><AppLayout><PipelineRevenuePage /></AppLayout></ProtectedRoute>} />
       <Route path="/app/dashboard/channels" element={<Navigate to="/app/dashboard/pipelines" replace />} />
       <Route path="/app/dashboard/channels/:id/edit" element={<ProtectedRoute><AppLayout><div className="p-6"><p>Edit pipeline (placeholder)</p></div></AppLayout></ProtectedRoute>} />
       {/* Redirect canonical /dashboard/channels to /app/dashboard/pipelines */}

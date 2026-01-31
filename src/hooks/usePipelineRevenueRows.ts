@@ -3,42 +3,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getEvent } from '@/lib/api/events';
 import { getProduct } from '@/lib/api/products';
+import { PipelineRow } from './usePipelineRows';
 
-export interface PipelineRow {
-  tracking_link_id: string;
-  label: string;
-  slug: string;
-  type: 'tracking' | 'affiliate';
-  clicks: number;
-  orders: number;
-  revenue: number;
-  destination_url: string;
-  destination_type: 'event' | 'product' | 'custom';
-  event_id: string | null;
-  product_id: string | null;
-  event_title: string | null;
-  product_title: string | null;
-  affiliate_org_id: string | null;
-  affiliate_org_name: string | null;
-  host_org_id: string | null;
-  host_org_name: string | null;
-  commission_rate: number | null;
-  status: 'active' | 'inactive' | 'pending' | 'payment_pending' | 'paid';
-}
-
-export interface UsePipelineRowsOptions {
+export interface UsePipelineRevenueRowsOptions {
   mode: 'host' | 'collab';
   orgId: string;
+  status?: 'active' | 'payment_pending' | 'paid' | 'inactive';
 }
 
 /**
- * Hook to fetch pipeline rows
+ * Hook to fetch pipeline rows with revenue > 0
  * Filters by host_org_id or affiliate_org_id based on mode
- * Includes event and product titles for grouping
+ * Filters by revenue > 0 (role-specific: host_revenue or affiliate_revenue)
+ * Filters by status if provided
+ * Includes event and product titles
  */
-export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
+export function usePipelineRevenueRows({ mode, orgId, status }: UsePipelineRevenueRowsOptions) {
   return useQuery({
-    queryKey: ['pipeline-rows', orgId, mode],
+    queryKey: ['pipeline-revenue-rows', orgId, mode, status],
     queryFn: async (): Promise<PipelineRow[]> => {
       if (!orgId) {
         return [];
@@ -60,7 +42,6 @@ export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
           commission_rate,
           host_org_id
         `)
-        .eq('status', 'active')
         .in('type', ['tracking', 'affiliate']);
 
       // Apply filter based on mode
@@ -70,10 +51,15 @@ export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
         query = query.eq('affiliate_org_id', orgId);
       }
 
+      // Apply status filter if provided
+      if (status) {
+        query = query.eq('status', status);
+      }
+
       const { data: links, error: linksError } = await query;
 
       if (linksError) {
-        console.error(`Error fetching pipeline rows (${mode}):`, linksError);
+        console.error(`Error fetching pipeline revenue rows (${mode}):`, linksError);
         throw linksError;
       }
 
@@ -186,32 +172,34 @@ export function usePipelineRows({ mode, orgId }: UsePipelineRowsOptions) {
         revenueMap.set(linkId, revenue);
       });
 
-      // Build pipeline rows
-      const pipelineRows: PipelineRow[] = links.map((link: any) => ({
-        tracking_link_id: link.id,
-        label: link.label || link.slug,
-        slug: link.slug,
-        type: link.type,
-        clicks: clicksMap.get(link.id) || 0,
-        orders: ordersMap.get(link.id) || 0,
-        revenue: revenueMap.get(link.id) || 0,
-        destination_url: link.destination_url,
-        destination_type: link.destination_type,
-        event_id: link.event_id,
-        product_id: link.product_id,
-        event_title: link.event_id ? eventTitleMap.get(link.event_id) || null : null,
-        product_title: link.product_id ? productTitleMap.get(link.product_id) || null : null,
-        affiliate_org_id: link.affiliate_org_id,
-        affiliate_org_name: link.affiliate_org_id ? affiliateOrgNameMap.get(link.affiliate_org_id) || null : null,
-        host_org_id: link.host_org_id,
-        host_org_name: link.host_org_id ? hostOrgNameMap.get(link.host_org_id) || null : null,
-        commission_rate: link.commission_rate,
-        status: link.status,
-      }));
+      // Build pipeline rows and filter by revenue > 0
+      const pipelineRows: PipelineRow[] = links
+        .map((link: any) => ({
+          tracking_link_id: link.id,
+          label: link.label || link.slug,
+          slug: link.slug,
+          type: link.type,
+          clicks: clicksMap.get(link.id) || 0,
+          orders: ordersMap.get(link.id) || 0,
+          revenue: revenueMap.get(link.id) || 0,
+          destination_url: link.destination_url,
+          destination_type: link.destination_type,
+          event_id: link.event_id,
+          product_id: link.product_id,
+          event_title: link.event_id ? eventTitleMap.get(link.event_id) || null : null,
+          product_title: link.product_id ? productTitleMap.get(link.product_id) || null : null,
+          affiliate_org_id: link.affiliate_org_id,
+          affiliate_org_name: link.affiliate_org_id ? affiliateOrgNameMap.get(link.affiliate_org_id) || null : null,
+          host_org_id: link.host_org_id,
+          host_org_name: link.host_org_id ? hostOrgNameMap.get(link.host_org_id) || null : null,
+          commission_rate: link.commission_rate,
+          status: link.status,
+        }))
+        .filter((row: PipelineRow) => row.revenue > 0) // Only show rows with revenue > 0
+        .sort((a: PipelineRow, b: PipelineRow) => b.revenue - a.revenue); // Sort by revenue desc
 
       return pipelineRows;
     },
     enabled: !!orgId,
   });
 }
-
