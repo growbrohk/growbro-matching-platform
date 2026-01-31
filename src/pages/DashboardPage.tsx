@@ -11,6 +11,18 @@ import { format } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
 import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLinkModal';
 import { supabase } from '@/integrations/supabase/client';
+import { usePipelineRows } from '@/hooks/usePipelineRows';
+
+/**
+ * Format money as HKD currency
+ */
+function formatHKD(amount: number): string {
+  const rounded = Math.round(amount * 100) / 100;
+  if (rounded % 1 === 0) {
+    return `HK$${rounded.toLocaleString()}`;
+  }
+  return `HK$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 /**
  * DashboardPage - Mobile-first dashboard matching screenshot layout
@@ -114,42 +126,19 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  // Fetch clicks count (tracking_clicks joined to tracking_links, filtered by time range and org membership)
-  const { start: clicksStart, end: clicksEnd } = getDateRange(selectedRange);
-  const { data: clicksCount = 0 } = useQuery({
-    queryKey: ['tracking-clicks-count', currentOrg?.id, selectedRange],
-    queryFn: async () => {
-      if (!currentOrg) return 0;
-      const startISO = clicksStart.toISOString();
-      const endISO = clicksEnd.toISOString();
-      
-      // Query clicks where tracking_link belongs to current org (as host or affiliate)
-      const { data, error } = await (supabase.from('tracking_clicks' as any) as any)
-        .select(`
-          id,
-          tracking_links!inner(
-            host_org_id,
-            affiliate_org_id
-          )
-        `)
-        .gte('clicked_at', startISO)
-        .lte('clicked_at', endISO);
-
-      if (error) {
-        console.error('Error fetching clicks count:', error);
-        return 0;
-      }
-
-      // Filter client-side to only count clicks where user's org is host or affiliate
-      const filteredClicks = (data || []).filter((click: any) => {
-        const link = click.tracking_links;
-        return link.host_org_id === currentOrg.id || link.affiliate_org_id === currentOrg.id;
-      });
-
-      return filteredClicks.length;
-    },
-    enabled: !!currentOrg,
+  // Fetch pipeline revenue totals (host + affiliate)
+  const { data: hostPipelineRows = [] } = usePipelineRows({ 
+    mode: 'host', 
+    orgId: currentOrg?.id || '' 
   });
+  const { data: collabPipelineRows = [] } = usePipelineRows({ 
+    mode: 'collab', 
+    orgId: currentOrg?.id || '' 
+  });
+
+  // Calculate total pipeline revenue: sum of host revenue + sum of affiliate revenue
+  const pipelineRevenueTotal = (hostPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0) +
+    (collabPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0);
 
   const rangeOptions: { key: RangeKey; label: string }[] = [
     { key: 'today', label: 'today' },
@@ -313,7 +302,7 @@ export default function DashboardPage() {
             />
           </button>
 
-          {/* Clicks Card */}
+          {/* Revenue Card */}
           <button
             onClick={() => {
               // Placeholder - can navigate or do nothing
@@ -321,10 +310,10 @@ export default function DashboardPage() {
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {clicksCount}
+              {formatHKD(pipelineRevenueTotal)}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
-              clicks
+              revenue
             </div>
             <ChevronRight 
               className="h-4 w-4 absolute right-3 bottom-3" 
