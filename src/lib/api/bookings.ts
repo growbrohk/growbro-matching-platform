@@ -127,18 +127,33 @@ export async function createBooking(
     buyer_last_name: contactInfo.lastName,
   });
 
-  // Extract tid (tracking_link_id) from URL query params if present
-  const urlParams = new URLSearchParams(window.location.search);
-  const tidParam = urlParams.get('tid');
+  // Extract tracking_link_id from localStorage (captured on landing page)
+  // Fallback to URL params for backward compatibility
   let trackingLinkId: string | null = null;
   
-  // Validate tid is a valid UUID
-  if (tidParam) {
+  // First, try to read from localStorage (preferred method)
+  const storedTrackingLinkId = localStorage.getItem('tracking_link_id');
+  if (storedTrackingLinkId) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(tidParam)) {
-      trackingLinkId = tidParam;
+    if (uuidRegex.test(storedTrackingLinkId)) {
+      trackingLinkId = storedTrackingLinkId;
+      console.log('[createBooking] Using tracking_link_id from localStorage:', trackingLinkId);
     } else {
-      console.warn('Invalid tid parameter format, ignoring:', tidParam);
+      console.warn('[createBooking] Invalid tracking_link_id format in localStorage, ignoring:', storedTrackingLinkId);
+      localStorage.removeItem('tracking_link_id'); // Clean up invalid value
+    }
+  } else {
+    // Fallback: try URL params (for backward compatibility)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tidParam = urlParams.get('tid');
+    if (tidParam) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(tidParam)) {
+        trackingLinkId = tidParam;
+        console.log('[createBooking] Using tracking_link_id from URL params:', trackingLinkId);
+      } else {
+        console.warn('[createBooking] Invalid tid parameter format, ignoring:', tidParam);
+      }
     }
   }
 

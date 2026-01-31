@@ -16,9 +16,24 @@ export default function PublicEventPage() {
   // Get query params
   const codeParam = searchParams.get('code');
   const refParam = searchParams.get('ref');
+  const tidParam = searchParams.get('tid');
 
   // Reserved org slugs that should not be used
   const RESERVED_ORG_SLUGS = ['app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding', 'book', 'r'];
+
+  // Capture tracking_link_id (tid) from URL and store in localStorage
+  useEffect(() => {
+    if (tidParam) {
+      // Validate tid is a valid UUID before storing
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(tidParam)) {
+        localStorage.setItem('tracking_link_id', tidParam);
+        console.log('[PublicEventPage] Captured tracking_link_id:', tidParam);
+      } else {
+        console.warn('[PublicEventPage] Invalid tid parameter format, ignoring:', tidParam);
+      }
+    }
+  }, [tidParam]);
 
   useEffect(() => {
     if (!orgSlug || !eventSlug) {

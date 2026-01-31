@@ -59,6 +59,10 @@ export default function SuccessfulBookingPage() {
         setOrder(orderData);
         setLoading(false);
 
+        // Clear tracking_link_id attribution after successful order confirmation
+        // This is a safety measure in case it wasn't cleared during order creation
+        localStorage.removeItem('tracking_link_id');
+
         // Prevent multiple redirect attempts in one mount cycle
         if (hasRedirectedRef.current) return;
 

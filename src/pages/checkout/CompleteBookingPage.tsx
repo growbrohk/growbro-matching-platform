@@ -671,6 +671,10 @@ export default function CompleteBookingPage() {
                   // Clear booking draft
                   clearBookingDraft();
 
+                  // Clear tracking_link_id attribution after successful order creation
+                  localStorage.removeItem('tracking_link_id');
+                  console.log('[CompleteBookingPage] Cleared tracking_link_id from localStorage after order creation');
+
                   // Store orderId in sessionStorage for guest checkout access
                   sessionStorage.setItem('last_order_id', result.orderId);
                   
