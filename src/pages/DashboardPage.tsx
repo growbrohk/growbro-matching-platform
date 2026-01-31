@@ -305,7 +305,7 @@ export default function DashboardPage() {
           {/* Revenue Card */}
           <button
             onClick={() => {
-              // Placeholder - can navigate or do nothing
+              navigate('/app/dashboard/pipeline-revenue');
             }}
             className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
