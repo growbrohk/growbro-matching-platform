@@ -7,9 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, RefreshCw, ChevronDown, ChevronRight, ChevronsDown } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, ChevronDown, ChevronRight, ChevronsDown, Upload } from 'lucide-react';
 import { getVariantHierarchy, parseVariantName, getVariantOptionValue } from '@/lib/utils/variant-parser';
 import { getVariantConfig } from '@/lib/api/variant-config';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type Warehouse = { id: string; org_id: string; name: string; address: string | null };
 type Product = { id: string; org_id: string; title: string };
@@ -23,7 +27,7 @@ interface ProductInventoryData {
 }
 
 export default function Inventory() {
-  const { currentOrg } = useAuth();
+  const { currentOrg, user } = useAuth();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -37,6 +41,19 @@ export default function Inventory() {
   // Expansion state
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedVariantGroups, setExpandedVariantGroups] = useState<Set<string>>(new Set());
+
+  // View mode state with localStorage persistence
+  const [viewMode, setViewMode] = useState<'grouped' | 'list'>(() => {
+    if (!currentOrg) return 'grouped';
+    const saved = localStorage.getItem(`inventory:viewMode:${currentOrg.id}`);
+    return (saved === 'list' || saved === 'grouped') ? saved : 'grouped';
+  });
+
+  // Bulk update modal state
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false);
+  const [bulkUpdateMode, setBulkUpdateMode] = useState<'set' | 'delta'>('set');
+  const [bulkUpdateCsv, setBulkUpdateCsv] = useState('');
+  const [bulkUpdateLoading, setBulkUpdateLoading] = useState(false);
 
   const reload = async () => {
     if (!currentOrg) return;
@@ -124,6 +141,21 @@ export default function Inventory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrg?.id]);
 
+  // Sync viewMode with localStorage when org changes
+  useEffect(() => {
+    if (!currentOrg) return;
+    const saved = localStorage.getItem(`inventory:viewMode:${currentOrg.id}`);
+    if (saved === 'list' || saved === 'grouped') {
+      setViewMode(saved);
+    }
+  }, [currentOrg?.id]);
+
+  // Save viewMode to localStorage when it changes
+  useEffect(() => {
+    if (!currentOrg) return;
+    localStorage.setItem(`inventory:viewMode:${currentOrg.id}`, viewMode);
+  }, [viewMode, currentOrg?.id]);
+
   const toggleProduct = (productId: string) => {
     setExpandedProducts(prev => {
       const next = new Set(prev);
@@ -190,6 +222,166 @@ export default function Inventory() {
       .reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  // Parse CSV rows into { sku, value } pairs
+  const parseCsvRows = (csvText: string): Array<{ sku: string; value: number }> => {
+    const lines = csvText.split('\n');
+    const parsed: Array<{ sku: string; value: number }> = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      
+      // Try comma-separated first, then tab-separated, then space-separated
+      const parts = trimmed.includes(',') 
+        ? trimmed.split(',').map(s => s.trim())
+        : trimmed.includes('\t')
+        ? trimmed.split('\t').map(s => s.trim())
+        : trimmed.split(/\s+/).map(s => s.trim());
+      
+      if (parts.length >= 2) {
+        const sku = parts[0];
+        const value = parseFloat(parts[1]);
+        if (sku && !isNaN(value) && isFinite(value)) {
+          parsed.push({ sku, value });
+        }
+      }
+    }
+    
+    return parsed;
+  };
+
+  // Get preview summary for bulk update
+  const getBulkUpdatePreview = () => {
+    if (!bulkUpdateCsv.trim() || !currentOrg) {
+      return { matched: 0, unknown: [] };
+    }
+    
+    const parsed = parseCsvRows(bulkUpdateCsv);
+    const skuMap = new Map<string, Variant>();
+    
+    // Build SKU -> Variant map from all loaded variants
+    for (const productData of productInventoryData) {
+      for (const variant of productData.variants) {
+        if (variant.sku) {
+          skuMap.set(variant.sku, variant);
+        }
+      }
+    }
+    
+    const matched: string[] = [];
+    const unknown: string[] = [];
+    
+    for (const { sku } of parsed) {
+      if (skuMap.has(sku)) {
+        matched.push(sku);
+      } else {
+        unknown.push(sku);
+      }
+    }
+    
+    return { matched: matched.length, unknown };
+  };
+
+  // Apply bulk update
+  const applyBulkUpdate = async () => {
+    if (!currentOrg || !user || selectedWarehouseId === 'all') return;
+    
+    const parsed = parseCsvRows(bulkUpdateCsv);
+    if (parsed.length === 0) return;
+    
+    setBulkUpdateLoading(true);
+    
+    try {
+      // Build SKU -> Variant map
+      const skuMap = new Map<string, Variant>();
+      for (const productData of productInventoryData) {
+        for (const variant of productData.variants) {
+          if (variant.sku) {
+            skuMap.set(variant.sku, variant);
+          }
+        }
+      }
+      
+      let updatedCount = 0;
+      const unknownSkus: string[] = [];
+      
+      for (const { sku, value } of parsed) {
+        const variant = skuMap.get(sku);
+        if (!variant) {
+          unknownSkus.push(sku);
+          continue;
+        }
+        
+        // Find or create inventory_item
+        let inventoryItem: InventoryItem | null = null;
+        const existingItem = productInventoryData
+          .flatMap(pd => pd.inventoryItems)
+          .find(item => item.variant_id === variant.id && item.warehouse_id === selectedWarehouseId);
+        
+        if (existingItem) {
+          inventoryItem = existingItem;
+        } else {
+          // Create new inventory_item
+          const { data: newItem, error: createErr } = await supabase
+            .from('inventory_items')
+            .insert({
+              org_id: currentOrg.id,
+              warehouse_id: selectedWarehouseId,
+              variant_id: variant.id,
+              quantity: 0,
+            })
+            .select()
+            .single();
+          
+          if (createErr) throw createErr;
+          inventoryItem = newItem as InventoryItem;
+        }
+        
+        // Calculate new quantity
+        const oldQty = inventoryItem.quantity;
+        const newQty = bulkUpdateMode === 'set' ? value : oldQty + value;
+        const delta = newQty - oldQty;
+        
+        // Update inventory_item
+        const { error: updateErr } = await supabase
+          .from('inventory_items')
+          .update({ quantity: newQty, updated_at: new Date().toISOString() })
+          .eq('id', inventoryItem.id);
+        
+        if (updateErr) throw updateErr;
+        
+        // Create inventory_movement
+        const { error: movementErr } = await supabase
+          .from('inventory_movements')
+          .insert({
+            inventory_item_id: inventoryItem.id,
+            delta,
+            reason: 'bulk_update',
+            note: 'Bulk update',
+            created_by: user.id,
+          });
+        
+        if (movementErr) throw movementErr;
+        
+        updatedCount++;
+      }
+      
+      toast({
+        title: 'Bulk update complete',
+        description: `${updatedCount} updated, ${unknownSkus.length} unknown SKU${unknownSkus.length !== 1 ? 's' : ''}`,
+      });
+      
+      setBulkUpdateOpen(false);
+      setBulkUpdateCsv('');
+      await reload();
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to apply bulk update';
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setBulkUpdateLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -227,10 +419,14 @@ export default function Inventory() {
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
+          <Button variant="outline" onClick={() => setBulkUpdateOpen(true)} className="w-full sm:w-auto">
+            <Upload className="mr-2 h-4 w-4" />
+            Bulk Update
+          </Button>
         </div>
       </div>
 
-      {/* Warehouse Filter */}
+      {/* Warehouse Filter and View Mode Toggle */}
       <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
@@ -246,6 +442,13 @@ export default function Inventory() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2 ml-auto">
+              <Label className="text-sm font-medium">View:</Label>
+              <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as 'grouped' | 'list')}>
+                <ToggleGroupItem value="grouped" aria-label="Grouped view">Grouped</ToggleGroupItem>
+                <ToggleGroupItem value="list" aria-label="List view">List</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -260,7 +463,30 @@ export default function Inventory() {
             <p className="text-muted-foreground py-8 text-center">
               No products with inventory found.
             </p>
+          ) : viewMode === 'list' ? (
+            // List view: flat list of all variants
+            <div className="space-y-1">
+              {productInventoryData.flatMap(productData =>
+                productData.variants.map(variant => {
+                  const stock = getVariantStock(variant.id, productData.inventoryItems);
+                  return (
+                    <div key={variant.id} className="flex items-center justify-between py-2 px-3 rounded hover:bg-muted/30 border-b" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate" style={{ color: '#0F1F17' }}>
+                          {productData.product.title}
+                        </div>
+                        <div className="text-sm truncate" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                          {variant.name} {variant.sku && `(${variant.sku})`}
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold ml-4">{stock}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           ) : (
+            // Grouped view: hierarchical structure
             <div className="space-y-2">
               {productInventoryData.map(productData => {
                 const isExpanded = expandedProducts.has(productData.product.id);
@@ -343,6 +569,105 @@ export default function Inventory() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk Update Modal */}
+      <Dialog open={bulkUpdateOpen} onOpenChange={setBulkUpdateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Bulk Update Inventory</DialogTitle>
+            <DialogDescription>
+              Paste CSV data with SKU and quantity values. Format: SKU, value (one per line)
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Mode Toggle */}
+            <div className="space-y-2">
+              <Label>Update Mode:</Label>
+              <RadioGroup value={bulkUpdateMode} onValueChange={(v) => setBulkUpdateMode(v as 'set' | 'delta')}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="set" id="mode-set" />
+                  <Label htmlFor="mode-set" className="font-normal cursor-pointer">
+                    Set quantity (replace current value)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="delta" id="mode-delta" />
+                  <Label htmlFor="mode-delta" className="font-normal cursor-pointer">
+                    Adjust by delta (add/subtract from current value)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Warehouse Warning */}
+            {selectedWarehouseId === 'all' && (
+              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                <p className="text-sm text-yellow-800">
+                  Select a warehouse to bulk update
+                </p>
+              </div>
+            )}
+
+            {/* CSV Textarea */}
+            <div className="space-y-2">
+              <Label htmlFor="csv-input">CSV Data:</Label>
+              <Textarea
+                id="csv-input"
+                placeholder="SKU001, 100&#10;SKU002, 50&#10;SKU003, -10"
+                value={bulkUpdateCsv}
+                onChange={(e) => setBulkUpdateCsv(e.target.value)}
+                className="min-h-[200px] font-mono text-sm"
+              />
+            </div>
+
+            {/* Preview Summary */}
+            {bulkUpdateCsv.trim() && (
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-sm space-y-1">
+                  <div>
+                    <span className="font-medium">Matched SKUs:</span> {getBulkUpdatePreview().matched}
+                  </div>
+                  {getBulkUpdatePreview().unknown.length > 0 && (
+                    <div>
+                      <span className="font-medium">Unknown SKUs:</span>{' '}
+                      <span className="text-destructive">
+                        {getBulkUpdatePreview().unknown.slice(0, 5).join(', ')}
+                        {getBulkUpdatePreview().unknown.length > 5 && ` +${getBulkUpdatePreview().unknown.length - 5} more`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkUpdateOpen(false);
+                setBulkUpdateCsv('');
+              }}
+              disabled={bulkUpdateLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={applyBulkUpdate}
+              disabled={
+                bulkUpdateLoading ||
+                !bulkUpdateCsv.trim() ||
+                selectedWarehouseId === 'all' ||
+                getBulkUpdatePreview().matched === 0
+              }
+            >
+              {bulkUpdateLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Apply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
