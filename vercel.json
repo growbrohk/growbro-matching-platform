@@ -8,6 +8,17 @@
       "source": "/(.*)",
       "destination": "/"
     }
+  ],
+  "headers": [
+    {
+      "source": "/s/:orgSlug/:eventSlug",
+      "headers": [
+        {
+          "key": "x-supabase-project-ref",
+          "value": "wczkgwanltjbjiph"
+        }
+      ]
+    }
   ]
 }
 
