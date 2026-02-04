@@ -174,20 +174,21 @@ Deno.serve(async (req) => {
       : `https://growbrohk.com/s/${orgSlug}/${eventSlug}`;
 
     // Detect link preview bots via User-Agent
-    const userAgent = req.headers.get('user-agent') || '';
+    const ua = (req.headers.get('user-agent') || '').toLowerCase();
     const botPatterns = [
       'facebookexternalhit',
-      'WhatsApp',
-      'Instagram',
-      'Twitterbot',
-      'Slackbot',
-      'Discordbot',
-      'TelegramBot',
-      'LinkedInBot',
+      'facebot',
+      'meta-externalagent',
+      'meta-externalfetcher',
+      'whatsapp',
+      'instagram',
+      'twitterbot',
+      'slackbot',
+      'discordbot',
+      'telegrambot',
+      'linkedinbot',
     ];
-    const isBot = botPatterns.some(pattern => 
-      userAgent.toLowerCase().includes(pattern.toLowerCase())
-    );
+    const isBot = ua === '' || botPatterns.some(pattern => ua.includes(pattern));
 
     // If human, return HTTP 302 redirect
     if (!isBot) {
