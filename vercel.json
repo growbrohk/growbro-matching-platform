@@ -1,36 +1,20 @@
 {
-  "rewrites": [
+  "redirects": [
     {
       "source": "/s/:orgSlug/:eventSlug",
-      "destination": "https://wczkgwanltjbjiph.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug"
+      "destination": "https://pbtupzbqtuxzznwummep.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug",
+      "permanent": false
     },
     {
       "source": "/s/:orgSlug/:eventSlug/",
-      "destination": "https://wczkgwanltjbjiph.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug"
-    },
+      "destination": "https://pbtupzbqtuxzznwummep.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     {
       "source": "/(.*)",
       "destination": "/"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/s/:orgSlug/:eventSlug",
-      "headers": [
-        {
-          "key": "x-supabase-project-ref",
-          "value": "wczkgwanltjbjiph"
-        }
-      ]
-    },
-    {
-      "source": "/s/:orgSlug/:eventSlug/",
-      "headers": [
-        {
-          "key": "x-supabase-project-ref",
-          "value": "wczkgwanltjbjiph"
-        }
-      ]
     }
   ]
 }
