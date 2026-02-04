@@ -173,7 +173,34 @@ Deno.serve(async (req) => {
       ? `https://growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
       : `https://growbrohk.com/s/${orgSlug}/${eventSlug}`;
 
-    // Generate HTML with OG tags
+    // Detect link preview bots via User-Agent
+    const userAgent = req.headers.get('user-agent') || '';
+    const botPatterns = [
+      'facebookexternalhit',
+      'WhatsApp',
+      'Instagram',
+      'Twitterbot',
+      'Slackbot',
+      'Discordbot',
+      'TelegramBot',
+      'LinkedInBot',
+    ];
+    const isBot = botPatterns.some(pattern => 
+      userAgent.toLowerCase().includes(pattern.toLowerCase())
+    );
+
+    // If human, return HTTP 302 redirect
+    if (!isBot) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': redirectUrl,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+
+    // If bot, return OG HTML (no meta refresh, no JS redirect)
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -200,15 +227,10 @@ Deno.serve(async (req) => {
   <!-- Standard meta tags -->
   <title>${escapeHtml(ogTitle)}</title>
   <meta name="description" content="${escapeHtml(ogDescriptionShort)}">
-  
-  <!-- Redirect to SPA -->
-  <meta http-equiv="refresh" content="0;url=${redirectUrl}">
-  <script>
-    window.location.replace("${redirectUrl}");
-  </script>
 </head>
 <body>
-  <p>Redirecting to <a href="${redirectUrl}">${escapeHtml(ogTitle)}</a>...</p>
+  <h1>${escapeHtml(ogTitle)}</h1>
+  <p>${escapeHtml(ogDescriptionShort)}</p>
 </body>
 </html>`;
 

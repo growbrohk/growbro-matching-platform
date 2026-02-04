@@ -2,6 +2,17 @@
 
 This document explains how to set up the `/s/:orgSlug/:eventSlug` share endpoint for WhatsApp/Instagram link previews.
 
+## ⚠️ Critical Requirement
+
+**The Edge Function MUST be deployed with `--no-verify-jwt` flag for OG previews to work.**
+
+Social media crawlers (WhatsApp, Instagram, Facebook) cannot send Authorization headers. Without this flag, they will receive `401 Missing authorization header` errors and link previews will fail.
+
+**Deployment command:**
+```bash
+supabase functions deploy share-event --no-verify-jwt
+```
+
 ## Overview
 
 The share endpoint (`/s/:orgSlug/:eventSlug`) serves server-rendered HTML with Open Graph tags for social media crawlers. It then redirects real users to the SPA event page.
@@ -16,14 +27,44 @@ The share endpoint (`/s/:orgSlug/:eventSlug`) serves server-rendered HTML with O
 
 ### 1. Deploy Supabase Edge Function
 
+**⚠️ CRITICAL: Public Access Required for OG Previews**
+
+The function **MUST** be deployed with the `--no-verify-jwt` flag to allow public access without authentication. This is **required** for WhatsApp/Instagram/Facebook crawlers which cannot send Authorization headers.
+
+**Without this flag:**
+- Direct calls to the function URL return `401 Missing authorization header`
+- Social media crawlers cannot access the endpoint
+- Link previews will not work in WhatsApp, Instagram, or Facebook
+
+**Deployment command:**
 ```bash
-# Deploy the function
-supabase functions deploy share-event
+# Deploy the function WITHOUT JWT verification (REQUIRED for OG previews)
+supabase functions deploy share-event --no-verify-jwt
 
 # Set environment variables (if not already set)
 supabase secrets set SUPABASE_URL=your_supabase_url
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
+
+**Why `--no-verify-jwt`?**
+- Social media crawlers (WhatsApp, Instagram, Facebook) cannot send Authorization headers
+- Without this flag, direct calls to the function URL return `401 Missing authorization header`
+- The function uses `SUPABASE_SERVICE_ROLE_KEY` internally for database access, so it doesn't need user authentication
+- This makes the function publicly accessible, which is necessary for crawlers to generate link previews
+
+**Security Note:** The function is safe to expose publicly because:
+- It only reads public event data (no sensitive information)
+- It uses `SUPABASE_SERVICE_ROLE_KEY` internally for database queries
+- No user authentication or authorization is required for viewing public events
+
+**Verify Deployment:**
+After deploying, test the function URL directly in a browser:
+```
+https://YOUR_PROJECT.supabase.co/functions/v1/share-event?orgSlug=your-org&eventSlug=your-event
+```
+
+**Expected result:** HTML response with OG tags (status 200)  
+**If you see 401:** The function was deployed with JWT verification - redeploy with `--no-verify-jwt`
 
 ### 2. Configure Routing
 
@@ -126,7 +167,22 @@ The endpoint sets:
 
 ## Troubleshooting
 
+- **401 Missing authorization header**: 
+  - **This is the most common issue!** The function must be deployed with `--no-verify-jwt` flag
+  - Redeploy using: `supabase functions deploy share-event --no-verify-jwt`
+  - Verify by calling the function URL directly in a browser (should return HTML, not 401)
+  - If you see 401, the function was deployed with JWT verification enabled
+  
 - **404 errors**: Check that the Edge Function is deployed and routing is configured
+  
 - **Missing OG tags**: Verify event/ticket data exists in database
+  
 - **Image not showing**: Ensure image URLs are absolute HTTPS URLs
+  
 - **Redirect not working**: Check that JavaScript is enabled (fallback uses meta refresh)
+  
+- **WhatsApp/Instagram previews not working**:
+  - Ensure function is deployed with `--no-verify-jwt`
+  - Test the function URL directly in a browser (should return HTML with OG tags)
+  - Use Facebook Sharing Debugger to scrape and refresh the preview
+  - Verify OG tags are present in the HTML response
