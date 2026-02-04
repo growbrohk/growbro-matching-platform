@@ -1417,6 +1417,50 @@ export default function EventForm() {
                         </div>
                       )}
                     </div>
+
+                    {/* Ticket Share Link (only shown if event and ticket are saved) */}
+                    {eventId && eventSlug && currentOrg?.slug && tt.id && (
+                      <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                        <Label className="text-sm font-medium mb-2 block">
+                          Share Ticket Link
+                        </Label>
+                        <p className="text-xs mb-3" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          Share this link to let customers purchase this specific ticket type
+                        </p>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <Input
+                            readOnly
+                            value={`https://growbrohk.com/s/${currentOrg.slug}/${eventSlug}?ticket=${tt.id}`}
+                            className="flex-1 font-mono text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const url = `https://growbrohk.com/s/${currentOrg.slug}/${eventSlug}?ticket=${tt.id}`;
+                              try {
+                                await navigator.clipboard.writeText(url);
+                                toast({
+                                  title: 'Copied!',
+                                  description: 'Ticket link copied to clipboard',
+                                });
+                              } catch (err) {
+                                toast({
+                                  title: 'Error',
+                                  description: 'Failed to copy link',
+                                  variant: 'destructive',
+                                });
+                              }
+                            }}
+                            className="flex-1 sm:flex-initial"
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
 
