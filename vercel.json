@@ -5,6 +5,10 @@
       "destination": "https://wczkgwanltjbjiph.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug"
     },
     {
+      "source": "/s/:orgSlug/:eventSlug/",
+      "destination": "https://wczkgwanltjbjiph.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/"
     }
@@ -18,7 +22,15 @@
           "value": "wczkgwanltjbjiph"
         }
       ]
+    },
+    {
+      "source": "/s/:orgSlug/:eventSlug/",
+      "headers": [
+        {
+          "key": "x-supabase-project-ref",
+          "value": "wczkgwanltjbjiph"
+        }
+      ]
     }
   ]
 }
-
