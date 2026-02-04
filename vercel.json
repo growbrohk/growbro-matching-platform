@@ -1,4 +1,13 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+  "rewrites": [
+    {
+      "source": "/s/:orgSlug/:eventSlug",
+      "destination": "https://wczkgwanltjbjiph.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
 }
 
