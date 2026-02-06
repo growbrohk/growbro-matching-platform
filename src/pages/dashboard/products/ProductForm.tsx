@@ -252,9 +252,15 @@ export default function ProductForm() {
   }, [currentOrg?.id, title]);
 
   // Helper function to get default warehouse ID
-  const getDefaultWarehouseId = (): string | null => {
-    if (warehouses.length === 0) return null;
-    const mainWh = warehouses.find(w => w.name.toLowerCase().includes('main')) || warehouses[0];
+  const getDefaultWarehouseId = (warehousesList: Warehouse[], selectedWarehouseIdParam?: string): string | null => {
+    if (warehousesList.length === 0) return null;
+    // Prefer selectedWarehouseId if present
+    if (selectedWarehouseIdParam) {
+      const found = warehousesList.find(w => w.id === selectedWarehouseIdParam);
+      if (found) return found.id;
+    }
+    // Else prefer warehouse with name includes 'main' (case-insensitive)
+    const mainWh = warehousesList.find(w => w.name.toLowerCase().includes('main')) || warehousesList[0];
     return mainWh.id;
   };
 
@@ -426,7 +432,7 @@ export default function ProductForm() {
               }
             } else {
               // Warehouses already loaded, use selected warehouse
-              const defaultWarehouseId = getDefaultWarehouseId();
+              const defaultWarehouseId = getDefaultWarehouseId(warehouses, selectedWarehouseId);
               if (defaultWarehouseId) {
                 const { data: invData, error: invErr } = await (supabase as any)
                   .from('inventory_items')
@@ -889,11 +895,20 @@ export default function ProductForm() {
         sig: '',
       }] : []);
       
+      // Declare insertedVariantsWithIds outside the if block so it's accessible for stock saving
+      let insertedVariantsWithIds: Array<{ id: string; stock?: string }> = [];
+      
       if (variantsToProcess.length > 0) {
         // Collect existing SKUs for auto-generation
         const existingSkus = variantsToProcess
           .map(v => v.sku?.trim())
           .filter(Boolean) as string[];
+        
+        // Create a map of variants by name for stock lookup later
+        const variantsStockMap = new Map<string, string>();
+        variantsToProcess.forEach(v => {
+          variantsStockMap.set(v.name.trim(), v.stock || '0');
+        });
         
         // Prepare current variants with SKU auto-generation
         const currentVariants = variantsToProcess
@@ -970,8 +985,19 @@ export default function ProductForm() {
             .select('id');
           if (insertErr) throw insertErr;
           
-          // Update variants state with new IDs for stock saving
-          const insertedIds = (insertedData || []).map((d: any) => d.id);
+          // Map inserted variants with their new IDs and stock values from state
+          // toInsert and insertedData are in the same order, so we can map by index
+          // Use the stock map we created earlier to get stock values
+          const insertedDataArray = insertedData || [];
+          insertedVariantsWithIds = toInsert.map((v, idx) => {
+            return {
+              id: insertedDataArray[idx]?.id,
+              stock: variantsStockMap.get(v.name.trim()) || '0',
+            };
+          }).filter(v => v.id); // Filter out any that didn't get IDs
+          
+          // Update variants state with new IDs for UI
+          const insertedIds = insertedDataArray.map((d: any) => d.id);
           let idIdx = 0;
           setVariants(prev => prev.map(v => {
             if (!v.id && idIdx < insertedIds.length) {
@@ -990,9 +1016,7 @@ export default function ProductForm() {
         if (defaultVariantIdToUse) {
           try {
             // For edit mode, use selected warehouse; for create mode, use default warehouse
-            const warehouseIdToUse = isEditMode && selectedWarehouseId 
-              ? selectedWarehouseId 
-              : getDefaultWarehouseId();
+            const warehouseIdToUse = getDefaultWarehouseId(warehouses, selectedWarehouseId);
             
             if (!warehouseIdToUse) {
               // If no warehouses exist, skip stock saving
@@ -1011,72 +1035,103 @@ export default function ProductForm() {
         }
       }
 
-      // Save stock changes for variable products (only for edit mode with selected warehouse)
-      if (productKind === 'variable' && isEditMode && selectedWarehouseId && variants.length > 0) {
+      // Save stock changes for variable products (both create and edit mode)
+      if (productKind === 'variable' && variantsToProcess.length > 0) {
         try {
-          for (const variant of variants) {
-            if (!variant.id) continue; // Skip unsaved variants
+          // Determine warehouse ID: prefer selectedWarehouseId, else default warehouse
+          const warehouseIdToUse = getDefaultWarehouseId(warehouses, selectedWarehouseId);
+          
+          if (!warehouseIdToUse) {
+            // If no warehouses exist, skip stock saving
+            console.warn('No warehouses available for stock saving');
+          } else {
+            // Collect all variants that have IDs (both existing and newly inserted)
+            const variantsToStockSave: Array<{ id: string; stock: string }> = [];
             
-            const newStock = Number(variant.stock || 0);
-            if (!Number.isFinite(newStock) || newStock < 0) continue;
-            
-            // Check if inventory_item exists
-            const { data: invItem, error: fetchErr } = await (supabase as any)
-              .from('inventory_items')
-              .select('id, quantity')
-              .eq('org_id', currentOrg.id)
-              .eq('warehouse_id', selectedWarehouseId)
-              .eq('variant_id', variant.id)
-              .maybeSingle();
-            
-            if (fetchErr) throw fetchErr;
-            
-            let inventoryItemId: string;
-            let oldQty = 0;
-            
-            if (invItem) {
-              inventoryItemId = invItem.id;
-              oldQty = invItem.quantity;
-            } else {
-              // Create inventory_item with quantity 0
-              const { data: newInvItem, error: createErr } = await (supabase as any)
-                .from('inventory_items')
-                .insert({
-                  org_id: currentOrg.id,
-                  warehouse_id: selectedWarehouseId,
-                  variant_id: variant.id,
-                  quantity: 0,
-                })
-                .select('id')
-                .single();
-              
-              if (createErr) throw createErr;
-              inventoryItemId = newInvItem.id;
+            // Add existing variants (those that already had IDs)
+            for (const variant of variantsToProcess) {
+              if (variant.id) {
+                variantsToStockSave.push({
+                  id: variant.id,
+                  stock: variant.stock || '0',
+                });
+              }
             }
             
-            // Only update if stock changed
-            const delta = newStock - oldQty;
-            if (delta !== 0) {
-              // Update inventory_items quantity
-              const { error: updateErr } = await (supabase as any)
-                .from('inventory_items')
-                .update({ quantity: newStock, updated_at: new Date().toISOString() })
-                .eq('id', inventoryItemId);
-              
-              if (updateErr) throw updateErr;
-              
-              // Create inventory_movement
-              const { error: movementErr } = await (supabase as any)
-                .from('inventory_movements')
-                .insert({
-                  inventory_item_id: inventoryItemId,
-                  delta,
-                  reason: 'correction',
-                  note: 'Edited in product form',
-                  created_by: user?.id || null, // Use authenticated user ID
+            // Add newly inserted variants (those we just inserted)
+            for (const insertedVariant of insertedVariantsWithIds) {
+              if (insertedVariant.id) {
+                variantsToStockSave.push({
+                  id: insertedVariant.id,
+                  stock: insertedVariant.stock || '0',
                 });
+              }
+            }
+            
+            // Save stock for each variant
+            for (const variantToSave of variantsToStockSave) {
+              const newStock = Number(variantToSave.stock || 0);
+              if (!Number.isFinite(newStock) || newStock < 0) continue;
               
-              if (movementErr) throw movementErr;
+              // Check if inventory_item exists
+              const { data: invItem, error: fetchErr } = await (supabase as any)
+                .from('inventory_items')
+                .select('id, quantity')
+                .eq('org_id', currentOrg.id)
+                .eq('warehouse_id', warehouseIdToUse)
+                .eq('variant_id', variantToSave.id)
+                .maybeSingle();
+              
+              if (fetchErr) throw fetchErr;
+              
+              let inventoryItemId: string;
+              let oldQty = 0;
+              
+              if (invItem) {
+                inventoryItemId = invItem.id;
+                oldQty = invItem.quantity;
+              } else {
+                // Create inventory_item with the user-entered quantity (not 0)
+                const { data: newInvItem, error: createErr } = await (supabase as any)
+                  .from('inventory_items')
+                  .insert({
+                    org_id: currentOrg.id,
+                    warehouse_id: warehouseIdToUse,
+                    variant_id: variantToSave.id,
+                    quantity: newStock, // Use user-entered stock, not 0
+                  })
+                  .select('id')
+                  .single();
+                
+                if (createErr) throw createErr;
+                inventoryItemId = newInvItem.id;
+                oldQty = 0; // New item, so old quantity was 0
+              }
+              
+              // Calculate delta and update if changed
+              const delta = newStock - oldQty;
+              if (delta !== 0) {
+                // Update inventory_items quantity
+                const { error: updateErr } = await (supabase as any)
+                  .from('inventory_items')
+                  .update({ quantity: newStock, updated_at: new Date().toISOString() })
+                  .eq('id', inventoryItemId);
+                
+                if (updateErr) throw updateErr;
+                
+                // Create inventory_movement
+                const { error: movementErr } = await (supabase as any)
+                  .from('inventory_movements')
+                  .insert({
+                    inventory_item_id: inventoryItemId,
+                    delta,
+                    reason: isEditMode ? 'correction' : 'initial',
+                    note: isEditMode ? 'Edited in product form' : 'Initial stock set in product creation',
+                    created_by: user?.id || null,
+                  });
+                
+                if (movementErr) throw movementErr;
+              }
             }
           }
         } catch (stockErr: any) {
@@ -1391,63 +1446,61 @@ export default function ProductForm() {
                   </div>
                 )}
 
-                {/* Variant Combinations Table/Cards */}
+                {/* Variant Combinations Table */}
                 {variants.length > 0 && (
                   <div className="space-y-3">
                     <div>
                       <Label>Variant Combinations</Label>
                       <p className="text-sm text-muted-foreground">
-                        Edit SKU, price, stock{isEditMode && ` @ ${warehouses.find(w => w.id === selectedWarehouseId)?.name || 'warehouse'}`}, and status. SKU auto-generates if left blank.
+                        Edit SKU, price, stock{isEditMode && ` @ ${warehouses.find(w => w.id === selectedWarehouseId)?.name || 'warehouse'}`}{!isEditMode && ' (at default warehouse)'}, and status. SKU auto-generates if left blank.
                       </p>
                     </div>
 
-                    {/* Desktop Table (md and up) */}
-                    <div className="hidden md:block border rounded-lg overflow-hidden">
-                      <table className="w-full">
+                    {/* Table (all breakpoints) */}
+                    <div className="border rounded-lg overflow-x-auto">
+                      <table className="w-full min-w-[900px]">
                         <thead className="bg-muted">
                           <tr>
-                            <th className="text-left p-3 text-sm font-medium">Variant</th>
-                            <th className="text-left p-3 text-sm font-medium">SKU</th>
-                            <th className="text-left p-3 text-sm font-medium">Price</th>
-                            {isEditMode && <th className="text-left p-3 text-sm font-medium">Stock</th>}
-                            <th className="text-left p-3 text-sm font-medium">Active</th>
+                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Variant</th>
+                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">SKU</th>
+                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Price</th>
+                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Stock</th>
+                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Active</th>
                           </tr>
                         </thead>
                         <tbody>
                       {variants.map((v, idx) => (
                             <tr key={v.id ?? idx} className="border-t">
-                              <td className="p-3">
-                            <p className="text-sm font-medium">{v.name}</p>
+                              <td className="p-2 md:p-3">
+                            <p className="text-xs md:text-sm font-medium max-w-[220px] break-words" title={v.name}>{v.name}</p>
                               </td>
-                              <td className="p-3">
+                              <td className="p-2 md:p-3">
                                 <Input
                                   placeholder="Auto"
                                   value={v.sku}
                                   onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
-                                  className="h-8"
+                                  className="h-7 md:h-8 text-xs px-2 w-40 min-w-[160px]"
                                 />
                               </td>
-                              <td className="p-3">
+                              <td className="p-2 md:p-3">
                                 <Input
                                   placeholder="0.00"
                                   value={v.price}
                                   onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
-                                  className="h-8"
+                                  className="h-7 md:h-8 text-xs px-2 w-20 md:w-24"
                                 />
                               </td>
-                              {isEditMode && (
-                                <td className="p-3">
-                                  <Input
-                                    type="number"
-                                    placeholder="0"
-                                    value={v.stock}
-                                    onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
-                                    className="h-8"
-                                    min="0"
-                                  />
-                                </td>
-                              )}
-                              <td className="p-3">
+                              <td className="p-2 md:p-3">
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  value={v.stock}
+                                  onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
+                                  className="h-7 md:h-8 text-xs px-2 w-20 md:w-24"
+                                  min="0"
+                                />
+                              </td>
+                              <td className="p-2 md:p-3">
                                 <Switch
                                   checked={v.active}
                                   onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
@@ -1458,59 +1511,6 @@ export default function ProductForm() {
                         </tbody>
                       </table>
                           </div>
-
-                    {/* Mobile Cards (sm and below) */}
-                    <div className="md:hidden space-y-3">
-                      {variants.map((v, idx) => (
-                        <Card key={v.id ?? idx}>
-                          <CardContent className="p-4 space-y-3">
-                            <div className="font-medium text-sm">{v.name}</div>
-                            <div className="space-y-2">
-                              <div>
-                                <Label className="text-xs text-muted-foreground">SKU</Label>
-                            <Input
-                                  placeholder="Auto-generate"
-                              value={v.sku}
-                                  onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
-                                  className="h-8 mt-1"
-                            />
-                          </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground">Price</Label>
-                            <Input
-                                  placeholder="0.00"
-                              value={v.price}
-                                  onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
-                                  className="h-8 mt-1"
-                            />
-                          </div>
-                              {isEditMode && (
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">
-                                    Stock @ {warehouses.find(w => w.id === selectedWarehouseId)?.name || 'warehouse'}
-                                  </Label>
-                                  <Input
-                                    type="number"
-                                    placeholder="0"
-                                    value={v.stock}
-                                    onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
-                                    className="h-8 mt-1"
-                                    min="0"
-                                  />
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                              <Switch
-                                checked={v.active}
-                                  onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
-                              />
-                                <Label className="text-xs">Active</Label>
-                            </div>
-                          </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>
