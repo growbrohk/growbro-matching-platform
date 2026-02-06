@@ -10,22 +10,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon, Package, Boxes } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   getCategories, 
   createCategory as apiCreateCategory, 
-  getTags, 
-  createTag as apiCreateTag,
-  syncProductTags,
-  getProductTagIds,
   type ProductCategory,
-  type ProductTag,
 } from '@/lib/api/categories-and-tags';
 
-type OrgProductType = 'physical' | 'venue_asset';
+type OrgProductType = 'physical';
 
 type OrgProduct = {
   id: string;
@@ -202,6 +197,8 @@ function generateSKU(productTitle: string, sig: string, existingSkus: string[]):
   return finalSku;
 }
 
+type ProductKind = 'simple' | 'variable';
+
 export default function ProductForm() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -210,24 +207,22 @@ export default function ProductForm() {
   const { toast } = useToast();
 
   const isEditMode = !!id;
-  const initialType = (searchParams.get('type') as OrgProductType | null) ?? 'physical';
+  const initialKind = (searchParams.get('kind') as ProductKind | null) ?? null;
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
 
-  const [type, setType] = useState<OrgProductType>(initialType);
+  const [type] = useState<OrgProductType>('physical');
+  const [productKind, setProductKind] = useState<ProductKind | null>(initialKind);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
   
-  // Category & Tags (using database tables)
+  // Category (using database tables)
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [availableTags, setAvailableTags] = useState<ProductTag[]>([]);
-  const [tagInput, setTagInput] = useState('');
   
   // Warehouses & Stock
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -272,14 +267,9 @@ export default function ProductForm() {
       const whs = (whData as any[] || []) as Warehouse[];
       setWarehouses(whs);
       
-      // Load categories and tags from database tables
-      const [categoriesData, tagsData] = await Promise.all([
-        getCategories(currentOrg.id),
-        getTags(currentOrg.id),
-      ]);
-      
+      // Load categories from database tables
+      const categoriesData = await getCategories(currentOrg.id);
       setCategories(categoriesData);
-      setAvailableTags(tagsData);
       
       if (whs.length === 0) return;
       
@@ -347,17 +337,12 @@ export default function ProductForm() {
         if (productError) throw productError;
         const p = product as any as (OrgProduct & { metadata?: any });
 
-        setType(p.type);
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
         
         // Load category_id
         setCategoryId(p.category_id || '');
-        
-        // Load tags from product_tag_links
-        const tagIds = await getProductTagIds(p.id);
-        setSelectedTagIds(tagIds);
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -368,6 +353,13 @@ export default function ProductForm() {
 
         if (variantsError) throw variantsError;
         const v = (variantsData as any[] | null) || [];
+        
+        // Determine product kind based on variant count
+        if (v.length > 1) {
+          setProductKind('variable');
+        } else {
+          setProductKind('simple');
+        }
         
         // Load existing variants (edit mode shows existing combinations, not options)
         const variantsList = v.map((row: any) => ({
@@ -421,14 +413,9 @@ export default function ProductForm() {
           setSelectedWarehouseId(mainWh.id);
         }
         
-        // Load categories and tags from database tables
-        const [categoriesData, tagsData] = await Promise.all([
-          getCategories(currentOrg.id),
-          getTags(currentOrg.id),
-        ]);
-        
+        // Load categories from database tables
+        const categoriesData = await getCategories(currentOrg.id);
         setCategories(categoriesData);
-        setAvailableTags(tagsData);
       } catch (e: any) {
         console.error('Failed to load warehouses:', e);
       }
@@ -544,38 +531,6 @@ export default function ProductForm() {
     }
   };
 
-  // Tag management
-  const addTag = async () => {
-    if (!currentOrg) return;
-    
-    const trimmed = tagInput.trim();
-    if (!trimmed) return;
-    
-    // Check if tag already exists
-    let existingTag = availableTags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
-    
-    if (!existingTag) {
-      // Create new tag
-      try {
-        existingTag = await apiCreateTag(currentOrg.id, trimmed);
-        setAvailableTags([...availableTags, existingTag]);
-      } catch (error: any) {
-        toast({ title: 'Error', description: error.message || 'Failed to create tag', variant: 'destructive' });
-        return;
-      }
-    }
-    
-    // Add to selected tags if not already selected
-    if (!selectedTagIds.includes(existingTag.id)) {
-      setSelectedTagIds([...selectedTagIds, existingTag.id]);
-    }
-    
-    setTagInput('');
-  };
-
-  const removeTag = (tagId: string) => {
-    setSelectedTagIds(prev => prev.filter(id => id !== tagId));
-  };
 
   // Create warehouse handler
   const createWarehouse = async () => {
@@ -695,7 +650,7 @@ export default function ProductForm() {
           .from('products')
           .insert({
             org_id: currentOrg.id,
-            type,
+            type: 'physical',
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -710,7 +665,7 @@ export default function ProductForm() {
         const { error: updateError } = await (supabase as any)
           .from('products')
           .update({
-            type,
+            type: 'physical',
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -721,9 +676,36 @@ export default function ProductForm() {
 
         if (updateError) throw updateError;
       }
-      
-      // Sync product tags
-      await syncProductTags(productId, selectedTagIds);
+
+      // For simple products, ensure we have at least one variant
+      if (productKind === 'simple' && variants.length === 0) {
+        // Create a default variant for simple products
+        const { data: defaultVariant, error: variantErr } = await (supabase as any)
+          .from('product_variants')
+          .insert({
+            product_id: productId,
+            name: 'Default',
+            sku: '',
+            price: base_price,
+            active: true,
+          })
+          .select('id')
+          .single();
+        
+        if (variantErr) throw variantErr;
+        
+        // Update variants state for stock saving
+        setVariants([{
+          id: defaultVariant.id,
+          name: 'Default',
+          sku: '',
+          price: basePrice || '',
+          active: true,
+          stock: '0',
+          isNew: false,
+          sig: '',
+        }]);
+      }
 
       // Variant save logic with archival
       if (variants.length > 0) {
@@ -971,32 +953,76 @@ export default function ProductForm() {
     );
   }
 
+  // Step 1: Product kind selection (only for new products)
+  if (!isEditMode && !productKind) {
+    return (
+      <div className="max-w-3xl space-y-6 md:space-y-8">
+        <Button variant="ghost" onClick={() => navigate('/app/products')} className="w-full sm:w-auto">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Products
+        </Button>
+
+        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle>Create Product</CardTitle>
+            <CardDescription>Choose product type</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => setProductKind('simple')}>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Package className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-xl">Simple Product</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-base">A single product with one price and stock level.</CardDescription>
+                </CardContent>
+              </Card>
+
+              <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => setProductKind('variable')}>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Boxes className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-xl">Variable Product</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription className="text-base">A product with multiple variants (e.g., Size, Color) and inventory per variant.</CardDescription>
+                </CardContent>
+              </Card>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl space-y-6 md:space-y-8">
-      <Button variant="ghost" onClick={() => navigate('/app/products')} className="w-full sm:w-auto">
+      <Button variant="ghost" onClick={() => {
+        if (isEditMode) {
+          navigate('/app/products');
+        } else {
+          setProductKind(null);
+        }
+      }} className="w-full sm:w-auto">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Products
+            {isEditMode ? 'Back to Products' : 'Back'}
           </Button>
 
             <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
               <CardHeader className="p-4 md:p-6">
-          <CardTitle>{isEditMode ? 'Edit Product' : 'Create Product'}</CardTitle>
+          <CardTitle>{isEditMode ? 'Edit Product' : `Create ${productKind === 'simple' ? 'Simple' : 'Variable'} Product`}</CardTitle>
           <CardDescription>Products are scoped to your organization.</CardDescription>
               </CardHeader>
         <CardContent className="p-4 md:p-6 pt-0">
           <form onSubmit={onSave} className="space-y-6 md:space-y-8">
-                <div className="space-y-2">
-              <Label>Type</Label>
-              <div className="flex gap-2">
-                <Button type="button" variant={type === 'physical' ? 'default' : 'outline'} onClick={() => setType('physical')}>
-                  Physical
-                </Button>
-                <Button type="button" variant={type === 'venue_asset' ? 'default' : 'outline'} onClick={() => setType('venue_asset')}>
-                  Venue Asset
-                </Button>
-                    </div>
-                  </div>
-
                 <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
               <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" className="h-10" />
@@ -1050,55 +1076,8 @@ export default function ProductForm() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {selectedTagIds.map((tagId) => {
-                  const tag = availableTags.find(t => t.id === tagId);
-                  if (!tag) return null;
-                  return (
-                    <Badge key={tagId} variant="secondary" className="gap-1">
-                      {tag.name}
-                      <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tagId)} />
-                    </Badge>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add a tag"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addTag();
-                    }
-                  }}
-                  className="h-10"
-                  list="tag-suggestions"
-                />
-                <datalist id="tag-suggestions">
-                  {availableTags
-                    .filter(t => !selectedTagIds.includes(t.id))
-                    .map((tag) => (
-                      <option key={tag.id} value={tag.name} />
-                    ))}
-                </datalist>
-                <Button type="button" variant="outline" onClick={addTag} className="h-10">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {availableTags.length > 0 && (
-                <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                  Suggestions: {availableTags.filter(t => !selectedTagIds.includes(t.id)).slice(0, 5).map(t => t.name).join(', ')}
-                  {availableTags.filter(t => !selectedTagIds.includes(t.id)).length > 5 ? '...' : ''}
-                </p>
-              )}
-            </div>
-
-            {/* Hide variants section for venue assets */}
-            {type !== 'venue_asset' && (
+            {/* Variants section - only show for variable products */}
+            {productKind === 'variable' && (
               <div className="space-y-6">
                 {/* Variant Options Section */}
                 <div className="space-y-3">
@@ -1305,6 +1284,54 @@ export default function ProductForm() {
                         </Card>
                       ))}
                     </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Simple Product Stock Section */}
+            {productKind === 'simple' && isEditMode && warehouses.length > 0 && variants.length > 0 && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <WarehouseIcon className="h-4 w-4" />
+                    Stock @ Warehouse
+                  </Label>
+                  <Select value={selectedWarehouseId} onValueChange={(val) => {
+                    if (val === '__new__') {
+                      setCreateWarehouseOpen(true);
+                    } else {
+                      setSelectedWarehouseId(val);
+                    }
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map((wh) => (
+                        <SelectItem key={wh.id} value={wh.id}>
+                          {wh.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__new__">+ Add new warehouse</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {variants.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Stock Quantity</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={variants[0]?.stock || '0'}
+                      onChange={(e) => {
+                        if (variants.length > 0) {
+                          updateVariantField(0, 'stock', e.target.value);
+                        }
+                      }}
+                      className="h-10"
+                      min="0"
+                    />
                   </div>
                 )}
               </div>

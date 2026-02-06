@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getCategories, getTags, getProductTagIds, type ProductCategory, type ProductTag } from '@/lib/api/categories-and-tags';
+import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getVariantOptionValue, parseVariantName, getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
@@ -40,7 +40,6 @@ type Warehouse = {
 
 interface ProductWithDetails extends Product {
   variants: ProductVariant[];
-  tags: ProductTag[];
   inventoryItems: InventoryItem[];
 }
 
@@ -59,7 +58,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductWithDetails[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [allTags, setAllTags] = useState<ProductTag[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,7 +80,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   const productTypeLabel = useMemo(() => {
     return {
       physical: 'Physical',
-      venue_asset: 'Venue Asset',
     } as const;
   }, []);
 
@@ -92,10 +89,9 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch categories, tags, warehouses, and variant config in parallel
-        const [categoriesData, tagsData, warehousesResult, variantConfigData] = await Promise.all([
+        // Fetch categories, warehouses, and variant config in parallel
+        const [categoriesData, warehousesResult, variantConfigData] = await Promise.all([
           getCategories(currentOrg.id),
-          getTags(currentOrg.id),
           supabase
             .from('warehouses')
             .select('id, name')
@@ -105,7 +101,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
         ]);
 
         setCategories(categoriesData);
-        setAllTags(tagsData);
         setRank1(variantConfigData.rank1);
         setRank2(variantConfigData.rank2);
         
@@ -148,23 +143,18 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
           allInventoryItems = (inventoryResult.data || []) as InventoryItem[];
         }
         
-        // Fetch tags for each product
-        const productsWithDetails = await Promise.all(
-          productsData.map(async (product) => {
-            const tagIds = await getProductTagIds(product.id);
-            const productTags = tagsData.filter(t => tagIds.includes(t.id));
-            const productVariants = allVariants.filter(v => v.product_id === product.id);
-            const variantIds = productVariants.map(v => v.id);
-            const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
-            
-            return {
-              ...product,
-              variants: productVariants,
-              tags: productTags,
-              inventoryItems: productInventory,
-            };
-          })
-        );
+        // Build products with details
+        const productsWithDetails = productsData.map((product) => {
+          const productVariants = allVariants.filter(v => v.product_id === product.id);
+          const variantIds = productVariants.map(v => v.id);
+          const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
+          
+          return {
+            ...product,
+            variants: productVariants,
+            inventoryItems: productInventory,
+          };
+        });
         
         setProducts(productsWithDetails);
         setError(null);
@@ -191,7 +181,8 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
       // Event tickets would be a different type or have specific metadata
       filtered = []; // Placeholder - no event tickets in current schema
     } else if (selectedTab === 'space_booking') {
-      filtered = filtered.filter(p => p.type === 'venue_asset');
+      // Space booking removed - no venue_asset products anymore
+      filtered = [];
     }
     
     // Filter by category
@@ -209,8 +200,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
       filtered = filtered.filter(p => 
         p.title.toLowerCase().includes(query) ||
         p.description?.toLowerCase().includes(query) ||
-        p.variants.some(v => v.sku?.toLowerCase().includes(query)) ||
-        p.tags?.some(tag => tag.name.toLowerCase().includes(query))
+        p.variants.some(v => v.sku?.toLowerCase().includes(query))
       );
     }
     
@@ -226,7 +216,8 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     if (selectedTab === 'physical') {
       relevantProducts = products.filter(p => p.type === 'physical');
     } else if (selectedTab === 'space_booking') {
-      relevantProducts = products.filter(p => p.type === 'venue_asset');
+      // Space booking removed - no venue_asset products anymore
+      relevantProducts = [];
     }
     
     counts.set('all', relevantProducts.length);
@@ -688,11 +679,6 @@ function ProductsContent({
                             {product.title}
                           </h3>
                           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
-                            {product.tags.map(tag => (
-                              <Badge key={tag.id} variant="secondary" className="text-xs">
-                                {tag.name}
-                              </Badge>
-                            ))}
                             <Badge variant="outline" className="text-xs">
                               {productTypeLabel[product.type] || product.type}
                             </Badge>

@@ -8,7 +8,7 @@
 // ============================================================================
 
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
-export type ProductType = 'physical' | 'venue_asset';
+export type ProductType = 'physical';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type EventStatus = 'draft' | 'published' | 'cancelled' | 'completed';
 export type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
@@ -67,7 +67,7 @@ export interface ProductVariant {
 }
 
 // ============================================================================
-// CATEGORIES & TAGS
+// CATEGORIES
 // ============================================================================
 
 export interface ProductCategory {
@@ -78,22 +78,6 @@ export interface ProductCategory {
   sort_order: number;
   created_at: string;
   updated_at: string;
-}
-
-export interface ProductTag {
-  id: string;
-  org_id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProductTagLink {
-  id: string;
-  product_id: string;
-  tag_id: string;
-  created_at: string;
 }
 
 // ============================================================================
@@ -147,7 +131,7 @@ export interface InventoryMovement {
 }
 
 // ============================================================================
-// BOOKINGS (for venue_asset products)
+// BOOKINGS
 // ============================================================================
 
 export interface Booking {
@@ -260,12 +244,10 @@ export interface Ticket {
 
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   physical: 'Physical Product',
-  venue_asset: 'Venue Asset',
 };
 
 export const PRODUCT_TYPE_COLORS: Record<ProductType, string> = {
   physical: 'bg-blue-100 text-blue-700',
-  venue_asset: 'bg-purple-100 text-purple-700',
 };
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {

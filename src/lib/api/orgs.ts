@@ -135,8 +135,8 @@ export async function getOrgStats(orgId: string): Promise<{
   collabsCount: number;
   connectCount: number;
 }> {
-  // Catalog: products (physical) + events + space listings (venue_asset products) + poster_spaces
-  const [physicalProductsResult, eventsResult, venueAssetSpacesResult, posterSpacesResult] = await Promise.all([
+  // Catalog: products (physical) + events + poster_spaces
+  const [physicalProductsResult, eventsResult, posterSpacesResult] = await Promise.all([
     supabase
       .from('products')
       .select('*', { count: 'exact', head: true })
@@ -146,11 +146,6 @@ export async function getOrgStats(orgId: string): Promise<{
       .from('events')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', orgId),
-    supabase
-      .from('products')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId)
-      .eq('type', 'venue_asset'),
     (supabase
       .from('poster_spaces' as any)
       .select('*', { count: 'exact', head: true })
@@ -160,9 +155,8 @@ export async function getOrgStats(orgId: string): Promise<{
 
   const physicalProductsCount = physicalProductsResult.count || 0;
   const eventsCount = eventsResult.count || 0;
-  const venueAssetSpacesCount = venueAssetSpacesResult.count || 0;
   const posterSpacesCount = posterSpacesResult.count || 0;
-  const catalogCount = physicalProductsCount + eventsCount + venueAssetSpacesCount + posterSpacesCount;
+  const catalogCount = physicalProductsCount + eventsCount + posterSpacesCount;
 
   // Collabs: bookings where org is brand or venue
   const { count: collabsCount } = await supabase

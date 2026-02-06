@@ -42,12 +42,7 @@ import {
   deleteCategory,
   reassignProductsCategory,
   updateCategoriesSortOrder,
-  getTagsWithCounts,
-  createTag,
-  updateTag,
-  deleteTag,
   type CategoryWithCount,
-  type TagWithCount,
 } from '@/lib/api/categories-and-tags';
 
 type DeleteCategoryAction = 'cancel' | 'delete' | 'merge';
@@ -60,10 +55,6 @@ export default function CatalogSettings() {
   // Categories state
   const [categories, setCategories] = useState<CategoryWithCount[]>([]);
   const [newCategoryInput, setNewCategoryInput] = useState('');
-  
-  // Tags state
-  const [tags, setTags] = useState<TagWithCount[]>([]);
-  const [newTagInput, setNewTagInput] = useState('');
   
   // Variant options state
   const [variantOptions, setVariantOptions] = useState<string[]>([]);
@@ -79,18 +70,6 @@ export default function CatalogSettings() {
   }>({
     open: false,
     categoryId: '',
-    oldName: '',
-    newName: '',
-  });
-  
-  const [editTagDialog, setEditTagDialog] = useState<{ 
-    open: boolean; 
-    tagId: string;
-    oldName: string; 
-    newName: string;
-  }>({
-    open: false,
-    tagId: '',
     oldName: '',
     newName: '',
   });
@@ -112,17 +91,6 @@ export default function CatalogSettings() {
     mergeTargetId: '',
   });
   
-  const [deleteTagDialog, setDeleteTagDialog] = useState<{ 
-    open: boolean; 
-    tagId: string;
-    tagName: string; 
-    usageCount: number;
-  }>({
-    open: false,
-    tagId: '',
-    tagName: '',
-    usageCount: 0,
-  });
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -136,7 +104,6 @@ export default function CatalogSettings() {
     try {
       await Promise.all([
         loadCategories(),
-        loadTags(),
         loadVariantOptions(),
       ]);
     } catch (error: any) {
@@ -155,18 +122,6 @@ export default function CatalogSettings() {
       setCategories(data);
     } catch (error: any) {
       console.error('Error loading categories:', error);
-      throw error;
-    }
-  };
-
-  const loadTags = async () => {
-    if (!currentOrg) return;
-    
-    try {
-      const data = await getTagsWithCounts(currentOrg.id);
-      setTags(data);
-    } catch (error: any) {
-      console.error('Error loading tags:', error);
       throw error;
     }
   };
@@ -384,76 +339,6 @@ export default function CatalogSettings() {
   };
 
   // ============================================================================
-  // TAG FUNCTIONS
-  // ============================================================================
-
-  const addTag = async () => {
-    if (!currentOrg || !newTagInput.trim()) return;
-    
-    const newTagName = newTagInput.trim();
-    if (tags.some(t => t.name.toLowerCase() === newTagName.toLowerCase())) {
-      toast.error('Tag already exists');
-      return;
-    }
-    
-    setSaving(true);
-    try {
-      await createTag(currentOrg.id, newTagName);
-      await loadTags();
-      setNewTagInput('');
-      toast.success('Tag added');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add tag');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const renameTag = async () => {
-    if (!currentOrg || !editTagDialog.tagId || !editTagDialog.newName.trim()) return;
-    
-    const newName = editTagDialog.newName.trim();
-    
-    if (editTagDialog.oldName === newName) {
-      setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' });
-      return;
-    }
-    
-    if (tags.some(t => t.name.toLowerCase() === newName.toLowerCase() && t.id !== editTagDialog.tagId)) {
-      toast.error('Tag already exists');
-      return;
-    }
-    
-    setSaving(true);
-    try {
-      await updateTag(editTagDialog.tagId, { name: newName });
-      await loadTags();
-      setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' });
-      toast.success('Tag renamed');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to rename tag');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteTag = async () => {
-    if (!currentOrg || !deleteTagDialog.tagId) return;
-    
-    setSaving(true);
-    try {
-      await deleteTag(deleteTagDialog.tagId);
-      await loadTags();
-      setDeleteTagDialog({ open: false, tagId: '', tagName: '', usageCount: 0 });
-      toast.success('Tag deleted');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete tag');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ============================================================================
   // VARIANT OPTIONS FUNCTIONS
   // ============================================================================
 
@@ -531,14 +416,13 @@ export default function CatalogSettings() {
           Catalog Settings
         </h1>
         <p className="mt-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          Manage categories and tags for your product catalog
+          Manage categories and variant options for your product catalog
         </p>
       </div>
 
       <Tabs defaultValue="categories" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="tags">Tags</TabsTrigger>
           <TabsTrigger value="variants">Variants</TabsTrigger>
         </TabsList>
 
@@ -644,104 +528,6 @@ export default function CatalogSettings() {
                               usageCount: cat.product_count || 0,
                               action: 'cancel',
                               mergeTargetId: '',
-                            })
-                          }
-                          disabled={saving}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tags Tab */}
-        <TabsContent value="tags" className="space-y-4">
-          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardHeader className="p-4 md:p-6">
-              <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                Product Tags
-              </CardTitle>
-              <CardDescription>
-                Add tags to label and filter your products. You can rename or delete tags.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4 md:p-6 pt-0">
-              {/* Add new tag */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add a new tag"
-                  value={newTagInput}
-                  onChange={(e) => setNewTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addTag();
-                    }
-                  }}
-                  className="h-10"
-                  disabled={saving}
-                />
-                <Button
-                  onClick={addTag}
-                  disabled={saving || !newTagInput.trim()}
-                  style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </div>
-
-              {/* Tags list */}
-              <div className="space-y-2">
-                {tags.length === 0 ? (
-                  <p className="text-sm text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    No tags yet. Add your first tag above.
-                  </p>
-                ) : (
-                  tags.map((tag) => (
-                    <div
-                      key={tag.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                      style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium" style={{ color: '#0F1F17' }}>
-                          {tag.name}
-                        </p>
-                        <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                          Used by {tag.product_count || 0} product{tag.product_count !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setEditTagDialog({ 
-                            open: true, 
-                            tagId: tag.id,
-                            oldName: tag.name, 
-                            newName: tag.name 
-                          })}
-                          disabled={saving}
-                          title="Rename"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setDeleteTagDialog({
-                              open: true,
-                              tagId: tag.id,
-                              tagName: tag.name,
-                              usageCount: tag.product_count || 0,
                             })
                           }
                           disabled={saving}
@@ -976,74 +762,6 @@ export default function CatalogSettings() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Tag Dialog */}
-      <Dialog open={editTagDialog.open} onOpenChange={(open) => !saving && setEditTagDialog({ ...editTagDialog, open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename Tag</DialogTitle>
-            <DialogDescription>
-              Enter a new name for the tag. All products using this tag will be updated.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>New Tag Name</Label>
-              <Input
-                value={editTagDialog.newName}
-                onChange={(e) => setEditTagDialog({ ...editTagDialog, newName: e.target.value })}
-                placeholder="Tag name"
-                disabled={saving}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditTagDialog({ open: false, tagId: '', oldName: '', newName: '' })}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button onClick={renameTag} disabled={saving || !editTagDialog.newName.trim()}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Rename
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Tag Dialog */}
-      <AlertDialog open={deleteTagDialog.open} onOpenChange={(open) => !saving && setDeleteTagDialog({ ...deleteTagDialog, open })}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Tag</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTagDialog.usageCount > 0 ? (
-                <>
-                  This tag is used by {deleteTagDialog.usageCount} product{deleteTagDialog.usageCount !== 1 ? 's' : ''}.
-                  The tag will be removed from all products.
-                </>
-              ) : (
-                'Are you sure you want to delete this tag?'
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteTag();
-              }}
-              disabled={saving}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
