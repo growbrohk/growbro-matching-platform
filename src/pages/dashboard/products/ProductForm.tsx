@@ -217,6 +217,7 @@ export default function ProductForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
+  const [simpleStock, setSimpleStock] = useState('0'); // Stock for simple products
   
   // Category (using database tables)
   const [categoryId, setCategoryId] = useState('');
@@ -249,6 +250,13 @@ export default function ProductForm() {
     if (!title.trim()) return false;
     return true;
   }, [currentOrg?.id, title]);
+
+  // Helper function to get default warehouse ID
+  const getDefaultWarehouseId = (): string | null => {
+    if (warehouses.length === 0) return null;
+    const mainWh = warehouses.find(w => w.name.toLowerCase().includes('main')) || warehouses[0];
+    return mainWh.id;
+  };
 
   // Load warehouses and stock for selected warehouse
   const loadWarehouses = async (variantsList: VariantCombination[]) => {
@@ -379,6 +387,64 @@ export default function ProductForm() {
         
         // Load warehouses
         await loadWarehouses(variantsList);
+        
+        // Load stock for simple products
+        if (productKind === 'simple' && variantsList.length > 0) {
+          const defaultVariantId = variantsList[0]?.id;
+          if (defaultVariantId) {
+            // Fetch warehouses first if not already loaded
+            if (warehouses.length === 0) {
+              const { data: whData, error: whErr } = await (supabase as any)
+                .from('warehouses')
+                .select('id, org_id, name, address')
+                .eq('org_id', currentOrg.id)
+                .order('created_at', { ascending: true });
+              
+              if (!whErr && whData) {
+                const whs = (whData as any[] || []) as Warehouse[];
+                setWarehouses(whs);
+                
+                if (whs.length > 0) {
+                  const mainWh = whs.find(w => w.name.toLowerCase().includes('main')) || whs[0];
+                  setSelectedWarehouseId(mainWh.id);
+                  
+                  // Load stock for default variant at default warehouse
+                  const { data: invData, error: invErr } = await (supabase as any)
+                    .from('inventory_items')
+                    .select('quantity')
+                    .eq('org_id', currentOrg.id)
+                    .eq('warehouse_id', mainWh.id)
+                    .eq('variant_id', defaultVariantId)
+                    .maybeSingle();
+                  
+                  if (!invErr && invData) {
+                    setSimpleStock(String(invData.quantity || 0));
+                  } else {
+                    setSimpleStock('0');
+                  }
+                }
+              }
+            } else {
+              // Warehouses already loaded, use selected warehouse
+              const defaultWarehouseId = getDefaultWarehouseId();
+              if (defaultWarehouseId) {
+                const { data: invData, error: invErr } = await (supabase as any)
+                  .from('inventory_items')
+                  .select('quantity')
+                  .eq('org_id', currentOrg.id)
+                  .eq('warehouse_id', defaultWarehouseId)
+                  .eq('variant_id', defaultVariantId)
+                  .maybeSingle();
+                
+                if (!invErr && invData) {
+                  setSimpleStock(String(invData.quantity || 0));
+                } else {
+                  setSimpleStock('0');
+                }
+              }
+            }
+          }
+        }
       } catch (e: any) {
         toast({ title: 'Error', description: e?.message || 'Failed to load product', variant: 'destructive' });
         navigate('/app/products');
@@ -429,11 +495,38 @@ export default function ProductForm() {
   useEffect(() => {
     if (!isEditMode) return;
     if (!selectedWarehouseId) return;
-    if (variants.length === 0) return;
     
-    loadStockForWarehouse(selectedWarehouseId, variants);
+    // For simple products, reload simpleStock
+    if (productKind === 'simple' && variants.length > 0) {
+      const defaultVariantId = variants[0]?.id;
+      if (defaultVariantId) {
+        const loadSimpleStock = async () => {
+          try {
+            const { data: invData, error: invErr } = await (supabase as any)
+              .from('inventory_items')
+              .select('quantity')
+              .eq('org_id', currentOrg?.id)
+              .eq('warehouse_id', selectedWarehouseId)
+              .eq('variant_id', defaultVariantId)
+              .maybeSingle();
+            
+            if (!invErr && invData) {
+              setSimpleStock(String(invData.quantity || 0));
+            } else {
+              setSimpleStock('0');
+            }
+          } catch (e: any) {
+            console.error('Failed to load simple stock:', e);
+          }
+        };
+        loadSimpleStock();
+      }
+    } else if (variants.length > 0) {
+      // For variable products, use existing logic
+      loadStockForWarehouse(selectedWarehouseId, variants);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWarehouseId]);
+  }, [selectedWarehouseId, productKind]);
 
   // Variant Option Management
   const addOption = () => {
@@ -573,6 +666,81 @@ export default function ProductForm() {
     setVariants(prev => prev.map((v, i) => i === idx ? { ...v, [field]: value } : v));
   };
 
+  // Helper function to apply simple product stock
+  const applySimpleStock = async (warehouseId: string, variantId: string, quantity: number) => {
+    if (!currentOrg || !variantId) return;
+    
+    try {
+      // Parse quantity (allow blank -> 0)
+      const parsedQty = quantity || 0;
+      if (!Number.isFinite(parsedQty) || parsedQty < 0) return;
+      
+      // Check if inventory_item exists
+      const { data: invItem, error: fetchErr } = await (supabase as any)
+        .from('inventory_items')
+        .select('id, quantity')
+        .eq('org_id', currentOrg.id)
+        .eq('warehouse_id', warehouseId)
+        .eq('variant_id', variantId)
+        .maybeSingle();
+      
+      if (fetchErr) throw fetchErr;
+      
+      let inventoryItemId: string;
+      let oldQty = 0;
+      
+      if (invItem) {
+        inventoryItemId = invItem.id;
+        oldQty = invItem.quantity;
+      } else {
+        // Create inventory_item with quantity
+        const { data: newInvItem, error: createErr } = await (supabase as any)
+          .from('inventory_items')
+          .insert({
+            org_id: currentOrg.id,
+            warehouse_id: warehouseId,
+            variant_id: variantId,
+            quantity: parsedQty,
+          })
+          .select('id')
+          .single();
+        
+        if (createErr) throw createErr;
+        inventoryItemId = newInvItem.id;
+        oldQty = 0;
+      }
+      
+      // Calculate delta
+      const delta = parsedQty - oldQty;
+      
+      // Update inventory_items quantity
+      const { error: updateErr } = await (supabase as any)
+        .from('inventory_items')
+        .update({ quantity: parsedQty, updated_at: new Date().toISOString() })
+        .eq('id', inventoryItemId);
+      
+      if (updateErr) throw updateErr;
+      
+      // Create inventory_movement if delta != 0
+      if (delta !== 0) {
+        const { error: movementErr } = await (supabase as any)
+          .from('inventory_movements')
+          .insert({
+            inventory_item_id: inventoryItemId,
+            delta,
+            reason: isEditMode ? 'correction' : 'initial',
+            note: isEditMode ? 'Stock updated in product form' : 'Initial stock set in product creation',
+            created_by: user?.id || null,
+          });
+        
+        if (movementErr) throw movementErr;
+      }
+    } catch (err: any) {
+      console.error('Error applying simple stock:', err);
+      throw err;
+    }
+  };
+
   const regenerateVariants = () => {
     // Validate draft options
     const validation = isOptionsValid(variantOptionsDraft);
@@ -678,6 +846,7 @@ export default function ProductForm() {
       }
 
       // For simple products, ensure we have at least one variant
+      let defaultVariantId: string | null = null;
       if (productKind === 'simple' && variants.length === 0) {
         // Create a default variant for simple products
         const { data: defaultVariant, error: variantErr } = await (supabase as any)
@@ -693,6 +862,7 @@ export default function ProductForm() {
           .single();
         
         if (variantErr) throw variantErr;
+        defaultVariantId = defaultVariant.id;
         
         // Update variants state for stock saving
         setVariants([{
@@ -708,14 +878,25 @@ export default function ProductForm() {
       }
 
       // Variant save logic with archival
-      if (variants.length > 0) {
+      const variantsToProcess = variants.length > 0 ? variants : (defaultVariantId ? [{
+        id: defaultVariantId,
+        name: 'Default',
+        sku: '',
+        price: basePrice || '',
+        active: true,
+        stock: '0',
+        isNew: false,
+        sig: '',
+      }] : []);
+      
+      if (variantsToProcess.length > 0) {
         // Collect existing SKUs for auto-generation
-        const existingSkus = variants
+        const existingSkus = variantsToProcess
           .map(v => v.sku?.trim())
           .filter(Boolean) as string[];
         
         // Prepare current variants with SKU auto-generation
-        const currentVariants = variants
+        const currentVariants = variantsToProcess
           .filter((v) => v.name.trim().length > 0)
           .map((v) => {
             let sku = v.sku?.trim();
@@ -801,8 +982,37 @@ export default function ProductForm() {
         }
       }
 
-      // Save stock changes (only for edit mode with selected warehouse)
-      if (isEditMode && selectedWarehouseId && variants.length > 0) {
+      // Save stock for simple products (both create and edit mode)
+      if (productKind === 'simple') {
+        // Get the default variant ID (either from variants array or the one we just created)
+        const defaultVariantIdToUse = defaultVariantId || (variantsToProcess.length > 0 ? variantsToProcess[0]?.id : null);
+        
+        if (defaultVariantIdToUse) {
+          try {
+            // For edit mode, use selected warehouse; for create mode, use default warehouse
+            const warehouseIdToUse = isEditMode && selectedWarehouseId 
+              ? selectedWarehouseId 
+              : getDefaultWarehouseId();
+            
+            if (!warehouseIdToUse) {
+              // If no warehouses exist, skip stock saving
+              console.warn('No warehouses available for stock saving');
+            } else {
+              // Parse simpleStock (allow blank -> 0)
+              const parsedStock = simpleStock.trim() === '' ? 0 : Number(simpleStock);
+              if (Number.isFinite(parsedStock) && parsedStock >= 0) {
+                await applySimpleStock(warehouseIdToUse, defaultVariantIdToUse, parsedStock);
+              }
+            }
+          } catch (stockErr: any) {
+            console.error('Error saving simple product stock:', stockErr);
+            // Don't fail the save, but log it
+          }
+        }
+      }
+
+      // Save stock changes for variable products (only for edit mode with selected warehouse)
+      if (productKind === 'variable' && isEditMode && selectedWarehouseId && variants.length > 0) {
         try {
           for (const variant of variants) {
             if (!variant.id) continue; // Skip unsaved variants
@@ -1037,6 +1247,23 @@ export default function ProductForm() {
               <Label htmlFor="basePrice">Base Price (decimal)</Label>
               <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" className="h-10" />
                       </div>
+
+                {/* Stock input for Simple Products */}
+                {productKind === 'simple' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="simpleStock">Stock</Label>
+                    <Input
+                      id="simpleStock"
+                      type="number"
+                      value={simpleStock}
+                      onChange={(e) => setSimpleStock(e.target.value)}
+                      placeholder="0"
+                      className="h-10"
+                      min="0"
+                    />
+                    <p className="text-sm text-muted-foreground">Stock in Main warehouse</p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
               <Label htmlFor="category">Category (optional)</Label>
@@ -1289,53 +1516,6 @@ export default function ProductForm() {
               </div>
             )}
 
-            {/* Simple Product Stock Section */}
-            {productKind === 'simple' && isEditMode && warehouses.length > 0 && variants.length > 0 && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <WarehouseIcon className="h-4 w-4" />
-                    Stock @ Warehouse
-                  </Label>
-                  <Select value={selectedWarehouseId} onValueChange={(val) => {
-                    if (val === '__new__') {
-                      setCreateWarehouseOpen(true);
-                    } else {
-                      setSelectedWarehouseId(val);
-                    }
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((wh) => (
-                        <SelectItem key={wh.id} value={wh.id}>
-                          {wh.name}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__new__">+ Add new warehouse</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {variants.length > 0 && (
-                  <div className="space-y-2">
-                    <Label>Stock Quantity</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={variants[0]?.stock || '0'}
-                      onChange={(e) => {
-                        if (variants.length > 0) {
-                          updateVariantField(0, 'stock', e.target.value);
-                        }
-                      }}
-                      className="h-10"
-                      min="0"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => navigate('/app/products')} disabled={saving} className="w-full sm:w-auto">
