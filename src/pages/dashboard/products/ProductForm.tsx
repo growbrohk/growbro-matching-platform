@@ -1461,47 +1461,47 @@ export default function ProductForm() {
                       <table className="w-full min-w-[900px]">
                         <thead className="bg-muted">
                           <tr>
-                            <th className="text-left px-2 py-1.5 text-xs font-medium">Variant</th>
-                            <th className="text-left px-2 py-1.5 text-xs font-medium">Stock</th>
-                            <th className="text-left px-2 py-1.5 text-xs font-medium">Price</th>
-                            <th className="text-left px-2 py-1.5 text-xs font-medium">SKU</th>
-                            <th className="text-left px-2 py-1.5 text-xs font-medium">Active</th>
+                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Variant</th>
+                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Stock</th>
+                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Price</th>
+                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">SKU</th>
+                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Active</th>
                           </tr>
                         </thead>
                         <tbody>
                       {variants.map((v, idx) => (
                             <tr key={v.id ?? idx} className="border-t">
-                              <td className="px-2 py-1.5">
-                            <p className="text-xs font-medium max-w-[200px] break-words" title={v.name}>{v.name}</p>
+                              <td className="p-0">
+                            <p className="text-xs px-1 py-0 max-w-[120px] truncate" title={v.name}>{v.name}</p>
                               </td>
-                              <td className="px-2 py-1.5">
+                              <td className="p-0">
                                 <Input
                                   type="number"
                                   placeholder="0"
                                   value={v.stock}
                                   onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
-                                  className="h-7 text-xs px-2 w-20"
+                                  className="h-7 text-xs px-1 py-0 rounded-md w-[56px]"
                                   min="0"
                                 />
                               </td>
-                              <td className="px-2 py-1.5">
+                              <td className="p-0">
                                 <Input
                                   placeholder="0.00"
                                   value={v.price}
                                   onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
-                                  className="h-7 text-xs px-2 w-24"
+                                  className="h-7 text-xs px-1 py-0 rounded-md w-[64px]"
                                 />
                               </td>
-                              <td className="px-2 py-1.5">
+                              <td className="p-0">
                                 <Input
                                   placeholder="Auto"
                                   value={v.sku}
                                   onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
-                                  className="h-7 text-xs px-2 min-w-[160px]"
+                                  className="h-7 text-xs px-1 py-0 rounded-md min-w-[120px]"
                                 />
                               </td>
-                              <td className="px-2 py-1.5">
-                                <div className="flex items-center justify-center">
+                              <td className="p-0">
+                                <div className="flex items-center justify-center w-[44px]">
                                   <Switch
                                     checked={v.active}
                                     onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
