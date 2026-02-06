@@ -12,7 +12,6 @@ import NotFound from "./pages/NotFound";
 import DashboardProducts from "./pages/dashboard/products/Products";
 import ProductForm from "./pages/dashboard/products/ProductForm";
 import ProductTypeSelection from "./pages/dashboard/products/ProductTypeSelection";
-import Inventory from "./pages/dashboard/inventory/Inventory";
 // Old events system deprecated - using new placeholder pages
 import EventsList from "./pages/events/EventsList.new";
 import EventForm from "./pages/events/EventForm.new";
@@ -383,8 +382,8 @@ function AppRoutes() {
       {/* Redirect old routes to Catalog with appropriate tab */}
       <Route path="/app/products" element={<Navigate to="/app/catalog?tab=products" replace />} />
       
-      {/* Inventory - removed from bottom nav but routes still work */}
-      <Route path="/app/inventory" element={<ProtectedRoute><AppLayout><Inventory /></AppLayout></ProtectedRoute>} />
+      {/* Inventory - redirect to catalog products inventory tab */}
+      <Route path="/app/inventory" element={<Navigate to="/app/catalog?tab=products" replace />} />
       
       {/* Events CRUD routes */}
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />

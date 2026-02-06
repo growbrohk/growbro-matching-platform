@@ -13,7 +13,6 @@ import {
 import {
   LayoutDashboard,
   Package,
-  Warehouse,
   Calendar,
   Ticket,
   Settings,
@@ -46,11 +45,11 @@ interface AppLayoutProps {
  * 1. Desktop sidebar keeps all original nav items (backwards compatible)
  * 2. Mobile bottom nav shows new 5-tab layout
  * 3. Route aliases ensure old URLs still work:
- *    - /app/products → still works (also accessible via /app/catalog)
- *    - /app/inventory → still works (not in bottom nav)
- *    - /app/bookings → still works (not in bottom nav)
+ *    - /app/products → redirects to /app/catalog?tab=products
+ *    - /app/inventory → redirects to /app/catalog?tab=products (inventory pillar tab)
+ *    - /app/bookings → redirects to /app/catalog?tab=events
  * 4. New routes added:
- *    - /app/catalog (alias for /app/products)
+ *    - /app/catalog (main catalog page with Products/Events/Spaces tabs)
  *    - /app/collab (new Collab page)
  *    - /app/orders (new Orders page)
  *    - /app/account (alias for /app/settings)
@@ -79,7 +78,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: '/app/catalog', label: 'Catalog', icon: ShoppingBag },
     { path: '/app/collab', label: 'Collab', icon: Handshake },
     { path: '/app/enquiries', label: 'Enquiries', icon: Mail },
-    { path: '/app/inventory', label: 'Inventory', icon: Warehouse },
     { path: '/app/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -103,9 +101,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (path === '/app/catalog') {
       return location.pathname.startsWith('/app/catalog') || 
              location.pathname.startsWith('/app/products');
-    }
-    if (path === '/app/inventory') {
-      return location.pathname.startsWith('/app/inventory');
     }
     if (checkPath === '/app/settings' || path === '/app/account') {
       return location.pathname.startsWith('/app/settings') || location.pathname.startsWith('/app/account');

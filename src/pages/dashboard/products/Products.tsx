@@ -15,6 +15,7 @@ import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getVariantOptionValue, parseVariantName, getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
 import type { Product } from '@/lib/types';
+import { InventoryPanel } from '@/components/catalog/InventoryPanel';
 
 type ProductVariant = {
   id: string;
@@ -208,7 +209,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
       filtered = filtered.filter(p => 
         p.title.toLowerCase().includes(query) ||
         p.description?.toLowerCase().includes(query) ||
-        p.sku?.toLowerCase().includes(query) ||
+        p.variants.some(v => v.sku?.toLowerCase().includes(query)) ||
         p.tags?.some(tag => tag.name.toLowerCase().includes(query))
       );
     }
@@ -565,6 +566,37 @@ function ProductsContent({
   rank2,
   navigate,
 }: ProductsContentProps) {
+  const { currentOrg } = useAuth();
+
+  // If inventory pillar is selected, render InventoryPanel
+  if (selectedPillar === 'inventory') {
+    return (
+      <div className="space-y-4 md:space-y-6">
+        <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
+            {/* Pillar Tabs (Catalog / Inventory) */}
+            <Tabs value={selectedPillar} onValueChange={(v) => setSelectedPillar(v as 'catalog' | 'inventory')} className="w-full">
+              <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-grid mb-4">
+                <TabsTrigger value="catalog">Catalog</TabsTrigger>
+                <TabsTrigger value="inventory">Inventory</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardHeader>
+        </Card>
+        {currentOrg?.id ? (
+          <InventoryPanel orgId={currentOrg.id} />
+        ) : (
+          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+            <CardContent className="flex flex-col items-center justify-center py-12 p-4 md:p-6">
+              <p className="text-muted-foreground">No organization selected</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  // Catalog pillar - render existing catalog view
   return (
     <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
       <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
@@ -617,24 +649,6 @@ function ProductsContent({
             </button>
           )}
         </div>
-
-        {/* Warehouse Selector (only in Inventory pillar) */}
-        {/* TODO: Connect to multi-warehouse inventory once warehouse management is fully implemented */}
-        {selectedPillar === 'inventory' && warehouses.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pt-3 sm:pt-4">
-            <span className="text-xs sm:text-sm font-medium text-muted-foreground flex-shrink-0">Warehouse:</span>
-            <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-              <SelectTrigger className="w-full sm:w-48 h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map(wh => (
-                  <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
       </CardHeader>
 
       <CardContent className="p-3 sm:p-4 md:p-6">
@@ -687,27 +701,17 @@ function ProductsContent({
                       </button>
                       <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                         <div className="text-right">
-                          {selectedPillar === 'catalog' ? (
-                            <>
-                              <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
-                                HK${minPrice.toFixed(2)}
-                              </div>
-                              {product.variants.length > 1 && (
-                                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                  {product.variants.length} variants
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
-                                ({totalQty})
-                              </div>
+                          {/* Catalog pillar - show price */}
+                          <>
+                            <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
+                              HK${minPrice.toFixed(2)}
+                            </div>
+                            {product.variants.length > 1 && (
                               <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                Stock
+                                {product.variants.length} variants
                               </div>
-                            </>
-                          )}
+                            )}
+                          </>
                         </div>
                         <div className="flex gap-0.5 sm:gap-1">
                           {!isExpanded && product.variants.length > 1 && (
