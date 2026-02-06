@@ -730,17 +730,11 @@ function ProductsContent({
                   {/* Expanded Variants */}
                   {isExpanded && product.variants.length > 0 && (
                     <div className="border-t px-2.5 sm:px-3 md:px-8 py-2" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
-                      <VariantHierarchy
-                        productId={product.id}
+                      <VariantCombinationsTable
                         variants={product.variants}
                         inventoryItems={product.inventoryItems}
-                        rank1={rank1}
-                        rank2={rank2}
-                        expandedRank1Groups={expandedRank1Groups}
-                        toggleRank1Group={toggleRank1Group}
                         getVariantQuantity={getVariantQuantity}
-                        showQuantity={warehouses.length > 0}
-                        selectedPillar={selectedPillar}
+                        basePrice={product.base_price}
                       />
                     </div>
                   )}
@@ -754,91 +748,20 @@ function ProductsContent({
   );
 }
 
-// Component for rendering hierarchical variant view
-interface VariantHierarchyProps {
-  productId: string;
+// Component for rendering Excel-style variant combinations table (read-only)
+interface VariantCombinationsTableProps {
   variants: ProductVariant[];
   inventoryItems: InventoryItem[];
-  rank1: string;
-  rank2: string;
-  expandedRank1Groups: Set<string>;
-  toggleRank1Group: (key: string) => void;
   getVariantQuantity: (variantId: string, inventoryItems: InventoryItem[]) => number;
-  showQuantity: boolean;
-  selectedPillar: 'catalog' | 'inventory';
+  basePrice: number | null;
 }
 
-function VariantHierarchy({
-  productId,
+function VariantCombinationsTable({
   variants,
   inventoryItems,
-  rank1,
-  rank2,
-  expandedRank1Groups,
-  toggleRank1Group,
   getVariantQuantity,
-  showQuantity,
-  selectedPillar,
-}: VariantHierarchyProps) {
-  // Helper function for case-insensitive option name matching
-  const findMatchingOptionName = (optionNames: string[], targetName: string): string | null => {
-    const exactMatch = optionNames.find(name => name === targetName);
-    if (exactMatch) return exactMatch;
-    
-    // Try case-insensitive match
-    const lowerTarget = targetName.toLowerCase();
-    return optionNames.find(name => name.toLowerCase() === lowerTarget) || null;
-  };
-  
-  // Helper function to get option value with case-insensitive fallback
-  const getOptionValue = (variantName: string, optionName: string, availableNames: string[]): string | null => {
-    // Try exact match first
-    const exactValue = getVariantOptionValue(variantName, optionName);
-    if (exactValue) return exactValue;
-    
-    // Try case-insensitive match
-    const matchedName = findMatchingOptionName(availableNames, optionName);
-    if (matchedName && matchedName !== optionName) {
-      return getVariantOptionValue(variantName, matchedName);
-    }
-    
-    return null;
-  };
-  
-  // Compute effective rank options per product
-  const { effectiveRank1, effectiveRank2, availableOptionNames } = useMemo(() => {
-    const variantNames = variants.map(v => v.name).filter(Boolean);
-    const optionNames = getUniqueVariantOptionNames(variantNames);
-    
-    // Pick effectiveRank1
-    let rank1Effective: string | null = null;
-    const matchedRank1 = findMatchingOptionName(optionNames, rank1);
-    if (matchedRank1) {
-      rank1Effective = matchedRank1;
-    } else if (optionNames.length > 0) {
-      rank1Effective = optionNames[0];
-    }
-    
-    // Pick effectiveRank2
-    let rank2Effective: string | null = null;
-    const matchedRank2 = findMatchingOptionName(optionNames, rank2);
-    if (matchedRank2 && matchedRank2 !== rank1Effective) {
-      rank2Effective = matchedRank2;
-    } else {
-      // Use the next available optionName not equal to effectiveRank1
-      const nextOption = optionNames.find(name => name !== rank1Effective);
-      if (nextOption) {
-        rank2Effective = nextOption;
-      }
-    }
-    
-    return {
-      effectiveRank1: rank1Effective,
-      effectiveRank2: rank2Effective,
-      availableOptionNames: optionNames,
-    };
-  }, [variants, rank1, rank2]);
-
+  basePrice,
+}: VariantCombinationsTableProps) {
   if (variants.length === 0) {
     return (
       <div className="py-2 text-sm text-muted-foreground">
@@ -847,229 +770,59 @@ function VariantHierarchy({
     );
   }
 
-  // If only one variant, show it directly
-  if (variants.length === 1) {
-    const variant = variants[0];
-    const qty = getVariantQuantity(variant.id, inventoryItems);
-    return (
-      <div className="py-2 flex items-center justify-between gap-2">
-        <span className="text-xs sm:text-sm min-w-0 truncate">{variant.name}</span>
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          {selectedPillar === 'catalog' ? (
-            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
-          ) : (
-            <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({qty})</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Group variants by rank1 with smart detection
-  const rank1Groups = useMemo(() => {
-    if (!effectiveRank1) {
-      // No structured options detected, show flat list
-      return null;
-    }
-    
-    const groups = new Map<string, ProductVariant[]>();
-    const missingGroup: ProductVariant[] = [];
-    
-    for (const variant of variants) {
-      const rank1Value = getOptionValue(variant.name, effectiveRank1, availableOptionNames);
-      if (rank1Value) {
-        if (!groups.has(rank1Value)) {
-          groups.set(rank1Value, []);
-        }
-        groups.get(rank1Value)!.push(variant);
-      } else {
-        missingGroup.push(variant);
-      }
-    }
-    
-    const hasSomeValues = groups.size > 0;
-    const hasMissing = missingGroup.length > 0;
-    
-    // If no variants have rank1 values, return null to render flat list
-    if (!hasSomeValues) {
-      return null;
-    }
-    
-    // If some variants are missing rank1, add them to "Default" group
-    if (hasMissing) {
-      groups.set('Default', missingGroup);
-    }
-    
-    return Array.from(groups.entries()).sort(([a], [b]) => {
-      // Sort "Default" to the end
-      if (a === 'Default') return 1;
-      if (b === 'Default') return -1;
-      return a.localeCompare(b);
-    });
-  }, [variants, effectiveRank1, availableOptionNames]);
-
-  // If no rank1 grouping possible, show flat list
-  if (!rank1Groups) {
-    return (
-      <div className="space-y-1 py-2">
-        {variants.map(variant => {
-          const qty = getVariantQuantity(variant.id, inventoryItems);
-          return (
-            <div key={variant.id} className="flex items-center justify-between py-1 sm:py-1.5 px-1.5 sm:px-2 rounded hover:bg-muted/20 gap-2">
-              <span className="text-xs sm:text-sm min-w-0 truncate">{variant.name}</span>
-              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                {selectedPillar === 'catalog' ? (
-                  <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
-                ) : (
-                  <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({qty})</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-1.5 sm:space-y-2 py-2">
-      {rank1Groups.map(([rank1Value, groupVariants]) => {
-        const groupKey = `${productId}:${rank1Value}`;
-        const isExpanded = expandedRank1Groups.has(groupKey);
-        const groupTotal = groupVariants.reduce((sum, v) => sum + getVariantQuantity(v.id, inventoryItems), 0);
-
-        return (
-          <div key={groupKey} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'white' }}>
-            {/* Rank1 Header */}
-            <button
-              onClick={() => toggleRank1Group(groupKey)}
-              className="w-full flex items-center justify-between p-1.5 sm:p-2 hover:bg-muted/30 transition-colors"
-            >
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                {isExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: '#0E7A3A' }} />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: '#0E7A3A' }} />
-                )}
-                <span className="text-xs sm:text-sm font-medium truncate">
-                  {effectiveRank1}: {rank1Value}
-                </span>
-              </div>
-              {showQuantity && <span className="text-xs sm:text-sm font-semibold flex-shrink-0 whitespace-nowrap">({groupTotal})</span>}
-            </button>
-
-            {/* Rank2 or Leaf Variants */}
-            {isExpanded && (
-              <div className="border-t px-3 sm:px-6 py-1.5 sm:py-2 space-y-1" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                {(() => {
-                  // Check if rank2 grouping is possible
-                  if (!effectiveRank2) {
-                    // No rank2, render leaf variant rows
-                    return groupVariants.map(variant => {
-                      const qty = getVariantQuantity(variant.id, inventoryItems);
-                      // Extract remaining option for display (skip rank1)
-                      const options = parseVariantName(variant.name);
-                      const remainingOption = options.find(opt => opt.name !== effectiveRank1);
-                      const displayLabel = remainingOption 
-                        ? `${remainingOption.name}: ${remainingOption.value}`
-                        : variant.name;
-                      
-                      return (
-                        <div key={variant.id} className="flex items-center justify-between py-1 sm:py-1.5 px-1.5 sm:px-2 rounded hover:bg-muted/20 gap-2">
-                          <span className="text-xs sm:text-sm min-w-0 truncate">{displayLabel}</span>
-                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            {selectedPillar === 'catalog' ? (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
-                            ) : (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({qty})</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    });
-                  }
-                  
-                  // Group by rank2
-                  const rank2Groups = new Map<string, ProductVariant[]>();
-                  const rank2MissingGroup: ProductVariant[] = [];
-                  
-                  for (const variant of groupVariants) {
-                    const rank2Value = getOptionValue(variant.name, effectiveRank2, availableOptionNames);
-                    if (rank2Value) {
-                      if (!rank2Groups.has(rank2Value)) {
-                        rank2Groups.set(rank2Value, []);
-                      }
-                      rank2Groups.get(rank2Value)!.push(variant);
-                    } else {
-                      rank2MissingGroup.push(variant);
-                    }
-                  }
-                  
-                  const hasRank2Values = rank2Groups.size > 0;
-                  const hasRank2Missing = rank2MissingGroup.length > 0;
-                  
-                  // If no variants have rank2 values, render leaf variant rows
-                  if (!hasRank2Values) {
-                    return groupVariants.map(variant => {
-                      const qty = getVariantQuantity(variant.id, inventoryItems);
-                      const options = parseVariantName(variant.name);
-                      const remainingOption = options.find(opt => opt.name !== effectiveRank1);
-                      const displayLabel = remainingOption 
-                        ? `${remainingOption.name}: ${remainingOption.value}`
-                        : variant.name;
-                      
-                      return (
-                        <div key={variant.id} className="flex items-center justify-between py-1 sm:py-1.5 px-1.5 sm:px-2 rounded hover:bg-muted/20 gap-2">
-                          <span className="text-xs sm:text-sm min-w-0 truncate">{displayLabel}</span>
-                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            {selectedPillar === 'catalog' ? (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${(variant.price || 0).toFixed(2)}</span>
-                            ) : (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({qty})</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    });
-                  }
-                  
-                  // Add missing rank2 variants to "Default" group if needed
-                  if (hasRank2Missing) {
-                    rank2Groups.set('Default', rank2MissingGroup);
-                  }
-                  
-                  return Array.from(rank2Groups.entries())
-                    .sort(([a], [b]) => {
-                      // Sort "Default" to the end
-                      if (a === 'Default') return 1;
-                      if (b === 'Default') return -1;
-                      return a.localeCompare(b);
-                    })
-                    .map(([rank2Value, rank2Variants]) => {
-                      const rank2Total = rank2Variants.reduce((sum, v) => sum + getVariantQuantity(v.id, inventoryItems), 0);
-                      const avgPrice = rank2Variants.reduce((sum, v) => sum + (v.price || 0), 0) / rank2Variants.length;
-                      
-                      return (
-                        <div key={rank2Value} className="flex items-center justify-between py-1 sm:py-1.5 px-1.5 sm:px-2 rounded hover:bg-muted/20 gap-2">
-                          <span className="text-xs sm:text-sm min-w-0 truncate">
-                            {effectiveRank2}: {rank2Value}
-                          </span>
-                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            {selectedPillar === 'catalog' ? (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">HK${avgPrice.toFixed(2)}</span>
-                            ) : (
-                              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">({rank2Total})</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    });
-                })()}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="border border-border rounded-lg overflow-x-auto">
+      <table className="w-full border-collapse table-fixed">
+        <thead>
+          <tr className="bg-muted/50 border-t">
+            <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[88px]">Variant</th>
+            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[48px]">Stock</th>
+            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Price</th>
+            <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[96px]">SKU</th>
+            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-center text-muted-foreground w-[40px]">Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map((variant) => {
+            const stock = getVariantQuantity(variant.id, inventoryItems);
+            const price = variant.price ?? basePrice ?? 0;
+            
+            return (
+              <tr key={variant.id} className="border-t hover:bg-muted/30 even:bg-muted/10">
+                <td className="p-0 border w-[88px]">
+                  <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                    {variant.name}
+                  </span>
+                </td>
+                <td className="p-0 border w-[48px]">
+                  <span className="block px-1 py-0 text-xs leading-tight">
+                    {stock}
+                  </span>
+                </td>
+                <td className="p-0 border w-[56px]">
+                  <span className="block px-1 py-0 text-xs leading-tight">
+                    {price.toFixed(2)}
+                  </span>
+                </td>
+                <td className="p-0 border w-[96px]">
+                  <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                    {variant.sku || '-'}
+                  </span>
+                </td>
+                <td className="p-0 border w-[40px]">
+                  <div className="flex items-center justify-center py-0.5">
+                    {variant.active ? (
+                      <Badge variant="default" className="text-[10px] px-1 py-0 h-4">On</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Off</Badge>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
