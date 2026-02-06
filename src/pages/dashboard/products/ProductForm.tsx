@@ -1461,50 +1461,52 @@ export default function ProductForm() {
                       <table className="w-full min-w-[900px]">
                         <thead className="bg-muted">
                           <tr>
-                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Variant</th>
-                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">SKU</th>
-                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Price</th>
-                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Stock</th>
-                            <th className="text-left p-2 md:p-3 text-xs md:text-sm font-medium">Active</th>
+                            <th className="text-left px-2 py-1.5 text-xs font-medium">Variant</th>
+                            <th className="text-left px-2 py-1.5 text-xs font-medium">Stock</th>
+                            <th className="text-left px-2 py-1.5 text-xs font-medium">Price</th>
+                            <th className="text-left px-2 py-1.5 text-xs font-medium">SKU</th>
+                            <th className="text-left px-2 py-1.5 text-xs font-medium">Active</th>
                           </tr>
                         </thead>
                         <tbody>
                       {variants.map((v, idx) => (
                             <tr key={v.id ?? idx} className="border-t">
-                              <td className="p-2 md:p-3">
-                            <p className="text-xs md:text-sm font-medium max-w-[220px] break-words" title={v.name}>{v.name}</p>
+                              <td className="px-2 py-1.5">
+                            <p className="text-xs font-medium max-w-[200px] break-words" title={v.name}>{v.name}</p>
                               </td>
-                              <td className="p-2 md:p-3">
-                                <Input
-                                  placeholder="Auto"
-                                  value={v.sku}
-                                  onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
-                                  className="h-7 md:h-8 text-xs px-2 w-40 min-w-[160px]"
-                                />
-                              </td>
-                              <td className="p-2 md:p-3">
-                                <Input
-                                  placeholder="0.00"
-                                  value={v.price}
-                                  onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
-                                  className="h-7 md:h-8 text-xs px-2 w-20 md:w-24"
-                                />
-                              </td>
-                              <td className="p-2 md:p-3">
+                              <td className="px-2 py-1.5">
                                 <Input
                                   type="number"
                                   placeholder="0"
                                   value={v.stock}
                                   onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
-                                  className="h-7 md:h-8 text-xs px-2 w-20 md:w-24"
+                                  className="h-7 text-xs px-2 w-20"
                                   min="0"
                                 />
                               </td>
-                              <td className="p-2 md:p-3">
-                                <Switch
-                                  checked={v.active}
-                                  onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  placeholder="0.00"
+                                  value={v.price}
+                                  onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
+                                  className="h-7 text-xs px-2 w-24"
                                 />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <Input
+                                  placeholder="Auto"
+                                  value={v.sku}
+                                  onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
+                                  className="h-7 text-xs px-2 min-w-[160px]"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <div className="flex items-center justify-center">
+                                  <Switch
+                                    checked={v.active}
+                                    onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
+                                  />
+                                </div>
                               </td>
                             </tr>
                           ))}
