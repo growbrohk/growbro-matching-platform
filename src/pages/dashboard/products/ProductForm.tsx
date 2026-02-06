@@ -1456,52 +1456,56 @@ export default function ProductForm() {
                       </p>
                     </div>
 
-                    {/* Table (all breakpoints) */}
-                    <div className="border rounded-lg overflow-x-auto">
-                      <table className="w-full min-w-[900px]">
-                        <thead className="bg-muted">
-                          <tr>
-                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Variant</th>
-                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Stock</th>
-                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Price</th>
-                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">SKU</th>
-                            <th className="p-0 px-1 py-0.5 text-left text-[11px] font-medium">Active</th>
+                    {/* Excel-style table */}
+                    <div className="border border-border rounded overflow-x-auto">
+                      <table className="w-full min-w-[720px] border-collapse">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="sticky top-0 z-10 bg-muted/50 px-2 py-1 text-left text-[11px] font-medium text-muted-foreground border border-border">Variant</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 px-2 py-1 text-left text-[11px] font-medium text-muted-foreground border border-border">Stock</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 px-2 py-1 text-left text-[11px] font-medium text-muted-foreground border border-border">Price</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 px-2 py-1 text-left text-[11px] font-medium text-muted-foreground border border-border">SKU</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 px-2 py-1 text-center text-[11px] font-medium text-muted-foreground border border-border">Active</th>
                           </tr>
                         </thead>
                         <tbody>
-                      {variants.map((v, idx) => (
-                            <tr key={v.id ?? idx} className="border-t">
-                              <td className="p-0">
-                            <p className="text-xs px-1 py-0 max-w-[120px] truncate" title={v.name}>{v.name}</p>
+                          {variants.map((v, idx) => (
+                            <tr key={v.id ?? idx} className="hover:bg-muted/30 even:bg-muted/10">
+                              <td className="px-1 py-0.5 border border-border align-middle">
+                                <div className="text-xs whitespace-nowrap truncate max-w-[160px]" title={v.name}>
+                                  {v.name}
+                                </div>
                               </td>
-                              <td className="p-0">
-                                <Input
+                              <td className="px-1 py-0.5 border border-border align-middle">
+                                <input
                                   type="number"
                                   placeholder="0"
-                                  value={v.stock}
+                                  value={v.stock || ''}
                                   onChange={(e) => updateVariantField(idx, 'stock', e.target.value)}
-                                  className="h-7 text-xs px-1 py-0 rounded-md w-[56px]"
+                                  className="w-full bg-transparent border-0 outline-none text-xs px-1 py-1 focus:ring-2 focus:ring-primary/30 min-w-0"
                                   min="0"
                                 />
                               </td>
-                              <td className="p-0">
-                                <Input
+                              <td className="px-1 py-0.5 border border-border align-middle">
+                                <input
+                                  type="text"
                                   placeholder="0.00"
-                                  value={v.price}
+                                  value={v.price || ''}
                                   onChange={(e) => updateVariantField(idx, 'price', e.target.value)}
-                                  className="h-7 text-xs px-1 py-0 rounded-md w-[64px]"
+                                  className="w-full bg-transparent border-0 outline-none text-xs px-1 py-1 focus:ring-2 focus:ring-primary/30 min-w-0"
                                 />
                               </td>
-                              <td className="p-0">
-                                <Input
+                              <td className="px-1 py-0.5 border border-border align-middle">
+                                <input
+                                  type="text"
                                   placeholder="Auto"
-                                  value={v.sku}
+                                  value={v.sku || ''}
                                   onChange={(e) => updateVariantField(idx, 'sku', e.target.value)}
-                                  className="h-7 text-xs px-1 py-0 rounded-md min-w-[120px]"
+                                  className="w-full bg-transparent border-0 outline-none text-xs px-1 py-1 focus:ring-2 focus:ring-primary/30 min-w-0"
                                 />
                               </td>
-                              <td className="p-0">
-                                <div className="flex items-center justify-center w-[44px]">
+                              <td className="px-1 py-0.5 border border-border align-middle">
+                                <div className="flex items-center justify-center">
                                   <Switch
                                     checked={v.active}
                                     onCheckedChange={(checked) => updateVariantField(idx, 'active', checked)}
@@ -1512,7 +1516,7 @@ export default function ProductForm() {
                           ))}
                         </tbody>
                       </table>
-                          </div>
+                    </div>
                   </div>
                 )}
               </div>
