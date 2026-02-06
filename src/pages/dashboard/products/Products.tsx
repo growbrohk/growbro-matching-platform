@@ -322,94 +322,52 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
 
   return (
     <div className={`w-full min-w-0 ${isEmbeddedInCatalog ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} space-y-4 md:space-y-6`}>
-      {/* Header and Pillar Tabs - Only show when NOT embedded in Catalog */}
+      {/* Tabs - Only show when NOT embedded in Catalog */}
       {!isEmbeddedInCatalog && (
-        <>
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-                Products
-              </h1>
-            </div>
-            <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => navigate('/app/settings/catalog')}
-                className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-                title="Edit catalog settings"
-              >
-                <Pencil className="h-4 w-4" />
-                <span className="hidden sm:inline sm:ml-2">Edit</span>
-              </Button>
-              <Button 
-                onClick={() => navigate('/app/products/new')} 
-                disabled={!canCreate} 
-                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-                size="icon"
-                className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-                title="Add new product"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline sm:ml-2">Add Product</span>
-              </Button>
-            </div>
-          </div>
-
-          <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
-            <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
-              <TabsTrigger value="physical">Products</TabsTrigger>
-              <TabsTrigger value="event_tickets">Event Tickets</TabsTrigger>
-              <TabsTrigger value="space_booking">Space Booking</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </>
+        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
+          <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
+            <TabsTrigger value="physical">Products</TabsTrigger>
+            <TabsTrigger value="event_tickets">Event Tickets</TabsTrigger>
+            <TabsTrigger value="space_booking">Space Booking</TabsTrigger>
+          </TabsList>
+        </Tabs>
       )}
 
-      {/* Embedded header - Show when embedded in Catalog */}
-      {isEmbeddedInCatalog && (
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg sm:text-xl font-semibold truncate" style={{ color: '#0F1F17' }}>
-              Products
-            </h2>
-          </div>
-          <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => navigate('/app/settings/catalog')}
-              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-              title="Edit catalog settings"
-            >
-              <Pencil className="h-4 w-4" />
-              <span className="hidden sm:inline sm:ml-2">Edit</span>
-            </Button>
-            <Button 
-              onClick={() => navigate('/app/products/new')} 
-              disabled={!canCreate} 
-              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-              size="icon"
-              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 shrink-0"
-              title="Add new product"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline sm:ml-2">Add Product</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Search Bar */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
+      {/* Toolbar: Search + Edit + Add Product */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search resources..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9"
           />
+        </div>
+
+        <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate('/app/settings/catalog')}
+            className="h-9 w-9 sm:w-auto sm:px-3"
+            title="Edit catalog settings"
+          >
+            <Pencil className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">Edit</span>
+          </Button>
+
+          <Button
+            onClick={() => navigate('/app/products/new')}
+            disabled={!canCreate}
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            size="icon"
+            className="h-9 w-9 sm:w-auto sm:px-3"
+            title="Add new product"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline sm:ml-2">Add Product</span>
+          </Button>
         </div>
       </div>
 
