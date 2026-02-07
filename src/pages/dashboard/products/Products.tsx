@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
@@ -64,7 +64,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   
   // Filters
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
-  const [selectedTab, setSelectedTab] = useState<'physical' | 'event_tickets' | 'space_booking'>('physical');
   const [selectedPillar, setSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
   
   // Variant rank config
@@ -76,12 +75,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   const [expandedRank1Groups, setExpandedRank1Groups] = useState<Set<string>>(new Set());
 
   const canCreate = !!currentOrg?.id;
-
-  const productTypeLabel = useMemo(() => {
-    return {
-      physical: 'Physical',
-    } as const;
-  }, []);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -170,20 +163,10 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     fetchData();
   }, [currentOrg, toast]);
 
-  // Filter products by selected category, tab, and search query
+  // Filter products by selected category and search query (only physical products)
   const filteredProducts = useMemo(() => {
-    let filtered = products;
-    
-    // Filter by type based on tab
-    if (selectedTab === 'physical') {
-      filtered = filtered.filter(p => p.type === 'physical');
-    } else if (selectedTab === 'event_tickets') {
-      // Event tickets would be a different type or have specific metadata
-      filtered = []; // Placeholder - no event tickets in current schema
-    } else if (selectedTab === 'space_booking') {
-      // Space booking removed - no venue_asset products anymore
-      filtered = [];
-    }
+    // Only show physical products
+    let filtered = products.filter(p => p.type === 'physical');
     
     // Filter by category
     if (selectedCategoryId !== 'all') {
@@ -205,20 +188,14 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     }
     
     return filtered;
-  }, [products, selectedCategoryId, selectedTab, searchQuery]);
+  }, [products, selectedCategoryId, searchQuery]);
 
-  // Category counts
+  // Category counts (only physical products)
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     
-    // Count products by type for the selected tab
-    let relevantProducts = products;
-    if (selectedTab === 'physical') {
-      relevantProducts = products.filter(p => p.type === 'physical');
-    } else if (selectedTab === 'space_booking') {
-      // Space booking removed - no venue_asset products anymore
-      relevantProducts = [];
-    }
+    // Only count physical products
+    const relevantProducts = products.filter(p => p.type === 'physical');
     
     counts.set('all', relevantProducts.length);
     
@@ -228,7 +205,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
     });
     
     return counts;
-  }, [products, selectedTab]);
+  }, [products]);
 
   const toggleProduct = (productId: string) => {
     setExpandedProducts(prev => {
@@ -322,17 +299,6 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
 
   return (
     <div className={`w-full min-w-0 ${isEmbeddedInCatalog ? 'px-4 py-6' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'} space-y-4 md:space-y-6`}>
-      {/* Tabs - Only show when NOT embedded in Catalog */}
-      {!isEmbeddedInCatalog && (
-        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
-          <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-grid">
-            <TabsTrigger value="physical">Products</TabsTrigger>
-            <TabsTrigger value="event_tickets">Event Tickets</TabsTrigger>
-            <TabsTrigger value="space_booking">Space Booking</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      )}
-
       {/* Toolbar: Search + Edit + Add Product */}
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="relative flex-1 min-w-0">
@@ -371,98 +337,31 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
         </div>
       </div>
 
-      {/* Content - Always show, but wrapped in Tabs only when NOT embedded */}
-      {!isEmbeddedInCatalog ? (
-        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="w-full">
-
-          <TabsContent value="physical" className="mt-4 space-y-4">
-            <ProductsContent
-              products={filteredProducts}
-              categories={categories}
-              categoryCounts={categoryCounts}
-              selectedCategoryId={selectedCategoryId}
-              setSelectedCategoryId={setSelectedCategoryId}
-              selectedPillar={selectedPillar}
-              setSelectedPillar={setSelectedPillar}
-              warehouses={warehouses}
-              selectedWarehouseId={selectedWarehouseId}
-              setSelectedWarehouseId={setSelectedWarehouseId}
-              expandedProducts={expandedProducts}
-              expandedRank1Groups={expandedRank1Groups}
-              toggleProduct={toggleProduct}
-              toggleRank1Group={toggleRank1Group}
-              expandAllVariants={expandAllVariants}
-              getProductQuantity={getProductQuantity}
-              getVariantQuantity={getVariantQuantity}
-              productTypeLabel={productTypeLabel}
-              rank1={rank1}
-              rank2={rank2}
-              navigate={navigate}
-            />
-          </TabsContent>
-
-          <TabsContent value="event_tickets" className="mt-4">
-            <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-              <CardContent className="text-center py-12 px-4">
-                <p className="text-muted-foreground">Event Tickets coming soon</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="space_booking" className="mt-4">
-            <ProductsContent
-              products={filteredProducts}
-              categories={categories}
-              categoryCounts={categoryCounts}
-              selectedCategoryId={selectedCategoryId}
-              setSelectedCategoryId={setSelectedCategoryId}
-              selectedPillar={selectedPillar}
-              setSelectedPillar={setSelectedPillar}
-              warehouses={warehouses}
-              selectedWarehouseId={selectedWarehouseId}
-              setSelectedWarehouseId={setSelectedWarehouseId}
-              expandedProducts={expandedProducts}
-              expandedRank1Groups={expandedRank1Groups}
-              toggleProduct={toggleProduct}
-              toggleRank1Group={toggleRank1Group}
-              expandAllVariants={expandAllVariants}
-              getProductQuantity={getProductQuantity}
-              getVariantQuantity={getVariantQuantity}
-              productTypeLabel={productTypeLabel}
-              rank1={rank1}
-              rank2={rank2}
-              navigate={navigate}
-            />
-          </TabsContent>
-        </Tabs>
-      ) : (
-        // When embedded in Catalog, render content directly without the Tabs wrapper
-        <div className="mt-0">
-          <ProductsContent
-            products={filteredProducts}
-            categories={categories}
-            categoryCounts={categoryCounts}
-            selectedCategoryId={selectedCategoryId}
-            setSelectedCategoryId={setSelectedCategoryId}
-            selectedPillar={selectedPillar}
-            setSelectedPillar={setSelectedPillar}
-            warehouses={warehouses}
-            selectedWarehouseId={selectedWarehouseId}
-            setSelectedWarehouseId={setSelectedWarehouseId}
-            expandedProducts={expandedProducts}
-            expandedRank1Groups={expandedRank1Groups}
-            toggleProduct={toggleProduct}
-            toggleRank1Group={toggleRank1Group}
-            expandAllVariants={expandAllVariants}
-            getProductQuantity={getProductQuantity}
-            getVariantQuantity={getVariantQuantity}
-            productTypeLabel={productTypeLabel}
-            rank1={rank1}
-            rank2={rank2}
-            navigate={navigate}
-          />
-        </div>
-      )}
+      {/* Content */}
+      <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
+        <ProductsContent
+          products={filteredProducts}
+          categories={categories}
+          categoryCounts={categoryCounts}
+          selectedCategoryId={selectedCategoryId}
+          setSelectedCategoryId={setSelectedCategoryId}
+          selectedPillar={selectedPillar}
+          setSelectedPillar={setSelectedPillar}
+          warehouses={warehouses}
+          selectedWarehouseId={selectedWarehouseId}
+          setSelectedWarehouseId={setSelectedWarehouseId}
+          expandedProducts={expandedProducts}
+          expandedRank1Groups={expandedRank1Groups}
+          toggleProduct={toggleProduct}
+          toggleRank1Group={toggleRank1Group}
+          expandAllVariants={expandAllVariants}
+          getProductQuantity={getProductQuantity}
+          getVariantQuantity={getVariantQuantity}
+          rank1={rank1}
+          rank2={rank2}
+          navigate={navigate}
+        />
+      </div>
     </div>
   );
 }
@@ -486,7 +385,6 @@ interface ProductsContentProps {
   expandAllVariants: (productId: string, variants: any[]) => void;
   getProductQuantity: (product: ProductWithDetails) => number;
   getVariantQuantity: (variantId: string, inventoryItems: InventoryItem[]) => number;
-  productTypeLabel: Record<string, string>;
   rank1: string;
   rank2: string;
   navigate: (path: string) => void;
@@ -510,7 +408,6 @@ function ProductsContent({
   expandAllVariants,
   getProductQuantity,
   getVariantQuantity,
-  productTypeLabel,
   rank1,
   rank2,
   navigate,
@@ -636,11 +533,6 @@ function ProductsContent({
                           <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
                             {product.title}
                           </h3>
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              {productTypeLabel[product.type] || product.type}
-                            </Badge>
-                          </div>
                         </div>
                       </button>
                       <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
