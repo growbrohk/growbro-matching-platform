@@ -612,6 +612,20 @@ function VariantCombinationsTable({
   getVariantQuantity,
   basePrice,
 }: VariantCombinationsTableProps) {
+  // Helper function to format variant name by removing option type labels
+  const formatVariantName = (variantName: string): string => {
+    return variantName
+      .split('/')
+      .map(segment => {
+        const colonIndex = segment.indexOf(':');
+        if (colonIndex === -1) {
+          return segment.trim();
+        }
+        return segment.substring(colonIndex + 1).trim();
+      })
+      .join(' / ');
+  };
+
   if (variants.length === 0) {
     return (
       <div className="py-2 text-sm text-muted-foreground">
@@ -641,7 +655,7 @@ function VariantCombinationsTable({
               <tr key={variant.id} className="border-t hover:bg-muted/30 even:bg-muted/10">
                 <td className="p-0 border w-[88px]">
                   <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                    {variant.name}
+                    {formatVariantName(variant.name)}
                   </span>
                 </td>
                 <td className="p-0 border w-[48px]">
