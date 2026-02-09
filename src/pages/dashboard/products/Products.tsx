@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
@@ -50,7 +50,7 @@ interface ProductsProps {
 }
 
 export default function Products({ isEmbeddedInCatalog = false }: ProductsProps = {}) {
-  const { currentOrg } = useAuth();
+  const { currentOrg, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -73,6 +73,12 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   // Expansion state
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedRank1Groups, setExpandedRank1Groups] = useState<Set<string>>(new Set());
+
+  // Bulk edit state
+  const [isBulkEdit, setIsBulkEdit] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState<Record<string, { stock?: number; price?: number }>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const originalValuesRef = useRef<Record<string, { stock: number; price: number }>>({});
 
   const canCreate = !!currentOrg?.id;
 
@@ -276,6 +282,217 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
       .reduce((sum, i) => sum + i.quantity, 0);
   };
 
+  // Get current stock for a variant+warehouse (for bulk edit)
+  const getCurrentStock = (variantId: string, warehouseId: string): number => {
+    const inventoryItem = products
+      .flatMap(p => p.inventoryItems)
+      .find(i => i.variant_id === variantId && i.warehouse_id === warehouseId);
+    return inventoryItem?.quantity ?? 0;
+  };
+
+  // Get current price for a variant (for bulk edit)
+  const getCurrentPrice = (variantId: string): number => {
+    const variant = products
+      .flatMap(p => p.variants)
+      .find(v => v.id === variantId);
+    return variant?.price ?? 0;
+  };
+
+  // Enter bulk edit mode - snapshot current values
+  const handleEnterBulkEdit = () => {
+    const snapshot: Record<string, { stock: number; price: number }> = {};
+    
+    products.forEach(product => {
+      product.variants.forEach(variant => {
+        const stockKey = `${variant.id}:${selectedWarehouseId}`;
+        const priceKey = `${variant.id}`;
+        
+        snapshot[stockKey] = {
+          stock: getCurrentStock(variant.id, selectedWarehouseId),
+          price: getCurrentPrice(variant.id),
+        };
+        snapshot[priceKey] = snapshot[stockKey]; // Share same object for convenience
+      });
+    });
+    
+    originalValuesRef.current = snapshot;
+    setIsBulkEdit(true);
+    setPendingEdits({});
+  };
+
+  // Exit bulk edit mode
+  const handleCancelBulkEdit = () => {
+    setIsBulkEdit(false);
+    setPendingEdits({});
+    originalValuesRef.current = {};
+  };
+
+  // Save bulk edits
+  const handleSaveBulkEdit = async () => {
+    if (!currentOrg?.id || !selectedWarehouseId) {
+      toast({
+        title: 'Error',
+        description: 'Organization or warehouse not selected',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const stockEdits: Array<{ variantId: string; warehouseId: string; oldQty: number; newQty: number }> = [];
+      const priceEdits: Array<{ variantId: string; newPrice: number }> = [];
+
+      // Collect stock edits
+      Object.entries(pendingEdits).forEach(([key, edits]) => {
+        if (key.includes(':')) {
+          // Stock edit: format is "variantId:warehouseId"
+          const [variantId, warehouseId] = key.split(':');
+          if (edits.stock !== undefined) {
+            const oldQty = originalValuesRef.current[key]?.stock ?? getCurrentStock(variantId, warehouseId);
+            const newQty = edits.stock;
+            if (oldQty !== newQty) {
+              stockEdits.push({ variantId, warehouseId, oldQty, newQty });
+            }
+          }
+        } else {
+          // Price edit: format is "variantId"
+          const variantId = key;
+          if (edits.price !== undefined) {
+            const oldPrice = originalValuesRef.current[variantId]?.price ?? getCurrentPrice(variantId);
+            const newPrice = edits.price;
+            if (oldPrice !== newPrice) {
+              priceEdits.push({ variantId, newPrice });
+            }
+          }
+        }
+      });
+
+      // Process stock edits
+      for (const edit of stockEdits) {
+        // Find or create inventory_item
+        let inventoryItemId: string | null = null;
+        const existingItem = products
+          .flatMap(p => p.inventoryItems)
+          .find(i => i.variant_id === edit.variantId && i.warehouse_id === edit.warehouseId);
+
+        if (existingItem) {
+          inventoryItemId = existingItem.id;
+          // Update quantity
+          const { error: updateError } = await supabase
+            .from('inventory_items')
+            .update({ quantity: edit.newQty, updated_at: new Date().toISOString() })
+            .eq('id', inventoryItemId);
+
+          if (updateError) throw updateError;
+        } else {
+          // Create new inventory_item
+          const { data: newItem, error: createError } = await supabase
+            .from('inventory_items')
+            .insert({
+              org_id: currentOrg.id,
+              variant_id: edit.variantId,
+              warehouse_id: edit.warehouseId,
+              quantity: edit.newQty,
+            })
+            .select('id')
+            .single();
+
+          if (createError) throw createError;
+          inventoryItemId = newItem.id;
+        }
+
+        // Create inventory_movement
+        const delta = edit.newQty - edit.oldQty;
+        if (delta !== 0 && inventoryItemId) {
+          const { error: movementError } = await supabase
+            .from('inventory_movements')
+            .insert({
+              inventory_item_id: inventoryItemId,
+              delta,
+              reason: 'correction',
+              note: 'Bulk edit in Catalog',
+              created_by: user?.id || null,
+            });
+
+          if (movementError) throw movementError;
+        }
+      }
+
+      // Process price edits
+      for (const edit of priceEdits) {
+        const { error: priceError } = await supabase
+          .from('product_variants')
+          .update({ price: edit.newPrice })
+          .eq('id', edit.variantId);
+
+        if (priceError) throw priceError;
+      }
+
+      // Refresh data
+      const productsData = await getProducts(currentOrg.id);
+      const productIds = productsData.map(p => p.id);
+      
+      let allVariants: ProductVariant[] = [];
+      let allInventoryItems: InventoryItem[] = [];
+      
+      if (productIds.length > 0) {
+        const [variantsResult, inventoryResult] = await Promise.all([
+          supabase
+            .from('product_variants')
+            .select('id, product_id, name, sku, price, active')
+            .in('product_id', productIds)
+            .is('archived_at', null)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('inventory_items')
+            .select('id, variant_id, warehouse_id, quantity')
+            .eq('org_id', currentOrg.id),
+        ]);
+        
+        if (variantsResult.error) throw variantsResult.error;
+        if (inventoryResult.error) throw inventoryResult.error;
+        
+        allVariants = (variantsResult.data || []) as ProductVariant[];
+        allInventoryItems = (inventoryResult.data || []) as InventoryItem[];
+      }
+      
+      const productsWithDetails = productsData.map((product) => {
+        const productVariants = allVariants.filter(v => v.product_id === product.id);
+        const variantIds = productVariants.map(v => v.id);
+        const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
+        
+        return {
+          ...product,
+          variants: productVariants,
+          inventoryItems: productInventory,
+        };
+      });
+      
+      setProducts(productsWithDetails);
+      
+      // Exit bulk edit mode
+      setIsBulkEdit(false);
+      setPendingEdits({});
+      originalValuesRef.current = {};
+      
+      toast({
+        title: 'Success',
+        description: 'Changes saved successfully',
+      });
+    } catch (err: any) {
+      console.error('Error saving bulk edits:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to save changes',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -312,28 +529,59 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
         </div>
 
         <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate('/app/settings/catalog')}
-            className="h-9 w-9 sm:w-auto sm:px-3"
-            title="Edit catalog settings"
-          >
-            <Pencil className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-2">Edit</span>
-          </Button>
+          {!isBulkEdit ? (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleEnterBulkEdit}
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Bulk edit products"
+                disabled={!selectedWarehouseId}
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Bulk Edit</span>
+              </Button>
 
-          <Button
-            onClick={() => navigate('/app/products/new')}
-            disabled={!canCreate}
-            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-            size="icon"
-            className="h-9 w-9 sm:w-auto sm:px-3"
-            title="Add new product"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-2">Add Product</span>
-          </Button>
+              <Button
+                onClick={() => navigate('/app/products/new')}
+                disabled={!canCreate}
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                size="icon"
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Add new product"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Add Product</span>
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCancelBulkEdit}
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Cancel bulk edit"
+                disabled={isSaving}
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Cancel</span>
+              </Button>
+
+              <Button
+                onClick={handleSaveBulkEdit}
+                disabled={isSaving || Object.keys(pendingEdits).length === 0}
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                size="icon"
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Save changes"
+              >
+                <Save className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Save'}</span>
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -360,6 +608,11 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
           rank1={rank1}
           rank2={rank2}
           navigate={navigate}
+          isBulkEdit={isBulkEdit}
+          pendingEdits={pendingEdits}
+          setPendingEdits={setPendingEdits}
+          getCurrentStock={getCurrentStock}
+          getCurrentPrice={getCurrentPrice}
         />
       </div>
     </div>
@@ -388,6 +641,11 @@ interface ProductsContentProps {
   rank1: string;
   rank2: string;
   navigate: (path: string) => void;
+  isBulkEdit: boolean;
+  pendingEdits: Record<string, { stock?: number; price?: number }>;
+  setPendingEdits: React.Dispatch<React.SetStateAction<Record<string, { stock?: number; price?: number }>>>;
+  getCurrentStock: (variantId: string, warehouseId: string) => number;
+  getCurrentPrice: (variantId: string) => number;
 }
 
 function ProductsContent({
@@ -411,6 +669,11 @@ function ProductsContent({
   rank1,
   rank2,
   navigate,
+  isBulkEdit,
+  pendingEdits,
+  setPendingEdits,
+  getCurrentStock,
+  getCurrentPrice,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
@@ -585,6 +848,12 @@ function ProductsContent({
                         inventoryItems={product.inventoryItems}
                         getVariantQuantity={getVariantQuantity}
                         basePrice={product.base_price}
+                        isBulkEdit={isBulkEdit}
+                        selectedWarehouseId={selectedWarehouseId}
+                        pendingEdits={pendingEdits}
+                        setPendingEdits={setPendingEdits}
+                        getCurrentStock={getCurrentStock}
+                        getCurrentPrice={getCurrentPrice}
                       />
                     </div>
                   )}
@@ -598,12 +867,18 @@ function ProductsContent({
   );
 }
 
-// Component for rendering Excel-style variant combinations table (read-only)
+// Component for rendering Excel-style variant combinations table (read-only or editable)
 interface VariantCombinationsTableProps {
   variants: ProductVariant[];
   inventoryItems: InventoryItem[];
   getVariantQuantity: (variantId: string, inventoryItems: InventoryItem[]) => number;
   basePrice: number | null;
+  isBulkEdit?: boolean;
+  selectedWarehouseId?: string;
+  pendingEdits?: Record<string, { stock?: number; price?: number }>;
+  setPendingEdits?: React.Dispatch<React.SetStateAction<Record<string, { stock?: number; price?: number }>>>;
+  getCurrentStock?: (variantId: string, warehouseId: string) => number;
+  getCurrentPrice?: (variantId: string) => number;
 }
 
 function VariantCombinationsTable({
@@ -611,6 +886,12 @@ function VariantCombinationsTable({
   inventoryItems,
   getVariantQuantity,
   basePrice,
+  isBulkEdit = false,
+  selectedWarehouseId = '',
+  pendingEdits = {},
+  setPendingEdits,
+  getCurrentStock,
+  getCurrentPrice,
 }: VariantCombinationsTableProps) {
   // Helper function to format variant name by removing option type labels
   const formatVariantName = (variantName: string): string => {
@@ -648,8 +929,69 @@ function VariantCombinationsTable({
         </thead>
         <tbody>
           {variants.map((variant) => {
-            const stock = getVariantQuantity(variant.id, inventoryItems);
-            const price = variant.price ?? basePrice ?? 0;
+            const stockKey = `${variant.id}:${selectedWarehouseId}`;
+            const priceKey = `${variant.id}`;
+            
+            // Get display values - use pending edits if available, otherwise current values
+            const stock = isBulkEdit && pendingEdits[stockKey]?.stock !== undefined
+              ? pendingEdits[stockKey].stock!
+              : getVariantQuantity(variant.id, inventoryItems);
+            
+            const price = isBulkEdit && pendingEdits[priceKey]?.price !== undefined
+              ? pendingEdits[priceKey].price!
+              : (variant.price ?? basePrice ?? 0);
+            
+            const handleStockChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+              if (!setPendingEdits || !selectedWarehouseId) return;
+              
+              const inputValue = e.target.value;
+              // Allow empty string while typing, convert to 0 for storage
+              if (inputValue === '') {
+                setPendingEdits(prev => ({
+                  ...prev,
+                  [stockKey]: {
+                    ...prev[stockKey],
+                    stock: 0,
+                  },
+                }));
+              } else {
+                const value = parseFloat(inputValue);
+                const numValue = isNaN(value) ? 0 : Math.max(0, value);
+                setPendingEdits(prev => ({
+                  ...prev,
+                  [stockKey]: {
+                    ...prev[stockKey],
+                    stock: numValue,
+                  },
+                }));
+              }
+            };
+
+            const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+              if (!setPendingEdits) return;
+              
+              const inputValue = e.target.value;
+              // Allow empty string while typing, convert to 0 for storage
+              if (inputValue === '') {
+                setPendingEdits(prev => ({
+                  ...prev,
+                  [priceKey]: {
+                    ...prev[priceKey],
+                    price: 0,
+                  },
+                }));
+              } else {
+                const value = parseFloat(inputValue);
+                const numValue = isNaN(value) ? 0 : Math.max(0, value);
+                setPendingEdits(prev => ({
+                  ...prev,
+                  [priceKey]: {
+                    ...prev[priceKey],
+                    price: numValue,
+                  },
+                }));
+              }
+            };
             
             return (
               <tr key={variant.id} className="border-t hover:bg-muted/30 even:bg-muted/10">
@@ -659,14 +1001,37 @@ function VariantCombinationsTable({
                   </span>
                 </td>
                 <td className="p-0 border w-[48px]">
-                  <span className="block px-1 py-0 text-xs leading-tight">
-                    {stock}
-                  </span>
+                  {isBulkEdit && selectedWarehouseId ? (
+                    <Input
+                      type="number"
+                      min="0"
+                      value={pendingEdits[stockKey]?.stock !== undefined ? pendingEdits[stockKey].stock! : stock}
+                      onChange={handleStockChange}
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      style={{ fontSize: '11px' }}
+                    />
+                  ) : (
+                    <span className="block px-1 py-0 text-xs leading-tight">
+                      {stock}
+                    </span>
+                  )}
                 </td>
                 <td className="p-0 border w-[56px]">
-                  <span className="block px-1 py-0 text-xs leading-tight">
-                    {price.toFixed(2)}
-                  </span>
+                  {isBulkEdit ? (
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={pendingEdits[priceKey]?.price !== undefined ? pendingEdits[priceKey].price! : price}
+                      onChange={handlePriceChange}
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      style={{ fontSize: '11px' }}
+                    />
+                  ) : (
+                    <span className="block px-1 py-0 text-xs leading-tight">
+                      {price.toFixed(2)}
+                    </span>
+                  )}
                 </td>
                 <td className="p-0 border w-[96px]">
                   <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
