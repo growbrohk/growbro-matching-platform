@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -69,6 +70,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [localSelectedPillar, setLocalSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
+  
+  // Variant option filters
+  const [selectedRank1Values, setSelectedRank1Values] = useState<string[]>([]);
+  const [selectedRank2Values, setSelectedRank2Values] = useState<string[]>([]);
 
   // Use prop pillar when embedded, otherwise use local state
   const selectedPillar = isEmbeddedInCatalog ? (propSelectedPillar ?? 'catalog') : localSelectedPillar;
@@ -177,9 +182,9 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     fetchData();
   }, [currentOrg, toast]);
 
-  // Filter products by selected category and search query (only physical products)
-  const filteredProducts = useMemo(() => {
-    // Only show physical products
+  // Compute available variant option values from products (before variant filters)
+  // This uses products filtered by physical/category/search only
+  const productsBeforeVariantFilters = useMemo(() => {
     let filtered = products.filter(p => p.type === 'physical');
     
     // Filter by category
@@ -203,6 +208,59 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     
     return filtered;
   }, [products, selectedCategoryId, searchQuery]);
+
+  // Get available rank1 and rank2 option values
+  const rank1Options = useMemo(() => {
+    const values = new Set<string>();
+    productsBeforeVariantFilters.forEach(product => {
+      product.variants.forEach(variant => {
+        const value = getVariantOptionValue(variant.name, rank1);
+        if (value && value.trim()) {
+          values.add(value);
+        }
+      });
+    });
+    return Array.from(values).sort();
+  }, [productsBeforeVariantFilters, rank1]);
+
+  const rank2Options = useMemo(() => {
+    const values = new Set<string>();
+    productsBeforeVariantFilters.forEach(product => {
+      product.variants.forEach(variant => {
+        const value = getVariantOptionValue(variant.name, rank2);
+        if (value && value.trim()) {
+          values.add(value);
+        }
+      });
+    });
+    return Array.from(values).sort();
+  }, [productsBeforeVariantFilters, rank2]);
+
+  // Filter products by selected category, search query, and variant options (only physical products)
+  const filteredProducts = useMemo(() => {
+    let filtered = productsBeforeVariantFilters;
+    
+    // Apply variant option filters
+    // A product passes if it has AT LEAST ONE variant that matches ALL active variant filters
+    if (selectedRank1Values.length > 0 || selectedRank2Values.length > 0) {
+      filtered = filtered.filter(product => {
+        return product.variants.some(variant => {
+          const v1 = getVariantOptionValue(variant.name, rank1);
+          const v2 = getVariantOptionValue(variant.name, rank2);
+          
+          // Check rank1 filter
+          const ok1 = selectedRank1Values.length === 0 || (v1 && selectedRank1Values.includes(v1));
+          
+          // Check rank2 filter
+          const ok2 = selectedRank2Values.length === 0 || (v2 && selectedRank2Values.includes(v2));
+          
+          return ok1 && ok2;
+        });
+      });
+    }
+    
+    return filtered;
+  }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
   // Category counts (only physical products)
   const categoryCounts = useMemo(() => {
@@ -545,53 +603,172 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-4" align="end">
-              <div className="space-y-4">
-                <div className="font-semibold text-sm">Filter by Category</div>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  <button
-                    onClick={() => setSelectedCategoryId('all')}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                      selectedCategoryId === 'all'
-                        ? 'bg-[#0E7A3A] text-white'
-                        : 'bg-white border border-gray-300 hover:bg-gray-50'
-                    }`}
+              <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                {/* Row 1: Warehouse */}
+                <div className="space-y-2">
+                  <div className="font-semibold text-sm">Warehouse</div>
+                  <Select
+                    value={selectedWarehouseId}
+                    onValueChange={setSelectedWarehouseId}
+                    disabled={warehouses.length === 0}
                   >
-                    All ({categoryCounts.get('all') || 0})
-                  </button>
-                  {categories
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map(cat => (
-                      <button
-                        key={cat.id}
-                        onClick={() => setSelectedCategoryId(cat.id)}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                          selectedCategoryId === cat.id
-                            ? 'bg-[#0E7A3A] text-white'
-                            : 'bg-white border border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        {cat.name} ({categoryCounts.get(cat.id) || 0})
-                      </button>
-                    ))}
-                  {(categoryCounts.get('uncategorized') || 0) > 0 && (
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={warehouses.length === 0 ? "No warehouses" : "Select warehouse"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(wh => (
+                        <SelectItem key={wh.id} value={wh.id}>
+                          {wh.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Row 2: Category */}
+                <div className="space-y-2">
+                  <div className="font-semibold text-sm">Category</div>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
                     <button
-                      onClick={() => setSelectedCategoryId('uncategorized')}
+                      onClick={() => setSelectedCategoryId('all')}
                       className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        selectedCategoryId === 'uncategorized'
+                        selectedCategoryId === 'all'
                           ? 'bg-[#0E7A3A] text-white'
                           : 'bg-white border border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      Uncategorized ({categoryCounts.get('uncategorized') || 0})
+                      All ({categoryCounts.get('all') || 0})
                     </button>
-                  )}
+                    {categories
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map(cat => (
+                        <button
+                          key={cat.id}
+                          onClick={() => setSelectedCategoryId(cat.id)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                            selectedCategoryId === cat.id
+                              ? 'bg-[#0E7A3A] text-white'
+                              : 'bg-white border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {cat.name} ({categoryCounts.get(cat.id) || 0})
+                        </button>
+                      ))}
+                    {(categoryCounts.get('uncategorized') || 0) > 0 && (
+                      <button
+                        onClick={() => setSelectedCategoryId('uncategorized')}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedCategoryId === 'uncategorized'
+                            ? 'bg-[#0E7A3A] text-white'
+                            : 'bg-white border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        Uncategorized ({categoryCounts.get('uncategorized') || 0})
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Row 3: Variant Filter (rank1) */}
+                {rank1 && rank1Options.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold text-sm">{rank1}</div>
+                      {selectedRank1Values.length > 0 && (
+                        <button
+                          onClick={() => setSelectedRank1Values([])}
+                          className="text-xs text-muted-foreground hover:text-foreground underline"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {selectedRank1Values.length > 0 ? `${selectedRank1Values.length} selected` : 'Select options'}
+                    </div>
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                      {rank1Options.map(option => (
+                        <div key={option} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`rank1-${option}`}
+                            checked={selectedRank1Values.includes(option)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRank1Values(prev => [...prev, option]);
+                              } else {
+                                setSelectedRank1Values(prev => prev.filter(v => v !== option));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`rank1-${option}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Row 4: Variant Filter (rank2) */}
+                {rank2 && rank2Options.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold text-sm">{rank2}</div>
+                      {selectedRank2Values.length > 0 && (
+                        <button
+                          onClick={() => setSelectedRank2Values([])}
+                          className="text-xs text-muted-foreground hover:text-foreground underline"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mb-1">
+                      {selectedRank2Values.length > 0 ? `${selectedRank2Values.length} selected` : 'Select options'}
+                    </div>
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                      {rank2Options.map(option => (
+                        <div key={option} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`rank2-${option}`}
+                            checked={selectedRank2Values.includes(option)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRank2Values(prev => [...prev, option]);
+                              } else {
+                                setSelectedRank2Values(prev => prev.filter(v => v !== option));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`rank2-${option}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {option}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
                 <div className="flex gap-2 pt-2 border-t">
                   <Button
                     variant="outline"
                     className="flex-1"
                     onClick={() => {
+                      // Reset warehouse to default (prefer "Main" else first)
+                      if (warehouses.length > 0) {
+                        const mainWh = warehouses.find(w => w.name.toLowerCase().includes('main')) || warehouses[0];
+                        setSelectedWarehouseId(mainWh.id);
+                      }
                       setSelectedCategoryId('all');
+                      setSelectedRank1Values([]);
+                      setSelectedRank2Values([]);
                     }}
                   >
                     Reset
