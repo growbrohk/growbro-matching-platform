@@ -215,7 +215,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [isBulkModeDialogOpen, setIsBulkModeDialogOpen] = useState(false);
   
   // Restock mode state
-  const [restockWarehouseId, setRestockWarehouseId] = useState<string>('');
   const [restockReferenceNote, setRestockReferenceNote] = useState('');
   const [restockEdits, setRestockEdits] = useState<Record<string, number>>({});
   
@@ -291,11 +290,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         const whs = (warehousesResult.data || []) as Warehouse[];
         setWarehouses(whs);
         
-        // Select default warehouse: prefer "Main" (case-insensitive), else first
+          // Select default warehouse: prefer "Main" (case-insensitive), else first
         if (whs.length > 0) {
           const mainWh = whs.find(w => w.name.toLowerCase().includes('main')) || whs[0];
           setSelectedWarehouseId(mainWh.id);
-          setRestockWarehouseId(mainWh.id);
           setTransferFromWarehouseId(mainWh.id);
           // Set transferToWarehouseId to first warehouse != from (or first if only one)
           const toWh = whs.length > 1 ? whs.find(w => w.id !== mainWh.id) || whs[0] : whs[0];
@@ -615,7 +613,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   
   // Enter restock mode
   const handleEnterRestock = () => {
-    setRestockWarehouseId(selectedWarehouseId);
     setRestockReferenceNote('');
     setRestockEdits({});
     setBulkMode('restock');
@@ -821,7 +818,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   
   // Save restock edits
   const handleSaveRestock = async () => {
-    if (!currentOrg?.id || !restockWarehouseId || !user?.id) {
+    if (!currentOrg?.id || !selectedWarehouseId || !user?.id) {
       toast({
         title: 'Error',
         description: 'Organization, warehouse, or user not available',
@@ -852,7 +849,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         let inventoryItemId: string | null = null;
         const existingItem = products
           .flatMap(p => p.inventoryItems)
-          .find(i => i.variant_id === variantId && i.warehouse_id === restockWarehouseId);
+          .find(i => i.variant_id === variantId && i.warehouse_id === selectedWarehouseId);
         
         const currentQty = existingItem?.quantity ?? 0;
         const newQty = currentQty + qty;
@@ -873,7 +870,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
             .insert({
               org_id: currentOrg.id,
               variant_id: variantId,
-              warehouse_id: restockWarehouseId,
+              warehouse_id: selectedWarehouseId,
               quantity: newQty,
             })
             .select('id')
@@ -1363,6 +1360,32 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                 <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Save'}</span>
               </Button>
             </>
+          ) : bulkMode === 'restock' ? (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleExitBulkMode}
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Cancel restock"
+                disabled={isSaving}
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Cancel</span>
+              </Button>
+
+              <Button
+                onClick={handleSaveRestock}
+                disabled={isSaving || !Object.values(restockEdits).some(qty => qty > 0)}
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                size="icon"
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Save restock"
+              >
+                <Save className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Save Restock'}</span>
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -1566,26 +1589,21 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         </DialogContent>
       </Dialog>
 
+      {/* Restock Note Input (shown above product list when in restock mode) */}
+      {bulkMode === 'restock' && (
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Reference note (optional)"
+            value={restockReferenceNote}
+            onChange={(e) => setRestockReferenceNote(e.target.value)}
+            className="h-9 max-w-md"
+          />
+        </div>
+      )}
+
       {/* Content */}
       <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
-        {bulkMode === 'restock' ? (
-          <RestockPanel
-            products={filteredProducts}
-            warehouses={warehouses}
-            restockWarehouseId={restockWarehouseId}
-            setRestockWarehouseId={setRestockWarehouseId}
-            restockReferenceNote={restockReferenceNote}
-            setRestockReferenceNote={setRestockReferenceNote}
-            restockEdits={restockEdits}
-            setRestockEdits={setRestockEdits}
-            getQty={getQty}
-            onBack={handleExitBulkMode}
-            onSave={handleSaveRestock}
-            isSaving={isSaving}
-            rank1={rank1}
-            rank2={rank2}
-          />
-        ) : bulkMode === 'transfer' ? (
+        {bulkMode === 'transfer' ? (
           <TransferPanel
             products={filteredProducts}
             warehouses={warehouses}
@@ -1624,11 +1642,16 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
             rank1={rank1}
             rank2={rank2}
             navigate={navigate}
+            bulkMode={bulkMode}
             isBulkEdit={isBulkEdit}
             pendingEdits={pendingEdits}
             setPendingEdits={setPendingEdits}
             getCurrentStock={getCurrentStock}
             getCurrentPrice={getCurrentPrice}
+            restockEdits={restockEdits}
+            setRestockEdits={setRestockEdits}
+            restockReferenceNote={restockReferenceNote}
+            setRestockReferenceNote={setRestockReferenceNote}
           />
         )}
       </div>
@@ -2012,11 +2035,16 @@ interface ProductsContentProps {
   rank1: string;
   rank2: string;
   navigate: (path: string) => void;
+  bulkMode: 'none' | 'correction' | 'restock' | 'transfer';
   isBulkEdit: boolean;
   pendingEdits: Record<string, { stock?: number; price?: number }>;
   setPendingEdits: React.Dispatch<React.SetStateAction<Record<string, { stock?: number; price?: number }>>>;
   getCurrentStock: (variantId: string, warehouseId: string) => number;
   getCurrentPrice: (variantId: string) => number;
+  restockEdits: Record<string, number>;
+  setRestockEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  restockReferenceNote: string;
+  setRestockReferenceNote: (note: string) => void;
 }
 
 function ProductsContent({
@@ -2038,11 +2066,16 @@ function ProductsContent({
   rank1,
   rank2,
   navigate,
+  bulkMode,
   isBulkEdit,
   pendingEdits,
   setPendingEdits,
   getCurrentStock,
   getCurrentPrice,
+  restockEdits,
+  setRestockEdits,
+  restockReferenceNote,
+  setRestockReferenceNote,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
@@ -2153,12 +2186,15 @@ function ProductsContent({
                       inventoryItems={product.inventoryItems}
                       getVariantQuantity={getVariantQuantity}
                       basePrice={product.base_price}
+                      bulkMode={bulkMode}
                       isBulkEdit={isBulkEdit}
                       selectedWarehouseId={selectedWarehouseId}
                       pendingEdits={pendingEdits}
                       setPendingEdits={setPendingEdits}
                       getCurrentStock={getCurrentStock}
                       getCurrentPrice={getCurrentPrice}
+                      restockEdits={restockEdits}
+                      setRestockEdits={setRestockEdits}
                     />
                   </div>
                 )}
@@ -2177,12 +2213,15 @@ interface VariantCombinationsTableProps {
   inventoryItems: InventoryItem[];
   getVariantQuantity: (variantId: string, inventoryItems: InventoryItem[]) => number;
   basePrice: number | null;
+  bulkMode?: 'none' | 'correction' | 'restock' | 'transfer';
   isBulkEdit?: boolean;
   selectedWarehouseId?: string;
   pendingEdits?: Record<string, { stock?: number; price?: number }>;
   setPendingEdits?: React.Dispatch<React.SetStateAction<Record<string, { stock?: number; price?: number }>>>;
   getCurrentStock?: (variantId: string, warehouseId: string) => number;
   getCurrentPrice?: (variantId: string) => number;
+  restockEdits?: Record<string, number>;
+  setRestockEdits?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }
 
 function VariantCombinationsTable({
@@ -2190,12 +2229,15 @@ function VariantCombinationsTable({
   inventoryItems,
   getVariantQuantity,
   basePrice,
+  bulkMode = 'none',
   isBulkEdit = false,
   selectedWarehouseId = '',
   pendingEdits = {},
   setPendingEdits,
   getCurrentStock,
   getCurrentPrice,
+  restockEdits = {},
+  setRestockEdits,
 }: VariantCombinationsTableProps) {
   // Helper function to format variant name by removing option type labels
   const formatVariantName = (variantName: string): string => {
@@ -2219,6 +2261,9 @@ function VariantCombinationsTable({
     );
   }
 
+  const isRestockMode = bulkMode === 'restock';
+  const isCorrectionMode = bulkMode === 'correction' || isBulkEdit;
+
   return (
     <div className="border border-border rounded-lg overflow-x-auto">
       <table className="w-full border-collapse table-fixed">
@@ -2226,6 +2271,9 @@ function VariantCombinationsTable({
           <tr className="bg-muted/50 border-t">
             <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[88px]">Variant</th>
             <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[48px]">Stock</th>
+            {isRestockMode && (
+              <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Restock</th>
+            )}
             <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Price</th>
             <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[96px]">SKU</th>
             <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-center text-muted-foreground w-[40px]">Active</th>
@@ -2296,6 +2344,26 @@ function VariantCombinationsTable({
                 }));
               }
             };
+
+            const handleRestockChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+              if (!setRestockEdits) return;
+              
+              const inputValue = e.target.value;
+              // Allow empty string while typing, convert to 0 for storage
+              if (inputValue === '') {
+                setRestockEdits(prev => ({
+                  ...prev,
+                  [variant.id]: 0,
+                }));
+              } else {
+                const value = parseFloat(inputValue);
+                const numValue = isNaN(value) ? 0 : Math.max(0, value);
+                setRestockEdits(prev => ({
+                  ...prev,
+                  [variant.id]: numValue,
+                }));
+              }
+            };
             
             return (
               <tr key={variant.id} className="border-t hover:bg-muted/30 even:bg-muted/10">
@@ -2305,7 +2373,7 @@ function VariantCombinationsTable({
                   </span>
                 </td>
                 <td className="p-0 border w-[48px]">
-                  {isBulkEdit && selectedWarehouseId ? (
+                  {isCorrectionMode && selectedWarehouseId ? (
                     <Input
                       type="number"
                       min="0"
@@ -2320,8 +2388,21 @@ function VariantCombinationsTable({
                     </span>
                   )}
                 </td>
+                {isRestockMode && (
+                  <td className="p-0 border w-[56px]">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={restockEdits[variant.id] !== undefined && restockEdits[variant.id] !== 0 ? restockEdits[variant.id] : ''}
+                      onChange={handleRestockChange}
+                      placeholder="0"
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      style={{ fontSize: '11px' }}
+                    />
+                  </td>
+                )}
                 <td className="p-0 border w-[56px]">
-                  {isBulkEdit ? (
+                  {isCorrectionMode ? (
                     <Input
                       type="number"
                       min="0"
