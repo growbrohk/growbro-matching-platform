@@ -210,6 +210,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [isSaving, setIsSaving] = useState(false);
   const originalValuesRef = useRef<Record<string, { stock: number; price: number }>>({});
   
+  // Auto-focus refs for correction mode
+  const firstCorrectionInputRef = useRef<HTMLInputElement | null>(null);
+  const didAutofocusCorrectionRef = useRef(false);
+  
   // Bulk action mode state
   const [bulkMode, setBulkMode] = useState<'none' | 'correction' | 'restock' | 'transfer'>('none');
   const [isBulkModeDialogOpen, setIsBulkModeDialogOpen] = useState(false);
@@ -439,6 +443,45 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
+  // Auto-focus first Stock input when entering correction mode
+  useEffect(() => {
+    if (bulkMode !== 'correction') return;
+    if (didAutofocusCorrectionRef.current) return;
+    if (!Array.isArray(filteredProducts) || filteredProducts.length === 0) return;
+
+    // Wait until the expanded tables have rendered the inputs
+    const tryFocus = () => {
+      const el = firstCorrectionInputRef.current;
+      if (!el) return false;
+
+      // focus + select for faster overwrite
+      el.focus({ preventScroll: true });
+      try { el.select?.(); } catch {}
+      // ensure keyboard opens on iOS
+      // small delay helps Safari
+      setTimeout(() => {
+        el.focus({ preventScroll: true });
+        try { el.select?.(); } catch {}
+      }, 50);
+
+      return true;
+    };
+
+    // Defer to next paint(s)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const ok = tryFocus();
+        if (ok) didAutofocusCorrectionRef.current = true;
+        else {
+          // fallback: try again shortly if first render didn't mount input yet
+          setTimeout(() => {
+            if (tryFocus()) didAutofocusCorrectionRef.current = true;
+          }, 120);
+        }
+      });
+    });
+  }, [bulkMode, expandedProducts, filteredProducts.length]);
+
   // Auto-expand all products when entering bulk mode
   // Derive once - includes correction mode
   const isInBulkMode = isBulkEdit || bulkMode === 'restock' || bulkMode === 'transfer' || bulkMode === 'correction';
@@ -465,6 +508,14 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     });
     setExpandedRank1Groups(nextGroups);
   }, [isInBulkMode, filteredProducts, rank1]);
+
+  // Reset auto-focus guard when leaving correction mode
+  useEffect(() => {
+    if (bulkMode !== 'correction' && !isBulkEdit) {
+      didAutofocusCorrectionRef.current = false;
+      firstCorrectionInputRef.current = null;
+    }
+  }, [bulkMode, isBulkEdit]);
 
   // Category counts (only physical products)
   const categoryCounts = useMemo(() => {
@@ -1834,6 +1885,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           setTransferEdits={setTransferEdits}
           transferFromWarehouseId={transferFromWarehouseId}
           transferToWarehouseId={transferToWarehouseId}
+          setFirstCorrectionInput={(el) => {
+            // only set once
+            if (!firstCorrectionInputRef.current && el) firstCorrectionInputRef.current = el;
+          }}
         />
       </div>
     </div>
@@ -2028,6 +2083,7 @@ interface ProductsContentProps {
   setTransferEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   transferFromWarehouseId: string;
   transferToWarehouseId: string;
+  setFirstCorrectionInput?: (el: HTMLInputElement | null) => void;
 }
 
 function ProductsContent({
@@ -2063,6 +2119,7 @@ function ProductsContent({
   setTransferEdits,
   transferFromWarehouseId,
   transferToWarehouseId,
+  setFirstCorrectionInput,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
@@ -2092,7 +2149,7 @@ function ProductsContent({
         </div>
       ) : (
         <div className="space-y-2 sm:space-y-3">
-          {products.map((product) => {
+          {products.map((product, productIdx) => {
             const isExpanded = expandedProducts.has(product.id);
             const totalQty = getProductQuantity(product);
             const minPrice = product.variants.length > 0 
@@ -2186,6 +2243,7 @@ function ProductsContent({
                       setTransferEdits={setTransferEdits}
                       transferFromWarehouseId={transferFromWarehouseId}
                       transferToWarehouseId={transferToWarehouseId}
+                      setFirstCorrectionInput={productIdx === 0 ? setFirstCorrectionInput : undefined}
                     />
                   </div>
                 )}
@@ -2217,6 +2275,7 @@ interface VariantCombinationsTableProps {
   setTransferEdits?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   transferFromWarehouseId?: string;
   transferToWarehouseId?: string;
+  setFirstCorrectionInput?: (el: HTMLInputElement | null) => void;
 }
 
 function VariantCombinationsTable({
@@ -2237,6 +2296,7 @@ function VariantCombinationsTable({
   setTransferEdits,
   transferFromWarehouseId = '',
   transferToWarehouseId = '',
+  setFirstCorrectionInput,
 }: VariantCombinationsTableProps) {
   // Helper function to format variant name by removing option type labels
   const formatVariantName = (variantName: string): string => {
@@ -2283,7 +2343,7 @@ function VariantCombinationsTable({
           </tr>
         </thead>
         <tbody>
-          {variants.map((variant) => {
+          {variants.map((variant, idx) => {
             const stockKey = `${variant.id}:${selectedWarehouseId}`;
             const priceKey = `${variant.id}`;
             
@@ -2406,6 +2466,11 @@ function VariantCombinationsTable({
                       onChange={handleStockChange}
                       className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                       style={{ fontSize: '11px' }}
+                      ref={(el) => {
+                        if (isCorrectionMode && idx === 0 && setFirstCorrectionInput) {
+                          setFirstCorrectionInput(el);
+                        }
+                      }}
                     />
                   ) : (
                     <span className="block px-1 py-0 text-xs leading-tight">
