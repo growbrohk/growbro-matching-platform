@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal, Check } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -53,6 +53,115 @@ interface ProductsProps {
   onChangePillar?: (pillar: 'catalog' | 'inventory') => void;
 }
 
+// MultiSelectDropdown component for filter dropdowns
+interface MultiSelectDropdownProps {
+  label: string;
+  options: Array<{ value: string; label: string; count?: number }>;
+  selected: string[];
+  setSelected: (next: string[]) => void;
+  placeholder: string;
+  isCategory?: boolean; // Special handling for category "All" option
+}
+
+function MultiSelectDropdown({
+  label,
+  options,
+  selected,
+  setSelected,
+  placeholder,
+  isCategory = false,
+}: MultiSelectDropdownProps) {
+  const [open, setOpen] = useState(false);
+
+  const handleToggle = (value: string) => {
+    if (isCategory && value === 'all') {
+      // For category: selecting "All" clears all selections (empty = all)
+      setSelected([]);
+    } else {
+      // For regular multi-select: toggle the value
+      if (selected.includes(value)) {
+        setSelected(selected.filter(v => v !== value));
+      } else {
+        setSelected([...selected, value]);
+      }
+    }
+  };
+
+  const handleClear = () => {
+    setSelected([]);
+  };
+
+  const displayText = () => {
+    if (selected.length === 0) {
+      // For categories, empty means "All"
+      if (isCategory) {
+        const allOption = options.find(opt => opt.value === 'all');
+        return allOption ? allOption.label : placeholder;
+      }
+      return placeholder;
+    }
+    if (selected.length === 1) {
+      const option = options.find(opt => opt.value === selected[0]);
+      return option ? option.label : placeholder;
+    }
+    return `${selected.length} selected`;
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="font-semibold text-sm">{label}</div>
+        {selected.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-full justify-between text-left font-normal"
+          >
+            <span className="truncate">{displayText()}</span>
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <div className="max-h-[300px] overflow-y-auto">
+            {options.map((option) => {
+              // For categories, empty array means "All" is selected
+              const isSelected = isCategory && option.value === 'all'
+                ? selected.length === 0
+                : selected.includes(option.value);
+              return (
+                <div
+                  key={option.value}
+                  className="flex items-center space-x-2 px-3 py-2 hover:bg-muted cursor-pointer"
+                  onClick={() => handleToggle(option.value)}
+                >
+                  <div className="flex items-center justify-center w-4 h-4 border rounded border-gray-300">
+                    {isSelected && <Check className="h-3 w-3 text-[#0E7A3A]" />}
+                  </div>
+                  <label className="text-sm cursor-pointer flex-1">
+                    {option.label}
+                    {option.count !== undefined && (
+                      <span className="text-muted-foreground ml-1">({option.count})</span>
+                    )}
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export default function Products({ isEmbeddedInCatalog = false, selectedPillar: propSelectedPillar, onChangePillar: propOnChangePillar }: ProductsProps = {}) {
   const { currentOrg, user } = useAuth();
   const navigate = useNavigate();
@@ -67,7 +176,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [searchQuery, setSearchQuery] = useState('');
   
   // Filters
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [localSelectedPillar, setLocalSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
   
@@ -187,13 +296,14 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const productsBeforeVariantFilters = useMemo(() => {
     let filtered = products.filter(p => p.type === 'physical');
     
-    // Filter by category
-    if (selectedCategoryId !== 'all') {
-      if (selectedCategoryId === 'uncategorized') {
-        filtered = filtered.filter(p => !p.category_id);
-      } else {
-        filtered = filtered.filter(p => p.category_id === selectedCategoryId);
-      }
+    // Filter by category (multi-select)
+    // Empty array or includes 'all' means no category filtering
+    if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes('all')) {
+      filtered = filtered.filter(p => {
+        const hasUncategorized = selectedCategoryIds.includes('uncategorized');
+        const hasCategoryId = p.category_id && selectedCategoryIds.includes(p.category_id);
+        return (hasUncategorized && !p.category_id) || hasCategoryId;
+      });
     }
     
     // Filter by search query
@@ -207,7 +317,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     }
     
     return filtered;
-  }, [products, selectedCategoryId, searchQuery]);
+  }, [products, selectedCategoryIds, searchQuery]);
 
   // Get available rank1 and rank2 option values
   const rank1Options = useMemo(() => {
@@ -278,6 +388,36 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     
     return counts;
   }, [products]);
+
+  // Category options for dropdown (including 'all' and 'uncategorized')
+  const categoryOptions = useMemo(() => {
+    const options: Array<{ id: string; name: string; count: number }> = [
+      { id: 'all', name: 'All', count: categoryCounts.get('all') || 0 }
+    ];
+    
+    // Add regular categories
+    categories
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .forEach(cat => {
+        options.push({
+          id: cat.id,
+          name: cat.name,
+          count: categoryCounts.get(cat.id) || 0
+        });
+      });
+    
+    // Add uncategorized if it has products
+    const uncategorizedCount = categoryCounts.get('uncategorized') || 0;
+    if (uncategorizedCount > 0) {
+      options.push({
+        id: 'uncategorized',
+        name: 'Uncategorized',
+        count: uncategorizedCount
+      });
+    }
+    
+    return options;
+  }, [categories, categoryCounts]);
 
   const toggleProduct = (productId: string) => {
     setExpandedProducts(prev => {
@@ -626,133 +766,45 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                 </div>
 
                 {/* Row 2: Category */}
-                <div className="space-y-2">
-                  <div className="font-semibold text-sm">Category</div>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    <button
-                      onClick={() => setSelectedCategoryId('all')}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        selectedCategoryId === 'all'
-                          ? 'bg-[#0E7A3A] text-white'
-                          : 'bg-white border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      All ({categoryCounts.get('all') || 0})
-                    </button>
-                    {categories
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map(cat => (
-                        <button
-                          key={cat.id}
-                          onClick={() => setSelectedCategoryId(cat.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                            selectedCategoryId === cat.id
-                              ? 'bg-[#0E7A3A] text-white'
-                              : 'bg-white border border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {cat.name} ({categoryCounts.get(cat.id) || 0})
-                        </button>
-                      ))}
-                    {(categoryCounts.get('uncategorized') || 0) > 0 && (
-                      <button
-                        onClick={() => setSelectedCategoryId('uncategorized')}
-                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                          selectedCategoryId === 'uncategorized'
-                            ? 'bg-[#0E7A3A] text-white'
-                            : 'bg-white border border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        Uncategorized ({categoryCounts.get('uncategorized') || 0})
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <MultiSelectDropdown
+                  label="Category"
+                  options={categoryOptions.map(opt => ({
+                    value: opt.id,
+                    label: opt.name,
+                    count: opt.count,
+                  }))}
+                  selected={selectedCategoryIds}
+                  setSelected={setSelectedCategoryIds}
+                  placeholder="Select categories"
+                  isCategory={true}
+                />
 
                 {/* Row 3: Variant Filter (rank1) */}
                 {rank1 && rank1Options.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-sm">{rank1}</div>
-                      {selectedRank1Values.length > 0 && (
-                        <button
-                          onClick={() => setSelectedRank1Values([])}
-                          className="text-xs text-muted-foreground hover:text-foreground underline"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-1">
-                      {selectedRank1Values.length > 0 ? `${selectedRank1Values.length} selected` : 'Select options'}
-                    </div>
-                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
-                      {rank1Options.map(option => (
-                        <div key={option} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`rank1-${option}`}
-                            checked={selectedRank1Values.includes(option)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedRank1Values(prev => [...prev, option]);
-                              } else {
-                                setSelectedRank1Values(prev => prev.filter(v => v !== option));
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor={`rank1-${option}`}
-                            className="text-sm cursor-pointer flex-1"
-                          >
-                            {option}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <MultiSelectDropdown
+                    label={rank1}
+                    options={rank1Options.map(opt => ({
+                      value: opt,
+                      label: opt,
+                    }))}
+                    selected={selectedRank1Values}
+                    setSelected={setSelectedRank1Values}
+                    placeholder={`Select ${rank1.toLowerCase()}`}
+                  />
                 )}
 
                 {/* Row 4: Variant Filter (rank2) */}
                 {rank2 && rank2Options.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-sm">{rank2}</div>
-                      {selectedRank2Values.length > 0 && (
-                        <button
-                          onClick={() => setSelectedRank2Values([])}
-                          className="text-xs text-muted-foreground hover:text-foreground underline"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground mb-1">
-                      {selectedRank2Values.length > 0 ? `${selectedRank2Values.length} selected` : 'Select options'}
-                    </div>
-                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
-                      {rank2Options.map(option => (
-                        <div key={option} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`rank2-${option}`}
-                            checked={selectedRank2Values.includes(option)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedRank2Values(prev => [...prev, option]);
-                              } else {
-                                setSelectedRank2Values(prev => prev.filter(v => v !== option));
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor={`rank2-${option}`}
-                            className="text-sm cursor-pointer flex-1"
-                          >
-                            {option}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <MultiSelectDropdown
+                    label={rank2}
+                    options={rank2Options.map(opt => ({
+                      value: opt,
+                      label: opt,
+                    }))}
+                    selected={selectedRank2Values}
+                    setSelected={setSelectedRank2Values}
+                    placeholder={`Select ${rank2.toLowerCase()}`}
+                  />
                 )}
 
                 {/* Actions */}
@@ -766,7 +818,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                         const mainWh = warehouses.find(w => w.name.toLowerCase().includes('main')) || warehouses[0];
                         setSelectedWarehouseId(mainWh.id);
                       }
-                      setSelectedCategoryId('all');
+                      setSelectedCategoryIds([]);
                       setSelectedRank1Values([]);
                       setSelectedRank2Values([]);
                     }}
@@ -849,8 +901,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           products={filteredProducts}
           categories={categories}
           categoryCounts={categoryCounts}
-          selectedCategoryId={selectedCategoryId}
-          setSelectedCategoryId={setSelectedCategoryId}
           selectedPillar={selectedPillar}
           setSelectedPillar={setSelectedPillar}
           warehouses={warehouses}
@@ -882,8 +932,6 @@ interface ProductsContentProps {
   products: ProductWithDetails[];
   categories: ProductCategory[];
   categoryCounts: Map<string, number>;
-  selectedCategoryId: string;
-  setSelectedCategoryId: (id: string) => void;
   selectedPillar: 'catalog' | 'inventory';
   setSelectedPillar: (pillar: 'catalog' | 'inventory') => void;
   warehouses: Warehouse[];
@@ -910,8 +958,6 @@ function ProductsContent({
   products,
   categories,
   categoryCounts,
-  selectedCategoryId,
-  setSelectedCategoryId,
   selectedPillar,
   setSelectedPillar,
   warehouses,
