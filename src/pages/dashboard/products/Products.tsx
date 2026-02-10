@@ -777,7 +777,7 @@ function ProductsContent({
 
   // Catalog pillar - render existing catalog view
   return (
-    <div className="p-3 sm:p-4 md:p-6">
+    <>
       {products.length === 0 ? (
         <div className="text-center py-8 sm:py-12 px-4">
           <p className="text-sm sm:text-base text-muted-foreground mb-4">No products in this category</p>
@@ -879,7 +879,7 @@ function ProductsContent({
           })}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
