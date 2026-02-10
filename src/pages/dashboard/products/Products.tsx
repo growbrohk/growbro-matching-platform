@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -213,6 +213,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   // Auto-focus refs for correction mode
   const firstCorrectionInputRef = useRef<HTMLInputElement | null>(null);
   const didAutofocusCorrectionRef = useRef(false);
+  const shouldAutofocusCorrectionRef = useRef(false);
   
   // Bulk action mode state
   const [bulkMode, setBulkMode] = useState<'none' | 'correction' | 'restock' | 'transfer'>('none');
@@ -443,44 +444,57 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
+  // Helper function to focus input without selecting text (avoids iOS selection handles)
+  const focusInput = (el: HTMLInputElement | null) => {
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    // Place caret at end (no selection highlight)
+    const len = el.value?.length ?? 0;
+    try {
+      // Only use setSelectionRange for text inputs (not number inputs on some browsers)
+      if (el.type !== 'number') {
+        el.setSelectionRange(len, len);
+      }
+    } catch {
+      // Ignore errors (e.g., on number inputs in some browsers)
+    }
+  };
+
   // Auto-focus first Stock input when entering correction mode
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (bulkMode !== 'correction') return;
-    if (didAutofocusCorrectionRef.current) return;
+    if (!shouldAutofocusCorrectionRef.current) return;
     if (!Array.isArray(filteredProducts) || filteredProducts.length === 0) return;
 
-    // Wait until the expanded tables have rendered the inputs
-    const tryFocus = () => {
-      const el = firstCorrectionInputRef.current;
-      if (!el) return false;
-
-      // focus + select for faster overwrite
-      el.focus({ preventScroll: true });
-      try { el.select?.(); } catch {}
-      // ensure keyboard opens on iOS
-      // small delay helps Safari
-      setTimeout(() => {
-        el.focus({ preventScroll: true });
-        try { el.select?.(); } catch {}
-      }, 50);
-
-      return true;
-    };
-
-    // Defer to next paint(s)
-    requestAnimationFrame(() => {
+    const el = firstCorrectionInputRef.current;
+    if (!el) {
+      // If element not ready, try again shortly
       requestAnimationFrame(() => {
-        const ok = tryFocus();
-        if (ok) didAutofocusCorrectionRef.current = true;
-        else {
-          // fallback: try again shortly if first render didn't mount input yet
-          setTimeout(() => {
-            if (tryFocus()) didAutofocusCorrectionRef.current = true;
-          }, 120);
-        }
+        setTimeout(() => {
+          const el2 = firstCorrectionInputRef.current;
+          if (el2 && shouldAutofocusCorrectionRef.current) {
+            focusInput(el2);
+            shouldAutofocusCorrectionRef.current = false;
+            didAutofocusCorrectionRef.current = true;
+          }
+        }, 60);
       });
+      return;
+    }
+
+    // Focus immediately in the same tick (within user gesture call stack)
+    requestAnimationFrame(() => {
+      focusInput(el);
+      // Fallback attempt for Safari
+      setTimeout(() => {
+        if (shouldAutofocusCorrectionRef.current) {
+          focusInput(el);
+        }
+      }, 60);
+      shouldAutofocusCorrectionRef.current = false;
+      didAutofocusCorrectionRef.current = true;
     });
-  }, [bulkMode, expandedProducts, filteredProducts.length]);
+  }, [bulkMode, filteredProducts.length, expandedProducts]);
 
   // Auto-expand all products when entering bulk mode
   // Derive once - includes correction mode
@@ -513,6 +527,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   useEffect(() => {
     if (bulkMode !== 'correction' && !isBulkEdit) {
       didAutofocusCorrectionRef.current = false;
+      shouldAutofocusCorrectionRef.current = false;
       firstCorrectionInputRef.current = null;
     }
   }, [bulkMode, isBulkEdit]);
@@ -1574,8 +1589,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                   variant="outline"
                   className="w-full text-left whitespace-normal break-words h-auto py-4"
                   onClick={() => {
-                    handleEnterBulkEdit();
                     setIsBulkModeDialogOpen(false);
+                    handleEnterBulkEdit();
+                    // Set flag to trigger autofocus in useLayoutEffect (within user gesture call stack)
+                    shouldAutofocusCorrectionRef.current = true;
                   }}
                 >
                   <div className="text-left w-full">
@@ -2464,8 +2481,7 @@ function VariantCombinationsTable({
                       min="0"
                       value={pendingEdits[stockKey]?.stock !== undefined ? pendingEdits[stockKey].stock! : stock}
                       onChange={handleStockChange}
-                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                      style={{ fontSize: '11px' }}
+                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                       ref={(el) => {
                         if (isCorrectionMode && idx === 0 && setFirstCorrectionInput) {
                           setFirstCorrectionInput(el);
@@ -2486,8 +2502,7 @@ function VariantCombinationsTable({
                       value={restockEdits[variant.id] !== undefined && restockEdits[variant.id] !== 0 ? restockEdits[variant.id] : ''}
                       onChange={handleRestockChange}
                       placeholder="0"
-                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                      style={{ fontSize: '11px' }}
+                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   </td>
                 )}
@@ -2500,8 +2515,7 @@ function VariantCombinationsTable({
                       value={transferEdits[variant.id] !== undefined && transferEdits[variant.id] !== 0 ? transferEdits[variant.id] : ''}
                       onChange={handleTransferChange}
                       placeholder="0"
-                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                      style={{ fontSize: '11px' }}
+                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   </td>
                 )}
@@ -2513,8 +2527,7 @@ function VariantCombinationsTable({
                       step="0.01"
                       value={pendingEdits[priceKey]?.price !== undefined ? pendingEdits[priceKey].price! : price}
                       onChange={handlePriceChange}
-                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                      style={{ fontSize: '11px' }}
+                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   ) : (
                     <span className="block px-1 py-0 text-xs leading-tight">
