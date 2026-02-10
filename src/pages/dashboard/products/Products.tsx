@@ -210,10 +210,8 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [isSaving, setIsSaving] = useState(false);
   const originalValuesRef = useRef<Record<string, { stock: number; price: number }>>({});
   
-  // Auto-focus refs for correction mode
-  const firstCorrectionInputRef = useRef<HTMLInputElement | null>(null);
-  const didAutofocusCorrectionRef = useRef(false);
-  const shouldAutofocusCorrectionRef = useRef(false);
+  // Edit-state CTA visibility
+  const [showEditCta, setShowEditCta] = useState(false);
   
   // Bulk action mode state
   const [bulkMode, setBulkMode] = useState<'none' | 'correction' | 'restock' | 'transfer'>('none');
@@ -444,57 +442,12 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
-  // Helper function to focus input without selecting text (avoids iOS selection handles)
-  const focusInput = (el: HTMLInputElement | null) => {
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    // Place caret at end (no selection highlight)
-    const len = el.value?.length ?? 0;
-    try {
-      // Only use setSelectionRange for text inputs (not number inputs on some browsers)
-      if (el.type !== 'number') {
-        el.setSelectionRange(len, len);
-      }
-    } catch {
-      // Ignore errors (e.g., on number inputs in some browsers)
-    }
-  };
-
-  // Auto-focus first Stock input when entering correction mode
-  useLayoutEffect(() => {
-    if (bulkMode !== 'correction') return;
-    if (!shouldAutofocusCorrectionRef.current) return;
-    if (!Array.isArray(filteredProducts) || filteredProducts.length === 0) return;
-
-    const el = firstCorrectionInputRef.current;
-    if (!el) {
-      // If element not ready, try again shortly
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const el2 = firstCorrectionInputRef.current;
-          if (el2 && shouldAutofocusCorrectionRef.current) {
-            focusInput(el2);
-            shouldAutofocusCorrectionRef.current = false;
-            didAutofocusCorrectionRef.current = true;
-          }
-        }, 60);
-      });
-      return;
-    }
-
-    // Focus immediately in the same tick (within user gesture call stack)
-    requestAnimationFrame(() => {
-      focusInput(el);
-      // Fallback attempt for Safari
-      setTimeout(() => {
-        if (shouldAutofocusCorrectionRef.current) {
-          focusInput(el);
-        }
-      }, 60);
-      shouldAutofocusCorrectionRef.current = false;
-      didAutofocusCorrectionRef.current = true;
-    });
-  }, [bulkMode, filteredProducts.length, expandedProducts]);
+  // Auto-hide CTA after 4 seconds
+  useEffect(() => {
+    if (!isBulkEdit || !showEditCta) return;
+    const t = setTimeout(() => setShowEditCta(false), 4000);
+    return () => clearTimeout(t);
+  }, [isBulkEdit, showEditCta]);
 
   // Auto-expand all products when entering bulk mode
   // Derive once - includes correction mode
@@ -523,14 +476,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setExpandedRank1Groups(nextGroups);
   }, [isInBulkMode, filteredProducts, rank1]);
 
-  // Reset auto-focus guard when leaving correction mode
-  useEffect(() => {
-    if (bulkMode !== 'correction' && !isBulkEdit) {
-      didAutofocusCorrectionRef.current = false;
-      shouldAutofocusCorrectionRef.current = false;
-      firstCorrectionInputRef.current = null;
-    }
-  }, [bulkMode, isBulkEdit]);
 
   // Category counts (only physical products)
   const categoryCounts = useMemo(() => {
@@ -703,6 +648,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setIsBulkEdit(true);
     setPendingEdits({});
     setBulkMode('correction');
+    setShowEditCta(true);
   };
   
   // Enter restock mode
@@ -767,6 +713,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setTransferEdits({});
     setTransferReferenceNote('');
     originalValuesRef.current = {};
+    setShowEditCta(false);
   };
 
   // Exit bulk edit mode
@@ -774,6 +721,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setIsBulkEdit(false);
     setPendingEdits({});
     originalValuesRef.current = {};
+    setShowEditCta(false);
   };
 
   // Save bulk edits
@@ -925,6 +873,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
       setIsBulkEdit(false);
       setPendingEdits({});
       originalValuesRef.current = {};
+      setShowEditCta(false);
       
       toast({
         title: 'Success',
@@ -1548,6 +1497,34 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         </div>
       </div>
 
+      {/* Edit-state CTA (only in correction mode) */}
+      {isBulkEdit && bulkMode === 'correction' && showEditCta && (
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <div
+              className="inline-flex items-center rounded-full border px-3 py-1 text-xs"
+              style={{
+                borderColor: 'rgba(14,122,58,0.20)',
+                backgroundColor: 'rgba(251,248,244,0.95)',
+              }}
+            >
+              <span className="truncate">
+                Editing mode — tap a stock cell to update
+              </span>
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 shrink-0"
+            onClick={() => setShowEditCta(false)}
+          >
+            Got it
+          </Button>
+        </div>
+      )}
+
       {/* Transfer Summary Row */}
       {bulkMode === 'transfer' && (
         <div className="flex items-center gap-2 px-1 sm:px-0">
@@ -1591,8 +1568,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                   onClick={() => {
                     setIsBulkModeDialogOpen(false);
                     handleEnterBulkEdit();
-                    // Set flag to trigger autofocus in useLayoutEffect (within user gesture call stack)
-                    shouldAutofocusCorrectionRef.current = true;
                   }}
                 >
                   <div className="text-left w-full">
@@ -1902,10 +1877,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           setTransferEdits={setTransferEdits}
           transferFromWarehouseId={transferFromWarehouseId}
           transferToWarehouseId={transferToWarehouseId}
-          setFirstCorrectionInput={(el) => {
-            // only set once
-            if (!firstCorrectionInputRef.current && el) firstCorrectionInputRef.current = el;
-          }}
+          onBeginEditing={() => setShowEditCta(false)}
         />
       </div>
     </div>
@@ -2100,7 +2072,7 @@ interface ProductsContentProps {
   setTransferEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   transferFromWarehouseId: string;
   transferToWarehouseId: string;
-  setFirstCorrectionInput?: (el: HTMLInputElement | null) => void;
+  onBeginEditing?: () => void;
 }
 
 function ProductsContent({
@@ -2136,7 +2108,7 @@ function ProductsContent({
   setTransferEdits,
   transferFromWarehouseId,
   transferToWarehouseId,
-  setFirstCorrectionInput,
+  onBeginEditing,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
@@ -2260,7 +2232,7 @@ function ProductsContent({
                       setTransferEdits={setTransferEdits}
                       transferFromWarehouseId={transferFromWarehouseId}
                       transferToWarehouseId={transferToWarehouseId}
-                      setFirstCorrectionInput={productIdx === 0 ? setFirstCorrectionInput : undefined}
+                      onBeginEditing={onBeginEditing}
                     />
                   </div>
                 )}
@@ -2292,7 +2264,7 @@ interface VariantCombinationsTableProps {
   setTransferEdits?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   transferFromWarehouseId?: string;
   transferToWarehouseId?: string;
-  setFirstCorrectionInput?: (el: HTMLInputElement | null) => void;
+  onBeginEditing?: () => void;
 }
 
 function VariantCombinationsTable({
@@ -2313,7 +2285,7 @@ function VariantCombinationsTable({
   setTransferEdits,
   transferFromWarehouseId = '',
   transferToWarehouseId = '',
-  setFirstCorrectionInput,
+  onBeginEditing,
 }: VariantCombinationsTableProps) {
   // Helper function to format variant name by removing option type labels
   const formatVariantName = (variantName: string): string => {
@@ -2481,12 +2453,9 @@ function VariantCombinationsTable({
                       min="0"
                       value={pendingEdits[stockKey]?.stock !== undefined ? pendingEdits[stockKey].stock! : stock}
                       onChange={handleStockChange}
-                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
-                      ref={(el) => {
-                        if (isCorrectionMode && idx === 0 && setFirstCorrectionInput) {
-                          setFirstCorrectionInput(el);
-                        }
-                      }}
+                      onFocus={onBeginEditing}
+                      onClick={onBeginEditing}
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   ) : (
                     <span className="block px-1 py-0 text-xs leading-tight">
@@ -2502,7 +2471,7 @@ function VariantCombinationsTable({
                       value={restockEdits[variant.id] !== undefined && restockEdits[variant.id] !== 0 ? restockEdits[variant.id] : ''}
                       onChange={handleRestockChange}
                       placeholder="0"
-                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   </td>
                 )}
@@ -2515,7 +2484,7 @@ function VariantCombinationsTable({
                       value={transferEdits[variant.id] !== undefined && transferEdits[variant.id] !== 0 ? transferEdits[variant.id] : ''}
                       onChange={handleTransferChange}
                       placeholder="0"
-                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   </td>
                 )}
@@ -2527,7 +2496,9 @@ function VariantCombinationsTable({
                       step="0.01"
                       value={pendingEdits[priceKey]?.price !== undefined ? pendingEdits[priceKey].price! : price}
                       onChange={handlePriceChange}
-                      className="h-7 px-2 py-0 text-base border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      onFocus={onBeginEditing}
+                      onClick={onBeginEditing}
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
                     />
                   ) : (
                     <span className="block px-1 py-0 text-xs leading-tight">
