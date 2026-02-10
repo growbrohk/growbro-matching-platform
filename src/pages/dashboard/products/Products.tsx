@@ -48,9 +48,11 @@ interface ProductsProps {
   // Products is a sub-view under Catalog.
   // Do not render standalone page headers or pillar tabs when embedded.
   isEmbeddedInCatalog?: boolean;
+  selectedPillar?: 'catalog' | 'inventory';
+  onChangePillar?: (pillar: 'catalog' | 'inventory') => void;
 }
 
-export default function Products({ isEmbeddedInCatalog = false }: ProductsProps = {}) {
+export default function Products({ isEmbeddedInCatalog = false, selectedPillar: propSelectedPillar, onChangePillar: propOnChangePillar }: ProductsProps = {}) {
   const { currentOrg, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -65,8 +67,12 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   
   // Filters
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
-  const [selectedPillar, setSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
+  const [localSelectedPillar, setLocalSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
+
+  // Use prop pillar when embedded, otherwise use local state
+  const selectedPillar = isEmbeddedInCatalog ? (propSelectedPillar ?? 'catalog') : localSelectedPillar;
+  const setSelectedPillar = isEmbeddedInCatalog && propOnChangePillar ? propOnChangePillar : setLocalSelectedPillar;
   
   // Variant rank config
   const [rank1, setRank1] = useState('Color');
@@ -756,17 +762,6 @@ function ProductsContent({
   if (selectedPillar === 'inventory') {
     return (
       <div className="space-y-4 md:space-y-6">
-        <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-          <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
-            {/* Pillar Tabs (Catalog / Inventory) */}
-            <Tabs value={selectedPillar} onValueChange={(v) => setSelectedPillar(v as 'catalog' | 'inventory')} className="w-full">
-              <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-grid mb-4">
-                <TabsTrigger value="catalog">Catalog</TabsTrigger>
-                <TabsTrigger value="inventory">Inventory</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardHeader>
-        </Card>
         {currentOrg?.id ? (
           <InventoryPanel orgId={currentOrg.id} />
         ) : (
@@ -783,16 +778,6 @@ function ProductsContent({
   // Catalog pillar - render existing catalog view
   return (
     <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-      <CardHeader className="p-3 sm:p-4 md:p-6 pb-0">
-        {/* Pillar Tabs (Catalog / Inventory) */}
-        <Tabs value={selectedPillar} onValueChange={(v) => setSelectedPillar(v as 'catalog' | 'inventory')} className="w-full">
-          <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:inline-grid mb-4">
-            <TabsTrigger value="catalog">Catalog</TabsTrigger>
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </CardHeader>
-
       <CardContent className="p-3 sm:p-4 md:p-6">
         {products.length === 0 ? (
           <div className="text-center py-8 sm:py-12 px-4">
