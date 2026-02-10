@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal, Check, Settings } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal, Check, Settings, ArrowLeft, ArrowRightLeft } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -209,6 +209,21 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [pendingEdits, setPendingEdits] = useState<Record<string, { stock?: number; price?: number }>>({});
   const [isSaving, setIsSaving] = useState(false);
   const originalValuesRef = useRef<Record<string, { stock: number; price: number }>>({});
+  
+  // Bulk action mode state
+  const [bulkMode, setBulkMode] = useState<'none' | 'correction' | 'restock' | 'transfer'>('none');
+  const [isBulkModeDialogOpen, setIsBulkModeDialogOpen] = useState(false);
+  
+  // Restock mode state
+  const [restockWarehouseId, setRestockWarehouseId] = useState<string>('');
+  const [restockReferenceNote, setRestockReferenceNote] = useState('');
+  const [restockEdits, setRestockEdits] = useState<Record<string, number>>({});
+  
+  // Transfer mode state
+  const [transferFromWarehouseId, setTransferFromWarehouseId] = useState<string>('');
+  const [transferToWarehouseId, setTransferToWarehouseId] = useState<string>('');
+  const [transferReferenceNote, setTransferReferenceNote] = useState('');
+  const [transferEdits, setTransferEdits] = useState<Record<string, number>>({});
 
   const canCreate = !!currentOrg?.id;
 
@@ -280,6 +295,11 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         if (whs.length > 0) {
           const mainWh = whs.find(w => w.name.toLowerCase().includes('main')) || whs[0];
           setSelectedWarehouseId(mainWh.id);
+          setRestockWarehouseId(mainWh.id);
+          setTransferFromWarehouseId(mainWh.id);
+          // Set transferToWarehouseId to first warehouse != from (or first if only one)
+          const toWh = whs.length > 1 ? whs.find(w => w.id !== mainWh.id) || whs[0] : whs[0];
+          setTransferToWarehouseId(toWh.id);
         }
 
         // Fetch products using the products API
@@ -543,6 +563,11 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
       .find(i => i.variant_id === variantId && i.warehouse_id === warehouseId);
     return inventoryItem?.quantity ?? 0;
   };
+  
+  // Helper to get quantity for variant+warehouse (reusable)
+  const getQty = (variantId: string, warehouseId: string): number => {
+    return getCurrentStock(variantId, warehouseId);
+  };
 
   // Get current price for a variant (for bulk edit)
   const getCurrentPrice = (variantId: string): number => {
@@ -552,7 +577,20 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     return variant?.price ?? 0;
   };
 
-  // Enter bulk edit mode - snapshot current values
+  // Open bulk mode picker dialog
+  const handleOpenBulkModePicker = () => {
+    if (!selectedWarehouseId) {
+      toast({
+        title: 'Error',
+        description: 'Please select a warehouse first',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsBulkModeDialogOpen(true);
+  };
+  
+  // Enter bulk edit mode (correction) - snapshot current values
   const handleEnterBulkEdit = () => {
     const snapshot: Record<string, { stock: number; price: number }> = {};
     
@@ -572,6 +610,40 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     originalValuesRef.current = snapshot;
     setIsBulkEdit(true);
     setPendingEdits({});
+    setBulkMode('correction');
+  };
+  
+  // Enter restock mode
+  const handleEnterRestock = () => {
+    setRestockWarehouseId(selectedWarehouseId);
+    setRestockReferenceNote('');
+    setRestockEdits({});
+    setBulkMode('restock');
+    setIsBulkModeDialogOpen(false);
+  };
+  
+  // Enter transfer mode
+  const handleEnterTransfer = () => {
+    setTransferFromWarehouseId(selectedWarehouseId);
+    // Set to warehouse to first warehouse != from (or first if only one)
+    const otherWarehouse = warehouses.find(w => w.id !== selectedWarehouseId) || warehouses[0];
+    if (otherWarehouse) {
+      setTransferToWarehouseId(otherWarehouse.id);
+    }
+    setTransferReferenceNote('');
+    setTransferEdits({});
+    setBulkMode('transfer');
+    setIsBulkModeDialogOpen(false);
+  };
+  
+  // Exit bulk mode (any mode)
+  const handleExitBulkMode = () => {
+    setBulkMode('none');
+    setIsBulkEdit(false);
+    setPendingEdits({});
+    setRestockEdits({});
+    setTransferEdits({});
+    originalValuesRef.current = {};
   };
 
   // Exit bulk edit mode
@@ -746,6 +818,348 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
       setIsSaving(false);
     }
   };
+  
+  // Save restock edits
+  const handleSaveRestock = async () => {
+    if (!currentOrg?.id || !restockWarehouseId || !user?.id) {
+      toast({
+        title: 'Error',
+        description: 'Organization, warehouse, or user not available',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Check if any qty > 0
+    const hasEdits = Object.values(restockEdits).some(qty => qty > 0);
+    if (!hasEdits) {
+      toast({
+        title: 'Error',
+        description: 'Please enter at least one restock quantity',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsSaving(true);
+    
+    try {
+      // Process each variant with restock qty > 0
+      for (const [variantId, qty] of Object.entries(restockEdits)) {
+        if (qty <= 0) continue;
+        
+        // Find or create inventory_item
+        let inventoryItemId: string | null = null;
+        const existingItem = products
+          .flatMap(p => p.inventoryItems)
+          .find(i => i.variant_id === variantId && i.warehouse_id === restockWarehouseId);
+        
+        const currentQty = existingItem?.quantity ?? 0;
+        const newQty = currentQty + qty;
+        
+        if (existingItem) {
+          inventoryItemId = existingItem.id;
+          // Update quantity
+          const { error: updateError } = await supabase
+            .from('inventory_items')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('id', inventoryItemId);
+          
+          if (updateError) throw updateError;
+        } else {
+          // Create new inventory_item
+          const { data: newItem, error: createError } = await supabase
+            .from('inventory_items')
+            .insert({
+              org_id: currentOrg.id,
+              variant_id: variantId,
+              warehouse_id: restockWarehouseId,
+              quantity: newQty,
+            })
+            .select('id')
+            .single();
+          
+          if (createError) throw createError;
+          inventoryItemId = newItem.id;
+        }
+        
+        // Create inventory_movement
+        const note = restockReferenceNote.trim()
+          ? `Bulk restock — ${restockReferenceNote}`
+          : 'Bulk restock';
+        
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            inventory_item_id: inventoryItemId,
+            delta: qty,
+            reason: 'restock',
+            note,
+            created_by: user.id,
+          });
+        
+        if (movementError) throw movementError;
+      }
+      
+      // Refresh data (same as correction mode)
+      const productsData = await getProducts(currentOrg.id);
+      const productIds = productsData.map(p => p.id);
+      
+      let allVariants: ProductVariant[] = [];
+      let allInventoryItems: InventoryItem[] = [];
+      
+      if (productIds.length > 0) {
+        const [variantsResult, inventoryResult] = await Promise.all([
+          supabase
+            .from('product_variants')
+            .select('id, product_id, name, sku, price, active')
+            .in('product_id', productIds)
+            .is('archived_at', null)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('inventory_items')
+            .select('id, variant_id, warehouse_id, quantity')
+            .eq('org_id', currentOrg.id),
+        ]);
+        
+        if (variantsResult.error) throw variantsResult.error;
+        if (inventoryResult.error) throw inventoryResult.error;
+        
+        allVariants = (variantsResult.data || []) as ProductVariant[];
+        allInventoryItems = (inventoryResult.data || []) as InventoryItem[];
+      }
+      
+      const productsWithDetails = productsData.map((product) => {
+        const productVariants = allVariants.filter(v => v.product_id === product.id);
+        const variantIds = productVariants.map(v => v.id);
+        const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
+        
+        return {
+          ...product,
+          variants: productVariants,
+          inventoryItems: productInventory,
+        };
+      });
+      
+      setProducts(productsWithDetails);
+      
+      // Exit restock mode
+      handleExitBulkMode();
+      
+      toast({
+        title: 'Success',
+        description: 'Restock completed successfully',
+      });
+    } catch (err: any) {
+      console.error('Error saving restock:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to save restock',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Save transfer edits
+  const handleSaveTransfer = async () => {
+    if (!currentOrg?.id || !transferFromWarehouseId || !transferToWarehouseId || !user?.id) {
+      toast({
+        title: 'Error',
+        description: 'Organization, warehouses, or user not available',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (transferFromWarehouseId === transferToWarehouseId) {
+      toast({
+        title: 'Error',
+        description: 'From and To warehouses must be different',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Check if any qty > 0
+    const hasEdits = Object.values(transferEdits).some(qty => qty > 0);
+    if (!hasEdits) {
+      toast({
+        title: 'Error',
+        description: 'Please enter at least one transfer quantity',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsSaving(true);
+    
+    try {
+      const fromWarehouse = warehouses.find(w => w.id === transferFromWarehouseId);
+      const toWarehouse = warehouses.find(w => w.id === transferToWarehouseId);
+      const fromWarehouseName = fromWarehouse?.name || 'Unknown';
+      const toWarehouseName = toWarehouse?.name || 'Unknown';
+      
+      // Process each variant with transfer qty > 0
+      for (const [variantId, qty] of Object.entries(transferEdits)) {
+        if (qty <= 0) continue;
+        
+        // Get FROM inventory_item
+        const fromItem = products
+          .flatMap(p => p.inventoryItems)
+          .find(i => i.variant_id === variantId && i.warehouse_id === transferFromWarehouseId);
+        
+        const fromCurrentQty = fromItem?.quantity ?? 0;
+        
+        // Validate: cannot transfer more than available
+        if (qty > fromCurrentQty) {
+          throw new Error(`Cannot transfer ${qty} units: only ${fromCurrentQty} available in ${fromWarehouseName}`);
+        }
+        
+        // Ensure FROM inventory_item exists (should already exist if qty > 0, but handle edge case)
+        let fromInventoryItemId: string | null = null;
+        if (fromItem) {
+          fromInventoryItemId = fromItem.id;
+          // Update FROM quantity
+          const { error: updateFromError } = await supabase
+            .from('inventory_items')
+            .update({ quantity: fromCurrentQty - qty, updated_at: new Date().toISOString() })
+            .eq('id', fromInventoryItemId);
+          
+          if (updateFromError) throw updateFromError;
+        } else {
+          // This shouldn't happen if qty > 0, but handle gracefully
+          throw new Error(`No inventory item found for variant in ${fromWarehouseName}`);
+        }
+        
+        // Find or create TO inventory_item
+        let toInventoryItemId: string | null = null;
+        const toItem = products
+          .flatMap(p => p.inventoryItems)
+          .find(i => i.variant_id === variantId && i.warehouse_id === transferToWarehouseId);
+        
+        const toCurrentQty = toItem?.quantity ?? 0;
+        const toNewQty = toCurrentQty + qty;
+        
+        if (toItem) {
+          toInventoryItemId = toItem.id;
+          // Update TO quantity
+          const { error: updateToError } = await supabase
+            .from('inventory_items')
+            .update({ quantity: toNewQty, updated_at: new Date().toISOString() })
+            .eq('id', toInventoryItemId);
+          
+          if (updateToError) throw updateToError;
+        } else {
+          // Create new inventory_item for TO warehouse
+          const { data: newToItem, error: createToError } = await supabase
+            .from('inventory_items')
+            .insert({
+              org_id: currentOrg.id,
+              variant_id: variantId,
+              warehouse_id: transferToWarehouseId,
+              quantity: toNewQty,
+            })
+            .select('id')
+            .single();
+          
+          if (createToError) throw createToError;
+          toInventoryItemId = newToItem.id;
+        }
+        
+        // Create TWO inventory_movements
+        const baseNote = transferReferenceNote.trim()
+          ? `Transfer ${transferReferenceNote}`
+          : 'Transfer';
+        
+        // FROM movement (outgoing)
+        const { error: fromMovementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            inventory_item_id: fromInventoryItemId,
+            delta: -qty,
+            reason: 'transfer',
+            note: `${baseNote} to ${toWarehouseName}`,
+            created_by: user.id,
+          });
+        
+        if (fromMovementError) throw fromMovementError;
+        
+        // TO movement (incoming)
+        const { error: toMovementError } = await supabase
+          .from('inventory_movements')
+          .insert({
+            inventory_item_id: toInventoryItemId,
+            delta: qty,
+            reason: 'transfer',
+            note: `${baseNote} from ${fromWarehouseName}`,
+            created_by: user.id,
+          });
+        
+        if (toMovementError) throw toMovementError;
+      }
+      
+      // Refresh data (same as correction mode)
+      const productsData = await getProducts(currentOrg.id);
+      const productIds = productsData.map(p => p.id);
+      
+      let allVariants: ProductVariant[] = [];
+      let allInventoryItems: InventoryItem[] = [];
+      
+      if (productIds.length > 0) {
+        const [variantsResult, inventoryResult] = await Promise.all([
+          supabase
+            .from('product_variants')
+            .select('id, product_id, name, sku, price, active')
+            .in('product_id', productIds)
+            .is('archived_at', null)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('inventory_items')
+            .select('id, variant_id, warehouse_id, quantity')
+            .eq('org_id', currentOrg.id),
+        ]);
+        
+        if (variantsResult.error) throw variantsResult.error;
+        if (inventoryResult.error) throw inventoryResult.error;
+        
+        allVariants = (variantsResult.data || []) as ProductVariant[];
+        allInventoryItems = (inventoryResult.data || []) as InventoryItem[];
+      }
+      
+      const productsWithDetails = productsData.map((product) => {
+        const productVariants = allVariants.filter(v => v.product_id === product.id);
+        const variantIds = productVariants.map(v => v.id);
+        const productInventory = allInventoryItems.filter(i => variantIds.includes(i.variant_id));
+        
+        return {
+          ...product,
+          variants: productVariants,
+          inventoryItems: productInventory,
+        };
+      });
+      
+      setProducts(productsWithDetails);
+      
+      // Exit transfer mode
+      handleExitBulkMode();
+      
+      toast({
+        title: 'Success',
+        description: 'Transfer completed successfully',
+      });
+    } catch (err: any) {
+      console.error('Error saving transfer:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to save transfer',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -887,7 +1301,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
         </div>
 
         <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-          {!isBulkEdit ? (
+          {bulkMode === 'none' ? (
             <>
               <Button
                 variant="outline"
@@ -902,7 +1316,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
               <Button
                 variant="outline"
                 size="icon"
-                onClick={handleEnterBulkEdit}
+                onClick={handleOpenBulkModePicker}
                 className="h-9 w-9 sm:w-auto sm:px-3"
                 title="Bulk edit products"
                 disabled={!selectedWarehouseId}
@@ -923,12 +1337,12 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                 <span className="hidden sm:inline sm:ml-2">Add Product</span>
               </Button>
             </>
-          ) : (
+          ) : bulkMode === 'correction' ? (
             <>
               <Button
                 variant="outline"
                 size="icon"
-                onClick={handleCancelBulkEdit}
+                onClick={handleExitBulkMode}
                 className="h-9 w-9 sm:w-auto sm:px-3"
                 title="Cancel bulk edit"
                 disabled={isSaving}
@@ -949,9 +1363,68 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                 <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Save'}</span>
               </Button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
+
+      {/* Bulk Action Mode Picker Dialog */}
+      <Dialog open={isBulkModeDialogOpen} onOpenChange={setIsBulkModeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk Action</DialogTitle>
+            <DialogDescription>
+              Choose the type of bulk action you want to perform.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            <Button
+              variant="outline"
+              className="w-full justify-start h-auto py-4"
+              onClick={() => {
+                handleEnterBulkEdit();
+                setIsBulkModeDialogOpen(false);
+              }}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Correction</div>
+                <div className="text-sm text-muted-foreground">Set absolute stock + optional price updates</div>
+              </div>
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="w-full justify-start h-auto py-4"
+              onClick={handleEnterRestock}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Restock</div>
+                <div className="text-sm text-muted-foreground">Add quantities + movement reason restock</div>
+              </div>
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="w-full justify-start h-auto py-4"
+              onClick={handleEnterTransfer}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Transfer</div>
+                <div className="text-sm text-muted-foreground">Move quantities between warehouses + movement reason transfer</div>
+              </div>
+            </Button>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkModeDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Product Settings Dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -1086,33 +1559,427 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
 
       {/* Content */}
       <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
-        <ProductsContent
-          products={filteredProducts}
-          categories={categories}
-          categoryCounts={categoryCounts}
-          selectedPillar={selectedPillar}
-          setSelectedPillar={setSelectedPillar}
-          warehouses={warehouses}
-          selectedWarehouseId={selectedWarehouseId}
-          setSelectedWarehouseId={setSelectedWarehouseId}
-          expandedProducts={expandedProducts}
-          expandedRank1Groups={expandedRank1Groups}
-          toggleProduct={toggleProduct}
-          toggleRank1Group={toggleRank1Group}
-          expandAllVariants={expandAllVariants}
-          getProductQuantity={getProductQuantity}
-          getVariantQuantity={getVariantQuantity}
-          rank1={rank1}
-          rank2={rank2}
-          navigate={navigate}
-          isBulkEdit={isBulkEdit}
-          pendingEdits={pendingEdits}
-          setPendingEdits={setPendingEdits}
-          getCurrentStock={getCurrentStock}
-          getCurrentPrice={getCurrentPrice}
-        />
+        {bulkMode === 'restock' ? (
+          <RestockPanel
+            products={filteredProducts}
+            warehouses={warehouses}
+            restockWarehouseId={restockWarehouseId}
+            setRestockWarehouseId={setRestockWarehouseId}
+            restockReferenceNote={restockReferenceNote}
+            setRestockReferenceNote={setRestockReferenceNote}
+            restockEdits={restockEdits}
+            setRestockEdits={setRestockEdits}
+            getQty={getQty}
+            onBack={handleExitBulkMode}
+            onSave={handleSaveRestock}
+            isSaving={isSaving}
+            rank1={rank1}
+            rank2={rank2}
+          />
+        ) : bulkMode === 'transfer' ? (
+          <TransferPanel
+            products={filteredProducts}
+            warehouses={warehouses}
+            transferFromWarehouseId={transferFromWarehouseId}
+            setTransferFromWarehouseId={setTransferFromWarehouseId}
+            transferToWarehouseId={transferToWarehouseId}
+            setTransferToWarehouseId={setTransferToWarehouseId}
+            transferReferenceNote={transferReferenceNote}
+            setTransferReferenceNote={setTransferReferenceNote}
+            transferEdits={transferEdits}
+            setTransferEdits={setTransferEdits}
+            getQty={getQty}
+            onBack={handleExitBulkMode}
+            onSave={handleSaveTransfer}
+            isSaving={isSaving}
+            rank1={rank1}
+            rank2={rank2}
+          />
+        ) : (
+          <ProductsContent
+            products={filteredProducts}
+            categories={categories}
+            categoryCounts={categoryCounts}
+            selectedPillar={selectedPillar}
+            setSelectedPillar={setSelectedPillar}
+            warehouses={warehouses}
+            selectedWarehouseId={selectedWarehouseId}
+            setSelectedWarehouseId={setSelectedWarehouseId}
+            expandedProducts={expandedProducts}
+            expandedRank1Groups={expandedRank1Groups}
+            toggleProduct={toggleProduct}
+            toggleRank1Group={toggleRank1Group}
+            expandAllVariants={expandAllVariants}
+            getProductQuantity={getProductQuantity}
+            getVariantQuantity={getVariantQuantity}
+            rank1={rank1}
+            rank2={rank2}
+            navigate={navigate}
+            isBulkEdit={isBulkEdit}
+            pendingEdits={pendingEdits}
+            setPendingEdits={setPendingEdits}
+            getCurrentStock={getCurrentStock}
+            getCurrentPrice={getCurrentPrice}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+// Restock Panel Component
+interface RestockPanelProps {
+  products: ProductWithDetails[];
+  warehouses: Warehouse[];
+  restockWarehouseId: string;
+  setRestockWarehouseId: (id: string) => void;
+  restockReferenceNote: string;
+  setRestockReferenceNote: (note: string) => void;
+  restockEdits: Record<string, number>;
+  setRestockEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  getQty: (variantId: string, warehouseId: string) => number;
+  onBack: () => void;
+  onSave: () => void;
+  isSaving: boolean;
+  rank1: string;
+  rank2: string;
+}
+
+function RestockPanel({
+  products,
+  warehouses,
+  restockWarehouseId,
+  setRestockWarehouseId,
+  restockReferenceNote,
+  setRestockReferenceNote,
+  restockEdits,
+  setRestockEdits,
+  getQty,
+  onBack,
+  onSave,
+  isSaving,
+  rank1,
+  rank2,
+}: RestockPanelProps) {
+  // Helper function to format variant name by removing option type labels
+  const formatVariantName = (variantName: string): string => {
+    return variantName
+      .split('/')
+      .map(segment => {
+        const colonIndex = segment.indexOf(':');
+        if (colonIndex === -1) {
+          return segment.trim();
+        }
+        return segment.substring(colonIndex + 1).trim();
+      })
+      .join(' / ');
+  };
+  
+  // Get all variants from filtered products (flat list)
+  const allVariants = useMemo(() => {
+    return products.flatMap(p => p.variants);
+  }, [products]);
+  
+  const hasEdits = Object.values(restockEdits).some(qty => qty > 0);
+  
+  return (
+    <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={onBack} disabled={isSaving}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle>Restock</CardTitle>
+          </div>
+          <Button
+            onClick={onSave}
+            disabled={isSaving || !hasEdits}
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+          >
+            {isSaving ? 'Saving...' : 'Save Restock'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Top Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Warehouse</Label>
+            <Select value={restockWarehouseId} onValueChange={setRestockWarehouseId} disabled={isSaving}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select warehouse" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map(wh => (
+                  <SelectItem key={wh.id} value={wh.id}>
+                    {wh.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Reference (optional)</Label>
+            <Input
+              placeholder="e.g. supplier invoice #123"
+              value={restockReferenceNote}
+              onChange={(e) => setRestockReferenceNote(e.target.value)}
+              disabled={isSaving}
+            />
+          </div>
+        </div>
+        
+        {/* Variants Table */}
+        <div className="border rounded-lg overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="p-2 text-left text-sm font-medium">Variant</th>
+                <th className="p-2 text-left text-sm font-medium">SKU</th>
+                <th className="p-2 text-right text-sm font-medium">Current</th>
+                <th className="p-2 text-right text-sm font-medium">Restock Qty (+)</th>
+                <th className="p-2 text-right text-sm font-medium">After</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allVariants.map((variant) => {
+                const current = getQty(variant.id, restockWarehouseId);
+                const restockQty = restockEdits[variant.id] || 0;
+                const after = current + restockQty;
+                
+                return (
+                  <tr key={variant.id} className="border-b hover:bg-muted/30">
+                    <td className="p-2 text-sm">{formatVariantName(variant.name)}</td>
+                    <td className="p-2 text-sm text-muted-foreground">{variant.sku || '-'}</td>
+                    <td className="p-2 text-sm text-right">{current}</td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={restockQty || ''}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : Math.max(0, parseFloat(e.target.value) || 0);
+                          setRestockEdits(prev => ({
+                            ...prev,
+                            [variant.id]: value,
+                          }));
+                        }}
+                        disabled={isSaving}
+                        className="w-24 text-right"
+                      />
+                    </td>
+                    <td className="p-2 text-sm text-right font-medium">{after}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Transfer Panel Component
+interface TransferPanelProps {
+  products: ProductWithDetails[];
+  warehouses: Warehouse[];
+  transferFromWarehouseId: string;
+  setTransferFromWarehouseId: (id: string) => void;
+  transferToWarehouseId: string;
+  setTransferToWarehouseId: (id: string) => void;
+  transferReferenceNote: string;
+  setTransferReferenceNote: (note: string) => void;
+  transferEdits: Record<string, number>;
+  setTransferEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  getQty: (variantId: string, warehouseId: string) => number;
+  onBack: () => void;
+  onSave: () => void;
+  isSaving: boolean;
+  rank1: string;
+  rank2: string;
+}
+
+function TransferPanel({
+  products,
+  warehouses,
+  transferFromWarehouseId,
+  setTransferFromWarehouseId,
+  transferToWarehouseId,
+  setTransferToWarehouseId,
+  transferReferenceNote,
+  setTransferReferenceNote,
+  transferEdits,
+  setTransferEdits,
+  getQty,
+  onBack,
+  onSave,
+  isSaving,
+  rank1,
+  rank2,
+}: TransferPanelProps) {
+  // Helper function to format variant name by removing option type labels
+  const formatVariantName = (variantName: string): string => {
+    return variantName
+      .split('/')
+      .map(segment => {
+        const colonIndex = segment.indexOf(':');
+        if (colonIndex === -1) {
+          return segment.trim();
+        }
+        return segment.substring(colonIndex + 1).trim();
+      })
+      .join(' / ');
+  };
+  
+  // Get all variants from filtered products (flat list)
+  const allVariants = useMemo(() => {
+    return products.flatMap(p => p.variants);
+  }, [products]);
+  
+  const hasEdits = Object.values(transferEdits).some(qty => qty > 0);
+  const isValid = transferFromWarehouseId !== transferToWarehouseId && transferFromWarehouseId && transferToWarehouseId;
+  
+  const handleSwap = () => {
+    const temp = transferFromWarehouseId;
+    setTransferFromWarehouseId(transferToWarehouseId);
+    setTransferToWarehouseId(temp);
+    // Clear edits when swapping
+    setTransferEdits({});
+  };
+  
+  const fromWarehouse = warehouses.find(w => w.id === transferFromWarehouseId);
+  const toWarehouse = warehouses.find(w => w.id === transferToWarehouseId);
+  
+  return (
+    <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={onBack} disabled={isSaving}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <CardTitle>Transfer</CardTitle>
+          </div>
+          <Button
+            onClick={onSave}
+            disabled={isSaving || !hasEdits || !isValid}
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+          >
+            {isSaving ? 'Saving...' : 'Save Transfer'}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Top Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>From Warehouse</Label>
+            <Select value={transferFromWarehouseId} onValueChange={setTransferFromWarehouseId} disabled={isSaving}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select warehouse" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map(wh => (
+                  <SelectItem key={wh.id} value={wh.id}>
+                    {wh.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleSwap}
+              disabled={isSaving || !isValid}
+              className="w-full"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label>To Warehouse</Label>
+            <Select value={transferToWarehouseId} onValueChange={setTransferToWarehouseId} disabled={isSaving}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select warehouse" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map(wh => (
+                  <SelectItem key={wh.id} value={wh.id}>
+                    {wh.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Reference (optional)</Label>
+          <Input
+            placeholder="e.g. Event Booth"
+            value={transferReferenceNote}
+            onChange={(e) => setTransferReferenceNote(e.target.value)}
+            disabled={isSaving}
+          />
+        </div>
+        
+        {/* Variants Table */}
+        <div className="border rounded-lg overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-muted/50 border-b">
+                <th className="p-2 text-left text-sm font-medium">Variant</th>
+                <th className="p-2 text-left text-sm font-medium">SKU</th>
+                <th className="p-2 text-right text-sm font-medium">From Stock</th>
+                <th className="p-2 text-right text-sm font-medium">Transfer Qty</th>
+                <th className="p-2 text-right text-sm font-medium">To Stock</th>
+                <th className="p-2 text-right text-sm font-medium">After (To)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allVariants.map((variant) => {
+                const fromStock = getQty(variant.id, transferFromWarehouseId);
+                const toStock = getQty(variant.id, transferToWarehouseId);
+                const transferQty = transferEdits[variant.id] || 0;
+                const maxTransfer = fromStock;
+                const afterTo = toStock + transferQty;
+                
+                return (
+                  <tr key={variant.id} className="border-b hover:bg-muted/30">
+                    <td className="p-2 text-sm">{formatVariantName(variant.name)}</td>
+                    <td className="p-2 text-sm text-muted-foreground">{variant.sku || '-'}</td>
+                    <td className="p-2 text-sm text-right">{fromStock}</td>
+                    <td className="p-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        max={maxTransfer}
+                        value={transferQty || ''}
+                        onChange={(e) => {
+                          let value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
+                          value = Math.max(0, Math.min(value, maxTransfer)); // Clamp to max
+                          setTransferEdits(prev => ({
+                            ...prev,
+                            [variant.id]: value,
+                          }));
+                        }}
+                        disabled={isSaving}
+                        className="w-24 text-right"
+                      />
+                    </td>
+                    <td className="p-2 text-sm text-right">{toStock}</td>
+                    <td className="p-2 text-sm text-right font-medium">{afterTo}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
