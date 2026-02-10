@@ -777,111 +777,109 @@ function ProductsContent({
 
   // Catalog pillar - render existing catalog view
   return (
-    <Card className="rounded-3xl border overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-      <CardContent className="p-3 sm:p-4 md:p-6">
-        {products.length === 0 ? (
-          <div className="text-center py-8 sm:py-12 px-4">
-            <p className="text-sm sm:text-base text-muted-foreground mb-4">No products in this category</p>
-          </div>
-        ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {products.map((product) => {
-              const isExpanded = expandedProducts.has(product.id);
-              const totalQty = getProductQuantity(product);
-              const minPrice = product.variants.length > 0 
-                ? Math.min(...product.variants.map(v => v.price || 0).filter(p => p > 0))
-                : product.base_price || 0;
+    <div className="p-3 sm:p-4 md:p-6">
+      {products.length === 0 ? (
+        <div className="text-center py-8 sm:py-12 px-4">
+          <p className="text-sm sm:text-base text-muted-foreground mb-4">No products in this category</p>
+        </div>
+      ) : (
+        <div className="space-y-2 sm:space-y-3">
+          {products.map((product) => {
+            const isExpanded = expandedProducts.has(product.id);
+            const totalQty = getProductQuantity(product);
+            const minPrice = product.variants.length > 0 
+              ? Math.min(...product.variants.map(v => v.price || 0).filter(p => p > 0))
+              : product.base_price || 0;
 
-              return (
-                <div key={product.id} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                  {/* Product Header */}
-                  <div className="p-2.5 sm:p-3 md:p-4 bg-white">
-                    <div className="flex items-start justify-between gap-2 sm:gap-3">
-                      <button
-                        onClick={() => toggleProduct(product.id)}
-                        className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
-                      >
-                        {product.variants.length > 1 ? (
-                          isExpanded ? (
-                            <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
-                          )
+            return (
+              <div key={product.id} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                {/* Product Header */}
+                <div className="p-2.5 sm:p-3 md:p-4 bg-white">
+                  <div className="flex items-start justify-between gap-2 sm:gap-3">
+                    <button
+                      onClick={() => toggleProduct(product.id)}
+                      className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
+                    >
+                      {product.variants.length > 1 ? (
+                        isExpanded ? (
+                          <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
                         ) : (
-                          <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
-                            {product.title}
-                          </h3>
-                        </div>
-                      </button>
-                      <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
-                        <div className="text-right">
-                          {/* Catalog pillar - show price */}
-                          <>
-                            <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
-                              HK${minPrice.toFixed(2)}
+                          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
+                        )
+                      ) : (
+                        <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
+                          {product.title}
+                        </h3>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        {/* Catalog pillar - show price */}
+                        <>
+                          <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
+                            HK${minPrice.toFixed(2)}
+                          </div>
+                          {product.variants.length > 1 && (
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              {product.variants.length} variants
                             </div>
-                            {product.variants.length > 1 && (
-                              <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                {product.variants.length} variants
-                              </div>
-                            )}
-                          </>
-                        </div>
-                        <div className="flex gap-0.5 sm:gap-1">
-                          {!isExpanded && product.variants.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                expandAllVariants(product.id, product.variants);
-                              }}
-                              title="Expand all variants"
-                              className="h-8 w-8 p-0"
-                            >
-                              <ChevronsDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            </Button>
                           )}
+                        </>
+                      </div>
+                      <div className="flex gap-0.5 sm:gap-1">
+                        {!isExpanded && product.variants.length > 1 && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              expandAllVariants(product.id, product.variants);
+                            }}
+                            title="Expand all variants"
                             className="h-8 w-8 p-0"
                           >
-                            <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <ChevronsDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                           </Button>
-                        </div>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
-
-                  {/* Expanded Variants */}
-                  {isExpanded && product.variants.length > 0 && (
-                    <div className="border-t px-2.5 sm:px-3 md:px-8 py-2" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
-                      <VariantCombinationsTable
-                        variants={product.variants}
-                        inventoryItems={product.inventoryItems}
-                        getVariantQuantity={getVariantQuantity}
-                        basePrice={product.base_price}
-                        isBulkEdit={isBulkEdit}
-                        selectedWarehouseId={selectedWarehouseId}
-                        pendingEdits={pendingEdits}
-                        setPendingEdits={setPendingEdits}
-                        getCurrentStock={getCurrentStock}
-                        getCurrentPrice={getCurrentPrice}
-                      />
-                    </div>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+
+                {/* Expanded Variants */}
+                {isExpanded && product.variants.length > 0 && (
+                  <div className="border-t px-2.5 sm:px-3 md:px-8 py-2" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
+                    <VariantCombinationsTable
+                      variants={product.variants}
+                      inventoryItems={product.inventoryItems}
+                      getVariantQuantity={getVariantQuantity}
+                      basePrice={product.base_price}
+                      isBulkEdit={isBulkEdit}
+                      selectedWarehouseId={selectedWarehouseId}
+                      pendingEdits={pendingEdits}
+                      setPendingEdits={setPendingEdits}
+                      getCurrentStock={getCurrentStock}
+                      getCurrentPrice={getCurrentPrice}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
