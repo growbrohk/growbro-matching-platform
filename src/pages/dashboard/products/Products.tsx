@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
@@ -65,6 +66,7 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
   // Filters
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [selectedPillar, setSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
+  const [filterOpen, setFilterOpen] = useState(false);
   
   // Variant rank config
   const [rank1, setRank1] = useState('Color');
@@ -524,8 +526,81 @@ export default function Products({ isEmbeddedInCatalog = false }: ProductsProps 
             placeholder="Search resources..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9 pr-10 h-9"
           />
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+              >
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-4" align="end">
+              <div className="space-y-4">
+                <div className="font-semibold text-sm">Filter by Category</div>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <button
+                    onClick={() => setSelectedCategoryId('all')}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                      selectedCategoryId === 'all'
+                        ? 'bg-[#0E7A3A] text-white'
+                        : 'bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    All ({categoryCounts.get('all') || 0})
+                  </button>
+                  {categories
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                    .map(cat => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedCategoryId(cat.id)}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedCategoryId === cat.id
+                            ? 'bg-[#0E7A3A] text-white'
+                            : 'bg-white border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {cat.name} ({categoryCounts.get(cat.id) || 0})
+                      </button>
+                    ))}
+                  {(categoryCounts.get('uncategorized') || 0) > 0 && (
+                    <button
+                      onClick={() => setSelectedCategoryId('uncategorized')}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        selectedCategoryId === 'uncategorized'
+                          ? 'bg-[#0E7A3A] text-white'
+                          : 'bg-white border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Uncategorized ({categoryCounts.get('uncategorized') || 0})
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setSelectedCategoryId('all');
+                    }}
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                    onClick={() => setFilterOpen(false)}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
@@ -716,48 +791,6 @@ function ProductsContent({
             <TabsTrigger value="inventory">Inventory</TabsTrigger>
           </TabsList>
         </Tabs>
-
-        {/* Category Pills */}
-        {/* TODO: Wire up real-time category counts from database aggregation */}
-        <div className="flex gap-2 overflow-x-auto pb-3 sm:pb-4 -mx-1 px-1 scrollbar-hide">
-          <button
-            onClick={() => setSelectedCategoryId('all')}
-            className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
-              selectedCategoryId === 'all'
-                ? 'bg-[#0E7A3A] text-white'
-                : 'bg-white border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            All ({categoryCounts.get('all') || 0})
-          </button>
-          {categories
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategoryId(cat.id)}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
-                  selectedCategoryId === cat.id
-                    ? 'bg-[#0E7A3A] text-white'
-                    : 'bg-white border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {cat.name} ({categoryCounts.get(cat.id) || 0})
-              </button>
-            ))}
-          {(categoryCounts.get('uncategorized') || 0) > 0 && (
-            <button
-              onClick={() => setSelectedCategoryId('uncategorized')}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
-                selectedCategoryId === 'uncategorized'
-                  ? 'bg-[#0E7A3A] text-white'
-                  : 'bg-white border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              Uncategorized ({categoryCounts.get('uncategorized') || 0})
-            </button>
-          )}
-        </div>
       </CardHeader>
 
       <CardContent className="p-3 sm:p-4 md:p-6">
