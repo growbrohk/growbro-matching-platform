@@ -8,10 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal, Check } from 'lucide-react';
+import { Loader2, Plus, Edit, ChevronDown, ChevronRight, ChevronsDown, Pencil, Search, Save, X, SlidersHorizontal, Check, Settings } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
@@ -195,6 +198,11 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   // Expansion state
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [expandedRank1Groups, setExpandedRank1Groups] = useState<Set<string>>(new Set());
+  
+  // Settings dialog state
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [defaultView, setDefaultView] = useState<'list' | 'group'>('list');
+  const [defaultExpand, setDefaultExpand] = useState<'collapsed' | 'expanded'>('collapsed');
 
   // Bulk edit state
   const [isBulkEdit, setIsBulkEdit] = useState(false);
@@ -203,6 +211,46 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const originalValuesRef = useRef<Record<string, { stock: number; price: number }>>({});
 
   const canCreate = !!currentOrg?.id;
+
+  // Load saved defaults from localStorage
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    
+    const savedView = localStorage.getItem(`gb:${currentOrg.id}:products_default_view`) as 'list' | 'group' | null;
+    const savedExpand = localStorage.getItem(`gb:${currentOrg.id}:products_default_expand`) as 'collapsed' | 'expanded' | null;
+    
+    if (savedView === 'list' || savedView === 'group') {
+      setDefaultView(savedView);
+    }
+    if (savedExpand === 'collapsed' || savedExpand === 'expanded') {
+      setDefaultExpand(savedExpand);
+    }
+  }, [currentOrg?.id]);
+
+  // Track if we've applied initial expand behavior
+  const hasAppliedInitialExpand = useRef(false);
+
+  // Apply default expand behavior when products are loaded (only once per org)
+  useEffect(() => {
+    if (!currentOrg?.id || loading) return;
+    
+    if (defaultExpand === 'expanded' && products.length > 0 && !hasAppliedInitialExpand.current) {
+      // Auto-expand all products if default is 'expanded'
+      const allProductIds = new Set(products.map(p => p.id));
+      setExpandedProducts(allProductIds);
+      hasAppliedInitialExpand.current = true;
+    } else if (defaultExpand === 'collapsed' && hasAppliedInitialExpand.current === false) {
+      // Mark as applied even if collapsed, so we don't re-run
+      hasAppliedInitialExpand.current = true;
+    }
+  }, [defaultExpand, products.length, loading, currentOrg?.id]);
+
+  // Reset the flag when org changes
+  useEffect(() => {
+    hasAppliedInitialExpand.current = false;
+    setExpandedProducts(new Set());
+    setExpandedRank1Groups(new Set());
+  }, [currentOrg?.id]);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -844,6 +892,16 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
               <Button
                 variant="outline"
                 size="icon"
+                onClick={() => setSettingsOpen(true)}
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Product settings"
+              >
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Settings</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={handleEnterBulkEdit}
                 className="h-9 w-9 sm:w-auto sm:px-3"
                 title="Bulk edit products"
@@ -894,6 +952,137 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           )}
         </div>
       </div>
+
+      {/* Product Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Product Settings</DialogTitle>
+            <DialogDescription>
+              Manage product display defaults and configuration options.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Management Section */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm">Management</h3>
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate('/app/settings');
+                    setSettingsOpen(false);
+                    toast({
+                      title: 'Warehouse Management',
+                      description: 'Warehouse management is coming soon.',
+                    });
+                  }}
+                >
+                  Manage Warehouses
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate('/app/settings/catalog');
+                    setSettingsOpen(false);
+                  }}
+                >
+                  Manage Categories
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate('/app/settings/catalog');
+                    setSettingsOpen(false);
+                  }}
+                >
+                  Variant Configuration (rank1 / rank2)
+                </Button>
+              </div>
+            </div>
+
+            {/* Defaults Section */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm">Product Display Defaults</h3>
+              
+              {/* Default View */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Default view</Label>
+                <RadioGroup
+                  value={defaultView}
+                  onValueChange={(value) => setDefaultView(value as 'list' | 'group')}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="list" id="view-list" />
+                    <Label htmlFor="view-list" className="font-normal cursor-pointer">List</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="group" id="view-group" />
+                    <Label htmlFor="view-group" className="font-normal cursor-pointer">Group</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Default Expand Behavior */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Default expand behavior</Label>
+                <RadioGroup
+                  value={defaultExpand}
+                  onValueChange={(value) => setDefaultExpand(value as 'collapsed' | 'expanded')}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="collapsed" id="expand-collapsed" />
+                    <Label htmlFor="expand-collapsed" className="font-normal cursor-pointer">Collapsed</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expanded" id="expand-expanded" />
+                    <Label htmlFor="expand-expanded" className="font-normal cursor-pointer">Expanded</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSettingsOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (currentOrg?.id) {
+                  localStorage.setItem(`gb:${currentOrg.id}:products_default_view`, defaultView);
+                  localStorage.setItem(`gb:${currentOrg.id}:products_default_expand`, defaultExpand);
+                  
+                  // Apply expand behavior immediately
+                  if (defaultExpand === 'expanded' && products.length > 0) {
+                    const allProductIds = new Set(products.map(p => p.id));
+                    setExpandedProducts(allProductIds);
+                  } else if (defaultExpand === 'collapsed') {
+                    setExpandedProducts(new Set());
+                    setExpandedRank1Groups(new Set());
+                  }
+                  
+                  toast({
+                    title: 'Settings saved',
+                    description: 'Product display defaults have been updated.',
+                  });
+                }
+                setSettingsOpen(false);
+              }}
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Content */}
       <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
