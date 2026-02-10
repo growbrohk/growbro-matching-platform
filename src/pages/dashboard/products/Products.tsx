@@ -223,6 +223,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   const [transferToWarehouseId, setTransferToWarehouseId] = useState<string>('');
   const [transferReferenceNote, setTransferReferenceNote] = useState('');
   const [transferEdits, setTransferEdits] = useState<Record<string, number>>({});
+  const [isTransferSetupOpen, setIsTransferSetupOpen] = useState(false);
 
   const canCreate = !!currentOrg?.id;
 
@@ -619,18 +620,49 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setIsBulkModeDialogOpen(false);
   };
   
-  // Enter transfer mode
+  // Open transfer setup dialog
   const handleEnterTransfer = () => {
+    // Initialize with current warehouse as FROM, and first other warehouse as TO
     setTransferFromWarehouseId(selectedWarehouseId);
-    // Set to warehouse to first warehouse != from (or first if only one)
     const otherWarehouse = warehouses.find(w => w.id !== selectedWarehouseId) || warehouses[0];
     if (otherWarehouse) {
       setTransferToWarehouseId(otherWarehouse.id);
     }
     setTransferReferenceNote('');
-    setTransferEdits({});
-    setBulkMode('transfer');
     setIsBulkModeDialogOpen(false);
+    setIsTransferSetupOpen(true);
+  };
+  
+  // Confirm transfer setup and enter transfer mode
+  const handleConfirmTransferSetup = () => {
+    if (!transferFromWarehouseId || !transferToWarehouseId) {
+      toast({
+        title: 'Error',
+        description: 'Please select both From and To warehouses',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (transferFromWarehouseId === transferToWarehouseId) {
+      toast({
+        title: 'Error',
+        description: 'From and To warehouses must be different',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // If FROM warehouse changed, clear transfer edits
+    const fromWarehouseChanged = bulkMode === 'transfer' && selectedWarehouseId !== transferFromWarehouseId;
+    if (fromWarehouseChanged) {
+      setTransferEdits({});
+    }
+    
+    // Set selectedWarehouseId to FROM warehouse so Stock column shows FROM stock
+    setSelectedWarehouseId(transferFromWarehouseId);
+    setBulkMode('transfer');
+    setIsTransferSetupOpen(false);
   };
   
   // Exit bulk mode (any mode)
@@ -640,6 +672,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     setPendingEdits({});
     setRestockEdits({});
     setTransferEdits({});
+    setTransferReferenceNote('');
     originalValuesRef.current = {};
   };
 
@@ -1071,26 +1104,32 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           : 'Transfer';
         
         // FROM movement (outgoing)
+        const fromNote = transferReferenceNote.trim()
+          ? `Transfer to ${toWarehouseName} — ${transferReferenceNote}`
+          : `Transfer to ${toWarehouseName}`;
         const { error: fromMovementError } = await supabase
           .from('inventory_movements')
           .insert({
             inventory_item_id: fromInventoryItemId,
             delta: -qty,
             reason: 'transfer',
-            note: `${baseNote} to ${toWarehouseName}`,
+            note: fromNote,
             created_by: user.id,
           });
         
         if (fromMovementError) throw fromMovementError;
         
         // TO movement (incoming)
+        const toNote = transferReferenceNote.trim()
+          ? `Transfer from ${fromWarehouseName} — ${transferReferenceNote}`
+          : `Transfer from ${fromWarehouseName}`;
         const { error: toMovementError } = await supabase
           .from('inventory_movements')
           .insert({
             inventory_item_id: toInventoryItemId,
             delta: qty,
             reason: 'transfer',
-            note: `${baseNote} from ${fromWarehouseName}`,
+            note: toNote,
             created_by: user.id,
           });
         
@@ -1386,6 +1425,43 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
                 <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Save Restock'}</span>
               </Button>
             </>
+          ) : bulkMode === 'transfer' ? (
+            <>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>
+                  From: {warehouses.find(w => w.id === transferFromWarehouseId)?.name || 'Unknown'} → To: {warehouses.find(w => w.id === transferToWarehouseId)?.name || 'Unknown'}
+                </span>
+                <button
+                  onClick={() => setIsTransferSetupOpen(true)}
+                  className="text-[#0E7A3A] hover:underline"
+                >
+                  Edit
+                </button>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleExitBulkMode}
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Cancel transfer"
+                disabled={isSaving}
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">Cancel</span>
+              </Button>
+
+              <Button
+                onClick={handleSaveTransfer}
+                disabled={isSaving || !transferFromWarehouseId || !transferToWarehouseId || transferFromWarehouseId === transferToWarehouseId || !Object.values(transferEdits).some(qty => qty > 0)}
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                size="icon"
+                className="h-9 w-9 sm:w-auto sm:px-3"
+                title="Save transfer"
+              >
+                <Save className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-2">{isSaving ? 'Saving...' : 'Transfer'}</span>
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -1455,6 +1531,90 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
               </DialogFooter>
             </footer>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Setup Dialog */}
+      <Dialog open={isTransferSetupOpen} onOpenChange={setIsTransferSetupOpen}>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Transfer Stock</DialogTitle>
+            <DialogDescription>
+              Select the source and destination warehouses for the transfer.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="transfer-from">From warehouse *</Label>
+              <Select
+                value={transferFromWarehouseId}
+                onValueChange={setTransferFromWarehouseId}
+              >
+                <SelectTrigger id="transfer-from">
+                  <SelectValue placeholder="Select warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map(wh => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {wh.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="transfer-to">To warehouse *</Label>
+              <Select
+                value={transferToWarehouseId}
+                onValueChange={setTransferToWarehouseId}
+              >
+                <SelectTrigger id="transfer-to">
+                  <SelectValue placeholder="Select warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map(wh => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {wh.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="transfer-note">Reference (optional)</Label>
+              <Input
+                id="transfer-note"
+                placeholder="e.g. Event Booth"
+                value={transferReferenceNote}
+                onChange={(e) => setTransferReferenceNote(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsTransferSetupOpen(false);
+                // Only exit transfer mode if we're not already in transfer mode (i.e., initial setup)
+                if (bulkMode !== 'transfer') {
+                  setBulkMode('none');
+                }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmTransferSetup}
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+              disabled={!transferFromWarehouseId || !transferToWarehouseId || transferFromWarehouseId === transferToWarehouseId}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1603,57 +1763,40 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
 
       {/* Content */}
       <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
-        {bulkMode === 'transfer' ? (
-          <TransferPanel
-            products={filteredProducts}
-            warehouses={warehouses}
-            transferFromWarehouseId={transferFromWarehouseId}
-            setTransferFromWarehouseId={setTransferFromWarehouseId}
-            transferToWarehouseId={transferToWarehouseId}
-            setTransferToWarehouseId={setTransferToWarehouseId}
-            transferReferenceNote={transferReferenceNote}
-            setTransferReferenceNote={setTransferReferenceNote}
-            transferEdits={transferEdits}
-            setTransferEdits={setTransferEdits}
-            getQty={getQty}
-            onBack={handleExitBulkMode}
-            onSave={handleSaveTransfer}
-            isSaving={isSaving}
-            rank1={rank1}
-            rank2={rank2}
-          />
-        ) : (
-          <ProductsContent
-            products={filteredProducts}
-            categories={categories}
-            categoryCounts={categoryCounts}
-            selectedPillar={selectedPillar}
-            setSelectedPillar={setSelectedPillar}
-            warehouses={warehouses}
-            selectedWarehouseId={selectedWarehouseId}
-            setSelectedWarehouseId={setSelectedWarehouseId}
-            expandedProducts={expandedProducts}
-            expandedRank1Groups={expandedRank1Groups}
-            toggleProduct={toggleProduct}
-            toggleRank1Group={toggleRank1Group}
-            expandAllVariants={expandAllVariants}
-            getProductQuantity={getProductQuantity}
-            getVariantQuantity={getVariantQuantity}
-            rank1={rank1}
-            rank2={rank2}
-            navigate={navigate}
-            bulkMode={bulkMode}
-            isBulkEdit={isBulkEdit}
-            pendingEdits={pendingEdits}
-            setPendingEdits={setPendingEdits}
-            getCurrentStock={getCurrentStock}
-            getCurrentPrice={getCurrentPrice}
-            restockEdits={restockEdits}
-            setRestockEdits={setRestockEdits}
-            restockReferenceNote={restockReferenceNote}
-            setRestockReferenceNote={setRestockReferenceNote}
-          />
-        )}
+        <ProductsContent
+          products={filteredProducts}
+          categories={categories}
+          categoryCounts={categoryCounts}
+          selectedPillar={selectedPillar}
+          setSelectedPillar={setSelectedPillar}
+          warehouses={warehouses}
+          selectedWarehouseId={selectedWarehouseId}
+          setSelectedWarehouseId={setSelectedWarehouseId}
+          expandedProducts={expandedProducts}
+          expandedRank1Groups={expandedRank1Groups}
+          toggleProduct={toggleProduct}
+          toggleRank1Group={toggleRank1Group}
+          expandAllVariants={expandAllVariants}
+          getProductQuantity={getProductQuantity}
+          getVariantQuantity={getVariantQuantity}
+          rank1={rank1}
+          rank2={rank2}
+          navigate={navigate}
+          bulkMode={bulkMode}
+          isBulkEdit={isBulkEdit}
+          pendingEdits={pendingEdits}
+          setPendingEdits={setPendingEdits}
+          getCurrentStock={getCurrentStock}
+          getCurrentPrice={getCurrentPrice}
+          restockEdits={restockEdits}
+          setRestockEdits={setRestockEdits}
+          restockReferenceNote={restockReferenceNote}
+          setRestockReferenceNote={setRestockReferenceNote}
+          transferEdits={transferEdits}
+          setTransferEdits={setTransferEdits}
+          transferFromWarehouseId={transferFromWarehouseId}
+          transferToWarehouseId={transferToWarehouseId}
+        />
       </div>
     </div>
   );
@@ -1813,208 +1956,6 @@ function RestockPanel({
   );
 }
 
-// Transfer Panel Component
-interface TransferPanelProps {
-  products: ProductWithDetails[];
-  warehouses: Warehouse[];
-  transferFromWarehouseId: string;
-  setTransferFromWarehouseId: (id: string) => void;
-  transferToWarehouseId: string;
-  setTransferToWarehouseId: (id: string) => void;
-  transferReferenceNote: string;
-  setTransferReferenceNote: (note: string) => void;
-  transferEdits: Record<string, number>;
-  setTransferEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  getQty: (variantId: string, warehouseId: string) => number;
-  onBack: () => void;
-  onSave: () => void;
-  isSaving: boolean;
-  rank1: string;
-  rank2: string;
-}
-
-function TransferPanel({
-  products,
-  warehouses,
-  transferFromWarehouseId,
-  setTransferFromWarehouseId,
-  transferToWarehouseId,
-  setTransferToWarehouseId,
-  transferReferenceNote,
-  setTransferReferenceNote,
-  transferEdits,
-  setTransferEdits,
-  getQty,
-  onBack,
-  onSave,
-  isSaving,
-  rank1,
-  rank2,
-}: TransferPanelProps) {
-  // Helper function to format variant name by removing option type labels
-  const formatVariantName = (variantName: string): string => {
-    return variantName
-      .split('/')
-      .map(segment => {
-        const colonIndex = segment.indexOf(':');
-        if (colonIndex === -1) {
-          return segment.trim();
-        }
-        return segment.substring(colonIndex + 1).trim();
-      })
-      .join(' / ');
-  };
-  
-  // Get all variants from filtered products (flat list)
-  const allVariants = useMemo(() => {
-    return products.flatMap(p => p.variants);
-  }, [products]);
-  
-  const hasEdits = Object.values(transferEdits).some(qty => qty > 0);
-  const isValid = transferFromWarehouseId !== transferToWarehouseId && transferFromWarehouseId && transferToWarehouseId;
-  
-  const handleSwap = () => {
-    const temp = transferFromWarehouseId;
-    setTransferFromWarehouseId(transferToWarehouseId);
-    setTransferToWarehouseId(temp);
-    // Clear edits when swapping
-    setTransferEdits({});
-  };
-  
-  const fromWarehouse = warehouses.find(w => w.id === transferFromWarehouseId);
-  const toWarehouse = warehouses.find(w => w.id === transferToWarehouseId);
-  
-  return (
-    <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={onBack} disabled={isSaving}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <CardTitle>Transfer</CardTitle>
-          </div>
-          <Button
-            onClick={onSave}
-            disabled={isSaving || !hasEdits || !isValid}
-            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-          >
-            {isSaving ? 'Saving...' : 'Save Transfer'}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Top Controls */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label>From Warehouse</Label>
-            <Select value={transferFromWarehouseId} onValueChange={setTransferFromWarehouseId} disabled={isSaving}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select warehouse" />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map(wh => (
-                  <SelectItem key={wh.id} value={wh.id}>
-                    {wh.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-end">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleSwap}
-              disabled={isSaving || !isValid}
-              className="w-full"
-            >
-              <ArrowRightLeft className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <Label>To Warehouse</Label>
-            <Select value={transferToWarehouseId} onValueChange={setTransferToWarehouseId} disabled={isSaving}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select warehouse" />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map(wh => (
-                  <SelectItem key={wh.id} value={wh.id}>
-                    {wh.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label>Reference (optional)</Label>
-          <Input
-            placeholder="e.g. Event Booth"
-            value={transferReferenceNote}
-            onChange={(e) => setTransferReferenceNote(e.target.value)}
-            disabled={isSaving}
-          />
-        </div>
-        
-        {/* Variants Table */}
-        <div className="border rounded-lg overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="p-2 text-left text-sm font-medium">Variant</th>
-                <th className="p-2 text-left text-sm font-medium">SKU</th>
-                <th className="p-2 text-right text-sm font-medium">From Stock</th>
-                <th className="p-2 text-right text-sm font-medium">Transfer Qty</th>
-                <th className="p-2 text-right text-sm font-medium">To Stock</th>
-                <th className="p-2 text-right text-sm font-medium">After (To)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allVariants.map((variant) => {
-                const fromStock = getQty(variant.id, transferFromWarehouseId);
-                const toStock = getQty(variant.id, transferToWarehouseId);
-                const transferQty = transferEdits[variant.id] || 0;
-                const maxTransfer = fromStock;
-                const afterTo = toStock + transferQty;
-                
-                return (
-                  <tr key={variant.id} className="border-b hover:bg-muted/30">
-                    <td className="p-2 text-sm">{formatVariantName(variant.name)}</td>
-                    <td className="p-2 text-sm text-muted-foreground">{variant.sku || '-'}</td>
-                    <td className="p-2 text-sm text-right">{fromStock}</td>
-                    <td className="p-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        max={maxTransfer}
-                        value={transferQty || ''}
-                        onChange={(e) => {
-                          let value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0;
-                          value = Math.max(0, Math.min(value, maxTransfer)); // Clamp to max
-                          setTransferEdits(prev => ({
-                            ...prev,
-                            [variant.id]: value,
-                          }));
-                        }}
-                        disabled={isSaving}
-                        className="w-24 text-right"
-                      />
-                    </td>
-                    <td className="p-2 text-sm text-right">{toStock}</td>
-                    <td className="p-2 text-sm text-right font-medium">{afterTo}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // Products content component (shared between tabs)
 interface ProductsContentProps {
   products: ProductWithDetails[];
@@ -2045,6 +1986,10 @@ interface ProductsContentProps {
   setRestockEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   restockReferenceNote: string;
   setRestockReferenceNote: (note: string) => void;
+  transferEdits: Record<string, number>;
+  setTransferEdits: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  transferFromWarehouseId: string;
+  transferToWarehouseId: string;
 }
 
 function ProductsContent({
@@ -2076,6 +2021,10 @@ function ProductsContent({
   setRestockEdits,
   restockReferenceNote,
   setRestockReferenceNote,
+  transferEdits,
+  setTransferEdits,
+  transferFromWarehouseId,
+  transferToWarehouseId,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
@@ -2195,6 +2144,10 @@ function ProductsContent({
                       getCurrentPrice={getCurrentPrice}
                       restockEdits={restockEdits}
                       setRestockEdits={setRestockEdits}
+                      transferEdits={transferEdits}
+                      setTransferEdits={setTransferEdits}
+                      transferFromWarehouseId={transferFromWarehouseId}
+                      transferToWarehouseId={transferToWarehouseId}
                     />
                   </div>
                 )}
@@ -2222,6 +2175,10 @@ interface VariantCombinationsTableProps {
   getCurrentPrice?: (variantId: string) => number;
   restockEdits?: Record<string, number>;
   setRestockEdits?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  transferEdits?: Record<string, number>;
+  setTransferEdits?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  transferFromWarehouseId?: string;
+  transferToWarehouseId?: string;
 }
 
 function VariantCombinationsTable({
@@ -2238,6 +2195,10 @@ function VariantCombinationsTable({
   getCurrentPrice,
   restockEdits = {},
   setRestockEdits,
+  transferEdits = {},
+  setTransferEdits,
+  transferFromWarehouseId = '',
+  transferToWarehouseId = '',
 }: VariantCombinationsTableProps) {
   // Helper function to format variant name by removing option type labels
   const formatVariantName = (variantName: string): string => {
@@ -2262,6 +2223,7 @@ function VariantCombinationsTable({
   }
 
   const isRestockMode = bulkMode === 'restock';
+  const isTransferMode = bulkMode === 'transfer';
   const isCorrectionMode = bulkMode === 'correction' || isBulkEdit;
 
   return (
@@ -2273,6 +2235,9 @@ function VariantCombinationsTable({
             <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[48px]">Stock</th>
             {isRestockMode && (
               <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Restock</th>
+            )}
+            {isTransferMode && (
+              <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Transfer</th>
             )}
             <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-[56px]">Price</th>
             <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[96px]">SKU</th>
@@ -2365,6 +2330,28 @@ function VariantCombinationsTable({
               }
             };
             
+            const handleTransferChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+              if (!setTransferEdits || !transferFromWarehouseId || !getCurrentStock) return;
+              
+              const inputValue = e.target.value;
+              const fromStock = getCurrentStock(variant.id, transferFromWarehouseId);
+              
+              // Allow empty string while typing, convert to 0 for storage
+              if (inputValue === '') {
+                setTransferEdits(prev => ({
+                  ...prev,
+                  [variant.id]: 0,
+                }));
+              } else {
+                const value = parseFloat(inputValue);
+                const numValue = isNaN(value) ? 0 : Math.max(0, Math.min(value, fromStock)); // Clamp to max available
+                setTransferEdits(prev => ({
+                  ...prev,
+                  [variant.id]: numValue,
+                }));
+              }
+            };
+            
             return (
               <tr key={variant.id} className="border-t hover:bg-muted/30 even:bg-muted/10">
                 <td className="p-0 border w-[88px]">
@@ -2401,8 +2388,22 @@ function VariantCombinationsTable({
                     />
                   </td>
                 )}
+                {isTransferMode && (
+                  <td className="p-0 border w-[56px]">
+                    <Input
+                      type="number"
+                      min="0"
+                      max={transferFromWarehouseId && getCurrentStock ? getCurrentStock(variant.id, transferFromWarehouseId) : undefined}
+                      value={transferEdits[variant.id] !== undefined && transferEdits[variant.id] !== 0 ? transferEdits[variant.id] : ''}
+                      onChange={handleTransferChange}
+                      placeholder="0"
+                      className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
+                      style={{ fontSize: '11px' }}
+                    />
+                  </td>
+                )}
                 <td className="p-0 border w-[56px]">
-                  {isCorrectionMode ? (
+                  {isCorrectionMode && !isTransferMode ? (
                     <Input
                       type="number"
                       min="0"
