@@ -1369,60 +1369,69 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
 
       {/* Bulk Action Mode Picker Dialog */}
       <Dialog open={isBulkModeDialogOpen} onOpenChange={setIsBulkModeDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Bulk Action</DialogTitle>
-            <DialogDescription>
-              Choose the type of bulk action you want to perform.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-3 py-4">
-            <Button
-              variant="outline"
-              className="w-full justify-start h-auto py-4"
-              onClick={() => {
-                handleEnterBulkEdit();
-                setIsBulkModeDialogOpen(false);
-              }}
-            >
-              <div className="text-left">
-                <div className="font-semibold">Correction</div>
-                <div className="text-sm text-muted-foreground">Set absolute stock + optional price updates</div>
-              </div>
-            </Button>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-[520px] max-h-[85vh] overflow-hidden p-0">
+          <div className="flex flex-col max-h-[85vh]">
+            <header className="px-5 pt-5 pb-3 shrink-0">
+              <DialogHeader>
+                <DialogTitle>Bulk Action</DialogTitle>
+                <DialogDescription>
+                  Choose the type of bulk action you want to perform.
+                </DialogDescription>
+              </DialogHeader>
+            </header>
             
-            <Button
-              variant="outline"
-              className="w-full justify-start h-auto py-4"
-              onClick={handleEnterRestock}
-            >
-              <div className="text-left">
-                <div className="font-semibold">Restock</div>
-                <div className="text-sm text-muted-foreground">Add quantities + movement reason restock</div>
+            <div className="px-5 pb-4 flex-1 min-h-0 overflow-y-auto">
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full text-left whitespace-normal break-words h-auto py-4"
+                  onClick={() => {
+                    handleEnterBulkEdit();
+                    setIsBulkModeDialogOpen(false);
+                  }}
+                >
+                  <div className="text-left w-full">
+                    <div className="font-semibold">Correction</div>
+                    <div className="text-sm text-muted-foreground leading-snug whitespace-normal break-words">Set absolute stock + optional price updates</div>
+                  </div>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  className="w-full text-left whitespace-normal break-words h-auto py-4"
+                  onClick={handleEnterRestock}
+                >
+                  <div className="text-left w-full">
+                    <div className="font-semibold">Restock</div>
+                    <div className="text-sm text-muted-foreground leading-snug whitespace-normal break-words">Add quantities + movement reason restock</div>
+                  </div>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  className="w-full text-left whitespace-normal break-words h-auto py-4"
+                  onClick={handleEnterTransfer}
+                >
+                  <div className="text-left w-full">
+                    <div className="font-semibold">Transfer</div>
+                    <div className="text-sm text-muted-foreground leading-snug whitespace-normal break-words">Move quantities between warehouses + movement reason transfer</div>
+                  </div>
+                </Button>
               </div>
-            </Button>
+            </div>
             
-            <Button
-              variant="outline"
-              className="w-full justify-start h-auto py-4"
-              onClick={handleEnterTransfer}
-            >
-              <div className="text-left">
-                <div className="font-semibold">Transfer</div>
-                <div className="text-sm text-muted-foreground">Move quantities between warehouses + movement reason transfer</div>
-              </div>
-            </Button>
+            <footer className="px-5 pb-6 sm:pb-5 pt-3 shrink-0">
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkModeDialogOpen(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </footer>
           </div>
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsBulkModeDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
