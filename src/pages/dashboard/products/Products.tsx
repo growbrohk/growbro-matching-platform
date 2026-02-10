@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -439,6 +439,19 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
+  // Auto-expand all products when entering bulk mode
+  const isInBulkMode = isBulkEdit || bulkMode === 'restock' || bulkMode === 'transfer';
+  
+  useEffect(() => {
+    if (!isInBulkMode) return;
+    // Expand the currently rendered list, not the whole products array
+    // Use filteredProducts (the one passed to ProductsContent)
+    if (filteredProducts.length === 0) return;
+
+    // Expand all product rows and their rank1 groups
+    expandAllProductsForBulk(filteredProducts);
+  }, [isInBulkMode, filteredProducts, expandAllProductsForBulk]);
+
   // Category counts (only physical products)
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -526,6 +539,26 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
       return next;
     });
   };
+
+  // Helper function to expand all products for bulk mode
+  const expandAllProductsForBulk = useCallback((productsToExpand: ProductWithDetails[]) => {
+    // Expand all product rows
+    setExpandedProducts(new Set(productsToExpand.map(p => p.id)));
+    
+    // Also expand all rank1 groups so variant tables are visible without extra clicks
+    const nextGroups = new Set<string>();
+    productsToExpand.forEach(p => {
+      const rank1Values = new Set<string>();
+      p.variants.forEach(v => {
+        const val = getVariantOptionValue(v.name, rank1);
+        if (val) rank1Values.add(val);
+      });
+      rank1Values.forEach(val => {
+        nextGroups.add(`${p.id}:${val}`);
+      });
+    });
+    setExpandedRank1Groups(nextGroups);
+  }, [rank1]);
 
   const toggleRank1Group = (groupKey: string) => {
     setExpandedRank1Groups(prev => {
