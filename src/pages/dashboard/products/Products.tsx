@@ -1460,17 +1460,6 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
             </>
           ) : bulkMode === 'transfer' ? (
             <>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>
-                  From: {warehouses.find(w => w.id === transferFromWarehouseId)?.name || 'Unknown'} → To: {warehouses.find(w => w.id === transferToWarehouseId)?.name || 'Unknown'}
-                </span>
-                <button
-                  onClick={() => setIsTransferSetupOpen(true)}
-                  className="text-[#0E7A3A] hover:underline"
-                >
-                  Edit
-                </button>
-              </div>
               <Button
                 variant="outline"
                 size="icon"
@@ -1498,6 +1487,28 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           ) : null}
         </div>
       </div>
+
+      {/* Transfer Summary Row */}
+      {bulkMode === 'transfer' && (
+        <div className="flex items-center gap-2 px-1 sm:px-0">
+          <div className="flex-1 min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm"
+                 style={{ borderColor:'rgba(14,122,58,0.20)', backgroundColor:'rgba(251,248,244,0.9)' }}>
+              <span className="truncate">
+                {warehouses.find(w => w.id === transferFromWarehouseId)?.name || 'Unknown'} → {warehouses.find(w => w.id === transferToWarehouseId)?.name || 'Unknown'}
+              </span>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 h-8"
+            onClick={() => setIsTransferSetupOpen(true)}
+          >
+            Edit
+          </Button>
+        </div>
+      )}
 
       {/* Bulk Action Mode Picker Dialog */}
       <Dialog open={isBulkModeDialogOpen} onOpenChange={setIsBulkModeDialogOpen}>
