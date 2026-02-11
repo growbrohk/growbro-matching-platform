@@ -703,10 +703,23 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           </Popover>
           {editMode ? (
             <>
+              {/* Mobile: Icon-only Save button */}
+              <Button
+                variant="default"
+                size="icon"
+                className="h-9 w-9 md:hidden"
+                onClick={handleSave}
+                disabled={editedCount === 0 || saving}
+                aria-label="Save"
+                title="Save"
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+              {/* Desktop: Save button with text */}
               <Button
                 variant="default"
                 size="sm"
-                className="h-9"
+                className="h-9 hidden md:inline-flex"
                 onClick={handleSave}
                 disabled={editedCount === 0 || saving}
                 aria-label="Save"
@@ -715,10 +728,23 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <Save className="h-4 w-4 mr-2" />
                 Save {editedCount > 0 ? `(${editedCount})` : ''}
               </Button>
+              {/* Mobile: Icon-only Cancel button */}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 md:hidden"
+                onClick={handleCancelEdit}
+                disabled={saving}
+                aria-label="Cancel"
+                title="Cancel"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              {/* Desktop: Cancel button with text */}
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9"
+                className="h-9 hidden md:inline-flex"
                 onClick={handleCancelEdit}
                 disabled={saving}
                 aria-label="Cancel"
@@ -805,7 +831,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                     return (
                       <TableHead
                         key={column}
-                        className={`${baseClasses} cursor-pointer select-none`}
+                        className={`${baseClasses} cursor-pointer select-none min-w-[180px]`}
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -908,7 +934,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       if (editMode) {
                         const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
                         return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[180px]`}>
                             <Input
                               value={draftName === '-' ? '' : draftName}
                               onChange={(e) => {
@@ -917,7 +943,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                                   [ticket.id]: { ...prev[ticket.id], name: e.target.value },
                                 }));
                               }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium"
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium w-full min-w-[180px] whitespace-nowrap"
                               placeholder="-"
                             />
                           </TableCell>
@@ -926,7 +952,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       return (
                         <TableCell
                           key={column}
-                          className={`max-w-[140px] truncate ${baseClasses} font-medium`}
+                          className={`min-w-[180px] whitespace-nowrap ${baseClasses} font-medium`}
                           title={ticket.name ?? undefined}
                         >
                           {ticket.name || '-'}
