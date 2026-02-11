@@ -499,11 +499,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Toolbar: Search + Filter + Settings + Edit + Scan */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2">
         {editMode && (
-          <div className="text-sm text-muted-foreground mr-2">
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
             Editing mode
           </div>
         )}
@@ -513,17 +513,17 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
             placeholder="Search tickets..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9 h-8"
           />
         </div>
 
-        <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+        <div className="flex gap-2 flex-shrink-0">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 relative"
+                className="h-8 w-8 relative"
                 aria-label="Filter tickets"
                 title="Filter tickets"
               >
@@ -612,7 +612,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9"
+                className="h-8 w-8"
                 aria-label="Settings"
                 title="Settings"
               >
@@ -707,7 +707,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="default"
                 size="icon"
-                className="h-9 w-9 md:hidden"
+                className="h-8 w-8 md:hidden"
                 onClick={handleSave}
                 disabled={editedCount === 0 || saving}
                 aria-label="Save"
@@ -719,7 +719,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="default"
                 size="sm"
-                className="h-9 hidden md:inline-flex"
+                className="h-8 hidden md:inline-flex"
                 onClick={handleSave}
                 disabled={editedCount === 0 || saving}
                 aria-label="Save"
@@ -732,7 +732,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 md:hidden"
+                className="h-8 w-8 md:hidden"
                 onClick={handleCancelEdit}
                 disabled={saving}
                 aria-label="Cancel"
@@ -744,7 +744,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 hidden md:inline-flex"
+                className="h-8 hidden md:inline-flex"
                 onClick={handleCancelEdit}
                 disabled={saving}
                 aria-label="Cancel"
@@ -759,7 +759,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9"
+                className="h-8 w-8"
                 aria-label="Edit"
                 title="Edit"
                 onClick={handleEnterEditMode}
@@ -773,7 +773,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
       {/* Tickets count */}
       {tickets && tickets.length > 0 && (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-xs text-muted-foreground mt-1">
           {filteredTickets.length === tickets.length
             ? `${filteredTickets.length} ${filteredTickets.length === 1 ? 'ticket' : 'tickets'}`
             : `${filteredTickets.length} / ${tickets.length} ${tickets.length === 1 ? 'ticket' : 'tickets'}`}
@@ -822,7 +822,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                     return (
                       <TableHead
                         key={column}
-                        className={`${baseClasses} cursor-pointer select-none min-w-[180px]`}
+                        className={`${baseClasses} cursor-pointer select-none min-w-[140px]`}
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -925,7 +925,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       if (editMode) {
                         const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
                         return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[180px]`}>
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[140px]`}>
                             <Input
                               value={draftName === '-' ? '' : draftName}
                               onChange={(e) => {
@@ -934,7 +934,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                                   [ticket.id]: { ...prev[ticket.id], name: e.target.value },
                                 }));
                               }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium w-full min-w-[180px] whitespace-nowrap"
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium w-full min-w-[140px] whitespace-nowrap"
                               placeholder="-"
                             />
                           </TableCell>
@@ -943,7 +943,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       return (
                         <TableCell
                           key={column}
-                          className={`min-w-[180px] whitespace-nowrap ${baseClasses} font-medium`}
+                          className={`min-w-[140px] whitespace-nowrap ${baseClasses} font-medium`}
                           title={ticket.name ?? undefined}
                         >
                           {ticket.name || '-'}
