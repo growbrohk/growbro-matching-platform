@@ -39,7 +39,6 @@ import {
 } from '@/lib/api/events';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Event, TicketType } from '@/lib/types';
-import InstagramEmbed from '@/components/social/InstagramEmbed';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload, X } from 'lucide-react';
 import EventDescription from '@/components/events/EventDescription';
@@ -87,7 +86,6 @@ export default function EventForm() {
   // Event fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [instagramPostUrl, setInstagramPostUrl] = useState('');
   const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [startAt, setStartAt] = useState<Date | null>(null);
@@ -150,7 +148,6 @@ export default function EventForm() {
 
         setTitle(event.title || '');
         setDescription(event.description || '');
-        setInstagramPostUrl(event.instagram_post_url || '');
         setInstagramPreviewImageUrl(event.instagram_preview_image_url || '');
         setStartAt(event.start_at ? new Date(event.start_at) : null);
         setEndAt(event.end_at ? new Date(event.end_at) : null);
@@ -473,7 +470,6 @@ export default function EventForm() {
         org_id: currentOrg.id,
         title: title.trim(),
         description: description.trim() || undefined,
-        instagram_post_url: instagramPostUrl.trim() || null,
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
@@ -755,7 +751,7 @@ export default function EventForm() {
         <div className="space-y-6 overflow-hidden">
           <div>
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-              What is the name of your event?
+              Event Title
               <span className="text-red-500 ml-1">*</span>
             </h2>
             <Input
@@ -773,7 +769,7 @@ export default function EventForm() {
 
           <div>
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-              Describe your event
+              Event Description
             </h2>
             <Textarea
               value={description}
@@ -790,20 +786,7 @@ export default function EventForm() {
 
           <div>
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-              Instagram post URL (optional)
-            </h2>
-            <Input
-              type="url"
-              value={instagramPostUrl}
-              onChange={(e) => setInstagramPostUrl(e.target.value)}
-              placeholder="https://www.instagram.com/p/..."
-              className="w-full text-ellipsis"
-            />
-          </div>
-
-          <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-              Instagram preview photo (optional)
+              Preview Photo
             </h2>
             
             <div className="space-y-4 mt-3">
@@ -861,10 +844,10 @@ export default function EventForm() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-                When does it start?
-                <span className="text-red-500 ml-1">*</span>
-              </h2>
+            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              Start Time
+              <span className="text-red-500 ml-1">*</span>
+            </h2>
               <DateTimeRow24
                 value={startAt}
                 onChange={(date) => {
@@ -878,10 +861,10 @@ export default function EventForm() {
             </div>
 
             <div>
-              <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-                When does it end?
-                <span className="text-red-500 ml-1">*</span>
-              </h2>
+            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              End Time
+              <span className="text-red-500 ml-1">*</span>
+            </h2>
               <DateTimeRow24
                 value={endAt}
                 onChange={(date) => {
@@ -1056,7 +1039,7 @@ export default function EventForm() {
           <div className="space-y-6">
             <div>
               <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-                What ticket types are available?
+                Available Ticket Types
               </h2>
             </div>
 
@@ -1478,7 +1461,7 @@ export default function EventForm() {
           <div className="space-y-6">
             <div>
               <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
-                When should this event be published?
+                Event Status
               </h2>
               <div className="space-y-3 mt-3">
                 <label className="flex items-center space-x-3 cursor-pointer">
@@ -1576,7 +1559,6 @@ export default function EventForm() {
                   end_at: endAt ? endAt.toISOString() : '',
                   status: 'published',
                   location_text: locationText || null,
-                  instagram_post_url: instagramPostUrl || null,
                   instagram_preview_image_url: instagramPreviewImageUrl || null,
                   metadata: {},
                   created_at: new Date().toISOString(),

@@ -171,7 +171,6 @@ export interface Event {
   status: EventStatus;
   slug?: string;
   location_text?: string | null;
-  instagram_post_url?: string | null;
   instagram_preview_image_url?: string | null;
   collect_attendee_info?: 'primary' | 'per_ticket';
   enable_stripe?: boolean | null;
