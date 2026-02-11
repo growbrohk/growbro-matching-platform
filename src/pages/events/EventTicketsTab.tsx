@@ -21,19 +21,21 @@ import {
 
 type FilterType = 'all' | 'scanned' | 'valid';
 
+const isCheckedIn = (status: string) => status === 'scanned';
+
 export function EventTicketsTab({ eventId }: { eventId: string }) {
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
   const [filter, setFilter] = useState<FilterType>('all');
 
   const filteredTickets = tickets?.filter((ticket) => {
     if (filter === 'all') return true;
-    if (filter === 'scanned') return ticket.status === 'scanned';
+    if (filter === 'scanned') return isCheckedIn(ticket.status);
     if (filter === 'valid') return ticket.status === 'valid';
     return true;
   }) || [];
 
   const getStatusBadge = (status: string) => {
-    if (status === 'scanned') {
+    if (isCheckedIn(status)) {
       return (
         <Badge className="bg-green-100 text-green-700">
           <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -44,7 +46,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     return (
       <Badge variant="secondary">
         <XCircle className="h-3 w-3 mr-1" />
-        Not Checked In
+        Pending
       </Badge>
     );
   };
@@ -69,7 +71,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           <SelectContent>
             <SelectItem value="all">All Tickets</SelectItem>
             <SelectItem value="scanned">Checked In</SelectItem>
-            <SelectItem value="valid">Not Checked In</SelectItem>
+            <SelectItem value="valid">Pending</SelectItem>
           </SelectContent>
         </Select>
         <div className="text-sm text-muted-foreground">
@@ -89,7 +91,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 ? 'No tickets have been sold for this event yet.'
                 : filter === 'scanned'
                 ? 'No tickets have been checked in yet.'
-                : 'All tickets have been checked in.'}
+                : 'No pending tickets.'}
             </p>
           </CardContent>
         </Card>
