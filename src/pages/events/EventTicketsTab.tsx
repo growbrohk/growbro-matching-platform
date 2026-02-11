@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
-import { Loader2, Search, Filter, Settings, Pencil, Camera, ChevronUp, ChevronDown, Save, X } from 'lucide-react';
+import { Loader2, Search, Filter, Settings, Pencil, ChevronUp, ChevronDown, Save, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -765,15 +765,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 onClick={handleEnterEditMode}
               >
                 <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-9 w-9"
-                aria-label="Scan"
-                title="Scan"
-              >
-                <Camera className="h-4 w-4" />
               </Button>
             </>
           )}
