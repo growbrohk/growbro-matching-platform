@@ -99,12 +99,12 @@ export default function EventDetail() {
   return (
     <div className="w-full max-w-7xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
-      <div className="mb-6 overflow-hidden">
+      <div className="mb-2 overflow-hidden">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate('/app/catalog?tab=events')}
-          className="mb-4 text-xs md:text-sm"
+          className="text-xs md:text-sm"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Events
@@ -113,7 +113,7 @@ export default function EventDetail() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <div className="sticky top-0 z-10 backdrop-blur-xl border-b mb-6" style={{
+        <div className="sticky top-0 z-10 backdrop-blur-xl border-b mb-3" style={{
           borderColor: "rgba(14,122,58,0.12)",
           backgroundColor: "rgba(251,248,244,0.95)",
         }}>
