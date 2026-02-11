@@ -137,7 +137,7 @@ export function DateTimeRow24({
   }, [datePart, maxDateStr, maxTimeStr]);
 
   return (
-    <div className={cn("flex items-center gap-2", className)} id={id}>
+    <div className={cn("flex gap-3 w-full", className)} id={id}>
       {/* Date input */}
       <input
         type="date"
@@ -148,11 +148,10 @@ export function DateTimeRow24({
         max={maxDateStr}
         aria-label={ariaLabel ? `${ariaLabel} date` : undefined}
         className={cn(
-          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-          "file:border-0 file:bg-transparent file:text-sm file:font-medium",
-          "placeholder:text-muted-foreground",
+          "h-12 rounded-2xl border-2 px-4 text-base bg-[#FBF8F4] border-[rgba(14,122,58,0.14)]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "disabled:cursor-not-allowed disabled:opacity-50",
+          "flex-1",
           !value && "text-muted-foreground"
         )}
       />
@@ -168,11 +167,10 @@ export function DateTimeRow24({
         max={timeInputMax}
         aria-label={ariaLabel ? `${ariaLabel} time` : undefined}
         className={cn(
-          "flex h-10 w-[110px] shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-          "file:border-0 file:bg-transparent file:text-sm file:font-medium",
-          "placeholder:text-muted-foreground",
+          "h-12 rounded-2xl border-2 px-4 text-base bg-[#FBF8F4] border-[rgba(14,122,58,0.14)]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          "disabled:cursor-not-allowed disabled:opacity-50"
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          "flex-1"
         )}
       />
     </div>
