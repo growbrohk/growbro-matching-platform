@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
-import { Loader2, Search, Filter, Settings, Pencil, Camera } from 'lucide-react';
+import { Loader2, Search, Filter, Settings, Pencil, Camera, ChevronUp, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Table,
   TableBody,
@@ -14,36 +16,114 @@ import {
 
 const isCheckedIn = (status: string) => status === 'scanned';
 
+type SortKey = 'status' | 'name' | 'ticketType';
+
 export function EventTicketsTab({ eventId }: { eventId: string }) {
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
   const [query, setQuery] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
+
+  // Get unique ticket types for filter options
+  const uniqueTicketTypes = useMemo(() => {
+    if (!tickets) return [];
+    const types = new Set(tickets.map(t => t.ticketType).filter(Boolean));
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
+  }, [tickets]);
 
   const filteredTickets = useMemo(() => {
     if (!tickets) return [];
-    if (!query.trim()) return tickets;
 
-    const searchLower = query.toLowerCase();
-    return tickets.filter((ticket) => {
-      // Search across name, phone, email, ticketType, remark
-      const matchesName = ticket.name?.toLowerCase().includes(searchLower) || false;
-      const matchesPhone = ticket.phone?.toLowerCase().includes(searchLower) || false;
-      const matchesEmail = ticket.email?.toLowerCase().includes(searchLower) || false;
-      const matchesTicketType = ticket.ticketType?.toLowerCase().includes(searchLower) || false;
-      const matchesRemark = ticket.remark?.toLowerCase().includes(searchLower) || false;
-      
-      // Search status label
-      const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
-      const matchesStatus = statusLabel.includes(searchLower);
+    // Step 1: Apply search
+    let result = tickets;
+    if (query.trim()) {
+      const searchLower = query.toLowerCase();
+      result = tickets.filter((ticket) => {
+        const matchesName = ticket.name?.toLowerCase().includes(searchLower) || false;
+        const matchesPhone = ticket.phone?.toLowerCase().includes(searchLower) || false;
+        const matchesEmail = ticket.email?.toLowerCase().includes(searchLower) || false;
+        const matchesTicketType = ticket.ticketType?.toLowerCase().includes(searchLower) || false;
+        const matchesRemark = ticket.remark?.toLowerCase().includes(searchLower) || false;
+        const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
+        const matchesStatus = statusLabel.includes(searchLower);
+        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesStatus;
+      });
+    }
 
-      return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesStatus;
-    });
-  }, [tickets, query]);
+    // Step 2: Apply status filter
+    if (selectedStatuses.length > 0) {
+      result = result.filter(ticket => selectedStatuses.includes(ticket.status as 'valid' | 'scanned'));
+    }
+
+    // Step 3: Apply ticket type filter
+    if (selectedTypes.length > 0) {
+      result = result.filter(ticket => selectedTypes.includes(ticket.ticketType));
+    }
+
+    // Step 4: Apply sorting
+    if (sort) {
+      result = [...result].sort((a, b) => {
+        let comparison = 0;
+
+        if (sort.key === 'status') {
+          // Asc: Pending (valid) first, then Checked In (scanned)
+          // Desc: reverse
+          const aStatus = a.status === 'scanned' ? 1 : 0;
+          const bStatus = b.status === 'scanned' ? 1 : 0;
+          comparison = aStatus - bStatus;
+          // Tie-breaker: Name asc
+          if (comparison === 0) {
+            const aName = (a.name || '').toLowerCase();
+            const bName = (b.name || '').toLowerCase();
+            comparison = aName.localeCompare(bName);
+          }
+        } else if (sort.key === 'name') {
+          const aName = (a.name || '').toLowerCase();
+          const bName = (b.name || '').toLowerCase();
+          comparison = aName.localeCompare(bName);
+        } else if (sort.key === 'ticketType') {
+          const aType = (a.ticketType || '').toLowerCase();
+          const bType = (b.ticketType || '').toLowerCase();
+          comparison = aType.localeCompare(bType);
+          // Tie-breaker: Name asc
+          if (comparison === 0) {
+            const aName = (a.name || '').toLowerCase();
+            const bName = (b.name || '').toLowerCase();
+            comparison = aName.localeCompare(bName);
+          }
+        }
+
+        return sort.dir === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    return result;
+  }, [tickets, query, selectedStatuses, selectedTypes, sort]);
 
   const getStatusText = (status: string) => {
     if (isCheckedIn(status)) {
       return <span className="text-green-700">Checked In</span>;
     }
     return <span className="text-muted-foreground">Pending</span>;
+  };
+
+  const handleSort = (key: SortKey) => {
+    setSort(prev => {
+      if (prev?.key === key) {
+        // Toggle direction
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      }
+      // New column, start with asc
+      return { key, dir: 'asc' };
+    });
+  };
+
+  const hasActiveFilters = selectedStatuses.length > 0 || selectedTypes.length > 0;
+
+  const handleClearFilters = () => {
+    setSelectedStatuses([]);
+    setSelectedTypes([]);
   };
 
   if (isLoading) {
@@ -69,15 +149,95 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         </div>
 
         <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-9 w-9"
-            aria-label="Filter tickets"
-            title="Filter tickets"
-          >
-            <Filter className="h-4 w-4" />
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 relative"
+                aria-label="Filter tickets"
+                title="Filter tickets"
+              >
+                <Filter className="h-4 w-4" />
+                {hasActiveFilters && (
+                  <span className="absolute top-1 right-1 h-2 w-2 bg-primary rounded-full" />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[340px] p-0" align="end">
+              <div className="p-4 space-y-4">
+                {/* Row 1: Status */}
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Status</div>
+                  <div className="space-y-2">
+                    <div
+                      className="flex items-center space-x-2 cursor-pointer"
+                      onClick={() => {
+                        setSelectedStatuses(prev =>
+                          prev.includes('valid')
+                            ? prev.filter(s => s !== 'valid')
+                            : [...prev, 'valid']
+                        );
+                      }}
+                    >
+                      <Checkbox checked={selectedStatuses.includes('valid')} />
+                      <label className="text-sm cursor-pointer">Pending</label>
+                    </div>
+                    <div
+                      className="flex items-center space-x-2 cursor-pointer"
+                      onClick={() => {
+                        setSelectedStatuses(prev =>
+                          prev.includes('scanned')
+                            ? prev.filter(s => s !== 'scanned')
+                            : [...prev, 'scanned']
+                        );
+                      }}
+                    >
+                      <Checkbox checked={selectedStatuses.includes('scanned')} />
+                      <label className="text-sm cursor-pointer">Checked In</label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Ticket Type */}
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Ticket Type</div>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {uniqueTicketTypes.map(type => (
+                      <div
+                        key={type}
+                        className="flex items-center space-x-2 cursor-pointer"
+                        onClick={() => {
+                          setSelectedTypes(prev =>
+                            prev.includes(type)
+                              ? prev.filter(t => t !== type)
+                              : [...prev, type]
+                          );
+                        }}
+                      >
+                        <Checkbox checked={selectedTypes.includes(type)} />
+                        <label className="text-sm cursor-pointer">{type}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer: Clear button */}
+                {hasActiveFilters && (
+                  <div className="pt-2 border-t">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearFilters}
+                      className="w-full h-8 text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="outline"
             size="icon"
@@ -131,11 +291,35 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
-                  Status
+                <TableHead
+                  className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0 cursor-pointer select-none"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center gap-1">
+                    Status
+                    {sort?.key === 'status' && (
+                      sort.dir === 'asc' ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )
+                    )}
+                  </div>
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
-                  Name
+                <TableHead
+                  className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0 cursor-pointer select-none"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-1">
+                    Name
+                    {sort?.key === 'name' && (
+                      sort.dir === 'asc' ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )
+                    )}
+                  </div>
                 </TableHead>
                 <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Phone
@@ -143,8 +327,20 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Email
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
-                  Ticket Type
+                <TableHead
+                  className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0 cursor-pointer select-none"
+                  onClick={() => handleSort('ticketType')}
+                >
+                  <div className="flex items-center gap-1">
+                    Ticket Type
+                    {sort?.key === 'ticketType' && (
+                      sort.dir === 'asc' ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )
+                    )}
+                  </div>
                 </TableHead>
                 <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Remark
