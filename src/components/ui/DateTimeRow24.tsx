@@ -1,16 +1,5 @@
 import * as React from "react";
 import { format } from "date-fns";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { utcToDatetimeLocal, datetimeLocalToUTC } from "@/lib/utils/datetime";
 
@@ -37,8 +26,6 @@ export function DateTimeRow24({
   className,
   id,
 }: DateTimeRow24Props) {
-  const [open, setOpen] = React.useState(false);
-
   // Convert UTC Date to local datetime string for display/editing
   const getLocalDateTimeString = (date: Date | null): string => {
     if (!date) return "";
@@ -47,176 +34,147 @@ export function DateTimeRow24({
   };
 
   const localDateTimeString = getLocalDateTimeString(value);
-  const [datePart, timePart] = localDateTimeString.split("T");
-  const [hourStr = "00", minuteStr = "00"] = timePart ? timePart.split(":") : ["00", "00"];
+  const [datePart = "", timePart = ""] = localDateTimeString.split("T");
 
-  // Generate minute options based on minuteStep
-  const minuteOptions = React.useMemo(() => {
-    const options: string[] = [];
-    for (let i = 0; i < 60; i += minuteStep) {
-      options.push(i.toString().padStart(2, "0"));
-    }
-    return options;
-  }, [minuteStep]);
+  // Get min/max as local datetime strings for input constraints
+  const minDateStr = React.useMemo(() => {
+    if (!min) return undefined;
+    const localStr = getLocalDateTimeString(min);
+    return localStr.split("T")[0];
+  }, [min]);
 
-  // Generate hour options (00-23)
-  const hourOptions = React.useMemo(() => {
-    return Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
-  }, []);
+  const maxDateStr = React.useMemo(() => {
+    if (!max) return undefined;
+    const localStr = getLocalDateTimeString(max);
+    return localStr.split("T")[0];
+  }, [max]);
 
-  const handleDateSelect = (selectedDate: Date | undefined) => {
-    if (!selectedDate) {
+  const minTimeStr = React.useMemo(() => {
+    if (!min) return undefined;
+    const localStr = getLocalDateTimeString(min);
+    return localStr.split("T")[1]?.substring(0, 5); // HH:MM
+  }, [min]);
+
+  const maxTimeStr = React.useMemo(() => {
+    if (!max) return undefined;
+    const localStr = getLocalDateTimeString(max);
+    return localStr.split("T")[1]?.substring(0, 5); // HH:MM
+  }, [max]);
+
+  // Clamp a date+time combination to min/max bounds
+  const clampDateTime = React.useCallback(
+    (dateStr: string, timeStr: string): Date | null => {
+      const localDateTimeStr = `${dateStr}T${timeStr}`;
+      const utcString = datetimeLocalToUTC(localDateTimeStr);
+      if (!utcString) return null;
+
+      let resultDate = new Date(utcString);
+
+      // Clamp to min if provided
+      if (min && resultDate < min) {
+        resultDate = new Date(min);
+      }
+
+      // Clamp to max if provided
+      if (max && resultDate > max) {
+        resultDate = new Date(max);
+      }
+
+      return resultDate;
+    },
+    [min, max]
+  );
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDateStr = e.target.value;
+    if (!newDateStr) {
       onChange(null);
       return;
     }
 
-    // Keep existing hour/minute, update date
-    // Create local datetime string with selected date and current time
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const localDateTimeStr = `${dateStr}T${hourStr}:${minuteStr}`;
-    
-    // Convert local datetime string to UTC Date
-    const utcString = datetimeLocalToUTC(localDateTimeStr);
-    if (utcString) {
-      onChange(new Date(utcString));
+    // Keep existing time, or default to 00:00 if no time selected
+    const currentTimeStr = timePart || "00:00";
+    const clampedDate = clampDateTime(newDateStr, currentTimeStr);
+    if (clampedDate) {
+      onChange(clampedDate);
     }
   };
 
-  const handleHourChange = (newHour: string) => {
-    if (!value) {
-      // If no date, use today
-      const today = new Date();
-      const dateStr = format(today, "yyyy-MM-dd");
-      const localDateTimeStr = `${dateStr}T${newHour}:${minuteStr}`;
-      const utcString = datetimeLocalToUTC(localDateTimeStr);
-      if (utcString) {
-        onChange(new Date(utcString));
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTimeStr = e.target.value;
+    if (!newTimeStr) {
+      // If time is cleared, keep date but set time to 00:00
+      if (datePart) {
+        const clampedDate = clampDateTime(datePart, "00:00");
+        if (clampedDate) {
+          onChange(clampedDate);
+        }
       }
       return;
     }
 
-    // Keep existing date, update hour
-    // Get current local date string
-    const currentLocalStr = getLocalDateTimeString(value);
-    const [currentDatePart] = currentLocalStr.split("T");
-    const localDateTimeStr = `${currentDatePart}T${newHour}:${minuteStr}`;
-    const utcString = datetimeLocalToUTC(localDateTimeStr);
-    if (utcString) {
-      onChange(new Date(utcString));
+    // Keep existing date, or use today if no date
+    const currentDateStr = datePart || format(new Date(), "yyyy-MM-dd");
+    const clampedDate = clampDateTime(currentDateStr, newTimeStr);
+    if (clampedDate) {
+      onChange(clampedDate);
     }
   };
 
-  const handleMinuteChange = (newMinute: string) => {
-    if (!value) {
-      // If no date, use today
-      const today = new Date();
-      const dateStr = format(today, "yyyy-MM-dd");
-      const localDateTimeStr = `${dateStr}T${hourStr}:${newMinute}`;
-      const utcString = datetimeLocalToUTC(localDateTimeStr);
-      if (utcString) {
-        onChange(new Date(utcString));
-      }
-      return;
-    }
+  // Calculate time input constraints based on selected date
+  const timeInputMin = React.useMemo(() => {
+    if (!minTimeStr || !datePart || !minDateStr) return undefined;
+    // Only restrict time if the selected date matches the min date
+    if (datePart === minDateStr) return minTimeStr;
+    return undefined;
+  }, [datePart, minDateStr, minTimeStr]);
 
-    // Keep existing date/hour, update minute
-    // Get current local date string
-    const currentLocalStr = getLocalDateTimeString(value);
-    const [currentDatePart] = currentLocalStr.split("T");
-    const localDateTimeStr = `${currentDatePart}T${hourStr}:${newMinute}`;
-    const utcString = datetimeLocalToUTC(localDateTimeStr);
-    if (utcString) {
-      onChange(new Date(utcString));
-    }
-  };
-
-  // Get the date part for calendar (convert UTC to local Date for calendar display)
-  // Calendar expects a Date object in local time
-  const calendarDate = React.useMemo(() => {
-    if (!value) return undefined;
-    // Convert UTC to local datetime string, then parse as local Date
-    const localStr = getLocalDateTimeString(value);
-    const [datePart] = localStr.split("T");
-    if (!datePart) return undefined;
-    const [year, month, day] = datePart.split("-").map(Number);
-    return new Date(year, month - 1, day);
-  }, [value]);
-
-  // Format display value (show in local time)
-  const displayValue = React.useMemo(() => {
-    if (!value) return "";
-    const localStr = getLocalDateTimeString(value);
-    const [datePart] = localStr.split("T");
-    return datePart;
-  }, [value]);
+  const timeInputMax = React.useMemo(() => {
+    if (!maxTimeStr || !datePart || !maxDateStr) return undefined;
+    // Only restrict time if the selected date matches the max date
+    if (datePart === maxDateStr) return maxTimeStr;
+    return undefined;
+  }, [datePart, maxDateStr, maxTimeStr]);
 
   return (
     <div className={cn("flex items-center gap-2", className)} id={id}>
-      {/* Date picker */}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            disabled={disabled}
-            className={cn(
-              "w-[160px] justify-start text-left font-normal",
-              !value && "text-muted-foreground"
-            )}
-            aria-label={ariaLabel}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {displayValue || "Select date"}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={calendarDate}
-            onSelect={handleDateSelect}
-            disabled={disabled}
-            initialFocus
-          />
-        </PopoverContent>
-      </Popover>
+      {/* Date input */}
+      <input
+        type="date"
+        value={datePart}
+        onChange={handleDateChange}
+        disabled={disabled}
+        min={minDateStr}
+        max={maxDateStr}
+        aria-label={ariaLabel ? `${ariaLabel} date` : undefined}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+          "file:border-0 file:bg-transparent file:text-sm file:font-medium",
+          "placeholder:text-muted-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          !value && "text-muted-foreground"
+        )}
+      />
 
-      {/* Hour dropdown */}
-      <Select
-        value={hourStr}
-        onValueChange={handleHourChange}
-        disabled={disabled || !value}
-      >
-        <SelectTrigger className="w-[72px]">
-          <SelectValue placeholder="HH" />
-        </SelectTrigger>
-        <SelectContent>
-          {hourOptions.map((hour) => (
-            <SelectItem key={hour} value={hour}>
-              {hour}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {/* Separator */}
-      <span className="text-muted-foreground">:</span>
-
-      {/* Minute dropdown */}
-      <Select
-        value={minuteStr}
-        onValueChange={handleMinuteChange}
-        disabled={disabled || !value}
-      >
-        <SelectTrigger className="w-[72px]">
-          <SelectValue placeholder="mm" />
-        </SelectTrigger>
-        <SelectContent>
-          {minuteOptions.map((minute) => (
-            <SelectItem key={minute} value={minute}>
-              {minute}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Time input */}
+      <input
+        type="time"
+        step={minuteStep * 60}
+        value={timePart}
+        onChange={handleTimeChange}
+        disabled={disabled || !datePart}
+        min={timeInputMin}
+        max={timeInputMax}
+        aria-label={ariaLabel ? `${ariaLabel} time` : undefined}
+        className={cn(
+          "flex h-10 w-[110px] shrink-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+          "file:border-0 file:bg-transparent file:text-sm file:font-medium",
+          "placeholder:text-muted-foreground",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "disabled:cursor-not-allowed disabled:opacity-50"
+        )}
+      />
     </div>
   );
 }
