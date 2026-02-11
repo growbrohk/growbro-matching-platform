@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
-import { Loader2, CheckCircle2, XCircle, Filter } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Loader2, Filter } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -33,21 +32,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     return true;
   }) || [];
 
-  const getStatusBadge = (status: string) => {
+  const getStatusText = (status: string) => {
     if (isCheckedIn(status)) {
-      return (
-        <Badge className="bg-green-100 text-green-700">
-          <CheckCircle2 className="h-3 w-3 mr-1" />
-          Checked In
-        </Badge>
-      );
+      return <span className="text-green-700">Checked In</span>;
     }
-    return (
-      <Badge variant="secondary">
-        <XCircle className="h-3 w-3 mr-1" />
-        Pending
-      </Badge>
-    );
+    return <span className="text-muted-foreground">Pending</span>;
   };
 
   if (isLoading) {
@@ -80,7 +69,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
       {/* Sheet-like table or empty state */}
       {filteredTickets.length === 0 ? (
-        <div className="w-full rounded-md border border-border bg-background py-8 px-4 text-center">
+        <div className="w-full border border-border bg-background py-8 px-4 text-center">
           <p className="text-sm text-muted-foreground">
             {filter === 'all'
               ? 'No tickets have been sold for this event yet.'
@@ -90,26 +79,26 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           </p>
         </div>
       ) : (
-        <div className="w-full overflow-x-auto rounded-md border border-border bg-background">
+        <div className="w-full overflow-x-auto border border-border bg-background">
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Status
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Name
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Phone
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Email
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Ticket Type
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground last:border-r-0">
                   Remark
                 </TableHead>
               </TableRow>
@@ -117,29 +106,29 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
             <TableBody>
               {filteredTickets.map((ticket) => (
                 <TableRow key={ticket.id} className="border-b border-border">
-                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
-                    {getStatusBadge(ticket.status)}
+                  <TableCell className="border-r border-border px-2 py-1.5 text-sm last:border-r-0">
+                    {getStatusText(ticket.status)}
                   </TableCell>
                   <TableCell
-                    className="max-w-[140px] truncate border-r border-border py-2 px-3 font-medium last:border-r-0"
+                    className="max-w-[140px] truncate border-r border-border px-2 py-1.5 text-sm font-medium last:border-r-0"
                     title={ticket.name ?? undefined}
                   >
                     {ticket.name || '-'}
                   </TableCell>
-                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
+                  <TableCell className="border-r border-border px-2 py-1.5 text-sm last:border-r-0">
                     {ticket.phone || '-'}
                   </TableCell>
                   <TableCell
-                    className="max-w-[180px] truncate border-r border-border py-2 px-3 last:border-r-0"
+                    className="max-w-[180px] truncate border-r border-border px-2 py-1.5 text-sm last:border-r-0"
                     title={ticket.email ?? undefined}
                   >
                     {ticket.email || '-'}
                   </TableCell>
-                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
+                  <TableCell className="border-r border-border px-2 py-1.5 text-sm last:border-r-0">
                     {ticket.ticketType}
                   </TableCell>
                   <TableCell
-                    className="max-w-[200px] truncate border-r border-border py-2 px-3 last:border-r-0"
+                    className="max-w-[200px] truncate border-r border-border px-2 py-1.5 text-sm last:border-r-0"
                     title={ticket.remark ?? undefined}
                   >
                     {ticket.remark || '-'}
