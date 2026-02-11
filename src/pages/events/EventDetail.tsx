@@ -104,7 +104,7 @@ export default function EventDetail() {
           variant="ghost"
           size="sm"
           onClick={() => navigate('/app/catalog?tab=events')}
-          className="mb-4"
+          className="mb-4 text-xs md:text-sm"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Events
@@ -117,11 +117,11 @@ export default function EventDetail() {
           borderColor: "rgba(14,122,58,0.12)",
           backgroundColor: "rgba(251,248,244,0.95)",
         }}>
-          <div className="px-4 py-3">
+          <div className="px-4 py-2 md:py-3">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="tickets">Tickets</TabsTrigger>
-              <TabsTrigger value="scan">Scan</TabsTrigger>
+              <TabsTrigger value="edit" className="text-xs md:text-sm py-2 md:py-1.5">Edit</TabsTrigger>
+              <TabsTrigger value="tickets" className="text-xs md:text-sm py-2 md:py-1.5">Tickets</TabsTrigger>
+              <TabsTrigger value="scan" className="text-xs md:text-sm py-2 md:py-1.5">Scan</TabsTrigger>
             </TabsList>
           </div>
         </div>
