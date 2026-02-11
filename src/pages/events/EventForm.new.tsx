@@ -719,18 +719,6 @@ export default function EventForm() {
     <div className="w-full max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
       <div className="mb-8 overflow-hidden">
-        <div className="flex items-start justify-end mb-4">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowPreview(true)}
-            disabled={!title.trim() || !startAt || !endAt}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
-          </Button>
-        </div>
       </div>
 
       {/* Form */}
@@ -1407,7 +1395,7 @@ export default function EventForm() {
                         value={`https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`}
                         className="flex-1 font-mono text-sm"
                       />
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                         <Button
                           type="button"
                           variant="outline"
@@ -1445,6 +1433,17 @@ export default function EventForm() {
                         >
                           <ExternalLink className="h-4 w-4 mr-2" />
                           Open
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowPreview(true)}
+                          disabled={!title.trim() || !startAt || !endAt}
+                          className="flex-1 sm:flex-initial"
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Preview
                         </Button>
                       </div>
                     </div>
