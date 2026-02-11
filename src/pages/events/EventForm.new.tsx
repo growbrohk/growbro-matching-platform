@@ -718,7 +718,7 @@ export default function EventForm() {
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
-      <div className="mb-8 overflow-hidden">
+      <div className="mb-0 overflow-hidden">
       </div>
 
       {/* Form */}
@@ -736,9 +736,9 @@ export default function EventForm() {
         )}
 
         {/* Section 1: Basic Information */}
-        <div className="space-y-6 overflow-hidden">
+        <div className="space-y-5 overflow-hidden">
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Event Title
               <span className="text-red-500 ml-1">*</span>
             </h2>
@@ -756,7 +756,7 @@ export default function EventForm() {
           </div>
 
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Event Description
             </h2>
             <Textarea
@@ -773,7 +773,7 @@ export default function EventForm() {
           </div>
 
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Preview Photo
             </h2>
             
@@ -832,7 +832,7 @@ export default function EventForm() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Start Time
               <span className="text-red-500 ml-1">*</span>
             </h2>
@@ -849,7 +849,7 @@ export default function EventForm() {
             </div>
 
             <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               End Time
               <span className="text-red-500 ml-1">*</span>
             </h2>
@@ -868,7 +868,7 @@ export default function EventForm() {
           </div>
 
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Location
             </h2>
             <Input
@@ -881,7 +881,7 @@ export default function EventForm() {
           </div>
 
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Information Collection
             </h2>
             <RadioGroup
@@ -916,7 +916,7 @@ export default function EventForm() {
         {/* Section 2.5: Payment Methods */}
         <div className="space-y-6">
           <div>
-            <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Payment Methods
             </h2>
           </div>
@@ -1026,7 +1026,7 @@ export default function EventForm() {
         {showTicketTypesSection ? (
           <div className="space-y-6">
             <div>
-              <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
                 Available Ticket Types
               </h2>
             </div>
@@ -1384,7 +1384,7 @@ export default function EventForm() {
           <>
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+                <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
                   Share Link
                 </h2>
                 <Card className="bg-muted/50 mt-3">
@@ -1459,7 +1459,7 @@ export default function EventForm() {
         {showPublishingSection ? (
           <div className="space-y-6">
             <div>
-              <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
+              <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
                 Event Status
               </h2>
               <div className="space-y-3 mt-3">
