@@ -822,7 +822,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                     return (
                       <TableHead
                         key={column}
-                        className={`${baseClasses} cursor-pointer select-none min-w-[140px]`}
+                        className={`${baseClasses} cursor-pointer select-none w-[1%] whitespace-nowrap`}
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -925,7 +925,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       if (editMode) {
                         const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
                         return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[140px]`}>
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20 w-[1%] whitespace-nowrap`}>
                             <Input
                               value={draftName === '-' ? '' : draftName}
                               onChange={(e) => {
@@ -934,7 +934,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                                   [ticket.id]: { ...prev[ticket.id], name: e.target.value },
                                 }));
                               }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium w-full min-w-[140px] whitespace-nowrap"
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium whitespace-nowrap"
                               placeholder="-"
                             />
                           </TableCell>
@@ -943,7 +943,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       return (
                         <TableCell
                           key={column}
-                          className={`min-w-[140px] whitespace-nowrap ${baseClasses} font-medium`}
+                          className={`w-[1%] whitespace-nowrap ${baseClasses} font-medium`}
                           title={ticket.name ?? undefined}
                         >
                           {ticket.name || '-'}
