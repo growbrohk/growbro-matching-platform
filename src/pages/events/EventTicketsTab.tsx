@@ -1,13 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
-import { Loader2, Filter } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Loader2, Search, Filter, Settings, Pencil, Camera } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -17,20 +12,32 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-type FilterType = 'all' | 'scanned' | 'valid';
-
 const isCheckedIn = (status: string) => status === 'scanned';
 
 export function EventTicketsTab({ eventId }: { eventId: string }) {
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [query, setQuery] = useState('');
 
-  const filteredTickets = tickets?.filter((ticket) => {
-    if (filter === 'all') return true;
-    if (filter === 'scanned') return isCheckedIn(ticket.status);
-    if (filter === 'valid') return ticket.status === 'valid';
-    return true;
-  }) || [];
+  const filteredTickets = useMemo(() => {
+    if (!tickets) return [];
+    if (!query.trim()) return tickets;
+
+    const searchLower = query.toLowerCase();
+    return tickets.filter((ticket) => {
+      // Search across name, phone, email, ticketType, remark
+      const matchesName = ticket.name?.toLowerCase().includes(searchLower) || false;
+      const matchesPhone = ticket.phone?.toLowerCase().includes(searchLower) || false;
+      const matchesEmail = ticket.email?.toLowerCase().includes(searchLower) || false;
+      const matchesTicketType = ticket.ticketType?.toLowerCase().includes(searchLower) || false;
+      const matchesRemark = ticket.remark?.toLowerCase().includes(searchLower) || false;
+      
+      // Search status label
+      const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
+      const matchesStatus = statusLabel.includes(searchLower);
+
+      return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesStatus;
+    });
+  }, [tickets, query]);
 
   const getStatusText = (status: string) => {
     if (isCheckedIn(status)) {
@@ -49,33 +56,74 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <Select value={filter} onValueChange={(value) => setFilter(value as FilterType)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Tickets</SelectItem>
-            <SelectItem value="scanned">Checked In</SelectItem>
-            <SelectItem value="valid">Pending</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="text-sm text-muted-foreground">
-          {filteredTickets.length} {filteredTickets.length === 1 ? 'ticket' : 'tickets'}
+      {/* Toolbar: Search + Filter + Settings + Edit + Scan */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tickets..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+
+        <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label="Filter tickets"
+            title="Filter tickets"
+          >
+            <Filter className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label="Edit"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label="Scan"
+            title="Scan"
+          >
+            <Camera className="h-4 w-4" />
+          </Button>
         </div>
       </div>
+
+      {/* Tickets count */}
+      {tickets && tickets.length > 0 && (
+        <div className="text-sm text-muted-foreground">
+          {filteredTickets.length === tickets.length
+            ? `${filteredTickets.length} ${filteredTickets.length === 1 ? 'ticket' : 'tickets'}`
+            : `${filteredTickets.length} / ${tickets.length} ${tickets.length === 1 ? 'ticket' : 'tickets'}`}
+        </div>
+      )}
 
       {/* Sheet-like table or empty state */}
       {filteredTickets.length === 0 ? (
         <div className="w-full border border-border bg-background py-8 px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            {filter === 'all'
+            {!tickets || tickets.length === 0
               ? 'No tickets have been sold for this event yet.'
-              : filter === 'scanned'
-              ? 'No tickets have been checked in yet.'
-              : 'No pending tickets.'}
+              : `No results for '${query}'`}
           </p>
         </div>
       ) : (
