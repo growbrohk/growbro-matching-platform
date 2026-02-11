@@ -1387,30 +1387,51 @@ export default function EventForm() {
                 <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
                   Share Link
                 </h2>
-                <Card className="bg-muted/50 mt-3">
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      <Input
-                        readOnly
-                        value={`https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`}
-                        className="flex-1 font-mono text-sm"
-                      />
-                      <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowPreview(true)}
-                          disabled={!title.trim() || !startAt || !endAt}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Preview
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
+                  <Input
+                    readOnly
+                    value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}`}
+                    className="flex-1 font-mono text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                        try {
+                          await navigator.clipboard.writeText(url);
+                          toast({
+                            title: 'Copied!',
+                            description: 'Link copied to clipboard',
+                          });
+                        } catch (err) {
+                          toast({
+                            title: 'Error',
+                            description: 'Failed to copy link',
+                            variant: 'destructive',
+                          });
+                        }
+                      }}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                        window.open(url, '_blank');
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
             <Separator />

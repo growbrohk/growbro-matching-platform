@@ -104,21 +104,23 @@ export default function EventDetail() {
       {/* Header */}
       <div className="mb-2 overflow-hidden">
         <div className="flex items-center justify-between gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/app/catalog?tab=events')}
-            className="text-xs md:text-sm"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Events
-          </Button>
+          <div className="min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/app/catalog?tab=events')}
+              className="text-xs md:text-sm truncate"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Events
+            </Button>
+          </div>
 
           {event?.slug && currentOrg?.slug && (
-            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-2 flex-nowrap">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={async () => {
                   const url = `https://growbrohk.com/${currentOrg.slug}/${event.slug}`;
                   try {
@@ -128,21 +130,21 @@ export default function EventDetail() {
                     toast({ title: 'Error', description: 'Failed to copy link', variant: 'destructive' });
                   }
                 }}
+                aria-label="Copy link"
               >
-                <Copy className="h-4 w-4 mr-1" />
-                Copy
+                <Copy className="h-4 w-4" />
               </Button>
 
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={() => {
                   const url = `https://growbrohk.com/${currentOrg.slug}/${event.slug}`;
                   window.open(url, '_blank');
                 }}
+                aria-label="Open link"
               >
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Open
+                <ExternalLink className="h-4 w-4" />
               </Button>
             </div>
           )}
