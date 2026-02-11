@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
-import { Loader2, Search, Filter, Settings, Pencil, Camera, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, Search, Filter, Settings, Pencil, Camera, ChevronUp, ChevronDown, Save, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import type { EventTicketRow } from '@/hooks/use-event-tickets';
 import {
   Table,
   TableBody,
@@ -22,6 +25,9 @@ type SortKey = 'status' | 'name' | 'ticketType';
 type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'remark';
 
 const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark'];
+const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType'];
+
+type Draft = { status?: 'valid' | 'scanned'; name?: string; remark?: string };
 
 type DefaultSortOption = {
   label: string;
@@ -37,6 +43,7 @@ const DEFAULT_SORT_OPTIONS: DefaultSortOption[] = [
 
 export function EventTicketsTab({ eventId }: { eventId: string }) {
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
+  const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -44,6 +51,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
   const [defaultSort, setDefaultSort] = useState<string>('name-asc');
   const [rememberPrefs, setRememberPrefs] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draftById, setDraftById] = useState<Record<string, Draft>>({});
 
   // localStorage keys (memoized to avoid re-creation)
   const storageKeys = useMemo(() => ({
@@ -149,6 +159,39 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       localStorage.removeItem(storageKeys.defaultSort);
     }
   }, [rememberPrefs, visibleColumns, selectedStatuses, selectedTypes, sort, defaultSort, storageKeys]);
+
+  // Helper functions for edit mode
+  const getFullName = (ticket: EventTicketRow): string => {
+    return ticket.name?.trim() || '-';
+  };
+
+  const getDraftValue = <K extends keyof Draft>(ticket: EventTicketRow, field: K): Draft[K] | undefined => {
+    return draftById[ticket.id]?.[field];
+  };
+
+  const hasChanges = (ticket: EventTicketRow): boolean => {
+    const draft = draftById[ticket.id];
+    if (!draft) return false;
+    
+    const originalStatus = ticket.status as 'valid' | 'scanned';
+    const originalName = getFullName(ticket);
+    const originalRemark = ticket.remark || '';
+    
+    // Normalize empty strings for comparison
+    const normalizeName = (name: string) => (name.trim() || '-');
+    const normalizeRemark = (remark: string) => (remark || '');
+    
+    return (
+      (draft.status !== undefined && draft.status !== originalStatus) ||
+      (draft.name !== undefined && normalizeName(draft.name) !== normalizeName(originalName)) ||
+      (draft.remark !== undefined && normalizeRemark(draft.remark) !== normalizeRemark(originalRemark))
+    );
+  };
+
+  const editedCount = useMemo(() => {
+    if (!tickets) return 0;
+    return tickets.filter(hasChanges).length;
+  }, [tickets, draftById]);
 
   // Get unique ticket types for filter options
   const uniqueTicketTypes = useMemo(() => {
@@ -270,6 +313,126 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     }
   };
 
+  // Compute ordered columns based on edit mode
+  const orderedColumns = useMemo(() => {
+    const baseOrder = editMode ? EDIT_MODE_COLUMN_ORDER : DEFAULT_COLUMNS;
+    // Filter to only visible columns, preserving order
+    return baseOrder.filter(col => visibleColumns.includes(col));
+  }, [editMode, visibleColumns]);
+
+  const handleEnterEditMode = () => {
+    setEditMode(true);
+    setDraftById({});
+  };
+
+  const handleCancelEdit = () => {
+    setDraftById({});
+    setEditMode(false);
+  };
+
+  const handleSave = async () => {
+    if (editedCount === 0 || saving) return;
+
+    setSaving(true);
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id ?? null;
+
+      if (!tickets) {
+        throw new Error('No tickets available');
+      }
+
+      // Build update payloads for each edited ticket
+      const updates = tickets
+        .filter(hasChanges)
+        .map(ticket => {
+          const draft = draftById[ticket.id];
+          if (!draft) return null;
+
+          const payload: any = {};
+          const originalStatus = ticket.status as 'valid' | 'scanned';
+          const originalName = getFullName(ticket);
+          const normalizedOriginalName = originalName === '-' ? '' : originalName;
+          const originalRemark = ticket.remark || '';
+
+          // Handle name change: split into first_name/last_name
+          if (draft.name !== undefined) {
+            const normalizedDraftName = draft.name.trim();
+            if (normalizedDraftName !== normalizedOriginalName) {
+              if (normalizedDraftName) {
+                const nameParts = normalizedDraftName.split(/\s+/);
+                if (nameParts.length === 1) {
+                  // Single word -> first_name only
+                  payload.first_name = nameParts[0];
+                  payload.last_name = null;
+                } else {
+                  // Multiple words -> first word is first_name, rest is last_name
+                  payload.first_name = nameParts[0];
+                  payload.last_name = nameParts.slice(1).join(' ');
+                }
+              } else {
+                // Empty string -> clear both
+                payload.first_name = null;
+                payload.last_name = null;
+              }
+            }
+          }
+
+          // Handle remark change
+          if (draft.remark !== undefined && draft.remark !== originalRemark) {
+            payload.remark = draft.remark || null;
+          }
+
+          // Handle status change
+          if (draft.status !== undefined && draft.status !== originalStatus) {
+            if (draft.status === 'scanned') {
+              payload.status = 'scanned';
+              payload.scanned_at = new Date().toISOString();
+              payload.scanned_by = userId;
+            } else if (draft.status === 'valid') {
+              payload.status = 'valid';
+              payload.scanned_at = null;
+              payload.scanned_by = null;
+            }
+          }
+
+          return { id: ticket.id, payload };
+        })
+        .filter((u): u is { id: string; payload: any } => u !== null);
+
+      // Execute all updates
+      const results = await Promise.all(
+        updates.map(u => supabase.from('tickets').update(u.payload).eq('id', u.id))
+      );
+
+      // Check for errors
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to save ${errors.length} ticket(s)`);
+      }
+
+      // Success
+      toast({
+        title: 'Success',
+        description: `Saved ${editedCount} ticket(s)`,
+      });
+
+      // Reset state and refetch
+      setDraftById({});
+      setEditMode(false);
+      await refetch();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save tickets',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) return;
 
@@ -339,6 +502,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     <div className="space-y-4">
       {/* Toolbar: Search + Filter + Settings + Edit + Scan */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {editMode && (
+          <div className="text-sm text-muted-foreground mr-2">
+            Editing mode
+          </div>
+        )}
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -533,24 +701,56 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               </div>
             </PopoverContent>
           </Popover>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-9 w-9"
-            aria-label="Edit"
-            title="Edit"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-9 w-9"
-            aria-label="Scan"
-            title="Scan"
-          >
-            <Camera className="h-4 w-4" />
-          </Button>
+          {editMode ? (
+            <>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-9"
+                onClick={handleSave}
+                disabled={editedCount === 0 || saving}
+                aria-label="Save"
+                title="Save"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save {editedCount > 0 ? `(${editedCount})` : ''}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={handleCancelEdit}
+                disabled={saving}
+                aria-label="Cancel"
+                title="Cancel"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Edit"
+                title="Edit"
+                onClick={handleEnterEditMode}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                aria-label="Scan"
+                title="Scan"
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -577,8 +777,8 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">
-                {visibleColumns.map((column, index) => {
-                  const isLast = index === visibleColumns.length - 1;
+                {orderedColumns.map((column, index) => {
+                  const isLast = index === orderedColumns.length - 1;
                   const baseClasses = `sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground ${isLast ? 'last:border-r-0' : ''}`;
                   
                   if (column === 'status') {
@@ -669,11 +869,35 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
             <TableBody>
               {filteredTickets.map((ticket) => (
                 <TableRow key={ticket.id} className="border-b border-border">
-                  {visibleColumns.map((column, index) => {
-                    const isLast = index === visibleColumns.length - 1;
+                  {orderedColumns.map((column, index) => {
+                    const isLast = index === orderedColumns.length - 1;
                     const baseClasses = `border-r border-border px-2 py-1.5 text-sm ${isLast ? 'last:border-r-0' : ''}`;
                     
                     if (column === 'status') {
+                      if (editMode) {
+                        const draftStatus = getDraftValue(ticket, 'status') ?? (ticket.status as 'valid' | 'scanned');
+                        return (
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
+                            <Select
+                              value={draftStatus}
+                              onValueChange={(value: 'valid' | 'scanned') => {
+                                setDraftById(prev => ({
+                                  ...prev,
+                                  [ticket.id]: { ...prev[ticket.id], status: value },
+                                }));
+                              }}
+                            >
+                              <SelectTrigger className="h-8 px-2 text-sm rounded-none border-0 shadow-none">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="valid">Pending</SelectItem>
+                                <SelectItem value="scanned">Checked In</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        );
+                      }
                       return (
                         <TableCell key={column} className={baseClasses}>
                           {getStatusText(ticket.status)}
@@ -681,6 +905,24 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       );
                     }
                     if (column === 'name') {
+                      if (editMode) {
+                        const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
+                        return (
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
+                            <Input
+                              value={draftName === '-' ? '' : draftName}
+                              onChange={(e) => {
+                                setDraftById(prev => ({
+                                  ...prev,
+                                  [ticket.id]: { ...prev[ticket.id], name: e.target.value },
+                                }));
+                              }}
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium"
+                              placeholder="-"
+                            />
+                          </TableCell>
+                        );
+                      }
                       return (
                         <TableCell
                           key={column}
@@ -717,6 +959,24 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       );
                     }
                     if (column === 'remark') {
+                      if (editMode) {
+                        const draftRemark = getDraftValue(ticket, 'remark') ?? (ticket.remark || '');
+                        return (
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
+                            <Input
+                              value={draftRemark}
+                              onChange={(e) => {
+                                setDraftById(prev => ({
+                                  ...prev,
+                                  [ticket.id]: { ...prev[ticket.id], remark: e.target.value },
+                                }));
+                              }}
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none"
+                              placeholder="-"
+                            />
+                          </TableCell>
+                        );
+                      }
                       return (
                         <TableCell
                           key={column}

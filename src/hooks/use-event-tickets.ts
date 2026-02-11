@@ -31,6 +31,7 @@ export function useEventTickets(eventId: string | undefined) {
           last_name,
           email,
           phone,
+          remark,
           order_id,
           orders!inner(
             id,
@@ -70,8 +71,8 @@ export function useEventTickets(eventId: string | undefined) {
         // Ticket Type: from ticket_types.name
         const ticketTypeName = ticketType?.name || 'Unknown';
 
-        // Remark: from order.metadata.remark or ticket metadata if available
-        const remark = order?.metadata?.remark || (ticket as any).metadata?.remark || '';
+        // Remark: from ticket.remark column (prefer ticket remark, fallback to order metadata for backward compatibility)
+        const remark = ticket.remark || order?.metadata?.remark || '';
 
         return {
           id: ticket.id,
