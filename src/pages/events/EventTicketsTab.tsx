@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useEventTickets } from '@/hooks/use-event-tickets';
 import { Loader2, CheckCircle2, XCircle, Filter } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -79,58 +78,77 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Sheet-like table or empty state */}
       {filteredTickets.length === 0 ? (
-        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-          <CardContent className="flex flex-col items-center justify-center py-16 p-4 md:p-6">
-            <h3 className="text-xl font-semibold mb-2" style={{ color: '#0F1F17' }}>
-              No tickets found
-            </h3>
-            <p className="text-center text-muted-foreground">
-              {filter === 'all' 
-                ? 'No tickets have been sold for this event yet.'
-                : filter === 'scanned'
-                ? 'No tickets have been checked in yet.'
-                : 'No pending tickets.'}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="w-full rounded-md border border-border bg-background py-8 px-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            {filter === 'all'
+              ? 'No tickets have been sold for this event yet.'
+              : filter === 'scanned'
+              ? 'No tickets have been checked in yet.'
+              : 'No pending tickets.'}
+          </p>
+        </div>
       ) : (
-        <Card className="rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-          <CardHeader>
-            <CardTitle>Tickets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Ticket Type</TableHead>
-                    <TableHead>Remark</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTickets.map((ticket) => (
-                    <TableRow key={ticket.id}>
-                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
-                      <TableCell className="font-medium">{ticket.name || '-'}</TableCell>
-                      <TableCell>{ticket.phone || '-'}</TableCell>
-                      <TableCell>{ticket.email || '-'}</TableCell>
-                      <TableCell>{ticket.ticketType}</TableCell>
-                      <TableCell className="max-w-[200px] truncate" title={ticket.remark}>
-                        {ticket.remark || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="w-full overflow-x-auto rounded-md border border-border bg-background">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Status
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Name
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Phone
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Email
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Ticket Type
+                </TableHead>
+                <TableHead className="sticky top-0 z-10 h-auto border-r border-border bg-background py-2 px-3 text-xs font-medium text-muted-foreground last:border-r-0">
+                  Remark
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTickets.map((ticket) => (
+                <TableRow key={ticket.id} className="border-b border-border">
+                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
+                    {getStatusBadge(ticket.status)}
+                  </TableCell>
+                  <TableCell
+                    className="max-w-[140px] truncate border-r border-border py-2 px-3 font-medium last:border-r-0"
+                    title={ticket.name ?? undefined}
+                  >
+                    {ticket.name || '-'}
+                  </TableCell>
+                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
+                    {ticket.phone || '-'}
+                  </TableCell>
+                  <TableCell
+                    className="max-w-[180px] truncate border-r border-border py-2 px-3 last:border-r-0"
+                    title={ticket.email ?? undefined}
+                  >
+                    {ticket.email || '-'}
+                  </TableCell>
+                  <TableCell className="border-r border-border py-2 px-3 last:border-r-0">
+                    {ticket.ticketType}
+                  </TableCell>
+                  <TableCell
+                    className="max-w-[200px] truncate border-r border-border py-2 px-3 last:border-r-0"
+                    title={ticket.remark ?? undefined}
+                  >
+                    {ticket.remark || '-'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );
