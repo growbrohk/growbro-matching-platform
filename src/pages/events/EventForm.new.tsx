@@ -735,12 +735,6 @@ export default function EventForm() {
             Preview
           </Button>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold" style={{ color: '#0F1F17' }}>
-          {isEditMode ? 'Edit Event' : 'Create New Event'}
-        </h1>
-        <p className="mt-2 text-xs md:text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          Fill out the form below to {isEditMode ? 'update' : 'create'} your event
-        </p>
       </div>
 
       {/* Form */}
@@ -764,9 +758,6 @@ export default function EventForm() {
               What is the name of your event?
               <span className="text-red-500 ml-1">*</span>
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Give your event a clear, descriptive title
-            </p>
             <Input
               type="text"
               value={title}
@@ -784,9 +775,6 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Describe your event
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Add details about what attendees can expect (optional)
-            </p>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -804,9 +792,6 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Instagram post URL (optional)
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Paste a public Instagram post/reel URL
-            </p>
             <Input
               type="url"
               value={instagramPostUrl}
@@ -820,11 +805,8 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Instagram preview photo (optional)
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Used for the small portrait preview in mobile header (4:5). Upload an image or paste a URL.
-            </p>
             
-            <div className="space-y-4">
+            <div className="space-y-4 mt-3">
               {/* URL Input */}
               <Input
                 type="url"
@@ -883,9 +865,6 @@ export default function EventForm() {
                 When does it start?
                 <span className="text-red-500 ml-1">*</span>
               </h2>
-              <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                Select the start date and time
-              </p>
               <DateTimeRow24
                 value={startAt}
                 onChange={(date) => {
@@ -903,9 +882,6 @@ export default function EventForm() {
                 When does it end?
                 <span className="text-red-500 ml-1">*</span>
               </h2>
-              <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                Select the end date and time
-              </p>
               <DateTimeRow24
                 value={endAt}
                 onChange={(date) => {
@@ -924,9 +900,6 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Location
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              e.g., Koko Coffee @ G10, The Mills (optional)
-            </p>
             <Input
               type="text"
               value={locationText}
@@ -940,9 +913,6 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Information Collection
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Choose how attendee information is collected during checkout
-            </p>
             <RadioGroup
               value={collectAttendeeInfo}
               onValueChange={(value) => setCollectAttendeeInfo(value as 'primary' | 'per_ticket')}
@@ -978,9 +948,6 @@ export default function EventForm() {
             <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
               Payment Methods
             </h2>
-            <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Choose which payment methods customers can use to pay for tickets
-            </p>
           </div>
 
           <div className="space-y-4">
@@ -1039,9 +1006,6 @@ export default function EventForm() {
                     placeholder="https://payme.hsbc.com.hk/..."
                     className="w-full"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Share your PayMe payment link or QR code URL
-                  </p>
                 </div>
               )}
             </div>
@@ -1079,9 +1043,6 @@ export default function EventForm() {
                     placeholder="https://..."
                     className="w-full"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Share your FPS payment link or QR code URL
-                  </p>
                 </div>
               )}
             </div>
@@ -1097,19 +1058,10 @@ export default function EventForm() {
               <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                 What ticket types are available?
               </h2>
-              <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                Add different ticket types with pricing and availability
-              </p>
-              <p className="text-xs mb-4" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                Even 'Always available' tickets stop selling when the event ends.
-              </p>
             </div>
 
             {ticketTypes.length === 0 ? (
               <div className="border-2 border-dashed rounded-lg p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  No ticket types added yet
-                </p>
                 <Button
                   type="button"
                   variant="outline"
@@ -1168,9 +1120,6 @@ export default function EventForm() {
                         <Label htmlFor={`ticket-price-${index}`} className="text-xs md:text-sm font-medium">
                           Price ($)
                         </Label>
-                        <p className="text-xs mt-1 mb-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                          Leave empty for free ticket
-                        </p>
                         <Input
                           id={`ticket-price-${index}`}
                           type="number"
@@ -1214,9 +1163,6 @@ export default function EventForm() {
                           <Label htmlFor={`ticket-is-active-${index}`} className="text-xs md:text-sm font-medium">
                             On sale
                           </Label>
-                          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                            Turn off to hide this ticket from customers
-                          </p>
                         </div>
                         <Switch
                           id={`ticket-is-active-${index}`}
@@ -1246,11 +1192,6 @@ export default function EventForm() {
                               <SelectItem value="scheduled">Scheduled</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {tt.availability_mode === 'scheduled' 
-                              ? 'Set specific start and end times for ticket sales'
-                              : 'Available until the event ends'}
-                          </p>
                           {tt.availability_mode === 'scheduled' && (
                             <div className="space-y-3 mt-3" style={{ marginLeft: '0' }}>
                               <div>
@@ -1322,16 +1263,6 @@ export default function EventForm() {
                               <SelectItem value="hidden">Hidden</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {(() => {
-                              const mode = tt.visibility_mode || 'public';
-                              if (mode === 'public') return 'Visible to everyone on the public page';
-                              if (mode === 'code') return 'Only accessible with a link code';
-                              if (mode === 'affiliate') return 'Only accessible via affiliate links';
-                              if (mode === 'hidden') return 'Hidden from the public page';
-                              return 'Visible to everyone on the public page';
-                            })()}
-                          </p>
                           {tt.visibility_mode === 'code' && (
                             <div className="mt-3 flex gap-2" style={{ marginLeft: '0' }}>
                               <Input
@@ -1360,9 +1291,6 @@ export default function EventForm() {
                                 rows={2}
                                 className="text-sm"
                               />
-                              <p className="text-xs mt-1 text-muted-foreground">
-                                Leave blank to allow any affiliate. Enter specific slugs to restrict access.
-                              </p>
                             </div>
                           )}
                         </div>
@@ -1376,9 +1304,6 @@ export default function EventForm() {
                           <Label htmlFor={`show-remaining-count-${index}`} className="text-xs md:text-sm font-medium">
                             Show remaining count
                           </Label>
-                          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                            Display how many tickets are left to customers
-                          </p>
                         </div>
                         <Switch
                           id={`show-remaining-count-${index}`}
@@ -1391,9 +1316,6 @@ export default function EventForm() {
                           <Label htmlFor={`threshold-to-show-${index}`} className="text-xs font-medium">
                             Only show when remaining ≤ (optional)
                           </Label>
-                          <p className="text-xs mt-1 mb-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                            Leave blank to always show. Set a number to only show count when tickets are running low.
-                          </p>
                           <Input
                             id={`threshold-to-show-${index}`}
                             type="number"
@@ -1416,10 +1338,7 @@ export default function EventForm() {
                         <Label className="text-xs md:text-sm font-medium mb-2 block">
                           Share Ticket Link
                         </Label>
-                        <p className="text-xs mb-3" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                          Share this link to let customers purchase this specific ticket type
-                        </p>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
                           <Input
                             readOnly
                             value={`https://growbrohk.com/s/${currentOrg.slug}/${eventSlug}?ticket=${tt.id}`}
@@ -1497,10 +1416,7 @@ export default function EventForm() {
                 <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                   Share Link
                 </h2>
-                <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Share this link to let customers purchase tickets
-                </p>
-                <Card className="bg-muted/50">
+                <Card className="bg-muted/50 mt-3">
                   <CardContent className="pt-6">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                       <Input
@@ -1549,11 +1465,6 @@ export default function EventForm() {
                         </Button>
                       </div>
                     </div>
-                    {status !== 'published' && (
-                      <p className="text-xs mt-3 text-muted-foreground">
-                        Note: This event is not public until it's published.
-                      </p>
-                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -1569,10 +1480,7 @@ export default function EventForm() {
               <h2 className="text-lg md:text-xl font-semibold mb-1" style={{ color: '#0F1F17' }}>
                 When should this event be published?
               </h2>
-              <p className="text-xs md:text-sm mb-3 md:mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                Choose whether to publish immediately or save as draft
-              </p>
-              <div className="space-y-3">
+              <div className="space-y-3 mt-3">
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="radio"
