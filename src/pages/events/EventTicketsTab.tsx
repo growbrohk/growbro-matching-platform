@@ -822,7 +822,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                     return (
                       <TableHead
                         key={column}
-                        className={`${baseClasses} cursor-pointer select-none ${editMode ? 'min-w-[140px] w-auto' : 'w-[1%]'} whitespace-nowrap`}
+                        className={`${baseClasses} cursor-pointer select-none ${editMode ? 'min-w-[110px] w-fit' : 'w-[1%]'} whitespace-nowrap`}
                         onClick={() => handleSort('name')}
                       >
                         <div className="flex items-center gap-1">
@@ -874,7 +874,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                   }
                   if (column === 'remark') {
                     return (
-                      <TableHead key={column} className={baseClasses}>
+                      <TableHead key={column} className={`${baseClasses} ${editMode ? 'min-w-[160px]' : ''}`}>
                         Remark
                       </TableHead>
                     );
@@ -925,7 +925,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       if (editMode) {
                         const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
                         return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[140px] w-auto whitespace-nowrap overflow-visible`}>
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[110px] w-fit whitespace-nowrap overflow-visible`}>
                             <Input
                               value={draftName === '-' ? '' : draftName}
                               onChange={(e) => {
@@ -980,7 +980,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       if (editMode) {
                         const draftRemark = getDraftValue(ticket, 'remark') ?? (ticket.remark || '');
                         return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
+                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[160px] whitespace-nowrap overflow-visible`}>
                             <Input
                               value={draftRemark}
                               onChange={(e) => {
@@ -989,8 +989,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                                   [ticket.id]: { ...prev[ticket.id], remark: e.target.value },
                                 }));
                               }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none"
+                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none w-auto min-w-0"
                               placeholder="-"
+                              style={{ textOverflow: 'clip', overflow: 'visible' }}
                             />
                           </TableCell>
                         );
