@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EventForm from './EventForm.new';
 import { EventTicketsTab } from './EventTicketsTab';
 import { EventScanTab } from './EventScanTab';
 import { getEvent } from '@/lib/api/events';
 import { useToast } from '@/hooks/use-toast';
+import type { Event } from '@/lib/types';
 
 type EventDetailTab =  'edit'| 'tickets' | 'scan';
 
@@ -25,6 +26,7 @@ export default function EventDetail() {
   );
   const [loading, setLoading] = useState(true);
   const [eventExists, setEventExists] = useState(false);
+  const [event, setEvent] = useState<Event | null>(null);
 
   // Load event to verify access
   useEffect(() => {
@@ -32,8 +34,8 @@ export default function EventDetail() {
 
     const loadEvent = async () => {
       try {
-        const event = await getEvent(id);
-        if (!event) {
+        const eventData = await getEvent(id);
+        if (!eventData) {
           toast({
             title: 'Error',
             description: 'Event not found',
@@ -43,7 +45,7 @@ export default function EventDetail() {
           return;
         }
 
-        if (event.org_id !== currentOrg.id) {
+        if (eventData.org_id !== currentOrg.id) {
           toast({
             title: 'Error',
             description: 'You do not have access to this event',
@@ -53,6 +55,7 @@ export default function EventDetail() {
           return;
         }
 
+        setEvent(eventData);
         setEventExists(true);
       } catch (error: any) {
         toast({
@@ -100,15 +103,50 @@ export default function EventDetail() {
     <div className="w-full max-w-7xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
       <div className="mb-2 overflow-hidden">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/app/catalog?tab=events')}
-          className="text-xs md:text-sm"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Events
-        </Button>
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/app/catalog?tab=events')}
+            className="text-xs md:text-sm"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Events
+          </Button>
+
+          {event?.slug && currentOrg?.slug && (
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const url = `https://growbrohk.com/${currentOrg.slug}/${event.slug}`;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    toast({ title: 'Copied!', description: 'Link copied to clipboard' });
+                  } catch {
+                    toast({ title: 'Error', description: 'Failed to copy link', variant: 'destructive' });
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4 mr-1" />
+                Copy
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const url = `https://growbrohk.com/${currentOrg.slug}/${event.slug}`;
+                  window.open(url, '_blank');
+                }}
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Open
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

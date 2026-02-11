@@ -1400,44 +1400,6 @@ export default function EventForm() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={async () => {
-                            const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
-                            try {
-                              await navigator.clipboard.writeText(url);
-                              toast({
-                                title: 'Copied!',
-                                description: 'Link copied to clipboard',
-                              });
-                            } catch (err) {
-                              toast({
-                                title: 'Error',
-                                description: 'Failed to copy link',
-                                variant: 'destructive',
-                              });
-                            }
-                          }}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const url = `https://growbrohk.com/${currentOrg?.slug}/${eventSlug}`;
-                            window.open(url, '_blank');
-                          }}
-                          className="flex-1 sm:flex-initial"
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Open
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
                           onClick={() => setShowPreview(true)}
                           disabled={!title.trim() || !startAt || !endAt}
                           className="flex-1 sm:flex-initial"
