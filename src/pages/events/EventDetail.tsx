@@ -113,7 +113,7 @@ export default function EventDetail() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <div className="sticky top-0 z-10 backdrop-blur-xl border-b mb-1" style={{
+        <div className="sticky top-0 z-10 backdrop-blur-xl border-b mb-2" style={{
           borderColor: "rgba(14,122,58,0.12)",
           backgroundColor: "rgba(251,248,244,0.95)",
         }}>
