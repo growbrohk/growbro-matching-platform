@@ -718,7 +718,7 @@ export default function EventForm() {
   return (
     <div className="w-full max-w-2xl mx-auto pb-12 px-4 overflow-x-hidden">
       {/* Header */}
-      <div className="mb-0 overflow-hidden">
+      <div className="mb-1 overflow-hidden">
       </div>
 
       {/* Form */}
