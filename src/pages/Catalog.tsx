@@ -12,7 +12,7 @@ export default function Catalog() {
   const navigate = useNavigate();
   const tabParam = searchParams.get('tab') as CatalogTab | null;
   const [activeTab, setActiveTab] = useState<CatalogTab>(tabParam || 'products');
-  const [productsPillar, setProductsPillar] = useState<'catalog' | 'inventory'>('catalog');
+  const [productsSubtab, setProductsSubtab] = useState<'catalog' | 'orders'>('catalog');
 
   useEffect(() => {
     // Sync tab state with URL
@@ -46,10 +46,10 @@ export default function Catalog() {
 
             {activeTab === 'products' && (
               <div className="mt-2">
-                <Tabs value={productsPillar} onValueChange={(v) => setProductsPillar(v as 'catalog' | 'inventory')}>
+                <Tabs value={productsSubtab} onValueChange={(v) => setProductsSubtab(v as 'catalog' | 'orders')}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="catalog">Catalog</TabsTrigger>
-                    <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                    <TabsTrigger value="orders">Orders</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </div>
@@ -61,8 +61,8 @@ export default function Catalog() {
           <TabsContent value="products" className="mt-0">
             <DashboardProducts
               isEmbeddedInCatalog={true}
-              selectedPillar={productsPillar}
-              onChangePillar={setProductsPillar}
+              selectedSubtab={productsSubtab}
+              onChangeSubtab={setProductsSubtab}
             />
           </TabsContent>
 

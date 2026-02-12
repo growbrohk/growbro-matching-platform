@@ -20,7 +20,6 @@ import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getVariantOptionValue, parseVariantName, getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
 import type { Product } from '@/lib/types';
-import { InventoryPanel } from '@/components/catalog/InventoryPanel';
 
 type ProductVariant = {
   id: string;
@@ -50,10 +49,10 @@ interface ProductWithDetails extends Product {
 
 interface ProductsProps {
   // Products is a sub-view under Catalog.
-  // Do not render standalone page headers or pillar tabs when embedded.
+  // Do not render standalone page headers or subtab tabs when embedded.
   isEmbeddedInCatalog?: boolean;
-  selectedPillar?: 'catalog' | 'inventory';
-  onChangePillar?: (pillar: 'catalog' | 'inventory') => void;
+  selectedSubtab?: 'catalog' | 'orders';
+  onChangeSubtab?: (subtab: 'catalog' | 'orders') => void;
 }
 
 // MultiSelectDropdown component for filter dropdowns
@@ -165,7 +164,7 @@ function MultiSelectDropdown({
   );
 }
 
-export default function Products({ isEmbeddedInCatalog = false, selectedPillar: propSelectedPillar, onChangePillar: propOnChangePillar }: ProductsProps = {}) {
+export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: propSelectedSubtab, onChangeSubtab: propOnChangeSubtab }: ProductsProps = {}) {
   const { currentOrg, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -180,16 +179,16 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
   
   // Filters
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  const [localSelectedPillar, setLocalSelectedPillar] = useState<'catalog' | 'inventory'>('catalog');
+  const [localSelectedSubtab, setLocalSelectedSubtab] = useState<'catalog' | 'orders'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
   
   // Variant option filters
   const [selectedRank1Values, setSelectedRank1Values] = useState<string[]>([]);
   const [selectedRank2Values, setSelectedRank2Values] = useState<string[]>([]);
 
-  // Use prop pillar when embedded, otherwise use local state
-  const selectedPillar = isEmbeddedInCatalog ? (propSelectedPillar ?? 'catalog') : localSelectedPillar;
-  const setSelectedPillar = isEmbeddedInCatalog && propOnChangePillar ? propOnChangePillar : setLocalSelectedPillar;
+  // Use prop subtab when embedded, otherwise use local state
+  const selectedSubtab = isEmbeddedInCatalog ? (propSelectedSubtab ?? 'catalog') : localSelectedSubtab;
+  const setSelectedSubtab = isEmbeddedInCatalog && propOnChangeSubtab ? propOnChangeSubtab : setLocalSelectedSubtab;
   
   // Variant rank config
   const [rank1, setRank1] = useState('Color');
@@ -1848,8 +1847,8 @@ export default function Products({ isEmbeddedInCatalog = false, selectedPillar: 
           products={filteredProducts}
           categories={categories}
           categoryCounts={categoryCounts}
-          selectedPillar={selectedPillar}
-          setSelectedPillar={setSelectedPillar}
+          selectedSubtab={selectedSubtab}
+          setSelectedSubtab={setSelectedSubtab}
           warehouses={warehouses}
           selectedWarehouseId={selectedWarehouseId}
           setSelectedWarehouseId={setSelectedWarehouseId}
@@ -2043,8 +2042,8 @@ interface ProductsContentProps {
   products: ProductWithDetails[];
   categories: ProductCategory[];
   categoryCounts: Map<string, number>;
-  selectedPillar: 'catalog' | 'inventory';
-  setSelectedPillar: (pillar: 'catalog' | 'inventory') => void;
+  selectedSubtab: 'catalog' | 'orders';
+  setSelectedSubtab: (subtab: 'catalog' | 'orders') => void;
   warehouses: Warehouse[];
   selectedWarehouseId: string;
   setSelectedWarehouseId: (id: string) => void;
@@ -2079,8 +2078,8 @@ function ProductsContent({
   products,
   categories,
   categoryCounts,
-  selectedPillar,
-  setSelectedPillar,
+  selectedSubtab,
+  setSelectedSubtab,
   warehouses,
   selectedWarehouseId,
   setSelectedWarehouseId,
@@ -2112,24 +2111,26 @@ function ProductsContent({
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
 
-  // If inventory pillar is selected, render InventoryPanel
-  if (selectedPillar === 'inventory') {
+  // If orders subtab is selected, render placeholder
+  if (selectedSubtab === 'orders') {
     return (
       <div className="space-y-4 md:space-y-6">
-        {currentOrg?.id ? (
-          <InventoryPanel orgId={currentOrg.id} />
-        ) : (
-          <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-            <CardContent className="flex flex-col items-center justify-center py-12 p-4 md:p-6">
-              <p className="text-muted-foreground">No organization selected</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+          <CardHeader>
+            <CardTitle>Orders</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">Coming soon.</p>
+            <Button disabled style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
+              Create Order
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  // Catalog pillar - render existing catalog view
+  // Catalog subtab - render existing catalog view
   return (
     <>
       {products.length === 0 ? (
@@ -2171,7 +2172,7 @@ function ProductsContent({
                     </button>
                     <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                       <div className="text-right">
-                        {/* Catalog pillar - show price */}
+                        {/* Catalog subtab - show price */}
                         <>
                           <div className="text-sm sm:text-base font-semibold whitespace-nowrap" style={{ color: '#0F1F17' }}>
                             HK${minPrice.toFixed(2)}
