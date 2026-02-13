@@ -382,9 +382,6 @@ function AppRoutes() {
       {/* Redirect old routes to Catalog with appropriate tab */}
       <Route path="/app/products" element={<Navigate to="/app/catalog?tab=products" replace />} />
       
-      {/* Inventory - redirect to catalog products inventory tab */}
-      <Route path="/app/inventory" element={<Navigate to="/app/catalog?tab=products" replace />} />
-      
       {/* Events CRUD routes */}
       <Route path="/app/events/new" element={<ProtectedRoute><AppLayout><EventForm /></AppLayout></ProtectedRoute>} />
       <Route path="/app/events/:id" element={<ProtectedRoute><AppLayout><EventDetail /></AppLayout></ProtectedRoute>} />

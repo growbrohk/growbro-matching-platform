@@ -46,7 +46,6 @@ interface AppLayoutProps {
  * 2. Mobile bottom nav shows new 5-tab layout
  * 3. Route aliases ensure old URLs still work:
  *    - /app/products → redirects to /app/catalog?tab=products
- *    - /app/inventory → redirects to /app/catalog?tab=products (inventory pillar tab)
  *    - /app/bookings → redirects to /app/catalog?tab=events
  * 4. New routes added:
  *    - /app/catalog (main catalog page with Products/Events/Spaces tabs)
