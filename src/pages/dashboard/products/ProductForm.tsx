@@ -14,11 +14,13 @@ import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Ware
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { 
   getCategories, 
   createCategory as apiCreateCategory, 
   type ProductCategory,
 } from '@/lib/api/categories-and-tags';
+import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
 type OrgProductType = 'physical';
 
@@ -239,6 +241,19 @@ export default function ProductForm() {
   const [variantOptionsApplied, setVariantOptionsApplied] = useState<VariantOption[]>([]);
   const [variants, setVariants] = useState<VariantCombination[]>([]);
 
+  // Product Photo state
+  const [photoMode, setPhotoMode] = useState<'url' | 'upload'>('upload');
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [draftId] = useState<string>(() => {
+    // Generate draftId on first render for create mode
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  });
+
   // Computed: check if there are pending option changes
   const hasPendingOptionChanges = useMemo(() => {
     if (variantOptionsDraft.length === 0 && variantOptionsApplied.length === 0) return false;
@@ -248,8 +263,55 @@ export default function ProductForm() {
   const canSubmit = useMemo(() => {
     if (!currentOrg?.id) return false;
     if (!title.trim()) return false;
+    if (uploadingImage) return false; // Disable save while uploading
     return true;
-  }, [currentOrg?.id, title]);
+  }, [currentOrg?.id, title, uploadingImage]);
+
+  // Helper function to upload product image
+  const uploadProductImage = async (file: File): Promise<string> => {
+    if (!currentOrg?.id) {
+      throw new Error('Organization not found');
+    }
+
+    // Validate file size <= 3MB before compression
+    const maxSize = 3 * 1024 * 1024; // 3MB
+    if (file.size > maxSize) {
+      throw new Error('File size must be less than 3MB');
+    }
+
+    // Compress image
+    const compressedFile = await compressReceiptImage(file);
+
+    // Enforce hard cap: post-compression <= 50KB
+    if (compressedFile.size > 50 * 1024) {
+      throw new Error('Image is too large even after compression. Please try another image.');
+    }
+
+    // Determine upload path: org/{orgId}/products/{productId or draftId}/{timestamp}.webp
+    const productIdForPath = id || draftId;
+    const timestamp = Date.now();
+    const uploadPath = `${currentOrg.id}/products/${productIdForPath}/${timestamp}.webp`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(uploadPath, compressedFile, {
+        upsert: false,
+        contentType: 'image/webp',
+      });
+
+    if (uploadError) {
+      console.error('Error uploading product image:', uploadError);
+      throw new Error(uploadError.message || 'Failed to upload image');
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(uploadPath);
+
+    return urlData.publicUrl;
+  };
 
   // Helper function to get default warehouse ID
   const getDefaultWarehouseId = (warehousesList: Warehouse[], selectedWarehouseIdParam?: string): string | null => {
@@ -343,13 +405,13 @@ export default function ProductForm() {
     try {
         const { data: product, error: productError } = await (supabase as any)
           .from('products')
-          .select('id, org_id, type, title, description, base_price, metadata')
+          .select('id, org_id, type, title, description, base_price, metadata, image_url')
           .eq('id', id)
           .eq('org_id', currentOrg.id)
           .single();
 
         if (productError) throw productError;
-        const p = product as any as (OrgProduct & { metadata?: any });
+        const p = product as any as (OrgProduct & { metadata?: any; image_url?: string | null });
 
         setTitle(p.title);
         setDescription(p.description || '');
@@ -357,6 +419,15 @@ export default function ProductForm() {
         
         // Load category_id
         setCategoryId(p.category_id || '');
+
+        // Load image_url
+        if (p.image_url) {
+          setImageUrl(p.image_url);
+          setPhotoMode('url'); // If image exists, show as URL mode
+        } else {
+          setImageUrl('');
+          setPhotoMode('upload');
+        }
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -829,6 +900,7 @@ export default function ProductForm() {
             description: description.trim() || null,
             base_price,
             category_id: categoryId || null,
+            image_url: imageUrl || null,
           })
           .select('id')
           .single();
@@ -844,6 +916,7 @@ export default function ProductForm() {
             description: description.trim() || null,
             base_price,
             category_id: categoryId || null,
+            image_url: imageUrl || null,
           })
           .eq('id', id!)
           .eq('org_id', currentOrg.id);
@@ -1291,6 +1364,99 @@ export default function ProductForm() {
                 <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
               <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" className="h-10" />
+                </div>
+
+                {/* Product Photo */}
+                <div className="space-y-2">
+                  <Label>Product Photo</Label>
+                  <Tabs value={photoMode} onValueChange={(v) => setPhotoMode(v as 'url' | 'upload')} className="w-full">
+                    <TabsList className="grid w-full max-w-xs grid-cols-2">
+                      <TabsTrigger value="url">Image URL</TabsTrigger>
+                      <TabsTrigger value="upload">Upload Photo</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="url" className="space-y-2 mt-2">
+                      <Input
+                        id="imageUrl"
+                        type="url"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="h-10"
+                        disabled={uploadingImage}
+                      />
+                    </TabsContent>
+                    <TabsContent value="upload" className="space-y-2 mt-2">
+                      <Input
+                        id="imageUpload"
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          setUploadingImage(true);
+                          try {
+                            const url = await uploadProductImage(file);
+                            setImageUrl(url);
+                            toast({
+                              title: 'Image uploaded',
+                              description: 'Product photo uploaded successfully',
+                            });
+                          } catch (error: any) {
+                            console.error('Error uploading image:', error);
+                            toast({
+                              title: 'Upload failed',
+                              description: error.message || 'Failed to upload image',
+                              variant: 'destructive',
+                            });
+                          } finally {
+                            setUploadingImage(false);
+                            e.target.value = ''; // Reset file input
+                          }
+                        }}
+                        className="h-10"
+                        disabled={uploadingImage}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Max 3MB. We compress before upload.
+                      </p>
+                    </TabsContent>
+                  </Tabs>
+                  
+                  {/* Preview and Remove */}
+                  {imageUrl && (
+                    <div className="space-y-2">
+                      <div className="relative inline-block">
+                        <img
+                          src={imageUrl}
+                          alt="Product preview"
+                          className="h-32 w-32 object-cover rounded-lg border"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setImageUrl('');
+                          // Reset file input if exists
+                          const fileInput = document.getElementById('imageUpload') as HTMLInputElement;
+                          if (fileInput) fileInput.value = '';
+                        }}
+                        disabled={uploadingImage}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {uploadingImage && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Uploading and compressing image...
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
