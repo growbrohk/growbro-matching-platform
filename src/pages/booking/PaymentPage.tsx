@@ -181,12 +181,22 @@ export default function PaymentPage() {
 
     // Handle image files: compress to WebP
     if (file.type.startsWith('image/')) {
+      // Check upload limit: < 10MB before compression
+      if (file.size >= 10 * 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: 'Please upload an image smaller than 10MB.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       setIsCompressing(true);
       try {
         const compressedFile = await compressReceiptImage(file);
         
-        // Enforce hard cap: post-compression <= 1MB
-        if (compressedFile.size > 1024 * 1024) {
+        // Enforce hard cap: post-compression < 50KB
+        if (compressedFile.size >= 50 * 1024) {
           toast({
             title: 'Compression failed',
             description: 'Image is too large even after compression. Please try another image or upload as PDF.',

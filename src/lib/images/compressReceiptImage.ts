@@ -1,9 +1,9 @@
 /**
- * Compress receipt images to WebP format targeting <= 500KB
+ * Compress receipt images to WebP format targeting < 50KB
  * 
  * - Resizes images: long edge <= 1400px (maintains aspect ratio)
  * - Converts to image/webp
- * - Iteratively reduces quality until size <= 500KB or quality <= 0.6
+ * - Iteratively reduces quality until size < 50KB or quality <= 0.3
  * - Returns original file if not an image type
  */
 
@@ -50,7 +50,7 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
 }
 
 /**
- * Compress receipt image to WebP format targeting <= 500KB
+ * Compress receipt image to WebP format targeting < 50KB
  * 
  * @param file - The image file to compress
  * @returns Compressed File (WebP format) or original file if not an image
@@ -97,24 +97,24 @@ export async function compressReceiptImage(file: File): Promise<File> {
     // Clean up object URL
     URL.revokeObjectURL(originalUrl);
     
-    // Target size: 500KB
-    const targetSize = 500_000;
-    const minQuality = 0.6;
+    // Target size: < 50KB (50 * 1024 bytes)
+    const targetSize = 50 * 1024;
+    const minQuality = 0.3;
     
-    // Start with quality ~0.82, reduce by ~0.08 per iteration
-    let quality = 0.82;
+    // Start with quality ~0.7, reduce by ~0.05 per iteration
+    let quality = 0.7;
     let blob: Blob | null = null;
     let attempts = 0;
-    const maxAttempts = 7;
+    const maxAttempts = 10;
     
     while (attempts < maxAttempts && quality >= minQuality) {
       blob = await toBlob(canvas, quality);
       
-      if (blob.size <= targetSize) {
+      if (blob.size < targetSize) {
         break;
       }
       
-      quality -= 0.08;
+      quality -= 0.05;
       attempts++;
     }
     
