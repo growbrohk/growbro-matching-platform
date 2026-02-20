@@ -188,7 +188,25 @@ export function ProductsContent({
             return (
               <div key={product.id} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                 {/* Product Header */}
-                <div className="p-2.5 sm:p-3 md:p-4 bg-white">
+                <div 
+                  className={`p-2.5 sm:p-3 md:p-4 bg-white ${selectedSubtab === 'pos' ? 'cursor-pointer' : ''}`}
+                  onClick={selectedSubtab === 'pos' ? (e) => {
+                    // Check if click was on a control button (they should stopPropagation, but double-check)
+                    const target = e.target as HTMLElement;
+                    if (target.closest('button')) {
+                      return; // Let button handle it
+                    }
+                    handleProductClick(product, e);
+                  } : undefined}
+                  onKeyDown={selectedSubtab === 'pos' ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleProductClick(product, e as any);
+                    }
+                  } : undefined}
+                  role={selectedSubtab === 'pos' ? 'button' : undefined}
+                  tabIndex={selectedSubtab === 'pos' ? 0 : undefined}
+                >
                   <div className="flex items-start justify-between gap-2 sm:gap-3">
                     {/* Left chevron button - separate from row click to prevent event bubbling
                         In POS mode: chevron toggles expand/collapse, row adds to cart
@@ -212,23 +230,29 @@ export function ProductsContent({
                     ) : (
                       <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                     )}
-                    {/* Product row button - clickable for add-to-cart in POS, expand/collapse in Catalog */}
-                    <button
-                      onClick={(e) => {
-                        if (selectedSubtab === 'pos') {
-                          handleProductClick(product, e);
-                        } else {
-                          toggleProduct(product.id);
-                        }
-                      }}
-                      className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
-                          {product.title}
-                        </h3>
+                    {/* Product row content - clickable for add-to-cart in POS (via parent), expand/collapse in Catalog */}
+                    {selectedSubtab === 'pos' ? (
+                      <div className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
+                            {product.title}
+                          </h3>
+                        </div>
                       </div>
-                    </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          toggleProduct(product.id);
+                        }}
+                        className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
+                            {product.title}
+                          </h3>
+                        </div>
+                      </button>
+                    )}
                     <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
                       <div className="text-right">
                         {/* Catalog subtab - show price */}
@@ -250,6 +274,7 @@ export function ProductsContent({
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               expandAllVariants(product.id, product.variants);
                             }}
                             title="Expand all variants"
@@ -261,7 +286,12 @@ export function ProductsContent({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/app/products/${product.id}/edit`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            navigate(`/app/products/${product.id}/edit`);
+                          }}
+                          title="Edit product"
                           className="h-8 w-8 p-0"
                         >
                           <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
