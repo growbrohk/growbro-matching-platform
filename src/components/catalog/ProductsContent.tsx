@@ -1,17 +1,20 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChevronDown, ChevronRight, ChevronsDown, Edit } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { VariantCombinationsTable } from './VariantCombinationsTable';
+import { VariantPicker } from '@/components/pos/VariantPicker';
 import type { ProductCategory } from '@/lib/api/categories-and-tags';
-import type { ProductWithDetails, Warehouse, InventoryItem } from '@/pages/dashboard/products/Products';
+import type { ProductWithDetails, Warehouse, InventoryItem, ProductVariant } from '@/pages/dashboard/products/Products';
+import { getVariantOptionValue } from '@/lib/utils/variant-parser';
 
 export interface ProductsContentProps {
   products: ProductWithDetails[];
   categories: ProductCategory[];
   categoryCounts: Map<string, number>;
-  selectedSubtab: 'catalog' | 'orders';
-  setSelectedSubtab: (subtab: 'catalog' | 'orders') => void;
+  selectedSubtab: 'catalog' | 'pos' | 'orders';
+  setSelectedSubtab: (subtab: 'catalog' | 'pos' | 'orders') => void;
   warehouses: Warehouse[];
   selectedWarehouseId: string;
   setSelectedWarehouseId: (id: string) => void;
@@ -40,6 +43,8 @@ export interface ProductsContentProps {
   transferFromWarehouseId: string;
   transferToWarehouseId: string;
   onBeginEditing?: () => void;
+  cart?: Array<{ productId: string; variantId?: string; name: string; variantLabel?: string; qty: number; unitPrice: number }>;
+  onAddToCart?: (item: { productId: string; variantId?: string; name: string; variantLabel?: string; qty: number; unitPrice: number }) => void;
 }
 
 export function ProductsContent({
@@ -76,8 +81,74 @@ export function ProductsContent({
   transferFromWarehouseId,
   transferToWarehouseId,
   onBeginEditing,
+  cart,
+  onAddToCart,
 }: ProductsContentProps) {
   const { currentOrg } = useAuth();
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false);
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<{ product: ProductWithDetails; variants: ProductVariant[] } | null>(null);
+
+  const formatVariantLabel = (variant: ProductVariant): string => {
+    return variant.name
+      .split('/')
+      .map(segment => {
+        const colonIndex = segment.indexOf(':');
+        if (colonIndex === -1) {
+          return segment.trim();
+        }
+        return segment.substring(colonIndex + 1).trim();
+      })
+      .join(' / ');
+  };
+
+  const handleProductClick = (product: ProductWithDetails, e: React.MouseEvent) => {
+    // In POS mode, clicking product row adds to cart (unless clicking edit icon)
+    if (selectedSubtab === 'pos' && onAddToCart) {
+      // Check if click was on edit icon or its parent
+      const target = e.target as HTMLElement;
+      if (target.closest('button[title*="edit"], button[title*="Edit"]')) {
+        return; // Let edit button handle it
+      }
+
+      if (product.variants.length === 0) {
+        // No variants - add directly
+        onAddToCart({
+          productId: product.id,
+          name: product.title,
+          qty: 1,
+          unitPrice: product.base_price || 0,
+        });
+      } else if (product.variants.length === 1) {
+        // Single variant - add directly
+        const variant = product.variants[0];
+        onAddToCart({
+          productId: product.id,
+          variantId: variant.id,
+          name: product.title,
+          variantLabel: formatVariantLabel(variant),
+          qty: 1,
+          unitPrice: variant.price || product.base_price || 0,
+        });
+      } else {
+        // Multiple variants - open picker
+        setSelectedProductForVariant({ product, variants: product.variants });
+        setVariantPickerOpen(true);
+      }
+    }
+  };
+
+  const handleVariantSelect = (variant: ProductVariant) => {
+    if (selectedProductForVariant && onAddToCart) {
+      onAddToCart({
+        productId: selectedProductForVariant.product.id,
+        variantId: variant.id,
+        name: selectedProductForVariant.product.title,
+        variantLabel: formatVariantLabel(variant),
+        qty: 1,
+        unitPrice: variant.price || selectedProductForVariant.product.base_price || 0,
+      });
+    }
+  };
 
   // If orders subtab is selected, render placeholder
   if (selectedSubtab === 'orders') {
@@ -120,7 +191,13 @@ export function ProductsContent({
                 <div className="p-2.5 sm:p-3 md:p-4 bg-white">
                   <div className="flex items-start justify-between gap-2 sm:gap-3">
                     <button
-                      onClick={() => toggleProduct(product.id)}
+                      onClick={(e) => {
+                        if (selectedSubtab === 'pos') {
+                          handleProductClick(product, e);
+                        } else {
+                          toggleProduct(product.id);
+                        }
+                      }}
                       className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
                     >
                       {product.variants.length > 1 ? (
@@ -209,6 +286,19 @@ export function ProductsContent({
             );
           })}
         </div>
+      )}
+
+      {/* Variant Picker for POS */}
+      {selectedSubtab === 'pos' && selectedProductForVariant && (
+        <VariantPicker
+          open={variantPickerOpen}
+          onOpenChange={setVariantPickerOpen}
+          productName={selectedProductForVariant.product.title}
+          variants={selectedProductForVariant.variants}
+          rank1={rank1}
+          rank2={rank2}
+          onSelect={handleVariantSelect}
+        />
       )}
     </>
   );

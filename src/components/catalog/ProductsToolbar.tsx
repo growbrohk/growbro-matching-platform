@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, SlidersHorizontal, Settings, Pencil, Plus, X, Save } from 'lucide-react';
+import { Search, SlidersHorizontal, Settings, Pencil, Plus, X, Save, ShoppingCart } from 'lucide-react';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
 
 type Warehouse = {
@@ -54,6 +54,9 @@ export interface ProductsToolbarProps {
   onSaveRestock: () => void;
   onSaveTransfer: () => void;
   onTransferSetupClick: () => void;
+  isPosMode?: boolean;
+  cartItemCount?: number;
+  onCartClick?: () => void;
 }
 
 export function ProductsToolbar({
@@ -94,6 +97,9 @@ export function ProductsToolbar({
   onSaveRestock,
   onSaveTransfer,
   onTransferSetupClick,
+  isPosMode = false,
+  cartItemCount = 0,
+  onCartClick,
 }: ProductsToolbarProps) {
   return (
     <>
@@ -226,29 +232,49 @@ export function ProductsToolbar({
                 <Settings className="h-4 w-4" />
                 <span className="hidden sm:inline sm:ml-2">Settings</span>
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={onBulkModePickerClick}
-                className="h-9 w-9 sm:w-auto sm:px-3"
-                title="Bulk edit products"
-                disabled={!selectedWarehouseId}
-              >
-                <Pencil className="h-4 w-4" />
-                <span className="hidden sm:inline sm:ml-2">Bulk Edit</span>
-              </Button>
+              {!isPosMode && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={onBulkModePickerClick}
+                  className="h-9 w-9 sm:w-auto sm:px-3"
+                  title="Bulk edit products"
+                  disabled={!selectedWarehouseId}
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span className="hidden sm:inline sm:ml-2">Bulk Edit</span>
+                </Button>
+              )}
 
-              <Button
-                onClick={onAddProductClick}
-                disabled={!canCreate}
-                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-                size="icon"
-                className="h-9 w-9 sm:w-auto sm:px-3"
-                title="Add new product"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline sm:ml-2">Add Product</span>
-              </Button>
+              {isPosMode ? (
+                <Button
+                  onClick={onCartClick}
+                  style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                  size="icon"
+                  className="h-9 w-9 sm:w-auto sm:px-3 relative"
+                  title="Open cart"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {cartItemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: '#fff', color: '#0E7A3A' }}>
+                      {cartItemCount}
+                    </span>
+                  )}
+                  <span className="hidden sm:inline sm:ml-2">Cart</span>
+                </Button>
+              ) : (
+                <Button
+                  onClick={onAddProductClick}
+                  disabled={!canCreate}
+                  style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+                  size="icon"
+                  className="h-9 w-9 sm:w-auto sm:px-3"
+                  title="Add new product"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline sm:ml-2">Add Product</span>
+                </Button>
+              )}
             </>
           ) : bulkMode === 'correction' ? (
             <>

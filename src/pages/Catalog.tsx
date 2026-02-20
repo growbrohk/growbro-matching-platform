@@ -12,7 +12,7 @@ export default function Catalog() {
   const navigate = useNavigate();
   const tabParam = searchParams.get('tab') as CatalogTab | null;
   const [activeTab, setActiveTab] = useState<CatalogTab>(tabParam || 'products');
-  const [productsSubtab, setProductsSubtab] = useState<'catalog' | 'orders'>('catalog');
+  const [productsSubtab, setProductsSubtab] = useState<'catalog' | 'pos' | 'orders'>('catalog');
 
   useEffect(() => {
     // Sync tab state with URL
@@ -46,9 +46,10 @@ export default function Catalog() {
 
             {activeTab === 'products' && (
               <div className="mt-2">
-                <Tabs value={productsSubtab} onValueChange={(v) => setProductsSubtab(v as 'catalog' | 'orders')}>
-                  <TabsList className="grid w-full grid-cols-2">
+                <Tabs value={productsSubtab} onValueChange={(v) => setProductsSubtab(v as 'catalog' | 'pos' | 'orders')}>
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="catalog">Catalog</TabsTrigger>
+                    <TabsTrigger value="pos">POS</TabsTrigger>
                     <TabsTrigger value="orders">Orders</TabsTrigger>
                   </TabsList>
                 </Tabs>

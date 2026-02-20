@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
@@ -17,6 +17,7 @@ import type { Product } from '@/lib/types';
 import { ProductsToolbar } from '@/components/catalog/ProductsToolbar';
 import { BulkDialogs } from '@/components/catalog/BulkDialogs';
 import { ProductsContent } from '@/components/catalog/ProductsContent';
+import { Cart, type CartItem } from '@/components/pos/Cart';
 
 type ProductVariant = {
   id: string;
@@ -50,8 +51,8 @@ interface ProductsProps {
   // Products is a sub-view under Catalog.
   // Do not render standalone page headers or subtab tabs when embedded.
   isEmbeddedInCatalog?: boolean;
-  selectedSubtab?: 'catalog' | 'orders';
-  onChangeSubtab?: (subtab: 'catalog' | 'orders') => void;
+  selectedSubtab?: 'catalog' | 'pos' | 'orders';
+  onChangeSubtab?: (subtab: 'catalog' | 'pos' | 'orders') => void;
 }
 
 export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: propSelectedSubtab, onChangeSubtab: propOnChangeSubtab }: ProductsProps = {}) {
@@ -69,7 +70,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   
   // Filters
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  const [localSelectedSubtab, setLocalSelectedSubtab] = useState<'catalog' | 'orders'>('catalog');
+  const [localSelectedSubtab, setLocalSelectedSubtab] = useState<'catalog' | 'pos' | 'orders'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
   
   // Variant option filters
@@ -116,6 +117,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   const [transferReferenceNote, setTransferReferenceNote] = useState('');
   const [transferEdits, setTransferEdits] = useState<Record<string, number>>({});
   const [isTransferSetupOpen, setIsTransferSetupOpen] = useState(false);
+
+  // POS cart state
+  const [cart, setCart] = useState<Array<{ productId: string; variantId?: string; name: string; variantLabel?: string; qty: number; unitPrice: number }>>([]);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const canCreate = !!currentOrg?.id;
 
@@ -1189,6 +1194,9 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
         onSaveRestock={handleSaveRestock}
         onSaveTransfer={handleSaveTransfer}
         onTransferSetupClick={() => setIsTransferSetupOpen(true)}
+        isPosMode={selectedSubtab === 'pos'}
+        cartItemCount={selectedSubtab === 'pos' ? cart.reduce((sum, item) => sum + item.qty, 0) : 0}
+        onCartClick={selectedSubtab === 'pos' ? () => setCartOpen(true) : undefined}
       />
 
       <BulkDialogs
@@ -1270,8 +1278,56 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
           transferFromWarehouseId={transferFromWarehouseId}
           transferToWarehouseId={transferToWarehouseId}
           onBeginEditing={() => setShowEditCta(false)}
+          cart={selectedSubtab === 'pos' ? cart : undefined}
+          onAddToCart={selectedSubtab === 'pos' ? (item: CartItem) => {
+            // Merge cart items by product_id + variant_id
+            setCart(prev => {
+              const existingIndex = prev.findIndex(
+                i => i.productId === item.productId && i.variantId === item.variantId
+              );
+              if (existingIndex >= 0) {
+                const newCart = [...prev];
+                newCart[existingIndex] = { ...newCart[existingIndex], qty: newCart[existingIndex].qty + 1 };
+                return newCart;
+              }
+              return [...prev, { ...item, qty: 1 }];
+            });
+            toast({
+              title: 'Added to cart',
+              description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} added to cart`,
+            });
+          } : undefined}
         />
       </div>
+
+      {/* Cart Modal */}
+      {selectedSubtab === 'pos' && (
+        <>
+          <Cart
+            open={cartOpen}
+            onOpenChange={setCartOpen}
+            cart={cart}
+            onUpdateCart={setCart}
+            activeWarehouseId={selectedWarehouseId || null}
+            activeWarehouseName={warehouses.find(w => w.id === selectedWarehouseId)?.name || null}
+          />
+          
+          {/* Floating Action Button for Cart */}
+          {cart.reduce((sum, item) => sum + item.qty, 0) > 0 && (
+            <button
+              onClick={() => setCartOpen(true)}
+              className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg flex items-center justify-center z-50"
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+              title="Open cart"
+            >
+              <ShoppingCart className="h-6 w-6" />
+              <span className="absolute -top-1 -right-1 h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: '#fff', color: '#0E7A3A' }}>
+                {cart.reduce((sum, item) => sum + item.qty, 0)}
+              </span>
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
