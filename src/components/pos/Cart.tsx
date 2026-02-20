@@ -37,10 +37,55 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isCompleting, setIsCompleting] = useState(false);
 
-  const updateItemQty = (index: number, delta: number) => {
+  // Get stock for a variant/product in the active warehouse
+  const getStockForItem = async (item: CartItem): Promise<number> => {
+    if (!activeWarehouseId || !currentOrg?.id) return 0;
+    
+    const variantId = item.variantId || item.productId;
+    const { data } = await supabase
+      .from('inventory_items')
+      .select('quantity')
+      .eq('org_id', currentOrg.id)
+      .eq('warehouse_id', activeWarehouseId)
+      .eq('variant_id', variantId)
+      .maybeSingle();
+    
+    return data?.quantity ?? 0;
+  };
+
+  const updateItemQty = async (index: number, delta: number) => {
     const newCart = [...cart];
     const item = newCart[index];
     const newQty = Math.max(0, item.qty + delta);
+    
+    // If increasing quantity, check stock availability (strict stock mode for POS)
+    if (delta > 0 && activeWarehouseId) {
+      const availableStock = await getStockForItem(item);
+      
+      // Calculate remaining stock: available stock minus what's already in cart (excluding current item)
+      const otherCartItemsQty = cart
+        .filter((c, i) => i !== index && c.productId === item.productId && c.variantId === item.variantId)
+        .reduce((sum, c) => sum + c.qty, 0);
+      const remainingStock = availableStock - otherCartItemsQty;
+      
+      if (remainingStock === 0) {
+        toast({
+          title: 'Out of Stock',
+          description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} is out of stock`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (newQty > remainingStock) {
+        toast({
+          title: 'Insufficient Stock',
+          description: `Only ${remainingStock} left in this warehouse`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     
     if (newQty === 0) {
       newCart.splice(index, 1);

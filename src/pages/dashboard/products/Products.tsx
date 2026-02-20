@@ -1280,6 +1280,50 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
           onBeginEditing={() => setShowEditCta(false)}
           cart={selectedSubtab === 'pos' ? cart : undefined}
           onAddToCart={selectedSubtab === 'pos' ? (item: CartItem) => {
+            // Strict stock enforcement for POS mode
+            if (!selectedWarehouseId) {
+              toast({
+                title: 'Warehouse Required',
+                description: 'Please select a warehouse in Settings',
+                variant: 'destructive',
+              });
+              return;
+            }
+
+            // Get stock for variant (or product if no variant)
+            const variantId = item.variantId || item.productId;
+            const inventoryItem = products
+              .flatMap(p => p.inventoryItems)
+              .find(i => i.variant_id === variantId && i.warehouse_id === selectedWarehouseId);
+            
+            const availableStock = inventoryItem?.quantity ?? 0;
+
+            // Get current cart quantity for this item
+            const existingCartItem = cart.find(
+              i => i.productId === item.productId && i.variantId === item.variantId
+            );
+            const currentCartQty = existingCartItem?.qty ?? 0;
+            const newQty = currentCartQty + 1;
+
+            // Check stock availability
+            if (availableStock === 0) {
+              toast({
+                title: 'Out of Stock',
+                description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} is out of stock in the selected warehouse`,
+                variant: 'destructive',
+              });
+              return;
+            }
+
+            if (newQty > availableStock) {
+              toast({
+                title: 'Insufficient Stock',
+                description: `Only ${availableStock} left in this warehouse`,
+                variant: 'destructive',
+              });
+              return;
+            }
+
             // Merge cart items by product_id + variant_id
             setCart(prev => {
               const existingIndex = prev.findIndex(

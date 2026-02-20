@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import type { ProductVariant } from '@/pages/dashboard/products/Products';
+import { useToast } from '@/hooks/use-toast';
+import type { ProductVariant, InventoryItem } from '@/pages/dashboard/products/Products';
+import type { CartItem } from './Cart';
 import { getVariantOptionValue } from '@/lib/utils/variant-parser';
 
 interface VariantPickerProps {
@@ -12,9 +14,24 @@ interface VariantPickerProps {
   rank1: string;
   rank2: string;
   onSelect: (variant: ProductVariant) => void;
+  activeWarehouseId: string | null;
+  inventoryItems: InventoryItem[];
+  cart: CartItem[];
 }
 
-export function VariantPicker({ open, onOpenChange, productName, variants, rank1, rank2, onSelect }: VariantPickerProps) {
+export function VariantPicker({ 
+  open, 
+  onOpenChange, 
+  productName, 
+  variants, 
+  rank1, 
+  rank2, 
+  onSelect,
+  activeWarehouseId,
+  inventoryItems,
+  cart,
+}: VariantPickerProps) {
+  const { toast } = useToast();
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
 
   const formatVariantLabel = (variant: ProductVariant): string => {
@@ -30,12 +47,76 @@ export function VariantPicker({ open, onOpenChange, productName, variants, rank1
       .join(' / ');
   };
 
-  const handleConfirm = () => {
-    if (selectedVariant) {
-      onSelect(selectedVariant);
-      setSelectedVariant(null);
-      onOpenChange(false);
+  // Get stock for a variant in the active warehouse
+  const getVariantStock = (variantId: string): number => {
+    if (!activeWarehouseId) return 0;
+    const item = inventoryItems.find(
+      i => i.variant_id === variantId && i.warehouse_id === activeWarehouseId
+    );
+    return item?.quantity ?? 0;
+  };
+
+  // Get current cart quantity for a variant
+  const getCartQuantity = (variantId: string): number => {
+    const cartItem = cart.find(item => item.variantId === variantId);
+    return cartItem?.qty ?? 0;
+  };
+
+  // Get remaining stock (available stock minus what's already in cart)
+  const getRemainingStock = (variantId: string): number => {
+    const stock = getVariantStock(variantId);
+    const cartQty = getCartQuantity(variantId);
+    return Math.max(0, stock - cartQty);
+  };
+
+  const handleVariantClick = (variant: ProductVariant) => {
+    if (!activeWarehouseId) {
+      toast({
+        title: 'Warehouse Required',
+        description: 'Please select a warehouse in Settings',
+        variant: 'destructive',
+      });
+      return;
     }
+
+    const remainingStock = getRemainingStock(variant.id);
+    if (remainingStock === 0) {
+      toast({
+        title: 'Out of Stock',
+        description: 'This variant is out of stock in the selected warehouse',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSelectedVariant(variant);
+  };
+
+  const handleConfirm = () => {
+    if (!selectedVariant) return;
+
+    if (!activeWarehouseId) {
+      toast({
+        title: 'Warehouse Required',
+        description: 'Please select a warehouse in Settings',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const remainingStock = getRemainingStock(selectedVariant.id);
+    if (remainingStock === 0) {
+      toast({
+        title: 'Out of Stock',
+        description: 'This variant is out of stock in the selected warehouse',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    onSelect(selectedVariant);
+    setSelectedVariant(null);
+    onOpenChange(false);
   };
 
   return (
@@ -47,50 +128,74 @@ export function VariantPicker({ open, onOpenChange, productName, variants, rank1
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto py-4">
-          <div className="space-y-2">
-            {variants.map((variant) => {
-              const isSelected = selectedVariant?.id === variant.id;
-              const price = variant.price || 0;
-              const label = formatVariantLabel(variant);
+          {!activeWarehouseId ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Please select a warehouse in Settings</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {variants.map((variant) => {
+                const isSelected = selectedVariant?.id === variant.id;
+                const price = variant.price || 0;
+                const label = formatVariantLabel(variant);
+                const stock = getVariantStock(variant.id);
+                const remainingStock = getRemainingStock(variant.id);
+                const isOutOfStock = remainingStock === 0;
+                const isDisabled = isOutOfStock;
 
-              return (
-                <button
-                  key={variant.id}
-                  onClick={() => setSelectedVariant(variant)}
-                  className={`w-full p-4 rounded-lg border text-left transition-colors ${
-                    isSelected
-                      ? 'border-green-600 bg-green-50'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                  style={isSelected ? { borderColor: '#0E7A3A', backgroundColor: 'rgba(14,122,58,0.1)' } : {}}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium" style={{ color: '#0F1F17' }}>
-                        {label}
-                      </div>
-                      {variant.sku && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          SKU: {variant.sku}
+                return (
+                  <button
+                    key={variant.id}
+                    onClick={() => handleVariantClick(variant)}
+                    disabled={isDisabled}
+                    className={`w-full p-4 rounded-lg border text-left transition-colors ${
+                      isDisabled
+                        ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+                        : isSelected
+                        ? 'border-green-600 bg-green-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                    style={
+                      isDisabled
+                        ? {}
+                        : isSelected
+                        ? { borderColor: '#0E7A3A', backgroundColor: 'rgba(14,122,58,0.1)' }
+                        : {}
+                    }
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium" style={{ color: isDisabled ? '#9CA3AF' : '#0F1F17' }}>
+                          {label}
                         </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold" style={{ color: '#0E7A3A' }}>
-                        HK${price.toFixed(2)}
+                        <div className="flex items-center gap-3 mt-1">
+                          {variant.sku && (
+                            <div className="text-sm text-muted-foreground">
+                              SKU: {variant.sku}
+                            </div>
+                          )}
+                          <div className={`text-sm ${isOutOfStock ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                            {isOutOfStock ? 'Out of stock' : `Stock: ${remainingStock}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right ml-4">
+                        <div className="font-semibold" style={{ color: isDisabled ? '#9CA3AF' : '#0E7A3A' }}>
+                          HK${price.toFixed(2)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="border-t pt-4">
           <Button
             onClick={handleConfirm}
-            disabled={!selectedVariant}
+            disabled={!selectedVariant || !activeWarehouseId || (selectedVariant ? getRemainingStock(selectedVariant.id) === 0 : true)}
             className="w-full"
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
           >

@@ -312,6 +312,9 @@ export function ProductsContent({
           rank1={rank1}
           rank2={rank2}
           onSelect={handleVariantSelect}
+          activeWarehouseId={selectedWarehouseId || null}
+          inventoryItems={selectedProductForVariant.product.inventoryItems}
+          cart={cart || []}
         />
       )}
     </>
