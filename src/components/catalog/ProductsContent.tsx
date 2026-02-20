@@ -190,6 +190,29 @@ export function ProductsContent({
                 {/* Product Header */}
                 <div className="p-2.5 sm:p-3 md:p-4 bg-white">
                   <div className="flex items-start justify-between gap-2 sm:gap-3">
+                    {/* Left chevron button - separate from row click to prevent event bubbling
+                        In POS mode: chevron toggles expand/collapse, row adds to cart
+                        In Catalog mode: both chevron and row toggle expand/collapse */}
+                    {product.variants.length > 1 ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent row click handler from firing
+                          e.preventDefault();
+                          toggleProduct(product.id);
+                        }}
+                        className="flex-shrink-0 mt-0.5 p-1 hover:bg-muted/50 rounded transition-colors"
+                        title={isExpanded ? "Collapse variants" : "Expand variants"}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: '#0E7A3A' }} />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: '#0E7A3A' }} />
+                        )}
+                      </button>
+                    ) : (
+                      <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                    )}
+                    {/* Product row button - clickable for add-to-cart in POS, expand/collapse in Catalog */}
                     <button
                       onClick={(e) => {
                         if (selectedSubtab === 'pos') {
@@ -200,15 +223,6 @@ export function ProductsContent({
                       }}
                       className="flex items-start gap-1.5 sm:gap-2 flex-1 text-left min-w-0"
                     >
-                      {product.variants.length > 1 ? (
-                        isExpanded ? (
-                          <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" style={{ color: '#0E7A3A' }} />
-                        )
-                      ) : (
-                        <div className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                      )}
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
                           {product.title}
