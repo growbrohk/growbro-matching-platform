@@ -133,7 +133,7 @@ export function VariantPicker({
               <p>Please select a warehouse in Settings</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               {variants.map((variant) => {
                 const isSelected = selectedVariant?.id === variant.id;
                 const price = variant.price || 0;
@@ -148,7 +148,7 @@ export function VariantPicker({
                     key={variant.id}
                     onClick={() => handleVariantClick(variant)}
                     disabled={isDisabled}
-                    className={`w-full p-4 rounded-lg border text-left transition-colors ${
+                    className={`w-full p-2.5 sm:p-4 rounded-lg border text-left transition-colors ${
                       isDisabled
                         ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
                         : isSelected
@@ -163,24 +163,24 @@ export function VariantPicker({
                         : {}
                     }
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium" style={{ color: isDisabled ? '#9CA3AF' : '#0F1F17' }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm sm:text-base truncate" style={{ color: isDisabled ? '#9CA3AF' : '#0F1F17' }}>
                           {label}
                         </div>
-                        <div className="flex items-center gap-3 mt-1">
+                        <div className="flex items-center gap-2 sm:gap-3 mt-0.5 sm:mt-1">
                           {variant.sku && (
-                            <div className="text-sm text-muted-foreground">
+                            <div className="text-xs sm:text-sm text-muted-foreground truncate whitespace-nowrap">
                               SKU: {variant.sku}
                             </div>
                           )}
-                          <div className={`text-sm ${isOutOfStock ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                          <div className={`text-xs sm:text-sm whitespace-nowrap ${isOutOfStock ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                             {isOutOfStock ? 'Out of stock' : `Stock: ${remainingStock}`}
                           </div>
                         </div>
                       </div>
-                      <div className="text-right ml-4">
-                        <div className="font-semibold" style={{ color: isDisabled ? '#9CA3AF' : '#0E7A3A' }}>
+                      <div className="text-right ml-2 sm:ml-4 flex-shrink-0">
+                        <div className="font-semibold text-sm sm:text-base whitespace-nowrap" style={{ color: isDisabled ? '#9CA3AF' : '#0E7A3A' }}>
                           HK${price.toFixed(2)}
                         </div>
                       </div>
