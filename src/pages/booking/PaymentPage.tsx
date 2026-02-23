@@ -181,8 +181,8 @@ export default function PaymentPage() {
 
     // Handle image files: compress to WebP
     if (file.type.startsWith('image/')) {
-      // Check upload limit: < 10MB before compression
-      if (file.size >= 10 * 1024 * 1024) {
+      // Check upload limit: <= 10MB before compression
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: 'File too large',
           description: 'Please upload an image smaller than 10MB.',
