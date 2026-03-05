@@ -15,8 +15,8 @@ The **easiest and recommended** way to create storage policies is via the Supaba
    - Or navigate: Your Project → SQL Editor → New Query
 
 2. **Copy the SQL**
-   - Open: `supabase/migrations/20260201000001_fix_payment_receipt_storage_rls.sql`
-   - Copy the entire contents (starting from line 10, after the comments)
+   - Open: `supabase/migrations/20260246000000_fix_payment_receipt_storage_minimal.sql`
+   - Copy the entire contents (or run via `supabase migration up` if your setup supports it)
 
 3. **Paste and Run**
    - Paste the SQL into the Dashboard SQL Editor
@@ -29,6 +29,8 @@ If you prefer not to use SQL, you can create the policies manually:
 
 #### Policy 1: INSERT (Upload Receipts)
 
+Minimal policy – allows anyone (including anonymous users) to upload. Fixes PayMe/FPS receipt upload for incognito/guest users.
+
 1. Go to: **Storage** → **Policies** → Select `payment-receipts` bucket
 2. Click **"New Policy"**
 3. Configure:
@@ -37,41 +39,7 @@ If you prefer not to use SQL, you can create the policies manually:
    - **Policy Definition**: Use this SQL:
 
 ```sql
-bucket_id = 'payment-receipts' AND
-(
-  (
-    auth.role() = 'authenticated' AND
-    EXISTS (
-      SELECT 1 FROM orders o
-      WHERE o.id::text = split_part(name, '/', 1)
-      AND (
-        o.buyer_user_id = auth.uid()
-        OR
-        (
-          o.buyer_user_id IS NULL
-          AND o.buyer_email IS NOT NULL
-          AND (auth.jwt() ->> 'email') IS NOT NULL
-          AND o.buyer_email = (auth.jwt() ->> 'email')
-        )
-        OR
-        o.created_at > NOW() - INTERVAL '1 hour'
-      )
-    )
-  )
-  OR
-  (
-    auth.role() = 'anon' AND
-    EXISTS (
-      SELECT 1 FROM orders o
-      WHERE o.id::text = split_part(name, '/', 1)
-      AND o.buyer_user_id IS NULL
-      AND o.buyer_email IS NOT NULL
-      AND (auth.jwt() ->> 'email') IS NOT NULL
-      AND o.buyer_email = (auth.jwt() ->> 'email')
-      AND o.created_at > NOW() - INTERVAL '1 hour'
-    )
-  )
-)
+bucket_id = 'payment-receipts'
 ```
 
 #### Policy 2: SELECT (View Receipts)
