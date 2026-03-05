@@ -49,25 +49,36 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   });
 }
 
+export interface CompressImageOptions {
+  targetSizeBytes?: number;
+  maxDimension?: number;
+}
+
 /**
- * Compress receipt image to WebP format targeting < 50KB
+ * Compress image to WebP format targeting a given size
  * 
  * @param file - The image file to compress
+ * @param options - Optional: targetSizeBytes (default 50KB), maxDimension (default 1400px)
  * @returns Compressed File (WebP format) or original file if not an image
  */
-export async function compressReceiptImage(file: File): Promise<File> {
+export async function compressReceiptImage(
+  file: File,
+  options?: CompressImageOptions
+): Promise<File> {
   // If not an image, return as-is
   if (!file.type.startsWith('image/')) {
     return file;
   }
+
+  const targetSize = options?.targetSizeBytes ?? 50 * 1024;
+  const maxDimension = options?.maxDimension ?? 1400;
 
   try {
     // Load image
     const img = await loadImage(file);
     const originalUrl = img.src;
     
-    // Calculate dimensions: resize long edge to <= 1400px, maintain aspect ratio
-    const maxDimension = 1400;
+    // Calculate dimensions: resize long edge to <= maxDimension, maintain aspect ratio
     let width = img.width;
     let height = img.height;
     
@@ -97,8 +108,6 @@ export async function compressReceiptImage(file: File): Promise<File> {
     // Clean up object URL
     URL.revokeObjectURL(originalUrl);
     
-    // Target size: < 50KB (50 * 1024 bytes)
-    const targetSize = 50 * 1024;
     const minQuality = 0.3;
     
     // Start with quality ~0.7, reduce by ~0.05 per iteration

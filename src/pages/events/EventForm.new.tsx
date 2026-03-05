@@ -46,6 +46,7 @@ import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
+import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
 interface TicketTypeForm {
   id?: string;
@@ -287,12 +288,12 @@ export default function EventForm() {
       return;
     }
 
-    // Validation: File size (500KB max)
-    const maxSize = 500 * 1024; // 500KB
+    // Validation: File size (10MB max before compression)
+    const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       toast({
         title: 'Error',
-        description: 'File size must be less than 500KB',
+        description: 'File size must be less than 10MB',
         variant: 'destructive',
       });
       e.target.value = ''; // Clear file input
@@ -311,31 +312,39 @@ export default function EventForm() {
       return;
     }
 
-    // Determine file extension
-    let ext = 'jpg';
-    if (file.type === 'image/png') ext = 'png';
-    else if (file.type === 'image/webp') ext = 'webp';
-    else if (file.type === 'image/jpeg' || file.type === 'image/jpg') ext = 'jpg';
-
-    // Determine upload path based on whether eventId exists
-    let uploadPath: string;
-    if (eventId && currentOrg?.id) {
-      // Existing event: {orgId}/{eventId}/instagram-preview.{ext}
-      uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
-    } else {
-      // New event: temp/{userId}/{randomUUID}.{ext}
-      const randomUUID = generateUUID();
-      uploadPath = `temp/${user.id}/${randomUUID}.${ext}`;
-    }
-
     setUploadingPreview(true);
     try {
+      // Compress to ~70KB before upload
+      const compressedFile = await compressReceiptImage(file, {
+        targetSizeBytes: 70 * 1024,
+      });
+
+      if (compressedFile.size >= 70 * 1024) {
+        toast({
+          title: 'Error',
+          description: 'Image is too large even after compression. Please try another image.',
+          variant: 'destructive',
+        });
+        e.target.value = '';
+        return;
+      }
+
+      // Compressed output is always WebP
+      const ext = 'webp';
+      let uploadPath: string;
+      if (eventId && currentOrg?.id) {
+        uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
+      } else {
+        const randomUUID = generateUUID();
+        uploadPath = `temp/${user.id}/${randomUUID}.${ext}`;
+      }
+
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('event-previews')
-        .upload(uploadPath, file, {
+        .upload(uploadPath, compressedFile, {
           upsert: true,
-          contentType: file.type,
+          contentType: 'image/webp',
         });
 
       if (uploadError) {
