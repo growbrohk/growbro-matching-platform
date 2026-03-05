@@ -4,10 +4,10 @@
  * Human users continue to the SPA as normal.
  */
 
-import { NextResponse } from 'next/server';
+import { next } from '@vercel/functions';
 
 const SHARE_EVENT_BASE =
-  'https://pbtupzbqtuxzznwummep.functions.supabase.co/share-event';
+  'https://pbtupzbqtuxzznwummep.supabase.co/functions/v1/share-event';
 
 const RESERVED_ORG_SLUGS = new Set([
   'app',
@@ -100,8 +100,12 @@ export default async function middleware(request: Request) {
       },
     });
 
-    // Pass through 404, 400, 500 etc.
+    // Pass through 404, 400; fallback to SPA on 500+ so scrapers get 200
     if (!response.ok) {
+      if (response.status >= 500) {
+        console.error('[middleware] share-event returned', response.status);
+        return next();
+      }
       return response;
     }
 
@@ -110,10 +114,6 @@ export default async function middleware(request: Request) {
     console.error('[middleware] share-event fetch error:', error);
     return next();
   }
-}
-
-function next(): Response {
-  return NextResponse.next();
 }
 
 export const config = {
