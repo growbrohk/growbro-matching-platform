@@ -168,10 +168,13 @@ Deno.serve(async (req) => {
       ? `https://growbrohk.com/${orgSlug}/${eventSlug}?ticket=${ticketId}`
       : `https://growbrohk.com/${orgSlug}/${eventSlug}`;
 
-    // Build share URL (current URL)
-    const shareUrl = ticketId
-      ? `https://growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
-      : `https://growbrohk.com/s/${orgSlug}/${eventSlug}`;
+    // Build share URL (og:url) - use canonicalUrl if provided (e.g. from middleware for direct URLs)
+    const canonicalUrlParam = url.searchParams.get('canonicalUrl');
+    const shareUrl = (canonicalUrlParam && /^https:\/\/(www\.)?growbrohk\.com\//.test(canonicalUrlParam))
+      ? canonicalUrlParam
+      : (ticketId
+        ? `https://growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
+        : `https://growbrohk.com/s/${orgSlug}/${eventSlug}`);
 
     // Detect link preview bots via User-Agent
     const ua = (req.headers.get('user-agent') || '').toLowerCase();
