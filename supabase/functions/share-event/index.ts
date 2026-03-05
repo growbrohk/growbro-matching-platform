@@ -217,8 +217,7 @@ Deno.serve(async (req) => {
   <meta property="og:title" content="${escapeHtml(ogTitle)}">
   <meta property="og:description" content="${escapeHtml(ogDescriptionShort)}">
   <meta property="og:image" content="${ogImage}">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
+  ${ogImage.includes('event-previews') || ogImage.endsWith('.webp') ? '<meta property="og:image:type" content="image/webp">' : ''}
   <meta property="og:image:alt" content="${escapeHtml(ogTitle)}">
   
   <!-- Twitter -->
