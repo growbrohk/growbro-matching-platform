@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, Plus, ChevronUp, ChevronDown, X, Copy } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, X, Copy } from 'lucide-react';
 import {
   BookingDraft,
   ContactInfo,
@@ -319,9 +319,6 @@ export default function CompleteBookingPage() {
     );
   }
 
-  // Check if contact info is empty
-  const hasContactInfo = contactInfo.firstName || contactInfo.lastName || contactInfo.phone || contactInfo.email;
-
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
@@ -546,31 +543,7 @@ export default function CompleteBookingPage() {
           ) : (
             /* Primary Contact Info (FREE route) */
             <>
-              {!hasContactInfo && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // Clear form and open dialog for adding new contact
-                      setContactInfo({
-                        firstName: '',
-                        lastName: '',
-                        phone: '',
-                        email: '',
-                      });
-                      setShowContactDialog(true);
-                    }}
-                    style={{ borderColor: 'rgba(14,122,58,0.2)', color: '#0E7A3A' }}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add
-                  </Button>
-                </div>
-              )}
-
-              {/* Contact Info Card (shared component) */}
+              {/* Contact Info Card (shared component) - has its own Add button when empty */}
               <ContactInfoCard
                 contactInfo={contactInfo}
                 onUpdate={handleContactInfoUpdate}
