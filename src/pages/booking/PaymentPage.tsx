@@ -231,16 +231,33 @@ export default function PaymentPage() {
 
   const handleStripePayment = async () => {
     if (!orderId) return;
-    
-    // TODO: Implement Stripe checkout session creation
-    toast({
-      title: 'Stripe payment',
-      description: 'Stripe checkout will be implemented soon.',
-    });
-    
-    // Example: Redirect to Stripe checkout
-    // const checkoutUrl = await createStripeCheckoutSession(orderId);
-    // window.location.href = checkoutUrl;
+
+    setIsSubmitting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-stripe-checkout-session', {
+        body: { order_id: orderId },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to create checkout session');
+      }
+
+      const url = data?.url;
+      if (!url || typeof url !== 'string') {
+        throw new Error('Invalid response from payment service');
+      }
+
+      window.location.href = url;
+    } catch (error: unknown) {
+      console.error('Stripe checkout error:', error);
+      toast({
+        title: 'Payment error',
+        description: error instanceof Error ? error.message : 'Failed to start payment. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleManualPaymentSubmit = async () => {
