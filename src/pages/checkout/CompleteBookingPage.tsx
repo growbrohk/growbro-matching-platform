@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, ChevronUp, ChevronDown, X, Copy } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-react';
 import {
   BookingDraft,
   ContactInfo,
@@ -54,8 +54,8 @@ export default function CompleteBookingPage() {
     email: '',
   });
   const [attendees, setAttendees] = useState<AttendeeInfo[]>([]);
-  // Checkbox: Use Contact info as Attendee 1 (default ON)
-  const [useContactAsAttendee1, setUseContactAsAttendee1] = useState(true);
+  // Per-attendee: indices of attendees that use Contact info (UI-only, not persisted)
+  const [useContactAsAttendee, setUseContactAsAttendee] = useState<Set<number>>(() => new Set());
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -118,15 +118,6 @@ export default function CompleteBookingPage() {
               // Load saved attendees if available
               if (draft.attendees && draft.attendees.length === totalTickets) {
                 setAttendees(draft.attendees);
-                // If checkbox is ON and Attendee 1 has data, sync Contact info from Attendee 1
-                if (useContactAsAttendee1 && draft.attendees.length > 0 && draft.attendees[0].email) {
-                  setContactInfo({
-                    firstName: draft.attendees[0].firstName,
-                    lastName: draft.attendees[0].lastName,
-                    email: draft.attendees[0].email,
-                    phone: draft.attendees[0].phone,
-                  });
-                }
               } else {
                 setAttendees(initialAttendees);
               }
@@ -188,19 +179,22 @@ export default function CompleteBookingPage() {
     setContactInfo(info);
     saveContactInfo(info);
     
-    // If checkbox is ON, sync Contact info to Attendee 1
-    if (useContactAsAttendee1 && attendees.length > 0) {
+    // Sync to all attendees that use Contact info
+    if (useContactAsAttendee.size > 0 && attendees.length > 0) {
       const updated = [...attendees];
-      updated[0] = {
-        ...updated[0],
-        firstName: info.firstName,
-        lastName: info.lastName,
-        email: info.email,
-        phone: info.phone,
-      };
+      useContactAsAttendee.forEach((idx) => {
+        if (idx < updated.length) {
+          updated[idx] = {
+            ...updated[idx],
+            firstName: info.firstName,
+            lastName: info.lastName,
+            email: info.email,
+            phone: info.phone,
+          };
+        }
+      });
       setAttendees(updated);
       
-      // Save to booking draft
       if (bookingDraft) {
         const updatedDraft = { ...bookingDraft, attendees: updated };
         setBookingDraft(updatedDraft);
@@ -209,25 +203,12 @@ export default function CompleteBookingPage() {
     }
   };
 
-  // Handle attendee update
+  // Handle attendee update (only called when attendee is not using Contact info - those fields are disabled)
   const handleAttendeeUpdate = (index: number, field: keyof AttendeeInfo, value: string) => {
     const updated = [...attendees];
     updated[index] = { ...updated[index], [field]: value };
     setAttendees(updated);
     
-    // If checkbox is ON and this is Attendee 1, sync to Contact info
-    if (useContactAsAttendee1 && index === 0) {
-      const updatedContact: ContactInfo = {
-        firstName: updated[0].firstName,
-        lastName: updated[0].lastName,
-        email: updated[0].email,
-        phone: updated[0].phone,
-      };
-      setContactInfo(updatedContact);
-      saveContactInfo(updatedContact);
-    }
-    
-    // Save to booking draft
     if (bookingDraft) {
       const updatedDraft = { ...bookingDraft, attendees: updated };
       setBookingDraft(updatedDraft);
@@ -235,38 +216,32 @@ export default function CompleteBookingPage() {
     }
   };
 
-  // Handle toggle change: Use Contact info as Attendee 1
-  const handleToggleUseContactAsAttendee1 = (checked: boolean) => {
-    setUseContactAsAttendee1(checked);
-    if (checked && attendees.length > 0) {
-      // Copy Contact info to Attendee 1
+  // Handle toggle: Use Contact info as Attendee N
+  const handleToggleUseContactAsAttendee = (index: number, checked: boolean) => {
+    setUseContactAsAttendee((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(index);
+      } else {
+        next.delete(index);
+      }
+      return next;
+    });
+    if (checked && index < attendees.length) {
       const updated = [...attendees];
-      updated[0] = {
-        ...updated[0],
+      updated[index] = {
+        ...updated[index],
         firstName: contactInfo.firstName,
         lastName: contactInfo.lastName,
         email: contactInfo.email,
         phone: contactInfo.phone,
       };
       setAttendees(updated);
-      
-      // Save to booking draft
       if (bookingDraft) {
         const updatedDraft = { ...bookingDraft, attendees: updated };
         setBookingDraft(updatedDraft);
         saveBookingDraft(updatedDraft);
       }
-    }
-  };
-
-  // Copy from Attendee 1
-  const handleCopyFromFirst = (index: number) => {
-    if (attendees.length > 0 && index > 0) {
-      const firstAttendee = attendees[0];
-      handleAttendeeUpdate(index, 'firstName', firstAttendee.firstName);
-      handleAttendeeUpdate(index, 'lastName', firstAttendee.lastName);
-      handleAttendeeUpdate(index, 'email', firstAttendee.email);
-      handleAttendeeUpdate(index, 'phone', firstAttendee.phone);
     }
   };
 
@@ -389,9 +364,9 @@ export default function CompleteBookingPage() {
           </p>
 
           {event?.collect_attendee_info === 'per_ticket' ? (
-            /* Per-Ticket Mode: Contact Info + Attendee Forms */
+            /* Per-Ticket Mode: Contact Info (expanded) + Attendee Forms with per-card checkboxes */
             <div className="space-y-4">
-              {/* Contact Info Section (same as FREE route) */}
+              {/* Contact Info Section - always expanded */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
@@ -402,24 +377,6 @@ export default function CompleteBookingPage() {
                 <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                   This is the contact person for payment receipts and order updates
                 </p>
-                
-                {/* Checkbox: Use Contact info as Attendee 1 */}
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="use-contact-as-attendee-1"
-                    checked={useContactAsAttendee1}
-                    onCheckedChange={handleToggleUseContactAsAttendee1}
-                  />
-                  <label
-                    htmlFor="use-contact-as-attendee-1"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    style={{ color: '#0F1F17' }}
-                  >
-                    Use Contact info as Attendee 1
-                  </label>
-                </div>
-
-                {/* Contact Info Card (shared component) */}
                 <ContactInfoCard
                   contactInfo={contactInfo}
                   onUpdate={handleContactInfoUpdate}
@@ -430,12 +387,13 @@ export default function CompleteBookingPage() {
                     firstName: true,
                     lastName: true,
                     email: true,
-                    phone: false, // Phone optional for Order Contact
+                    phone: false,
                   }}
+                  alwaysExpanded={true}
                 />
               </div>
 
-              {/* Attendee Forms */}
+              {/* Attendee Information - each card has "Use Contact info as Attendee N" checkbox */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
@@ -452,6 +410,8 @@ export default function CompleteBookingPage() {
                   (line) => line.ticketTypeId === attendee.ticketTypeId
                 );
                 const ticketLabel = bookingDraft?.lines[lineIndex || 0]?.label || 'Ticket';
+                const usesContact = useContactAsAttendee.has(index);
+                const displayInfo = usesContact ? contactInfo : attendee;
                 
                 return (
                   <Card
@@ -464,21 +424,24 @@ export default function CompleteBookingPage() {
                         <CardTitle className="text-base font-semibold" style={{ color: '#0F1F17' }}>
                           Attendee {index + 1}
                         </CardTitle>
-                        {index > 0 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopyFromFirst(index)}
-                            className="text-xs"
-                            style={{ color: '#0E7A3A' }}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy from Attendee 1
-                          </Button>
-                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{ticketLabel}</p>
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Checkbox
+                          id={`use-contact-as-attendee-${index}`}
+                          checked={usesContact}
+                          onCheckedChange={(checked) =>
+                            handleToggleUseContactAsAttendee(index, checked === true)
+                          }
+                        />
+                        <label
+                          htmlFor={`use-contact-as-attendee-${index}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          style={{ color: '#0F1F17' }}
+                        >
+                          Use Contact info as Attendee {index + 1}
+                        </label>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -489,10 +452,11 @@ export default function CompleteBookingPage() {
                           <Input
                             id={`attendee-firstName-${index}`}
                             type="text"
-                            value={attendee.firstName}
+                            value={displayInfo.firstName}
                             onChange={(e) => handleAttendeeUpdate(index, 'firstName', e.target.value)}
                             className="mt-1"
                             placeholder="Enter first name"
+                            disabled={usesContact}
                           />
                         </div>
                         <div>
@@ -502,10 +466,11 @@ export default function CompleteBookingPage() {
                           <Input
                             id={`attendee-lastName-${index}`}
                             type="text"
-                            value={attendee.lastName}
+                            value={displayInfo.lastName}
                             onChange={(e) => handleAttendeeUpdate(index, 'lastName', e.target.value)}
                             className="mt-1"
                             placeholder="Enter last name"
+                            disabled={usesContact}
                           />
                         </div>
                       </div>
@@ -516,10 +481,11 @@ export default function CompleteBookingPage() {
                         <Input
                           id={`attendee-email-${index}`}
                           type="email"
-                          value={attendee.email}
+                          value={displayInfo.email}
                           onChange={(e) => handleAttendeeUpdate(index, 'email', e.target.value)}
                           className="mt-1"
                           placeholder="Enter email address"
+                          disabled={usesContact}
                         />
                       </div>
                       <div>
@@ -529,10 +495,11 @@ export default function CompleteBookingPage() {
                         <Input
                           id={`attendee-phone-${index}`}
                           type="tel"
-                          value={attendee.phone}
+                          value={displayInfo.phone}
                           onChange={(e) => handleAttendeeUpdate(index, 'phone', e.target.value)}
                           className="mt-1"
                           placeholder="Enter phone number"
+                          disabled={usesContact}
                         />
                       </div>
                     </CardContent>

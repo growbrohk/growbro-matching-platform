@@ -29,6 +29,8 @@ interface ContactInfoCardProps {
     email?: boolean;
     phone?: boolean;
   };
+  /** When true, always show inline form fields instead of compact card or Add button */
+  alwaysExpanded?: boolean;
 }
 
 const isValidEmail = (email: string): boolean => {
@@ -53,6 +55,7 @@ export function ContactInfoCard({
     email: true,
     phone: true,
   },
+  alwaysExpanded = false,
 }: ContactInfoCardProps) {
   const [showDialog, setShowDialog] = useState(false);
   const [editingInfo, setEditingInfo] = useState<ContactInfo>(contactInfo);
@@ -94,6 +97,79 @@ export function ContactInfoCard({
     setEditingInfo(contactInfo);
     setShowDialog(true);
   };
+
+  const handleInlineUpdate = (field: keyof ContactInfo, value: string) => {
+    onUpdate({ ...contactInfo, [field]: value });
+  };
+
+  // Always-expanded: render inline form fields
+  if (alwaysExpanded) {
+    return (
+      <div
+        className="border rounded-2xl p-4 space-y-4"
+        style={{
+          borderColor: 'rgba(14,122,58,0.14)',
+          backgroundColor: 'rgba(251,248,244,0.9)',
+        }}
+      >
+        <div>
+          <Label htmlFor="inline-firstName">
+            First name {requiredFields.firstName && <span className="text-red-500">*</span>}
+          </Label>
+          <Input
+            id="inline-firstName"
+            type="text"
+            value={contactInfo.firstName}
+            onChange={(e) => handleInlineUpdate('firstName', e.target.value)}
+            className="mt-1"
+            placeholder="Enter first name"
+          />
+        </div>
+        <div>
+          <Label htmlFor="inline-lastName">
+            Last name {requiredFields.lastName && <span className="text-red-500">*</span>}
+          </Label>
+          <Input
+            id="inline-lastName"
+            type="text"
+            value={contactInfo.lastName}
+            onChange={(e) => handleInlineUpdate('lastName', e.target.value)}
+            className="mt-1"
+            placeholder="Enter last name"
+          />
+        </div>
+        {showPhone && (
+          <div>
+            <Label htmlFor="inline-phone">
+              Phone number{' '}
+              {requiredFields.phone && <span className="text-red-500">*</span>}
+            </Label>
+            <Input
+              id="inline-phone"
+              type="tel"
+              value={contactInfo.phone}
+              onChange={(e) => handleInlineUpdate('phone', e.target.value)}
+              className="mt-1"
+              placeholder="Enter phone number"
+            />
+          </div>
+        )}
+        <div>
+          <Label htmlFor="inline-email">
+            Email address {requiredFields.email && <span className="text-red-500">*</span>}
+          </Label>
+          <Input
+            id="inline-email"
+            type="email"
+            value={contactInfo.email}
+            onChange={(e) => handleInlineUpdate('email', e.target.value)}
+            className="mt-1"
+            placeholder="Enter email address"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
