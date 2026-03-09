@@ -19,6 +19,11 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-react';
 import {
   BookingDraft,
@@ -40,6 +45,7 @@ import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
+import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
@@ -65,6 +71,7 @@ export default function CompleteBookingPage() {
     discountAmount: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tcAccepted, setTcAccepted] = useState(true);
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -165,8 +172,9 @@ export default function CompleteBookingPage() {
     );
   };
 
-  // Check if form is valid (either contact info or all attendees + contact info)
+  // Check if form is valid (either contact info or all attendees + contact info + T&C)
   const isFormValid = (): boolean => {
+    if (!tcAccepted) return false;
     if (event?.collect_attendee_info === 'per_ticket') {
       return areAttendeesValid() && isContactValid();
     }
@@ -562,6 +570,55 @@ export default function CompleteBookingPage() {
                 {!promoState.applied && <ChevronDown className="h-4 w-4" />}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Terms & Conditions Section */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
+            <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+              Terms & Conditions
+            </h3>
+          </div>
+          <Collapsible defaultOpen={false} className="group">
+            <div
+              className="rounded-2xl border overflow-hidden"
+              style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
+            >
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-black/5 transition-colors"
+                  style={{ color: '#0F1F17' }}
+                >
+                  <span className="text-sm font-medium">Event Ticket Terms & Conditions</span>
+                  <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div
+                  className="px-4 py-4 border-t text-sm whitespace-pre-wrap max-h-48 overflow-y-auto"
+                  style={{ borderColor: 'rgba(14,122,58,0.14)', color: 'rgba(15,31,23,0.72)' }}
+                >
+                  {(event as any)?.metadata?.ticket_terms_and_conditions || DEFAULT_EVENT_TICKET_TERMS}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="tc-accepted"
+              checked={tcAccepted}
+              onCheckedChange={(checked) => setTcAccepted(checked === true)}
+            />
+            <label
+              htmlFor="tc-accepted"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              style={{ color: '#0F1F17' }}
+            >
+              I have read and agree to the Event Ticket Terms & Conditions
+            </label>
           </div>
         </div>
       </div>

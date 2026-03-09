@@ -47,6 +47,7 @@ import PublicEventForm from '@/components/events/PublicEventForm';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
+import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 
 interface TicketTypeForm {
   id?: string;
@@ -103,6 +104,10 @@ export default function EventForm() {
   const [enableFps, setEnableFps] = useState<boolean>(false);
   const [paymeLink, setPaymeLink] = useState<string>('');
   const [fpsLink, setFpsLink] = useState<string>('');
+
+  // Event Ticket Terms & Conditions (editable, preset with default)
+  const [ticketTermsAndConditions, setTicketTermsAndConditions] = useState<string>(DEFAULT_EVENT_TICKET_TERMS);
+  const [eventMetadata, setEventMetadata] = useState<Record<string, any>>({});
 
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
@@ -162,6 +167,11 @@ export default function EventForm() {
         setEnableFps(event.enable_fps || false);
         setPaymeLink(event.payme_link || '');
         setFpsLink(event.fps_link || '');
+
+        // Load T&C and full metadata (for merge on save)
+        const metadata = (event as any).metadata || {};
+        setEventMetadata(metadata);
+        setTicketTermsAndConditions(metadata.ticket_terms_and_conditions ?? DEFAULT_EVENT_TICKET_TERMS);
 
         // Load ticket types
         const types = await getTicketTypes(id);
@@ -490,7 +500,10 @@ export default function EventForm() {
         enable_fps: enableFps || null,
         payme_link: paymeLink.trim() || null,
         fps_link: fpsLink.trim() || null,
-        metadata: {},
+        metadata: {
+          ...eventMetadata,
+          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+        },
       };
 
       let eventId: string;
@@ -917,6 +930,26 @@ export default function EventForm() {
                 </Label>
               </div>
             </RadioGroup>
+          </div>
+
+          <div>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
+              Event Ticket Terms & Conditions
+            </h2>
+            <p className="text-sm text-muted-foreground mb-2">
+              These terms will be shown to participants during checkout. You can edit the default text.
+            </p>
+            <Textarea
+              value={ticketTermsAndConditions}
+              onChange={(e) => setTicketTermsAndConditions(e.target.value)}
+              placeholder={DEFAULT_EVENT_TICKET_TERMS}
+              rows={5}
+              className="w-full rounded-2xl border-2 px-4 py-3 font-mono text-sm"
+              style={{
+                borderColor: 'rgba(14,122,58,0.14)',
+                backgroundColor: '#FBF8F4',
+              }}
+            />
           </div>
         </div>
 

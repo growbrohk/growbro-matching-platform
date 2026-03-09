@@ -160,6 +160,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   if (data.fps_link !== undefined) {
     updateFields.fps_link = data.fps_link;
   }
+  if (data.metadata !== undefined && data.metadata !== null) {
+    updateFields.metadata = data.metadata;
+  }
 
   if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
