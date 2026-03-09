@@ -1277,26 +1277,64 @@ export default function EventForm() {
                             </SelectContent>
                           </Select>
                           {tt.visibility_mode === 'code' && (
-                            <div className="mt-3 flex gap-2" style={{ marginLeft: '0' }}>
-                              <Input
-                                type="text"
-                                value={tt.access_code || ''}
-                                onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
-                                placeholder="Enter access code"
-                                className="flex-1"
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleGenerateCode(index)}
-                              >
-                                Generate code
-                              </Button>
+                            <div className="mt-3 space-y-3" style={{ marginLeft: '0' }}>
+                              <div className="flex gap-2">
+                                <Input
+                                  type="text"
+                                  value={tt.access_code || ''}
+                                  onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
+                                  placeholder="Enter access code"
+                                  className="flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleGenerateCode(index)}
+                                >
+                                  Generate code
+                                </Button>
+                              </div>
+                              {eventId && eventSlug && currentOrg?.slug && tt.access_code && (
+                                <div>
+                                  <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      readOnly
+                                      value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${tt.access_code}`}
+                                      className="flex-1 font-mono text-xs"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={async () => {
+                                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${tt.access_code}`;
+                                        try {
+                                          await navigator.clipboard.writeText(url);
+                                          toast({
+                                            title: 'Copied!',
+                                            description: 'Ticket link copied to clipboard',
+                                          });
+                                        } catch (err) {
+                                          toast({
+                                            title: 'Error',
+                                            description: 'Failed to copy link',
+                                            variant: 'destructive',
+                                          });
+                                        }
+                                      }}
+                                      className="flex-shrink-0"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                           {tt.visibility_mode === 'affiliate' && (
-                            <div className="mt-3" style={{ marginLeft: '0' }}>
+                            <div className="mt-3 space-y-3" style={{ marginLeft: '0' }}>
                               <Textarea
                                 value={tt.allowed_affiliates?.join(', ') || ''}
                                 onChange={(e) => handleAffiliatesChange(index, e.target.value)}
@@ -1304,6 +1342,48 @@ export default function EventForm() {
                                 rows={2}
                                 className="text-sm"
                               />
+                              {eventId && eventSlug && currentOrg?.slug && (
+                                <div>
+                                  <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      readOnly
+                                      value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?ref=${tt.allowed_affiliates?.[0] || 'affiliate-slug'}`}
+                                      className="flex-1 font-mono text-xs"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={async () => {
+                                        const ref = tt.allowed_affiliates?.[0] || 'affiliate-slug';
+                                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}?ref=${ref}`;
+                                        try {
+                                          await navigator.clipboard.writeText(url);
+                                          toast({
+                                            title: 'Copied!',
+                                            description: 'Ticket link copied to clipboard',
+                                          });
+                                        } catch (err) {
+                                          toast({
+                                            title: 'Error',
+                                            description: 'Failed to copy link',
+                                            variant: 'destructive',
+                                          });
+                                        }
+                                      }}
+                                      className="flex-shrink-0"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  {(!tt.allowed_affiliates || tt.allowed_affiliates.length === 0) && (
+                                    <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                                      Replace affiliate-slug with the partner&apos;s slug when sharing
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1344,47 +1424,6 @@ export default function EventForm() {
                         </div>
                       )}
                     </div>
-
-                    {/* Ticket Share Link (only shown if event and ticket are saved) */}
-                    {eventId && eventSlug && currentOrg?.slug && tt.id && (
-                      <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                        <Label className="text-xs md:text-sm font-medium mb-2 block">
-                          Share Ticket Link
-                        </Label>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
-                          <Input
-                            readOnly
-                            value={`https://growbrohk.com/s/${currentOrg.slug}/${eventSlug}?ticket=${tt.id}`}
-                            className="flex-1 font-mono text-xs"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              const url = `https://growbrohk.com/s/${currentOrg.slug}/${eventSlug}?ticket=${tt.id}`;
-                              try {
-                                await navigator.clipboard.writeText(url);
-                                toast({
-                                  title: 'Copied!',
-                                  description: 'Ticket link copied to clipboard',
-                                });
-                              } catch (err) {
-                                toast({
-                                  title: 'Error',
-                                  description: 'Failed to copy link',
-                                  variant: 'destructive',
-                                });
-                              }
-                            }}
-                            className="flex-1 sm:flex-initial"
-                          >
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy
-                          </Button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
 
