@@ -193,10 +193,14 @@ export default function PaymentPage() {
 
       setIsCompressing(true);
       try {
-        const compressedFile = await compressReceiptImage(file);
+        // Use 500KB target and 1000px max dimension so phone screenshots pass reliably
+        const compressedFile = await compressReceiptImage(file, {
+          targetSizeBytes: 500 * 1024,
+          maxDimension: 1000,
+        });
         
-        // Enforce hard cap: post-compression < 50KB
-        if (compressedFile.size >= 50 * 1024) {
+        // Enforce hard cap: post-compression <= 500KB (storage allows 10MB)
+        if (compressedFile.size > 500 * 1024) {
           toast({
             title: 'Compression failed',
             description: 'Image is too large even after compression. Please try another image or upload as PDF.',
