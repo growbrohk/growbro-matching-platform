@@ -29,13 +29,9 @@ import {
   BookingDraft,
   ContactInfo,
   AttendeeInfo,
-  PromoCodeState,
   loadBookingDraft,
   saveContactInfo,
   loadContactInfo,
-  savePromoCode,
-  loadPromoCode,
-  calculateBookingTotal,
   saveBookingDraft,
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
@@ -64,12 +60,6 @@ export default function CompleteBookingPage() {
   const [useContactAsAttendee, setUseContactAsAttendee] = useState<Set<number>>(() => new Set());
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [promoState, setPromoState] = useState<PromoCodeState>({
-    code: '',
-    applied: false,
-    discountAmount: 0,
-  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tcAccepted, setTcAccepted] = useState(true);
 
@@ -87,13 +77,6 @@ export default function CompleteBookingPage() {
     const savedContact = loadContactInfo();
     if (savedContact) {
       setContactInfo(savedContact);
-    }
-
-    // Load saved promo code
-    const savedPromo = loadPromoCode();
-    if (savedPromo) {
-      setPromoState(savedPromo);
-      setPromoCode(savedPromo.code);
     }
 
     // Fetch event data
@@ -253,35 +236,11 @@ export default function CompleteBookingPage() {
     }
   };
 
-  // Handle promo code apply
-  const handleApplyPromo = () => {
-    const code = promoCode.trim().toLowerCase();
-    if (code === 'growbro') {
-      const discount = 50; // HK$50 discount
-      const newState: PromoCodeState = {
-        code: promoCode.trim(),
-        applied: true,
-        discountAmount: discount,
-      };
-      setPromoState(newState);
-      savePromoCode(newState);
-    } else {
-      const newState: PromoCodeState = {
-        code: promoCode.trim(),
-        applied: false,
-        discountAmount: 0,
-      };
-      setPromoState(newState);
-      savePromoCode(newState);
-    }
-  };
-
   // Calculate totals
   const subtotal = bookingDraft
     ? bookingDraft.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
     : 0;
-  const discount = promoState.applied ? promoState.discountAmount : 0;
-  const total = Math.max(0, subtotal - discount);
+  const total = subtotal;
 
   // Format currency
   const formatCurrency = (amount: number): string => {
@@ -539,43 +498,6 @@ export default function CompleteBookingPage() {
               />
             </>
           )}
-        </div>
-
-        {/* Discounts Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
-            <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
-              Discounts
-            </h3>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Input
-                type="text"
-                placeholder="Enter promo code"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                onClick={handleApplyPromo}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Apply
-              </Button>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span style={{ color: 'rgba(15,31,23,0.72)' }}>discounts promo codes</span>
-              <div className="flex items-center gap-1">
-                <span style={{ color: promoState.applied ? '#0F1F17' : 'rgba(15,31,23,0.72)' }}>
-                  {promoState.applied ? `-${formatCurrency(promoState.discountAmount)}` : 'Not available'}
-                </span>
-                {!promoState.applied && <ChevronDown className="h-4 w-4" />}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Terms & Conditions Section */}
@@ -876,16 +798,6 @@ export default function CompleteBookingPage() {
                 {formatCurrency(subtotal)}
               </span>
             </div>
-            {promoState.applied && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Discount
-                </span>
-                <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                  -{formatCurrency(promoState.discountAmount)}
-                </span>
-              </div>
-            )}
             <Separator />
             <div className="flex items-center justify-between">
               <span className="text-base font-bold" style={{ color: '#0F1F17' }}>

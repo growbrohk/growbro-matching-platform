@@ -36,16 +36,9 @@ export interface ContactInfo {
   email: string;
 }
 
-export interface PromoCodeState {
-  code: string;
-  applied: boolean;
-  discountAmount: number;
-}
-
 // localStorage keys
 export const BOOKING_DRAFT_KEY = 'growbro_booking_draft';
 export const CONTACT_INFO_KEY = 'growbro_contact_info';
-export const PROMO_CODE_KEY = 'growbro_promo_code';
 
 // localStorage helpers
 export const saveBookingDraft = (draft: BookingDraft): void => {
@@ -92,30 +85,5 @@ export const loadContactInfo = (): ContactInfo | null => {
     console.error('Failed to load contact info:', error);
     return null;
   }
-};
-
-export const savePromoCode = (promo: PromoCodeState): void => {
-  try {
-    localStorage.setItem(PROMO_CODE_KEY, JSON.stringify(promo));
-  } catch (error) {
-    console.error('Failed to save promo code:', error);
-  }
-};
-
-export const loadPromoCode = (): PromoCodeState | null => {
-  try {
-    const stored = localStorage.getItem(PROMO_CODE_KEY);
-    if (!stored) return null;
-    return JSON.parse(stored) as PromoCodeState;
-  } catch (error) {
-    console.error('Failed to load promo code:', error);
-    return null;
-  }
-};
-
-// Calculate total from booking draft
-export const calculateBookingTotal = (draft: BookingDraft, discount: number = 0): number => {
-  const subtotal = draft.lines.reduce((sum, line) => sum + (line.unitPrice * line.qty), 0);
-  return Math.max(0, subtotal - discount);
 };
 
