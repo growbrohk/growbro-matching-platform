@@ -20,34 +20,6 @@ import {
   saveBookingDraft,
 } from '@/lib/types/booking';
 
-/**
- * Format datetime as "dd-MM-yyyy HH:mm" (24-hour format)
- * Example: "04-01-2026 23:55"
- */
-function formatTillDateTime(dateString: string): string {
-  const date = new Date(dateString);
-  
-  // Convert to Hong Kong timezone for display
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Hong_Kong',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  
-  const parts = formatter.formatToParts(date);
-  const day = parts.find(p => p.type === 'day')?.value || '';
-  const month = parts.find(p => p.type === 'month')?.value || '';
-  const year = parts.find(p => p.type === 'year')?.value || '';
-  const hour = parts.find(p => p.type === 'hour')?.value || '';
-  const minute = parts.find(p => p.type === 'minute')?.value || '';
-  
-  return `${day}-${month}-${year} ${hour}:${minute}`;
-}
-
 interface Org {
   id: string;
   name: string;
@@ -518,10 +490,6 @@ export default function PublicEventForm({
                     const availability = isTicketAvailable(tt);
                     const isUnavailable = !availability.available;
                     
-                    // Determine end datetime: ticket.sales_end_at (available_end_at) or fallback to event.end_at
-                    const endDateTime = tt.available_end_at || event.end_at;
-                    const showTillLabel = !!endDateTime;
-                    
                     return (
                       <div
                         key={tt.id}
@@ -569,11 +537,6 @@ export default function PublicEventForm({
                               </p>
                             )}
                           </div>
-                          {showTillLabel && (
-                            <span className="text-[11px] text-muted-foreground whitespace-nowrap flex-shrink-0">
-                              till {formatTillDateTime(endDateTime)}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <label className="text-sm text-muted-foreground">Quantity:</label>
