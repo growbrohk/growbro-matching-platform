@@ -90,6 +90,7 @@ export interface CreateTicketTypeData {
   valid_for_days?: 'day_1' | 'day_2' | 'both';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
+  description?: string | null;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -342,6 +343,9 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   }
   if (data.valid_for_days !== undefined) {
     updateFields.valid_for_days = data.valid_for_days;
+  }
+  if (data.description !== undefined) {
+    updateFields.description = data.description;
   }
 
   if (Object.keys(updateFields).length > 0) {

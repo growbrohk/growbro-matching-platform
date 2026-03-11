@@ -568,6 +568,11 @@ export default function PublicEventForm({
                                 );
                               })()}
                             </div>
+                            {tt.description && tt.description.trim() && (
+                              <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">
+                                {tt.description.trim()}
+                              </p>
+                            )}
                             {isUnavailable && (
                               <p className="text-xs text-red-600 mt-1">
                                 {availability.reason || 'Unavailable'}

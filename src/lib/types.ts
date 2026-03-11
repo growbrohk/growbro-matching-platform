@@ -202,6 +202,7 @@ export interface TicketType {
   valid_for_days?: 'day_1' | 'day_2' | 'both';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
+  description?: string | null;
   remaining_count?: number; // Calculated field: quota - sold tickets (valid/scanned)
   created_at: string;
   updated_at: string;

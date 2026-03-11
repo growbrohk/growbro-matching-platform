@@ -1333,6 +1333,7 @@ export type Database = {
           available_end_at: string | null
           available_start_at: string | null
           created_at: string
+          description: string | null
           event_id: string
           id: string
           is_active: boolean
@@ -1351,6 +1352,7 @@ export type Database = {
           available_end_at?: string | null
           available_start_at?: string | null
           created_at?: string
+          description?: string | null
           event_id: string
           id?: string
           is_active?: boolean
@@ -1369,6 +1371,7 @@ export type Database = {
           available_end_at?: string | null
           available_start_at?: string | null
           created_at?: string
+          description?: string | null
           event_id?: string
           id?: string
           is_active?: boolean

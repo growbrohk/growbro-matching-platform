@@ -48,6 +48,7 @@ import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
+import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 
 interface TicketTypeForm {
   id?: string;
@@ -55,6 +56,7 @@ interface TicketTypeForm {
   price: string;
   quota: string;
   isNew?: boolean;
+  description?: string | null;
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
@@ -187,6 +189,7 @@ export default function EventForm() {
           price: t.price.toString(),
           quota: t.quota.toString(),
           isNew: false,
+          description: t.description || '',
           visibility_mode: t.visibility_mode || 'public',
           access_code: t.access_code || null,
           allowed_affiliates: t.allowed_affiliates || null,
@@ -247,6 +250,7 @@ export default function EventForm() {
       price: '',
       quota: '',
       isNew: true,
+      description: '',
       visibility_mode: 'public',
       access_code: null,
       allowed_affiliates: null,
@@ -613,6 +617,7 @@ export default function EventForm() {
               valid_for_days: tt.valid_for_days || 'day_1',
               show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
               threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
+              description: (tt.description || '').trim() || null,
             });
           } else {
             // Create new
@@ -635,6 +640,7 @@ export default function EventForm() {
               valid_for_days: tt.valid_for_days || 'day_1',
               show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
               threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
+              description: (tt.description || '').trim() || null,
             });
           }
         }
@@ -714,6 +720,7 @@ export default function EventForm() {
             available_start_at: availableStartAt,
             available_end_at: availableEndAt,
             valid_for_days: tt.valid_for_days || 'day_1',
+            description: (tt.description || '').trim() || null,
           });
         }
       }
@@ -1223,6 +1230,27 @@ export default function EventForm() {
                         required
                         className="mt-1"
                       />
+                    </div>
+
+                    <div>
+                      <Label htmlFor={`ticket-description-${index}`} className="text-xs md:text-sm font-medium">
+                        Ticket description
+                        <span className="text-muted-foreground font-normal ml-1">
+                          (optional, {TICKET_TYPE_DESCRIPTION_MAX_LENGTH} chars max)
+                        </span>
+                      </Label>
+                      <Textarea
+                        id={`ticket-description-${index}`}
+                        value={tt.description || ''}
+                        onChange={(e) => updateTicketTypeForm(index, 'description', e.target.value || null)}
+                        placeholder="Optional: What this ticket includes (e.g. VIP access, refreshments)"
+                        maxLength={TICKET_TYPE_DESCRIPTION_MAX_LENGTH}
+                        rows={3}
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {(tt.description?.length ?? 0)}/{TICKET_TYPE_DESCRIPTION_MAX_LENGTH}
+                      </p>
                     </div>
 
                     {hasDay2 && (
@@ -1758,6 +1786,7 @@ export default function EventForm() {
                   name: tt.name.trim() || `Ticket Type ${index + 1}`,
                   price: (tt.price || '').trim() === '' ? 0 : (parseFloat(tt.price) || 0),
                   quota: isQuotaUnlimited(tt.quota) ? 999999 : parseInt(tt.quota) || 0,
+                  description: (tt.description || '').trim() || null,
                   visibility_mode: tt.visibility_mode || 'public',
                   access_code: tt.access_code || null,
                   allowed_affiliates: tt.allowed_affiliates || null,
