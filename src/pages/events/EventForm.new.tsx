@@ -324,12 +324,13 @@ export default function EventForm() {
 
     setUploadingPreview(true);
     try {
-      // Compress to ~70KB before upload
+      // Compress to ~100KB before upload (maxDimension 800 helps complex posters compress)
       const compressedFile = await compressReceiptImage(file, {
-        targetSizeBytes: 70 * 1024,
+        targetSizeBytes: 100 * 1024,
+        maxDimension: 800,
       });
 
-      if (compressedFile.size >= 70 * 1024) {
+      if (compressedFile.size >= 100 * 1024) {
         toast({
           title: 'Error',
           description: 'Image is too large even after compression. Please try another image.',
