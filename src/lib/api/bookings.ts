@@ -74,12 +74,18 @@ export interface OrderWithEvent {
   }>;
   tickets: Array<{
     id: string;
+    ticket_type_id: string;
     qr_code: string;
     status: string;
     first_name: string | null;
     last_name: string | null;
     email: string | null;
     phone: string | null;
+    ticket_type?: {
+      id: string;
+      name: string;
+      valid_for_days?: 'day_1' | 'day_2' | 'both';
+    };
   }>;
 }
 
@@ -277,12 +283,18 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,
+      ticket_type_id: ticket.ticket_type_id,
       qr_code: ticket.qr_code || '', // Ensure qr_code is always a string
       status: ticket.status,
       first_name: ticket.first_name,
       last_name: ticket.last_name,
       email: ticket.email,
       phone: ticket.phone,
+      ticket_type: ticket.ticket_type ? {
+        id: ticket.ticket_type.id,
+        name: ticket.ticket_type.name,
+        valid_for_days: ticket.ticket_type.valid_for_days,
+      } : undefined,
     })) : [],
   };
 

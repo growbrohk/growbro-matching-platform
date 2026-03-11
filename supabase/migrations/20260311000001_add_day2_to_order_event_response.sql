@@ -89,7 +89,8 @@ BEGIN
       'subtotal', oi.subtotal,
       'ticket_type', jsonb_build_object(
         'id', tt.id,
-        'name', tt.name
+        'name', tt.name,
+        'valid_for_days', tt.valid_for_days
       )
     )
     ORDER BY oi.created_at
@@ -98,20 +99,27 @@ BEGIN
   LEFT JOIN ticket_types tt ON tt.id = oi.ticket_type_id
   WHERE oi.order_id = p_order_id;
 
-  -- Fetch tickets
+  -- Fetch tickets (include ticket_type_id and ticket_type for per-ticket date display)
   SELECT COALESCE(jsonb_agg(
     jsonb_build_object(
       'id', t.id,
+      'ticket_type_id', t.ticket_type_id,
       'qr_code', t.qr_code,
       'status', t.status,
       'first_name', t.first_name,
       'last_name', t.last_name,
       'email', t.email,
-      'phone', t.phone
+      'phone', t.phone,
+      'ticket_type', jsonb_build_object(
+        'id', tt.id,
+        'name', tt.name,
+        'valid_for_days', tt.valid_for_days
+      )
     )
     ORDER BY t.created_at
   ), '[]'::jsonb) INTO v_tickets
   FROM tickets t
+  LEFT JOIN ticket_types tt ON tt.id = t.ticket_type_id
   WHERE t.order_id = p_order_id;
 
   -- Build result

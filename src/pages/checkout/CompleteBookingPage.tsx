@@ -347,6 +347,11 @@ export default function CompleteBookingPage() {
                 <div key={idx} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                   {line.label}
                   {line.optionLabel && ` - ${line.optionLabel}`} × {line.qty}
+                  {line.dateTimeLabel && (
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      {line.dateTimeLabel}
+                    </span>
+                  )}
                 </div>
               ))}
           </div>

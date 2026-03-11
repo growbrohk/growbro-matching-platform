@@ -9,6 +9,7 @@ export interface BookingDraftLine {
   unitPrice: number;
   qty: number;
   ticketTypeId: string; // Reference to ticket type
+  dateTimeLabel?: string; // e.g., "Fri 6 Dec 18:00–22:00"
 }
 
 export interface AttendeeInfo {

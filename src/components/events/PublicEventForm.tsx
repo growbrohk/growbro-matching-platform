@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
-import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
+import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay, formatTicketTypeDateTime } from '@/lib/utils/datetime';
 import {
   BookingDraft,
   saveBookingDraft,
@@ -404,6 +404,7 @@ export default function PublicEventForm({
           unitPrice: tt.price,
           qty: finalQty,
           ticketTypeId: tt.id,
+          dateTimeLabel: formatTicketTypeDateTime(event, tt),
         });
       }
     });
@@ -534,6 +535,9 @@ export default function PublicEventForm({
                                 </span>
                               )}
                             </h3>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              {formatTicketTypeDateTime(event, tt)}
+                            </p>
                             <div className="flex items-center gap-3 mt-1">
                               <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
                                 ${tt.price.toFixed(2)}

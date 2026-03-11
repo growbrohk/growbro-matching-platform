@@ -30,7 +30,7 @@ function maskHeaderValue(headerName: string, value: string | null): string {
   return value;
 }
 
-/** ✅ THIS IS THE IMPORTANT PART — HKT FORMATTER */
+/** HKT formatter for single datetime */
 function formatEventTimeHKT(dateString: string) {
   return new Date(dateString).toLocaleString('en-HK', {
     timeZone: 'Asia/Hong_Kong',
@@ -42,6 +42,25 @@ function formatEventTimeHKT(dateString: string) {
     minute: '2-digit',
     hour12: true,
   });
+}
+
+/** Format date/time for a ticket type based on valid_for_days (HKT) */
+function formatTicketTypeDateTimeHKT(
+  event: { start_at: string; end_at: string; day_2_start_at?: string | null; day_2_end_at?: string | null },
+  validForDays: string | null
+): string {
+  const validFor = validForDays || 'day_1';
+  const hasDay2 = !!(event.day_2_start_at && event.day_2_end_at);
+
+  if (!hasDay2 || validFor === 'day_1') {
+    return `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)} (HKT)`;
+  }
+  if (validFor === 'day_2') {
+    return `${formatEventTimeHKT(event.day_2_start_at!)} – ${formatEventTimeHKT(event.day_2_end_at!)} (HKT)`;
+  }
+  const day1 = `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)}`;
+  const day2 = `${formatEventTimeHKT(event.day_2_start_at!)} – ${formatEventTimeHKT(event.day_2_end_at!)}`;
+  return `${day1}; ${day2} (HKT)`;
 }
 
 /* ============================================================================
@@ -132,13 +151,21 @@ Deno.serve(async (req) => {
     ------------------------------------------------------------------------ */
     const { data: event } = await supabase
       .from('events')
-      .select('title, start_at, location_text')
+      .select('title, start_at, end_at, day_2_start_at, day_2_end_at, location_text')
       .eq('id', order.event_id)
       .single();
 
-    const { count: ticketsCount, data: ticketsData } = await supabase
+    const { count: ticketsCount } = await supabase
       .from('tickets')
       .select('id', { count: 'exact' })
+      .eq('order_id', order_id);
+
+    const { data: orderItems } = await supabase
+      .from('order_items')
+      .select(`
+        ticket_type_id,
+        ticket_type:ticket_types(id, name, valid_for_days)
+      `)
       .eq('order_id', order_id);
 
     // Ensure tickets exist before sending email
@@ -153,12 +180,30 @@ Deno.serve(async (req) => {
     }
 
     /* ------------------------------------------------------------------------
-       FORMAT DATA (🔥 HKT HERE 🔥)
+       FORMAT DATA (per-ticket-type dates)
     ------------------------------------------------------------------------ */
     const eventTitle = event?.title || 'Event';
-    const eventStartAt = event?.start_at
-      ? `${formatEventTimeHKT(event.start_at)} (HKT)`
-      : 'TBA';
+    let eventStartAt: string;
+    if (event?.start_at && orderItems && orderItems.length > 0) {
+      const uniqueValidFor = [...new Set(
+        orderItems.map((oi: any) => oi.ticket_type?.valid_for_days || 'day_1')
+      )];
+      if (uniqueValidFor.length === 1) {
+        eventStartAt = formatTicketTypeDateTimeHKT(event, uniqueValidFor[0]);
+      } else {
+        const dayLabels: Record<string, string> = { day_1: 'Day 1', day_2: 'Day 2', both: 'Both days' };
+        eventStartAt = uniqueValidFor
+          .map((vf: string) => {
+            const formatted = formatTicketTypeDateTimeHKT(event, vf);
+            return `${dayLabels[vf] || vf}: ${formatted}`;
+          })
+          .join('; ');
+      }
+    } else {
+      eventStartAt = event?.start_at
+        ? `${formatEventTimeHKT(event.start_at)} (HKT)`
+        : 'TBA';
+    }
     const venue = event?.location_text || 'TBA';
 
     const buyerName =

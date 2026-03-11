@@ -122,6 +122,32 @@ export function formatEventDateTimeMultiDay(
 }
 
 /**
+ * Format date/time for a ticket type based on valid_for_days
+ * - day_1: Day 1 range (e.g., "Fri 6 Dec 18:00–22:00")
+ * - day_2: Day 2 range (e.g., "Sat 7 Dec 14:00–20:00")
+ * - both: Both ranges
+ * - Default/1-day event: Day 1 range
+ */
+export function formatTicketTypeDateTime(
+  event: { start_at: string; end_at: string; day_2_start_at?: string | null; day_2_end_at?: string | null },
+  ticketType: { valid_for_days?: 'day_1' | 'day_2' | 'both' }
+): string {
+  const validFor = ticketType.valid_for_days || 'day_1';
+  const hasDay2 = !!(event.day_2_start_at && event.day_2_end_at);
+
+  if (!hasDay2 || validFor === 'day_1') {
+    return `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`;
+  }
+  if (validFor === 'day_2') {
+    return `${formatEventDate(event.day_2_start_at!)} ${formatEventTime(event.day_2_start_at!, event.day_2_end_at!)}`;
+  }
+  // both
+  const day1 = `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`;
+  const day2 = `${formatEventDate(event.day_2_start_at!)} ${formatEventTime(event.day_2_start_at!, event.day_2_end_at!)}`;
+  return `${day1}, ${day2}`;
+}
+
+/**
  * Format message time for WhatsApp-style display
  * - If today: "11:27 PM" (12-hour format)
  * - Else: "Jan 10" (short date format)
