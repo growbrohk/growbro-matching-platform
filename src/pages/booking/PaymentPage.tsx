@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
-import { formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
+import { formatTicketTypeDateTime, formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
@@ -441,6 +441,29 @@ export default function PaymentPage() {
   const totalAmount = Number(order.total_amount);
   const currency = order.currency || 'HKD';
 
+  // Format date/time based on ticket types in order (not both days)
+  const formatOrderDateTime = () => {
+    const items = order.order_items || [];
+    if (items.length === 0) {
+      return event.start_at && event.end_at
+        ? `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`
+        : 'TBA';
+    }
+    const uniqueValidFor = [...new Set(
+      items.map((oi) => oi.ticket_type?.valid_for_days || 'day_1')
+    )];
+    if (uniqueValidFor.length === 1) {
+      return formatTicketTypeDateTime(event, { valid_for_days: uniqueValidFor[0] as 'day_1' | 'day_2' | 'both' });
+    }
+    const dayLabels: Record<string, string> = { day_1: 'Day 1', day_2: 'Day 2', both: 'Both days' };
+    return uniqueValidFor
+      .map((vf) => {
+        const formatted = formatTicketTypeDateTime(event, { valid_for_days: vf as 'day_1' | 'day_2' | 'both' });
+        return `${dayLabels[vf] || vf}: ${formatted}`;
+      })
+      .join('; ');
+  };
+
   // Determine available payment methods
   const availablePaymentMethods: PaymentMethod[] = [];
   if (event.enable_stripe) {
@@ -477,7 +500,7 @@ export default function PaymentPage() {
                 {event.title}
               </p>
               <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at)}
+                {formatOrderDateTime()}
               </p>
               {event.location_text && (
                 <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
