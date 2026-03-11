@@ -506,7 +506,7 @@ export default function PublicEventForm({
 
           <CardContent className="space-y-6">
             {/* Description */}
-            <EventDescription text={event.description} initialWordLimit={50} />
+            <EventDescription text={event.description} />
 
             {/* Tickets Section */}
             {ticketTypes.length > 0 && (

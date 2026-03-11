@@ -174,6 +174,26 @@
     border-color: rgba(14, 122, 58, 0.14);
     background-color: rgba(251, 248, 244, 0.9);
   }
+
+  /* Event description scrollbar - visible styling */
+  .event-description-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .event-description-scroll::-webkit-scrollbar-track {
+    background: rgba(14, 122, 58, 0.08);
+    border-radius: 4px;
+  }
+  .event-description-scroll::-webkit-scrollbar-thumb {
+    background: rgba(14, 122, 58, 0.35);
+    border-radius: 4px;
+  }
+  .event-description-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(14, 122, 58, 0.5);
+  }
+  .event-description-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(14, 122, 58, 0.35) rgba(14, 122, 58, 0.08);
+  }
 }
 
 @layer utilities {
