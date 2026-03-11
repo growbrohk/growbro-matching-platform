@@ -48,6 +48,8 @@ export interface OrderWithEvent {
     title: string;
     start_at: string;
     end_at: string;
+    day_2_start_at?: string | null;
+    day_2_end_at?: string | null;
     location_text: string | null;
     venue_name?: string | null;
     category?: string | null;
@@ -249,6 +251,8 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       title: eventData.title,
       start_at: eventData.start_at,
       end_at: eventData.end_at,
+      day_2_start_at: eventData.day_2_start_at ?? null,
+      day_2_end_at: eventData.day_2_end_at ?? null,
       location_text: eventData.location_text,
       venue_name: eventData.venue_name,
       category: eventData.category,

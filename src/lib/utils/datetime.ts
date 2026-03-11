@@ -103,6 +103,25 @@ export function formatEventTime(startString: string, endString: string): string 
 }
 
 /**
+ * Format multi-day event display
+ * 1-day: "Fri 6 Dec, 18:00–22:00"
+ * 2-day: "Fri 6 Dec 18:00–22:00, Sat 7 Dec 14:00–20:00"
+ */
+export function formatEventDateTimeMultiDay(
+  startAt: string,
+  endAt: string,
+  day2StartAt?: string | null,
+  day2EndAt?: string | null
+): string {
+  const day1 = `${formatEventDate(startAt)} ${formatEventTime(startAt, endAt)}`;
+  if (!day2StartAt || !day2EndAt) {
+    return day1;
+  }
+  const day2 = `${formatEventDate(day2StartAt)} ${formatEventTime(day2StartAt, day2EndAt)}`;
+  return `${day1}, ${day2}`;
+}
+
+/**
  * Format message time for WhatsApp-style display
  * - If today: "11:27 PM" (12-hour format)
  * - Else: "Jan 10" (short date format)

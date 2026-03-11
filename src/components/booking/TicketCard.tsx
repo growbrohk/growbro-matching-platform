@@ -21,6 +21,7 @@ import React, { useEffect, useRef, useState } from 'react';
 export interface TicketCardProps {
   eventName: string;
   dateTime: string;
+  dateTimeFormatted?: string; // Optional pre-formatted string for multi-day events
   venue: string;
 
   checkinCode: string;
@@ -52,6 +53,7 @@ function formatPrice(price: number, currency: string = 'HKD'): string {
 export default function TicketCard({
   eventName,
   dateTime,
+  dateTimeFormatted,
   venue,
   checkinCode,
   qrValue,
@@ -62,7 +64,7 @@ export default function TicketCard({
   className = '',
   captureMode = false,
 }: TicketCardProps) {
-  const formattedDateTime = formatTicketDateTime(dateTime);
+  const formattedDateTime = dateTimeFormatted ?? formatTicketDateTime(dateTime);
   const formattedPrice = formatPrice(price, currency);
   const displaySeatNumber = seatNumber || 'FREE';
 

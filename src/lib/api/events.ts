@@ -56,6 +56,8 @@ export interface CreateEventData {
   description?: string;
   start_at: string;
   end_at: string;
+  day_2_start_at?: string | null;
+  day_2_end_at?: string | null;
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
   location_text?: string | null;
   instagram_preview_image_url?: string | null;
@@ -85,6 +87,7 @@ export interface CreateTicketTypeData {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
+  valid_for_days?: 'day_1' | 'day_2' | 'both';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
 }
@@ -98,6 +101,7 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
+  valid_for_days?: 'day_1' | 'day_2' | 'both';
 }
 
 /**
@@ -162,6 +166,12 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.metadata !== undefined && data.metadata !== null) {
     updateFields.metadata = data.metadata;
+  }
+  if (data.day_2_start_at !== undefined) {
+    updateFields.day_2_start_at = data.day_2_start_at;
+  }
+  if (data.day_2_end_at !== undefined) {
+    updateFields.day_2_end_at = data.day_2_end_at;
   }
 
   if (Object.keys(updateFields).length > 0) {
@@ -329,6 +339,9 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   }
   if (data.threshold_to_show !== undefined) {
     updateFields.threshold_to_show = data.threshold_to_show;
+  }
+  if (data.valid_for_days !== undefined) {
+    updateFields.valid_for_days = data.valid_for_days;
   }
 
   if (Object.keys(updateFields).length > 0) {

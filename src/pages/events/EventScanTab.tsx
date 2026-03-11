@@ -234,7 +234,8 @@ export function EventScanTab({ eventId }: { eventId: string }) {
             event_id
           ),
           ticket_type:ticket_types(
-            name
+            name,
+            valid_for_days
           )
         `)
         .eq('qr_code', identifier)
@@ -265,7 +266,8 @@ export function EventScanTab({ eventId }: { eventId: string }) {
               event_id
             ),
             ticket_type:ticket_types(
-              name
+              name,
+              valid_for_days
             )
           `)
           .eq('id', identifier)
@@ -293,6 +295,45 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       // Verify ticket belongs to this event
       if (order.event_id !== eventId) {
         throw new Error('Ticket does not belong to this event');
+      }
+
+      // Fetch event to validate ticket's valid window (for multi-day events)
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .select('start_at, end_at, day_2_start_at, day_2_end_at')
+        .eq('id', order.event_id)
+        .single();
+
+      if (!eventError && eventData) {
+        const now = new Date().getTime();
+        const validForDays = ticketType?.valid_for_days || 'day_1';
+        const hasDay2 = !!(eventData.day_2_start_at && eventData.day_2_end_at);
+
+        let validStart: number;
+        let validEnd: number;
+
+        if (hasDay2 && validForDays === 'day_2') {
+          validStart = new Date(eventData.day_2_start_at).getTime();
+          validEnd = new Date(eventData.day_2_end_at).getTime();
+        } else if (hasDay2 && validForDays === 'both') {
+          const day1Start = new Date(eventData.start_at).getTime();
+          const day1End = new Date(eventData.end_at).getTime();
+          const day2Start = new Date(eventData.day_2_start_at).getTime();
+          const day2End = new Date(eventData.day_2_end_at).getTime();
+          validStart = Math.min(day1Start, day2Start);
+          validEnd = Math.max(day1End, day2End);
+        } else {
+          validStart = new Date(eventData.start_at).getTime();
+          validEnd = new Date(eventData.end_at).getTime();
+        }
+
+        const FIVE_MINUTES_MS = 5 * 60 * 1000;
+        if (now < validStart - FIVE_MINUTES_MS) {
+          throw new Error('Ticket not yet valid for this time slot');
+        }
+        if (now > validEnd + FIVE_MINUTES_MS) {
+          throw new Error('Ticket no longer valid for this time slot');
+        }
       }
 
       // Check if already scanned

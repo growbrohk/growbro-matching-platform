@@ -62,6 +62,7 @@ interface TicketTypeForm {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: Date | null;
   available_end_at?: Date | null;
+  valid_for_days?: 'day_1' | 'day_2' | 'both';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
 }
@@ -92,6 +93,8 @@ export default function EventForm() {
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [startAt, setStartAt] = useState<Date | null>(null);
   const [endAt, setEndAt] = useState<Date | null>(null);
+  const [day2StartAt, setDay2StartAt] = useState<Date | null>(null);
+  const [day2EndAt, setDay2EndAt] = useState<Date | null>(null);
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
@@ -157,6 +160,8 @@ export default function EventForm() {
         setInstagramPreviewImageUrl(event.instagram_preview_image_url || '');
         setStartAt(event.start_at ? new Date(event.start_at) : null);
         setEndAt(event.end_at ? new Date(event.end_at) : null);
+        setDay2StartAt((event as any).day_2_start_at ? new Date((event as any).day_2_start_at) : null);
+        setDay2EndAt((event as any).day_2_end_at ? new Date((event as any).day_2_end_at) : null);
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
@@ -189,6 +194,7 @@ export default function EventForm() {
           availability_mode: t.availability_mode || 'always',
           available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
           available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
+          valid_for_days: (t.valid_for_days as 'day_1' | 'day_2' | 'both') || 'day_1',
           show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
           threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
         })));
@@ -233,6 +239,8 @@ export default function EventForm() {
     return code;
   };
 
+  const hasDay2 = day2StartAt != null && day2EndAt != null;
+
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, {
       name: '',
@@ -246,6 +254,7 @@ export default function EventForm() {
       availability_mode: 'always',
       available_start_at: null,
       available_end_at: null,
+      valid_for_days: 'day_1',
       show_remaining_count: true,
       threshold_to_show: null,
     }]);
@@ -493,6 +502,8 @@ export default function EventForm() {
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
+        day_2_start_at: day2StartAt?.toISOString() ?? null,
+        day_2_end_at: day2EndAt?.toISOString() ?? null,
         location_text: locationText.trim() || null,
         status: status,
         collect_attendee_info: collectAttendeeInfo,
@@ -532,7 +543,7 @@ export default function EventForm() {
         }
 
         // Update or create ticket types
-        const eventEndAt = new Date(endAt);
+        const effectiveEventEnd = day2EndAt ? new Date(day2EndAt) : new Date(endAt);
         for (const tt of ticketTypes) {
           // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
           const ticketMetadata = (tt as any).metadata || {};
@@ -541,8 +552,8 @@ export default function EventForm() {
           // If sales_end_at exists and is after event.end_at, cap it to event.end_at
           if (ticketMetadata.sales_end_at) {
             const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > eventEndAt) {
-              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            if (salesEndAt > effectiveEventEnd) {
+              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
             }
           }
           
@@ -550,8 +561,8 @@ export default function EventForm() {
           const salesEndAtField = (tt as any).sales_end_at;
           if (salesEndAtField) {
             const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > eventEndAt) {
-              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            if (salesEndAt > effectiveEventEnd) {
+              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
             }
           }
 
@@ -568,7 +579,7 @@ export default function EventForm() {
             if (tt.available_end_at) {
               const endDate = tt.available_end_at;
               // Cap available_end_at to event.end_at
-              const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
+              const finalEndAt = endDate > effectiveEventEnd ? effectiveEventEnd : endDate;
               availableEndAt = finalEndAt.toISOString();
               
               // Validate: start must be < end
@@ -599,6 +610,7 @@ export default function EventForm() {
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
               available_end_at: availableEndAt,
+              valid_for_days: tt.valid_for_days || 'day_1',
               show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
               threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
             });
@@ -620,6 +632,7 @@ export default function EventForm() {
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
               available_end_at: availableEndAt,
+              valid_for_days: tt.valid_for_days || 'day_1',
               show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
               threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
             });
@@ -635,7 +648,7 @@ export default function EventForm() {
         setEventSlug((newEvent as any).slug || '');
 
         // Create ticket types
-        const eventEndAt = new Date(endAt);
+        const effectiveEventEnd = day2EndAt ? new Date(day2EndAt) : new Date(endAt);
         for (const tt of ticketTypes) {
           // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
           const ticketMetadata = (tt as any).metadata || {};
@@ -644,8 +657,8 @@ export default function EventForm() {
           // If sales_end_at exists and is after event.end_at, cap it to event.end_at
           if (ticketMetadata.sales_end_at) {
             const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > eventEndAt) {
-              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            if (salesEndAt > effectiveEventEnd) {
+              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
             }
           }
           
@@ -653,8 +666,8 @@ export default function EventForm() {
           const salesEndAtField = (tt as any).sales_end_at;
           if (salesEndAtField) {
             const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > eventEndAt) {
-              finalMetadata.sales_end_at = eventEndAt.toISOString();
+            if (salesEndAt > effectiveEventEnd) {
+              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
             }
           }
 
@@ -670,8 +683,8 @@ export default function EventForm() {
             }
             if (tt.available_end_at) {
               const endDate = tt.available_end_at;
-              // Cap available_end_at to event.end_at
-              const finalEndAt = endDate > eventEndAt ? eventEndAt : endDate;
+              // Cap available_end_at to effective event end
+              const finalEndAt = endDate > effectiveEventEnd ? effectiveEventEnd : endDate;
               availableEndAt = finalEndAt.toISOString();
               
               // Validate: start must be < end
@@ -700,6 +713,7 @@ export default function EventForm() {
             availability_mode: availabilityMode,
             available_start_at: availableStartAt,
             available_end_at: availableEndAt,
+            valid_for_days: tt.valid_for_days || 'day_1',
           });
         }
       }
@@ -889,6 +903,88 @@ export default function EventForm() {
               />
             </div>
           </div>
+
+          {/* Optional Day 2 */}
+          {hasDay2 ? (
+            <div className="space-y-4 p-4 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base md:text-lg font-semibold" style={{ color: '#0F1F17' }}>
+                  Day 2
+                </h2>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDay2StartAt(null);
+                    setDay2EndAt(null);
+                    setTicketTypes(prev => prev.map(tt => ({
+                      ...tt,
+                      valid_for_days: (tt.valid_for_days === 'day_2' || tt.valid_for_days === 'both') ? 'day_1' as const : tt.valid_for_days,
+                    })));
+                  }}
+                  className="text-muted-foreground"
+                >
+                  Remove Day 2
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <Label className="text-sm font-medium">Day 2 Start</Label>
+                  <DateTimeRow24
+                    value={day2StartAt}
+                    onChange={(date) => {
+                      setDay2StartAt(date);
+                      if (validationErrors.length > 0) setValidationErrors([]);
+                    }}
+                    disabled={false}
+                    min={endAt || undefined}
+                    ariaLabel="Day 2 start date and time"
+                    className="mt-1 w-full"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Day 2 End</Label>
+                  <DateTimeRow24
+                    value={day2EndAt}
+                    onChange={(date) => {
+                      setDay2EndAt(date);
+                      if (validationErrors.length > 0) setValidationErrors([]);
+                    }}
+                    disabled={false}
+                    min={day2StartAt || endAt || undefined}
+                    ariaLabel="Day 2 end date and time"
+                    className="mt-1 w-full"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (startAt && endAt) {
+                    const day2Start = new Date(endAt);
+                    day2Start.setDate(day2Start.getDate() + 1);
+                    day2Start.setHours(14, 0, 0, 0);
+                    const day2End = new Date(day2Start);
+                    day2End.setHours(18, 0, 0, 0);
+                    setDay2StartAt(day2Start);
+                    setDay2EndAt(day2End);
+                  }
+                }}
+                disabled={!startAt || !endAt}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Day 2
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add a second day for multi-day events. Ticket types can then be set to Day 1 only, Day 2 only, or Both days.
+              </p>
+            </div>
+          )}
 
           <div>
             <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
@@ -1129,6 +1225,27 @@ export default function EventForm() {
                       />
                     </div>
 
+                    {hasDay2 && (
+                      <div>
+                        <Label htmlFor={`valid-for-days-${index}`} className="text-xs md:text-sm font-medium">
+                          Valid for
+                        </Label>
+                        <Select
+                          value={tt.valid_for_days || 'day_1'}
+                          onValueChange={(value) => updateTicketTypeForm(index, 'valid_for_days', value as 'day_1' | 'day_2' | 'both')}
+                        >
+                          <SelectTrigger id={`valid-for-days-${index}`} className="w-full max-w-[200px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="day_1">Day 1 only</SelectItem>
+                            <SelectItem value="day_2">Day 2 only</SelectItem>
+                            <SelectItem value="both">Both days</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor={`ticket-price-${index}`} className="text-xs md:text-sm font-medium">
@@ -1223,7 +1340,7 @@ export default function EventForm() {
                                     }
                                   }}
                                   disabled={tt.is_active === false}
-                                  max={endAt || undefined}
+                                  max={(day2EndAt || endAt) || undefined}
                                   ariaLabel="Sales start date and time"
                                   className="mt-1"
                                 />
@@ -1245,7 +1362,7 @@ export default function EventForm() {
                                   }}
                                   disabled={tt.is_active === false}
                                   min={tt.available_start_at || startAt || undefined}
-                                  max={endAt || undefined}
+                                  max={(day2EndAt || endAt) || undefined}
                                   ariaLabel="Sales end date and time"
                                   className="mt-1"
                                 />
@@ -1621,6 +1738,8 @@ export default function EventForm() {
                   description: description || '',
                   start_at: startAt ? startAt.toISOString() : '',
                   end_at: endAt ? endAt.toISOString() : '',
+                  day_2_start_at: day2StartAt ? day2StartAt.toISOString() : null,
+                  day_2_end_at: day2EndAt ? day2EndAt.toISOString() : null,
                   status: 'published',
                   location_text: locationText || null,
                   instagram_preview_image_url: instagramPreviewImageUrl || null,
@@ -1646,6 +1765,7 @@ export default function EventForm() {
                   availability_mode: tt.availability_mode || 'always',
                   available_start_at: tt.available_start_at ? tt.available_start_at.toISOString() : null,
                   available_end_at: tt.available_end_at ? tt.available_end_at.toISOString() : null,
+                  valid_for_days: tt.valid_for_days || 'day_1',
                   metadata: {},
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),

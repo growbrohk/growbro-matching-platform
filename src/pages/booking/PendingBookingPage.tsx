@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
-import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
 import { Clock, Loader2 } from 'lucide-react';
 
 /**
@@ -183,8 +183,7 @@ export default function PendingBookingPage() {
                   {event.location_text && (
                     <p>📍 {event.location_text}</p>
                   )}
-                  <p>📅 {formatEventDate(event.start_at)}</p>
-                  <p>🕐 {formatEventTime(event.start_at, event.end_at)}</p>
+                  <p>📅 {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at)}</p>
                 </div>
               </div>
 

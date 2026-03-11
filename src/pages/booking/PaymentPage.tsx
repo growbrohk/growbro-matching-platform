@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
-import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
@@ -473,7 +473,7 @@ export default function PaymentPage() {
                 {event.title}
               </p>
               <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                {formatEventDate(event.start_at)} {formatEventTime(event.start_at, event.end_at)}
+                {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at)}
               </p>
               {event.location_text && (
                 <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>

@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
-import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
 import TicketCard, { TicketCardPreview } from '@/components/booking/TicketCard';
 import { CheckCircle2, FileText } from 'lucide-react';
 
@@ -231,6 +231,12 @@ export default function SuccessfulBookingPage() {
                     <TicketCard
                       eventName={order.event.title}
                       dateTime={order.event.start_at}
+                      dateTimeFormatted={formatEventDateTimeMultiDay(
+                        order.event.start_at,
+                        order.event.end_at,
+                        order.event.day_2_start_at,
+                        order.event.day_2_end_at
+                      )}
                       venue={venue}
                       checkinCode={ticket.qr_code}
                       qrValue={ticket.qr_code}

@@ -407,6 +407,8 @@ export type Database = {
         Row: {
           collect_attendee_info: string | null
           created_at: string
+          day_2_end_at: string | null
+          day_2_start_at: string | null
           description: string | null
           enable_fps: boolean | null
           enable_payme: boolean | null
@@ -429,6 +431,8 @@ export type Database = {
         Insert: {
           collect_attendee_info?: string | null
           created_at?: string
+          day_2_end_at?: string | null
+          day_2_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null
@@ -451,6 +455,8 @@ export type Database = {
         Update: {
           collect_attendee_info?: string | null
           created_at?: string
+          day_2_end_at?: string | null
+          day_2_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null
@@ -1335,6 +1341,7 @@ export type Database = {
           price: number
           quota: number
           updated_at: string
+          valid_for_days: string
           visibility_mode: string
         }
         Insert: {
@@ -1352,6 +1359,7 @@ export type Database = {
           price: number
           quota: number
           updated_at?: string
+          valid_for_days?: string
           visibility_mode?: string
         }
         Update: {
@@ -1369,6 +1377,7 @@ export type Database = {
           price?: number
           quota?: number
           updated_at?: string
+          valid_for_days?: string
           visibility_mode?: string
         }
         Relationships: [

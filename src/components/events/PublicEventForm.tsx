@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
-import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
 import {
   BookingDraft,
   saveBookingDraft,
@@ -105,12 +105,22 @@ export default function PublicEventForm({
       return date;
     };
 
-    const eventEndAt = parseUTCDate(event.end_at);
-    const eventEndTime = eventEndAt.getTime();
+    // Effective end for this ticket type based on valid_for_days
+    const hasDay2 = !!(event as any).day_2_start_at && (event as any).day_2_end_at;
+    let ticketValidEndTime: number;
+    if (hasDay2 && tt.valid_for_days === 'day_2') {
+      ticketValidEndTime = parseUTCDate((event as any).day_2_end_at).getTime();
+    } else if (hasDay2 && tt.valid_for_days === 'both') {
+      const day2End = parseUTCDate((event as any).day_2_end_at).getTime();
+      const day1End = parseUTCDate(event.end_at).getTime();
+      ticketValidEndTime = Math.max(day1End, day2End);
+    } else {
+      ticketValidEndTime = parseUTCDate(event.end_at).getTime();
+    }
 
-    // Hard cutoff: if event has ended (with 5-minute safety margin), all tickets are unavailable
+    // Hard cutoff: if event has ended (with 5-minute safety margin), ticket is unavailable
     const FIVE_MINUTES_MS = 5 * 60 * 1000;
-    if (nowTime > (eventEndTime + FIVE_MINUTES_MS)) {
+    if (nowTime > (ticketValidEndTime + FIVE_MINUTES_MS)) {
       return { available: false, reason: 'Event ended' };
     }
 
@@ -142,14 +152,14 @@ export default function PublicEventForm({
         }
       }
       
-      // Check end time: effective end = min(available_end_at, event.end_at)
+      // Check end time: effective end = min(available_end_at, ticket's valid window end)
       const effectiveEndAt = availableEndAt 
-        ? (availableEndAt.getTime() < eventEndTime ? availableEndAt : eventEndAt)
-        : eventEndAt;
-      const effectiveEndTime = effectiveEndAt.getTime();
+        ? (availableEndAt.getTime() < ticketValidEndTime ? availableEndAt : new Date(ticketValidEndTime))
+        : new Date(ticketValidEndTime);
+      const effectiveEndTimeVal = effectiveEndAt.getTime();
       
       // Add safety margin: if we're within 5 minutes after end, still allow
-      if (nowTime > (effectiveEndTime + FIVE_MINUTES_MS)) {
+      if (nowTime > (effectiveEndTimeVal + FIVE_MINUTES_MS)) {
         return { available: false, reason: 'Sales closed' };
       }
       
@@ -403,11 +413,26 @@ export default function PublicEventForm({
       return;
     }
 
+    // Compute dateLabel from selected ticket types
+    const hasDay2 = !!(event as any).day_2_start_at && (event as any).day_2_end_at;
+    let dateLabel: string;
+    if (hasDay2 && lines.some(l => {
+      const tt = visibleTicketTypes.find(t => t.id === l.ticketTypeId);
+      return tt?.valid_for_days === 'day_2';
+    }) && !lines.some(l => {
+      const tt = visibleTicketTypes.find(t => t.id === l.ticketTypeId);
+      return tt?.valid_for_days === 'day_1' || tt?.valid_for_days === 'both';
+    })) {
+      dateLabel = formatDateForBooking((event as any).day_2_start_at);
+    } else {
+      dateLabel = formatDateForBooking(event.start_at);
+    }
+
     // Create booking draft
     const draft: BookingDraft = {
       eventId: event.id,
       eventTitle: event.title,
-      dateLabel: formatDateForBooking(event.start_at),
+      dateLabel,
       currency: 'HKD',
       lines,
     };
@@ -441,12 +466,15 @@ export default function PublicEventForm({
                 {/* Date, Time, Location */}
                 <div className="space-y-1 break-words">
                   <div>
-                    <span className="text-sm text-muted-foreground">Date:</span>{' '}
-                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>{formatEventDate(event.start_at)}</span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Time:</span>{' '}
-                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>{formatEventTime(event.start_at, event.end_at)}</span>
+                    <span className="text-sm text-muted-foreground">Date & Time:</span>{' '}
+                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                      {formatEventDateTimeMultiDay(
+                        event.start_at,
+                        event.end_at,
+                        (event as any).day_2_start_at,
+                        (event as any).day_2_end_at
+                      )}
+                    </span>
                   </div>
                   {event.location_text && (
                     <div>
@@ -500,6 +528,11 @@ export default function PublicEventForm({
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
                               {tt.name}
+                              {(event as any).day_2_start_at && (event as any).day_2_end_at && tt.valid_for_days && (
+                                <span className="text-xs font-normal text-muted-foreground ml-1">
+                                  ({tt.valid_for_days === 'day_1' ? 'Day 1 only' : tt.valid_for_days === 'day_2' ? 'Day 2 only' : 'Both days'})
+                                </span>
+                              )}
                             </h3>
                             <div className="flex items-center gap-3 mt-1">
                               <span className="text-base font-medium" style={{ color: '#0F1F17' }}>

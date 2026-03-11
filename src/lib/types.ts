@@ -168,6 +168,8 @@ export interface Event {
   description?: string;
   start_at: string;
   end_at: string;
+  day_2_start_at?: string | null;
+  day_2_end_at?: string | null;
   status: EventStatus;
   slug?: string;
   location_text?: string | null;
@@ -197,6 +199,7 @@ export interface TicketType {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
+  valid_for_days?: 'day_1' | 'day_2' | 'both';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   remaining_count?: number; // Calculated field: quota - sold tickets (valid/scanned)
