@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.share-event]
 verify_jwt = false
 
+[functions.tracking-redirect]
+verify_jwt = false
+
 [functions.create-stripe-checkout-session]
 verify_jwt = false
 
