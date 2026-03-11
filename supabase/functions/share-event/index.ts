@@ -191,7 +191,11 @@ Deno.serve(async (req) => {
       'telegrambot',
       'linkedinbot',
     ];
-    const isBot = ua === '' || botPatterns.some(pattern => ua.includes(pattern));
+    // Instagram/WhatsApp in-app browsers have full browser UA (Mozilla/AppleWebKit).
+    // Treat as human; crawlers use facebookexternalhit, not full browser UA.
+    const hasBrowserUA = ua.includes('mozilla') || ua.includes('applewebkit');
+    const isInAppBrowser = hasBrowserUA && (ua.includes('instagram') || ua.includes('whatsapp'));
+    const isBot = (ua === '' || botPatterns.some(pattern => ua.includes(pattern))) && !isInAppBrowser;
 
     // If human, return HTTP 302 redirect
     if (!isBot) {

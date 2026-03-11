@@ -54,7 +54,14 @@ const BOT_PATTERNS = [
 
 function isBot(userAgent: string): boolean {
   const ua = userAgent.toLowerCase();
-  return ua === '' || BOT_PATTERNS.some((p) => ua.includes(p));
+  if (ua === '') return true;
+  // Instagram/WhatsApp in-app browsers have full browser UA (Mozilla/AppleWebKit).
+  // Treat as human; crawlers use facebookexternalhit, not full browser UA.
+  const hasBrowserUA = ua.includes('mozilla') || ua.includes('applewebkit');
+  if (hasBrowserUA && (ua.includes('instagram') || ua.includes('whatsapp'))) {
+    return false;
+  }
+  return BOT_PATTERNS.some((p) => ua.includes(p));
 }
 
 export default async function middleware(request: Request) {

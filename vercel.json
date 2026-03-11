@@ -1,6 +1,11 @@
 {
   "redirects": [
     {
+      "source": "/r/:slug",
+      "destination": "https://pbtupzbqtuxzznwummep.functions.supabase.co/tracking-redirect?slug=:slug",
+      "permanent": false
+    },
+    {
       "source": "/s/:orgSlug/:eventSlug",
       "destination": "https://pbtupzbqtuxzznwummep.functions.supabase.co/share-event?orgSlug=:orgSlug&eventSlug=:eventSlug",
       "permanent": false
