@@ -20,7 +20,9 @@ export function useEventTickets(eventId: string | undefined) {
       if (!eventId) return [];
 
       // Get tickets with order and ticket type info
-      // Using a join through orders to filter by event_id
+      // Using a join through orders to filter by event_id and order stage
+      // Only include: confirmed orders OR pending_confirmation with receipt uploaded (payment_status='submitted')
+      // Exclude: unpaid orders without receipt, cancelled orders
       const { data, error } = await supabase
         .from('tickets')
         .select(`
@@ -47,6 +49,9 @@ export function useEventTickets(eventId: string | undefined) {
           )
         `)
         .eq('orders.event_id', eventId)
+        .or('fulfillment_status.eq.confirmed,and(fulfillment_status.eq.pending_confirmation,payment_status.eq.submitted)', {
+          foreignTable: 'orders',
+        })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
