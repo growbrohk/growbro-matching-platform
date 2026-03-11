@@ -70,6 +70,7 @@ export interface OrderWithEvent {
     ticket_type: {
       id: string;
       name: string;
+      valid_for_days?: 'day_1' | 'day_2' | 'both' | null;
     };
   }>;
   tickets: Array<{
@@ -279,6 +280,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       ticket_type: {
         id: item.ticket_type.id,
         name: item.ticket_type.name,
+        valid_for_days: item.ticket_type?.valid_for_days ?? null,
       },
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
