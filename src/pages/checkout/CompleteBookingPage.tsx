@@ -58,6 +58,8 @@ export default function CompleteBookingPage() {
   const [attendees, setAttendees] = useState<AttendeeInfo[]>([]);
   // Per-attendee: indices of attendees that use Contact info (UI-only, not persisted)
   const [useContactAsAttendee, setUseContactAsAttendee] = useState<Set<number>>(() => new Set());
+  // Attendee 1 collapsible: collapsed by default to save vertical space
+  const [attendee1Expanded, setAttendee1Expanded] = useState(false);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -108,8 +110,20 @@ export default function CompleteBookingPage() {
               // Load saved attendees if available
               if (draft.attendees && draft.attendees.length === totalTickets) {
                 setAttendees(draft.attendees);
+                setUseContactAsAttendee(new Set()); // No preset when loading from draft
               } else {
+                // Fresh init: preset Attendee 1 to use contact info, sync from contact
+                if (initialAttendees.length > 0 && savedContact) {
+                  initialAttendees[0] = {
+                    ...initialAttendees[0],
+                    firstName: savedContact.firstName,
+                    lastName: savedContact.lastName,
+                    email: savedContact.email,
+                    phone: savedContact.phone,
+                  };
+                }
                 setAttendees(initialAttendees);
+                setUseContactAsAttendee(new Set([0])); // Preset Attendee 1
               }
             }
           }
@@ -232,6 +246,10 @@ export default function CompleteBookingPage() {
         const updatedDraft = { ...bookingDraft, attendees: updated };
         setBookingDraft(updatedDraft);
         saveBookingDraft(updatedDraft);
+      }
+      // Auto-collapse Attendee 1 when re-checking "Use contact info" to save vertical space
+      if (index === 0) {
+        setAttendee1Expanded(false);
       }
     }
   };
@@ -384,7 +402,125 @@ export default function CompleteBookingPage() {
                 const ticketLabel = bookingDraft?.lines[lineIndex || 0]?.label || 'Ticket';
                 const usesContact = useContactAsAttendee.has(index);
                 const displayInfo = usesContact ? contactInfo : attendee;
-                
+                const isAttendee1 = index === 0;
+
+                // Attendee 1: Collapsible with preset "Use contact info", compact when collapsed
+                if (isAttendee1) {
+                  return (
+                    <Collapsible
+                      key={index}
+                      open={attendee1Expanded}
+                      onOpenChange={setAttendee1Expanded}
+                    >
+                      <Card
+                        className="border rounded-2xl"
+                        style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                              Attendee 1
+                            </CardTitle>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{ticketLabel}</p>
+                          <div className="flex items-center space-x-2 pt-2">
+                            <Checkbox
+                              id={`use-contact-as-attendee-${index}`}
+                              checked={usesContact}
+                              onCheckedChange={(checked) =>
+                                handleToggleUseContactAsAttendee(index, checked === true)
+                              }
+                            />
+                            <label
+                              htmlFor={`use-contact-as-attendee-${index}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                              style={{ color: '#0F1F17' }}
+                            >
+                              Use Contact info as Attendee 1
+                            </label>
+                          </div>
+                          {!attendee1Expanded && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttendee1Expanded(true);
+                                handleToggleUseContactAsAttendee(0, false);
+                              }}
+                              className="text-sm font-medium mt-2 text-left hover:underline"
+                              style={{ color: '#0E7A3A' }}
+                            >
+                              Fill in different info
+                            </button>
+                          )}
+                        </CardHeader>
+                        <CollapsibleContent>
+                          <CardContent className="space-y-4 pt-0">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor={`attendee-firstName-${index}`} className="text-sm">
+                                  First name <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  id={`attendee-firstName-${index}`}
+                                  type="text"
+                                  value={displayInfo.firstName}
+                                  onChange={(e) => handleAttendeeUpdate(index, 'firstName', e.target.value)}
+                                  className="mt-1"
+                                  placeholder="Enter first name"
+                                  disabled={usesContact}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`attendee-lastName-${index}`} className="text-sm">
+                                  Last name <span className="text-red-500">*</span>
+                                </Label>
+                                <Input
+                                  id={`attendee-lastName-${index}`}
+                                  type="text"
+                                  value={displayInfo.lastName}
+                                  onChange={(e) => handleAttendeeUpdate(index, 'lastName', e.target.value)}
+                                  className="mt-1"
+                                  placeholder="Enter last name"
+                                  disabled={usesContact}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label htmlFor={`attendee-email-${index}`} className="text-sm">
+                                Email address <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`attendee-email-${index}`}
+                                type="email"
+                                value={displayInfo.email}
+                                onChange={(e) => handleAttendeeUpdate(index, 'email', e.target.value)}
+                                className="mt-1"
+                                placeholder="Enter email address"
+                                disabled={usesContact}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`attendee-phone-${index}`} className="text-sm">
+                                Phone number <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id={`attendee-phone-${index}`}
+                                type="tel"
+                                value={displayInfo.phone}
+                                onChange={(e) => handleAttendeeUpdate(index, 'phone', e.target.value)}
+                                className="mt-1"
+                                placeholder="Enter phone number"
+                                disabled={usesContact}
+                              />
+                            </div>
+                          </CardContent>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  );
+                }
+
+                // Attendees 2, 3, 4: Always expanded, no preset
                 return (
                   <Card
                     key={index}
