@@ -308,6 +308,7 @@ export default function CompleteBookingPage() {
     return sum + unitPrice * sel.qty;
   }, 0);
   const total = ticketSubtotal + addonSubtotal;
+  const subtotal = ticketSubtotal; // Used in Price Summary Sheet
 
   // Format currency
   const formatCurrency = (amount: number): string => {
@@ -1110,6 +1111,29 @@ export default function CompleteBookingPage() {
                   </p>
                 </div>
               ))}
+            {Object.entries(addonSelections)
+              .filter(([, sel]) => sel.qty > 0)
+              .map(([productId, sel]) => {
+                const addon = eventAddons.find((a) => a.product_id === productId);
+                if (!addon) return null;
+                const variant = addon.variants.find((v) => v.id === sel.variantId);
+                const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                return (
+                  <div key={productId} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                        {addon.product_title}
+                        {variant?.name && (
+                          <span className="text-xs text-muted-foreground ml-1">– {variant.name}</span>
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-sm" style={{ color: '#0F1F17' }}>
+                      {formatCurrency(unitPrice)} × {sel.qty}
+                    </p>
+                  </div>
+                );
+              })}
             <Separator />
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
