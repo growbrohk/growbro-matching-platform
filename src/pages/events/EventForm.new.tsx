@@ -874,7 +874,7 @@ export default function EventForm() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
             <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Start Time
@@ -935,7 +935,7 @@ export default function EventForm() {
                   Remove Day 2
                 </Button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                   <Label className="text-sm font-medium">Day 2 Start</Label>
                   <DateTimeRow24
