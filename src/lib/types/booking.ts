@@ -12,6 +12,15 @@ export interface BookingDraftLine {
   dateTimeLabel?: string; // e.g., "Fri 6 Dec 18:00–22:00"
 }
 
+export interface BookingDraftAddonLine {
+  productId: string;
+  productVariantId?: string;
+  label: string;
+  variantLabel?: string;
+  unitPrice: number;
+  qty: number;
+}
+
 export interface AttendeeInfo {
   firstName: string;
   lastName: string;
@@ -26,6 +35,7 @@ export interface BookingDraft {
   dateLabel?: string; // e.g., "12 Jan 2026"
   currency: string; // e.g., "HKD"
   lines: BookingDraftLine[];
+  addonLines?: BookingDraftAddonLine[];
   attendees?: AttendeeInfo[]; // Per-ticket attendee information
 }
 

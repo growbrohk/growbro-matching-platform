@@ -8,7 +8,7 @@
 // ============================================================================
 
 export type OrgMemberRole = 'owner' | 'admin' | 'member';
-export type ProductType = 'physical';
+export type ProductType = 'physical' | 'addon';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type EventStatus = 'draft' | 'published' | 'cancelled' | 'completed';
 export type OrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded';
@@ -247,10 +247,12 @@ export interface Ticket {
 
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   physical: 'Physical Product',
+  addon: 'Add-on Only',
 };
 
 export const PRODUCT_TYPE_COLORS: Record<ProductType, string> = {
   physical: 'bg-blue-100 text-blue-700',
+  addon: 'bg-amber-100 text-amber-700',
 };
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {

@@ -27,6 +27,7 @@ import {
 import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-react';
 import {
   BookingDraft,
+  BookingDraftAddonLine,
   ContactInfo,
   AttendeeInfo,
   loadBookingDraft,
@@ -36,6 +37,7 @@ import {
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
 import { getEvent } from '@/lib/api/events';
+import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
 import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +66,9 @@ export default function CompleteBookingPage() {
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tcAccepted, setTcAccepted] = useState(true);
+  const [eventAddons, setEventAddons] = useState<EventAddonForCheckout[]>([]);
+  // addonSelections: product_id -> { variantId?, qty }
+  const [addonSelections, setAddonSelections] = useState<Record<string, { variantId?: string; qty: number }>>({});
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -133,7 +138,18 @@ export default function CompleteBookingPage() {
       }
     };
 
+    const fetchAddons = async () => {
+      if (draft?.eventId) {
+        try {
+          const addons = await getEventAddonsForCheckout(draft.eventId);
+          setEventAddons(addons);
+        } catch (err) {
+          console.error('Failed to fetch event addons:', err);
+        }
+      }
+    };
     fetchEvent();
+    fetchAddons();
   }, [navigate]);
 
   const isValidEmail = (email: string): boolean => {
@@ -169,9 +185,24 @@ export default function CompleteBookingPage() {
     );
   };
 
-  // Check if form is valid (either contact info or all attendees + contact info + T&C)
+  // Validate required add-ons: must have selection (variant or qty > 0)
+  const areRequiredAddonsValid = (): boolean => {
+    return eventAddons
+      .filter((a) => a.is_required)
+      .every((addon) => {
+        const sel = addonSelections[addon.product_id];
+        if (!sel) return false;
+        if (addon.variants.length > 1) {
+          return !!sel.variantId && sel.qty > 0;
+        }
+        return sel.qty > 0;
+      });
+  };
+
+  // Check if form is valid (contact/attendees + T&C + required add-ons)
   const isFormValid = (): boolean => {
     if (!tcAccepted) return false;
+    if (!areRequiredAddonsValid()) return false;
     if (event?.collect_attendee_info === 'per_ticket') {
       return areAttendeesValid() && isContactValid();
     }
@@ -254,11 +285,22 @@ export default function CompleteBookingPage() {
     }
   };
 
-  // Calculate totals
-  const subtotal = bookingDraft
+  // Calculate totals (tickets + add-ons)
+  const ticketSubtotal = bookingDraft
     ? bookingDraft.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
     : 0;
-  const total = subtotal;
+  const addonSubtotal = Object.entries(addonSelections).reduce((sum, [productId, sel]) => {
+    if (sel.qty <= 0) return sum;
+    const addon = eventAddons.find((a) => a.product_id === productId);
+    if (!addon) return sum;
+    let unitPrice = addon.base_price ?? 0;
+    if (addon.variants.length > 1 && sel.variantId) {
+      const v = addon.variants.find((x) => x.id === sel.variantId);
+      if (v) unitPrice = v.price;
+    }
+    return sum + unitPrice * sel.qty;
+  }, 0);
+  const total = ticketSubtotal + addonSubtotal;
 
   // Format currency
   const formatCurrency = (amount: number): string => {
@@ -331,6 +373,21 @@ export default function CompleteBookingPage() {
                   )}
                 </div>
               ))}
+            {Object.entries(addonSelections)
+              .filter(([, sel]) => sel.qty > 0)
+              .map(([productId, sel]) => {
+                const addon = eventAddons.find((a) => a.product_id === productId);
+                if (!addon) return null;
+                const variant = addon.variants.find((v) => v.id === sel.variantId);
+                const label = addon.product_title;
+                const variantLabel = variant?.name;
+                return (
+                  <div key={productId} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    {label}
+                    {variantLabel && ` - ${variantLabel}`} × {sel.qty}
+                  </div>
+                );
+              })}
           </div>
           <div className="pt-2">
             <p className="text-xl font-bold" style={{ color: '#0F1F17' }}>
@@ -338,6 +395,109 @@ export default function CompleteBookingPage() {
             </p>
           </div>
         </div>
+
+        {/* Add-ons Section */}
+        {eventAddons.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
+              <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
+                Add-ons
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {eventAddons.map((addon) => {
+                const sel = addonSelections[addon.product_id] ?? { qty: 0 };
+                const hasVariants = addon.variants.length > 1;
+                const unitPrice =
+                  hasVariants && sel.variantId
+                    ? addon.variants.find((v) => v.id === sel.variantId)?.price ?? addon.base_price ?? 0
+                    : addon.base_price ?? 0;
+                return (
+                  <div
+                    key={addon.product_id}
+                    className="p-4 rounded-2xl border"
+                    style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium" style={{ color: '#0F1F17' }}>
+                        {addon.product_title}
+                      </span>
+                      {addon.is_required && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                          Required
+                        </span>
+                      )}
+                    </div>
+                    {hasVariants ? (
+                      <div className="space-y-2">
+                        <Label className="text-sm">Select option</Label>
+                        <Select
+                          value={sel.variantId ?? ''}
+                          onValueChange={(v) =>
+                            setAddonSelections((prev) => ({
+                              ...prev,
+                              [addon.product_id]: { ...prev[addon.product_id], variantId: v, qty: 1 },
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {addon.variants.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.name} – HK$ {v.price.toFixed(0)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {sel.variantId && (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm">Quantity</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={sel.qty}
+                              onChange={(e) => {
+                                const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                setAddonSelections((prev) => ({
+                                  ...prev,
+                                  [addon.product_id]: { ...prev[addon.product_id], qty: q },
+                                }));
+                              }}
+                              className="w-20"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Quantity</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={sel.qty}
+                          onChange={(e) => {
+                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setAddonSelections((prev) => ({
+                              ...prev,
+                              [addon.product_id]: { qty: q },
+                            }));
+                          }}
+                          className="w-20"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Contact Info / Attendee Info Section */}
         <div className="space-y-4">
@@ -719,9 +879,27 @@ export default function CompleteBookingPage() {
                     saveBookingDraft(finalDraft);
                   }
 
-                  // Create booking (server computes total_amount from ticket_types.price)
-                  // ALWAYS use contactInfo as buyer contact info (p_buyer_*)
-                  // This ensures consistency: Contact info is always used as orders.buyer_email
+                  // Build addon lines from selections
+                  const addonLines: BookingDraftAddonLine[] = Object.entries(addonSelections)
+                    .filter(([, sel]) => sel.qty > 0)
+                    .map(([productId, sel]) => {
+                      const addon = eventAddons.find((a) => a.product_id === productId);
+                      if (!addon) return null;
+                      const variant = addon.variants.find((v) => v.id === sel.variantId);
+                      const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                      return {
+                        productId,
+                        productVariantId: sel.variantId,
+                        label: addon.product_title,
+                        variantLabel: variant?.name,
+                        unitPrice,
+                        qty: sel.qty,
+                      };
+                    })
+                    .filter(Boolean) as BookingDraftAddonLine[];
+                  finalDraft = { ...finalDraft, addonLines };
+
+                  // Create booking (server computes total_amount from ticket_types + products)
                   const result = await createBooking(
                     finalDraft,
                     contactInfo, // Always use contactInfo (same for FREE route and Per-Ticket mode)

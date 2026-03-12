@@ -44,6 +44,7 @@ import { Upload, X } from 'lucide-react';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
+import { EventAddonsSection } from '@/components/events/EventAddonsSection';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
@@ -1605,6 +1606,14 @@ export default function EventForm() {
         )}
 
         {showTicketTypesSection && <Separator />}
+
+        {/* Section 3b: Add-ons (shown when event exists) */}
+        {eventId && currentOrg && (
+          <>
+            <EventAddonsSection eventId={eventId} orgId={currentOrg.id} />
+            <Separator />
+          </>
+        )}
 
         {/* Section 4: Share Link (shown if event has ID and slug) */}
         {eventId && eventSlug && currentOrg?.slug && (

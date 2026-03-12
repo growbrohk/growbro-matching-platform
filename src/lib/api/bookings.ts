@@ -113,6 +113,17 @@ export async function createBooking(
       quantity: line.qty,
     }));
 
+  // Prepare addon lines - product_id, product_variant_id?, quantity (NO prices - server computes)
+  const addonLines = (draft.addonLines || [])
+    .filter(line => line.qty > 0)
+    .map(line => ({
+      product_id: line.productId,
+      product_variant_id: line.productVariantId || null,
+      quantity: line.qty,
+      label: line.label || null,
+      variant_label: line.variantLabel || null,
+    }));
+
   // Prepare attendees array if provided (per-ticket mode)
   let attendeesArray: any[] | null = null;
   if (attendees && attendees.length > 0) {
@@ -179,7 +190,8 @@ export async function createBooking(
     p_buyer_phone: contactInfo.phone || null,
     p_currency: draft.currency || 'HKD',
     p_attendees: attendeesArray,
-    p_tracking_link_id: trackingLinkId, // Optional tracking link attribution
+    p_tracking_link_id: trackingLinkId,
+    p_addon_lines: addonLines.length > 0 ? addonLines : null,
   });
 
   if (error) {
