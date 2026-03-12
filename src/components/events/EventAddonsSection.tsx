@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,8 +24,8 @@ import {
   removeEventAddon,
   updateEventAddon,
   getProductsForAddonPicker,
-  quickCreateAddonProduct,
 } from '@/lib/api/event-addons';
+import ProductForm from '@/pages/dashboard/products/ProductForm';
 
 interface EventAddonsSectionProps {
   eventId: string;
@@ -230,9 +229,10 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
       <QuickCreateAddonDialog
         open={showQuickCreate}
         onOpenChange={setShowQuickCreate}
-        orgId={orgId}
-        onCreated={async (productId, isRequired) => {
-          await handleAddFromCatalog(productId, isRequired);
+        eventId={eventId}
+        addonsLength={addons.length}
+        onCreated={async () => {
+          await loadAddons();
           setShowQuickCreate(false);
         }}
       />
@@ -310,88 +310,37 @@ function AddFromCatalogDialog({
 function QuickCreateAddonDialog({
   open,
   onOpenChange,
-  orgId,
+  eventId,
+  addonsLength,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  orgId: string;
-  onCreated: (productId: string, isRequired: boolean) => Promise<void>;
+  eventId: string;
+  addonsLength: number;
+  onCreated: () => Promise<void>;
 }) {
   const { toast } = useToast();
-  const [title, setTitle] = useState('');
-  const [basePrice, setBasePrice] = useState('0');
   const [isRequired, setIsRequired] = useState(false);
   const [alsoShowInCatalog, setAlsoShowInCatalog] = useState(false);
-  const [variantOptions, setVariantOptions] = useState('');
-  const [saving, setSaving] = useState(false);
 
-  const handleCreate = async () => {
-    if (!title.trim()) {
-      toast({ title: 'Title required', variant: 'destructive' });
-      return;
-    }
-    setSaving(true);
+  const handleSuccess = async (productId: string) => {
     try {
-      const variantNames = variantOptions
-        .split(/[,;]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const { productId } = await quickCreateAddonProduct(orgId, {
-        title: title.trim(),
-        basePrice: parseFloat(basePrice) || 0,
-        alsoShowInCatalog,
-        variantNames: variantNames.length > 0 ? variantNames : undefined,
-      });
-      await onCreated(productId, isRequired);
-      setTitle('');
-      setBasePrice('0');
-      setIsRequired(false);
-      setAlsoShowInCatalog(false);
-      setVariantOptions('');
-      onOpenChange(false);
+      await addEventAddon(eventId, productId, isRequired, addonsLength);
+      await onCreated();
+      toast({ title: 'Add-on created and added' });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setSaving(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Quick create add-on</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label>Name</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Free T-shirt"
-            />
-          </div>
-          <div>
-            <Label>Price (HKD)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={basePrice}
-              onChange={(e) => setBasePrice(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <Label>Variants (optional)</Label>
-            <Input
-              value={variantOptions}
-              onChange={(e) => setVariantOptions(e.target.value)}
-              placeholder="e.g. S, M, L, XL or Small; Medium; Large"
-            />
-            <p className="text-xs text-muted-foreground mt-1">Comma or semicolon separated</p>
-          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox checked={isRequired} onCheckedChange={(c) => setIsRequired(c === true)} />
             <span className="text-sm">Required (guest must select before checkout)</span>
@@ -400,15 +349,13 @@ function QuickCreateAddonDialog({
             <Checkbox checked={alsoShowInCatalog} onCheckedChange={(c) => setAlsoShowInCatalog(c === true)} />
             <span className="text-sm">Also show in product catalog</span>
           </label>
+          <ProductForm
+            embedded
+            productType={alsoShowInCatalog ? 'physical' : 'addon'}
+            onSuccess={handleSuccess}
+            onCancel={() => onOpenChange(false)}
+          />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate} disabled={saving || !title.trim()}>
-            {saving ? 'Creating...' : 'Create & add'}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

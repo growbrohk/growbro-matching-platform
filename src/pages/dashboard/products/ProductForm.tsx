@@ -201,14 +201,22 @@ function generateSKU(productTitle: string, sig: string, existingSkus: string[]):
 
 type ProductKind = 'simple' | 'variable';
 
-export default function ProductForm() {
+export interface ProductFormEmbeddedProps {
+  embedded?: boolean;
+  productType?: 'physical' | 'addon';
+  onSuccess?: (productId: string) => void;
+  onCancel?: () => void;
+}
+
+export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { currentOrg, user } = useAuth();
   const { toast } = useToast();
 
-  const isEditMode = !!id;
+  const embedded = props?.embedded ?? false;
+  const isEditMode = embedded ? false : !!id;
   const initialKind = (searchParams.get('kind') as ProductKind | null) ?? null;
 
   const [loading, setLoading] = useState(isEditMode);
@@ -895,7 +903,7 @@ export default function ProductForm() {
           .from('products')
           .insert({
             org_id: currentOrg.id,
-            type: 'physical',
+            type: props?.productType ?? 'physical',
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -911,7 +919,7 @@ export default function ProductForm() {
         const { error: updateError } = await (supabase as any)
           .from('products')
           .update({
-            type: 'physical',
+            type: props?.productType ?? 'physical',
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -1275,7 +1283,11 @@ export default function ProductForm() {
       }
 
       toast({ title: 'Success', description: isEditMode ? 'Product updated' : 'Product created' });
-      navigate('/app/products');
+      if (props?.onSuccess && productId) {
+        props.onSuccess(productId);
+      } else {
+        navigate('/app/products');
+      }
     } catch (e: any) {
       toast({ title: 'Error', description: e?.message || 'Failed to save product', variant: 'destructive' });
     } finally {
@@ -1295,9 +1307,13 @@ export default function ProductForm() {
   if (!isEditMode && !productKind) {
     return (
       <div className="max-w-3xl space-y-6 md:space-y-8">
-        <Button variant="ghost" onClick={() => navigate('/app/products')} className="w-full sm:w-auto">
+        <Button
+          variant="ghost"
+          onClick={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
+          className="w-full sm:w-auto"
+        >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Products
+          {embedded ? 'Back' : 'Back to Products'}
         </Button>
 
         <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
@@ -1343,16 +1359,22 @@ export default function ProductForm() {
 
   return (
     <div className="max-w-3xl space-y-6 md:space-y-8">
-      <Button variant="ghost" onClick={() => {
-        if (isEditMode) {
-          navigate('/app/products');
-        } else {
-          setProductKind(null);
-        }
-      }} className="w-full sm:w-auto">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            {isEditMode ? 'Back to Products' : 'Back'}
-          </Button>
+      <Button
+        variant="ghost"
+        onClick={() => {
+          if (embedded) {
+            props?.onCancel?.();
+          } else if (isEditMode) {
+            navigate('/app/products');
+          } else {
+            setProductKind(null);
+          }
+        }}
+        className="w-full sm:w-auto"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        {embedded ? 'Back' : isEditMode ? 'Back to Products' : 'Back'}
+      </Button>
 
             <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
               <CardHeader className="p-4 md:p-6">
@@ -1690,7 +1712,13 @@ export default function ProductForm() {
 
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => navigate('/app/products')} disabled={saving} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
+                disabled={saving}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={!canSubmit || saving} className="w-full sm:w-auto">
