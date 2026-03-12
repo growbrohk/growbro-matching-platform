@@ -74,8 +74,12 @@ export default function CompleteBookingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tcAccepted, setTcAccepted] = useState(true);
   const [eventAddons, setEventAddons] = useState<EventAddonForCheckout[]>([]);
-  // addonSelections: product_id -> { variantId?, qty }
+  // addonSelections: product_id -> { variantId?, qty } (primary mode)
   const [addonSelections, setAddonSelections] = useState<Record<string, { variantId?: string; qty: number }>>({});
+  // addonSelectionsByAttendee: attendeeIndex -> product_id -> { variantId?, qty } (per-ticket mode)
+  const [addonSelectionsByAttendee, setAddonSelectionsByAttendee] = useState<
+    Record<number, Record<string, { variantId?: string; qty: number }>>
+  >({});
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -193,17 +197,27 @@ export default function CompleteBookingPage() {
   };
 
   // Validate required add-ons: must have selection (variant or qty > 0)
+  // Primary mode: check addonSelections. Per-ticket: each attendee must have each required addon.
   const areRequiredAddonsValid = (): boolean => {
-    return eventAddons
-      .filter((a) => a.is_required)
-      .every((addon) => {
-        const sel = addonSelections[addon.product_id];
-        if (!sel) return false;
-        if (addon.variants.length > 1) {
-          return !!sel.variantId && sel.qty > 0;
-        }
-        return sel.qty > 0;
-      });
+    const required = eventAddons.filter((a) => a.is_required);
+    if (required.length === 0) return true;
+
+    if (event?.collect_attendee_info === 'per_ticket') {
+      return attendees.every((_, idx) =>
+        required.every((addon) => {
+          const sel = addonSelectionsByAttendee[idx]?.[addon.product_id];
+          if (!sel) return false;
+          if (addon.variants.length > 1) return !!sel.variantId && sel.qty > 0;
+          return sel.qty > 0;
+        })
+      );
+    }
+    return required.every((addon) => {
+      const sel = addonSelections[addon.product_id];
+      if (!sel) return false;
+      if (addon.variants.length > 1) return !!sel.variantId && sel.qty > 0;
+      return sel.qty > 0;
+    });
   };
 
   // Check if form is valid (contact/attendees + T&C + required add-ons)
@@ -296,17 +310,22 @@ export default function CompleteBookingPage() {
   const ticketSubtotal = bookingDraft
     ? bookingDraft.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
     : 0;
-  const addonSubtotal = Object.entries(addonSelections).reduce((sum, [productId, sel]) => {
-    if (sel.qty <= 0) return sum;
-    const addon = eventAddons.find((a) => a.product_id === productId);
-    if (!addon) return sum;
-    let unitPrice = addon.base_price ?? 0;
-    if (addon.variants.length > 1 && sel.variantId) {
-      const v = addon.variants.find((x) => x.id === sel.variantId);
-      if (v) unitPrice = v.price;
-    }
-    return sum + unitPrice * sel.qty;
-  }, 0);
+  const addonSubtotalFromSelections = (selections: Record<string, { variantId?: string; qty: number }>) =>
+    Object.entries(selections).reduce((sum, [productId, sel]) => {
+      if (sel.qty <= 0) return sum;
+      const addon = eventAddons.find((a) => a.product_id === productId);
+      if (!addon) return sum;
+      let unitPrice = addon.base_price ?? 0;
+      if (addon.variants.length > 1 && sel.variantId) {
+        const v = addon.variants.find((x) => x.id === sel.variantId);
+        if (v) unitPrice = v.price;
+      }
+      return sum + unitPrice * sel.qty;
+    }, 0);
+  const addonSubtotal =
+    event?.collect_attendee_info === 'per_ticket'
+      ? Object.values(addonSelectionsByAttendee).reduce((sum, s) => sum + addonSubtotalFromSelections(s), 0)
+      : addonSubtotalFromSelections(addonSelections);
   const total = ticketSubtotal + addonSubtotal;
   const subtotal = ticketSubtotal; // Used in Price Summary Sheet
 
@@ -381,21 +400,42 @@ export default function CompleteBookingPage() {
                   )}
                 </div>
               ))}
-            {Object.entries(addonSelections)
-              .filter(([, sel]) => sel.qty > 0)
-              .map(([productId, sel]) => {
-                const addon = eventAddons.find((a) => a.product_id === productId);
-                if (!addon) return null;
-                const variant = addon.variants.find((v) => v.id === sel.variantId);
-                const label = addon.product_title;
-                const variantLabel = variant?.name;
-                return (
-                  <div key={productId} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                    {label}
-                    {variantLabel && ` - ${variantLabel}`} × {sel.qty}
-                  </div>
-                );
-              })}
+            {event?.collect_attendee_info === 'per_ticket'
+              ? Object.entries(addonSelectionsByAttendee)
+                  .flatMap(([idxStr, selections]) =>
+                    Object.entries(selections)
+                      .filter(([, sel]) => sel.qty > 0)
+                      .map(([productId, sel]) => {
+                        const addon = eventAddons.find((a) => a.product_id === productId);
+                        if (!addon) return null;
+                        const variant = addon.variants.find((v) => v.id === sel.variantId);
+                        const label = addon.product_title;
+                        const variantLabel = variant?.name;
+                        const attendeeNum = parseInt(idxStr, 10) + 1;
+                        return (
+                          <div key={`${idxStr}-${productId}`} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                            Attendee {attendeeNum}: {label}
+                            {variantLabel && ` - ${variantLabel}`} × {sel.qty}
+                          </div>
+                        );
+                      })
+                  )
+                  .filter(Boolean)
+              : Object.entries(addonSelections)
+                  .filter(([, sel]) => sel.qty > 0)
+                  .map(([productId, sel]) => {
+                    const addon = eventAddons.find((a) => a.product_id === productId);
+                    if (!addon) return null;
+                    const variant = addon.variants.find((v) => v.id === sel.variantId);
+                    const label = addon.product_title;
+                    const variantLabel = variant?.name;
+                    return (
+                      <div key={productId} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                        {label}
+                        {variantLabel && ` - ${variantLabel}`} × {sel.qty}
+                      </div>
+                    );
+                  })}
           </div>
           <div className="pt-2">
             <p className="text-xl font-bold" style={{ color: '#0F1F17' }}>
@@ -404,8 +444,8 @@ export default function CompleteBookingPage() {
           </div>
         </div>
 
-        {/* Add-ons Section */}
-        {eventAddons.length > 0 && (
+        {/* Add-ons Section (primary mode only; per-ticket shows add-ons inside each attendee card) */}
+        {eventAddons.length > 0 && event?.collect_attendee_info !== 'per_ticket' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
@@ -681,6 +721,105 @@ export default function CompleteBookingPage() {
                                 disabled={usesContact}
                               />
                             </div>
+                            {eventAddons.length > 0 && (
+                              <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                                <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                                  Add-ons for Attendee {index + 1}
+                                </p>
+                                {eventAddons.map((addon) => {
+                                  const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
+                                  const hasVariants = addon.variants.length > 1;
+                                  return (
+                                    <div
+                                      key={addon.product_id}
+                                      className="p-3 rounded-xl border text-sm"
+                                      style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="font-medium">{addon.product_title}</span>
+                                        {addon.is_required && (
+                                          <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                                            Required
+                                          </span>
+                                        )}
+                                      </div>
+                                      {hasVariants ? (
+                                        <div className="space-y-2">
+                                          <Label className="text-xs">Select option</Label>
+                                          <Select
+                                            value={sel.variantId ?? ''}
+                                            onValueChange={(v) =>
+                                              setAddonSelectionsByAttendee((prev) => ({
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
+                                                },
+                                              }))
+                                            }
+                                          >
+                                            <SelectTrigger className="h-9">
+                                              <SelectValue placeholder="Choose..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {addon.variants.map((v) => (
+                                                <SelectItem key={v.id} value={v.id}>
+                                                  {v.name} – HK$ {v.price.toFixed(0)}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                          {sel.variantId && (
+                                            <div className="flex items-center gap-2">
+                                              <Label className="text-xs">Qty</Label>
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                value={sel.qty}
+                                                onChange={(e) => {
+                                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                  setAddonSelectionsByAttendee((prev) => ({
+                                                    ...prev,
+                                                    [index]: {
+                                                      ...(prev[index] ?? {}),
+                                                      [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                    },
+                                                  }));
+                                                }}
+                                                className="w-16 h-9"
+                                              />
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <Label className="text-xs">Qty</Label>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            value={sel.qty}
+                                            onChange={(e) => {
+                                              const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                              setAddonSelectionsByAttendee((prev) => ({
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: { qty: q },
+                                                },
+                                              }));
+                                            }}
+                                            className="w-16 h-9"
+                                          />
+                                          <span className="text-xs text-muted-foreground">
+                                            HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </CardContent>
                         </CollapsibleContent>
                       </Card>
@@ -778,6 +917,105 @@ export default function CompleteBookingPage() {
                           disabled={usesContact}
                         />
                       </div>
+                      {eventAddons.length > 0 && (
+                        <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                          <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                            Add-ons for Attendee {index + 1}
+                          </p>
+                          {eventAddons.map((addon) => {
+                            const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
+                            const hasVariants = addon.variants.length > 1;
+                            return (
+                              <div
+                                key={addon.product_id}
+                                className="p-3 rounded-xl border text-sm"
+                                style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="font-medium">{addon.product_title}</span>
+                                  {addon.is_required && (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                                      Required
+                                    </span>
+                                  )}
+                                </div>
+                                {hasVariants ? (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Select option</Label>
+                                    <Select
+                                      value={sel.variantId ?? ''}
+                                      onValueChange={(v) =>
+                                        setAddonSelectionsByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: {
+                                            ...(prev[index] ?? {}),
+                                            [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Choose..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {addon.variants.map((v) => (
+                                          <SelectItem key={v.id} value={v.id}>
+                                            {v.name} – HK$ {v.price.toFixed(0)}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {sel.variantId && (
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs">Qty</Label>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          value={sel.qty}
+                                          onChange={(e) => {
+                                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                              },
+                                            }));
+                                          }}
+                                          className="w-16 h-9"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-xs">Qty</Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      value={sel.qty}
+                                      onChange={(e) => {
+                                        const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                        setAddonSelectionsByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: {
+                                            ...(prev[index] ?? {}),
+                                            [addon.product_id]: { qty: q },
+                                          },
+                                        }));
+                                      }}
+                                      className="w-16 h-9"
+                                    />
+                                    <span className="text-xs text-muted-foreground">
+                                      HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -887,24 +1125,45 @@ export default function CompleteBookingPage() {
                     saveBookingDraft(finalDraft);
                   }
 
-                  // Build addon lines from selections
-                  const addonLines: BookingDraftAddonLine[] = Object.entries(addonSelections)
-                    .filter(([, sel]) => sel.qty > 0)
-                    .map(([productId, sel]) => {
-                      const addon = eventAddons.find((a) => a.product_id === productId);
-                      if (!addon) return null;
-                      const variant = addon.variants.find((v) => v.id === sel.variantId);
-                      const unitPrice = variant?.price ?? addon.base_price ?? 0;
-                      return {
-                        productId,
-                        productVariantId: sel.variantId,
-                        label: addon.product_title,
-                        variantLabel: variant?.name,
-                        unitPrice,
-                        qty: sel.qty,
-                      };
-                    })
-                    .filter(Boolean) as BookingDraftAddonLine[];
+                  // Build addon lines from selections (per-ticket: include attendeeIndex)
+                  const addonLines: BookingDraftAddonLine[] =
+                    event?.collect_attendee_info === 'per_ticket'
+                      ? Object.entries(addonSelectionsByAttendee).flatMap(([idxStr, selections]) =>
+                          Object.entries(selections)
+                            .filter(([, sel]) => sel.qty > 0)
+                            .map(([productId, sel]) => {
+                              const addon = eventAddons.find((a) => a.product_id === productId);
+                              if (!addon) return null;
+                              const variant = addon.variants.find((v) => v.id === sel.variantId);
+                              const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                              return {
+                                productId,
+                                productVariantId: sel.variantId,
+                                label: addon.product_title,
+                                variantLabel: variant?.name,
+                                unitPrice,
+                                qty: sel.qty,
+                                attendeeIndex: parseInt(idxStr, 10),
+                              };
+                            })
+                        ).filter(Boolean) as BookingDraftAddonLine[]
+                      : Object.entries(addonSelections)
+                          .filter(([, sel]) => sel.qty > 0)
+                          .map(([productId, sel]) => {
+                            const addon = eventAddons.find((a) => a.product_id === productId);
+                            if (!addon) return null;
+                            const variant = addon.variants.find((v) => v.id === sel.variantId);
+                            const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                            return {
+                              productId,
+                              productVariantId: sel.variantId,
+                              label: addon.product_title,
+                              variantLabel: variant?.name,
+                              unitPrice,
+                              qty: sel.qty,
+                            };
+                          })
+                          .filter(Boolean) as BookingDraftAddonLine[];
                   finalDraft = { ...finalDraft, addonLines };
 
                   // Create booking (server computes total_amount from ticket_types + products)
@@ -1111,29 +1370,56 @@ export default function CompleteBookingPage() {
                   </p>
                 </div>
               ))}
-            {Object.entries(addonSelections)
-              .filter(([, sel]) => sel.qty > 0)
-              .map(([productId, sel]) => {
-                const addon = eventAddons.find((a) => a.product_id === productId);
-                if (!addon) return null;
-                const variant = addon.variants.find((v) => v.id === sel.variantId);
-                const unitPrice = variant?.price ?? addon.base_price ?? 0;
-                return (
-                  <div key={productId} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                        {addon.product_title}
-                        {variant?.name && (
-                          <span className="text-xs text-muted-foreground ml-1">– {variant.name}</span>
-                        )}
-                      </p>
-                    </div>
-                    <p className="text-sm" style={{ color: '#0F1F17' }}>
-                      {formatCurrency(unitPrice)} × {sel.qty}
-                    </p>
-                  </div>
-                );
-              })}
+            {event?.collect_attendee_info === 'per_ticket'
+              ? Object.entries(addonSelectionsByAttendee).flatMap(([idxStr, selections]) =>
+                  Object.entries(selections)
+                    .filter(([, sel]) => sel.qty > 0)
+                    .map(([productId, sel]) => {
+                      const addon = eventAddons.find((a) => a.product_id === productId);
+                      if (!addon) return null;
+                      const variant = addon.variants.find((v) => v.id === sel.variantId);
+                      const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                      const attendeeNum = parseInt(idxStr, 10) + 1;
+                      return (
+                        <div key={`${idxStr}-${productId}`} className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                              Attendee {attendeeNum}: {addon.product_title}
+                              {variant?.name && (
+                                <span className="text-xs text-muted-foreground ml-1">– {variant.name}</span>
+                              )}
+                            </p>
+                          </div>
+                          <p className="text-sm" style={{ color: '#0F1F17' }}>
+                            {formatCurrency(unitPrice)} × {sel.qty}
+                          </p>
+                        </div>
+                      );
+                    })
+                ).filter(Boolean)
+              : Object.entries(addonSelections)
+                  .filter(([, sel]) => sel.qty > 0)
+                  .map(([productId, sel]) => {
+                    const addon = eventAddons.find((a) => a.product_id === productId);
+                    if (!addon) return null;
+                    const variant = addon.variants.find((v) => v.id === sel.variantId);
+                    const unitPrice = variant?.price ?? addon.base_price ?? 0;
+                    return (
+                      <div key={productId} className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                            {addon.product_title}
+                            {variant?.name && (
+                              <span className="text-xs text-muted-foreground ml-1">– {variant.name}</span>
+                            )}
+                          </p>
+                        </div>
+                        <p className="text-sm" style={{ color: '#0F1F17' }}>
+                          {formatCurrency(unitPrice)} × {sel.qty}
+                        </p>
+                      </div>
+                    );
+                  })}
             <Separator />
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>

@@ -220,6 +220,10 @@ export default function SuccessfulBookingPage() {
                   ? `${order.buyer_first_name || ''} ${order.buyer_last_name || ''}`.trim().toUpperCase()
                   : 'GUEST';
 
+              const addonsForTicket = (order.order_addon_items || []).filter(
+                (a) => a.ticket_id === ticket.id
+              );
+
               return (
                 <div key={ticket.id || index} className="ticket-page-break mb-12 no-print:last:mb-0">
                   {tickets.length > 1 && (
@@ -244,9 +248,34 @@ export default function SuccessfulBookingPage() {
                       currency={order.currency || 'HKD'}
                     />
                   </TicketCardPreview>
+                  {addonsForTicket.length > 0 && (
+                    <div className="mt-3 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      {addonsForTicket.map((a) => (
+                        <div key={a.id}>
+                          {a.label}
+                          {a.variant_label && ` – ${a.variant_label}`} × {a.quantity}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
+            {(order.order_addon_items || []).filter((a) => !a.ticket_id).length > 0 && (
+              <div className="mt-4 p-4 rounded-xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+                <p className="text-sm font-medium mb-2" style={{ color: BRAND.dark }}>
+                  Add-ons
+                </p>
+                {(order.order_addon_items || [])
+                  .filter((a) => !a.ticket_id)
+                  .map((a) => (
+                    <div key={a.id} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                      {a.label}
+                      {a.variant_label && ` – ${a.variant_label}`} × {a.quantity}
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
 
           <div className="mt-6 no-print">

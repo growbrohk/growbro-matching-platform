@@ -19,6 +19,8 @@ export interface BookingDraftAddonLine {
   variantLabel?: string;
   unitPrice: number;
   qty: number;
+  /** When set, add-on is for this attendee (per-ticket mode). */
+  attendeeIndex?: number;
 }
 
 export interface AttendeeInfo {

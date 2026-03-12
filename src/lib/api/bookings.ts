@@ -73,6 +73,17 @@ export interface OrderWithEvent {
       valid_for_days?: 'day_1' | 'day_2' | 'both' | null;
     };
   }>;
+  order_addon_items?: Array<{
+    id: string;
+    product_id: string;
+    product_variant_id: string | null;
+    quantity: number;
+    unit_price: number;
+    subtotal: number;
+    label: string | null;
+    variant_label: string | null;
+    ticket_id: string | null;
+  }>;
   tickets: Array<{
     id: string;
     ticket_type_id: string;
@@ -114,15 +125,22 @@ export async function createBooking(
     }));
 
   // Prepare addon lines - product_id, product_variant_id?, quantity (NO prices - server computes)
+  // Per-ticket mode: include ticket_index so add-ons attach to specific tickets
   const addonLines = (draft.addonLines || [])
     .filter(line => line.qty > 0)
-    .map(line => ({
-      product_id: line.productId,
-      product_variant_id: line.productVariantId || null,
-      quantity: line.qty,
-      label: line.label || null,
-      variant_label: line.variantLabel || null,
-    }));
+    .map(line => {
+      const base = {
+        product_id: line.productId,
+        product_variant_id: line.productVariantId || null,
+        quantity: line.qty,
+        label: line.label || null,
+        variant_label: line.variantLabel || null,
+      };
+      if (line.attendeeIndex !== undefined) {
+        return { ...base, ticket_index: line.attendeeIndex };
+      }
+      return base;
+    });
 
   // Prepare attendees array if provided (per-ticket mode)
   let attendeesArray: any[] | null = null;
@@ -238,6 +256,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
   const orderData = rpcData.order;
   const eventData = rpcData.event;
   const orderItems = rpcData.order_items || [];
+  const orderAddonItems = rpcData.order_addon_items || [];
   const tickets = rpcData.tickets || [];
 
   // Ensure tickets array is always present (this is the source of truth for quantity)
@@ -294,6 +313,17 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
         name: item.ticket_type.name,
         valid_for_days: item.ticket_type?.valid_for_days ?? null,
       },
+    })),
+    order_addon_items: orderAddonItems.map((item: any) => ({
+      id: item.id,
+      product_id: item.product_id,
+      product_variant_id: item.product_variant_id,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price),
+      subtotal: Number(item.subtotal),
+      label: item.label,
+      variant_label: item.variant_label,
+      ticket_id: item.ticket_id,
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,
