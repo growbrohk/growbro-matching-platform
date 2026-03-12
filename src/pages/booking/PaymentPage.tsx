@@ -585,7 +585,7 @@ export default function PaymentPage() {
                               <RadioGroupItem value="stripe" id="stripe" onClick={(e) => e.stopPropagation()} />
                               <label htmlFor="stripe" className="flex items-center gap-3 cursor-pointer flex-1">
                                 <CreditCard className="h-5 w-5" style={{ color: BRAND.green }} />
-                                <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Stripe Card (Online)</span>
+                                <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
                               </label>
                             </div>
                             {selectedPaymentMethod === 'stripe' ? (
@@ -597,7 +597,7 @@ export default function PaymentPage() {
                         </CollapsibleTrigger>
                         <CollapsibleContent className="pt-2 px-4 pb-4">
                           <p className="text-sm text-muted-foreground">
-                            You will be redirected to Stripe to complete payment securely.
+                            You will be redirected to complete payment securely.
                           </p>
                         </CollapsibleContent>
                       </Collapsible>

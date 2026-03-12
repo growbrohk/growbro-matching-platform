@@ -1075,7 +1075,7 @@ export default function EventForm() {
                   <CreditCard className="h-5 w-5" style={{ color: '#0E7A3A' }} />
                   <div>
                     <Label htmlFor="enable-stripe" className="text-xs md:text-sm font-medium cursor-pointer">
-                      Stripe Card (Online)
+                      Credit Card
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Secure online card payments
