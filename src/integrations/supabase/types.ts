@@ -685,6 +685,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          addon_inventory_deducted: boolean
           buyer_email: string | null
           buyer_first_name: string | null
           buyer_last_name: string | null
@@ -716,6 +717,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          addon_inventory_deducted?: boolean
           buyer_email?: string | null
           buyer_first_name?: string | null
           buyer_last_name?: string | null
@@ -747,6 +749,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          addon_inventory_deducted?: boolean
           buyer_email?: string | null
           buyer_first_name?: string | null
           buyer_last_name?: string | null
