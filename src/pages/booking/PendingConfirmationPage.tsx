@@ -242,6 +242,27 @@ export default function PendingConfirmationPage() {
                 </div>
               </div>
 
+              {/* Add-ons */}
+              {(order.order_addon_items?.length ?? 0) > 0 && (
+                <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Add-ons</p>
+                  <div className="space-y-1">
+                    {(order.order_addon_items || []).map((a) => {
+                      const ticketIdx = a.ticket_id
+                        ? (order.tickets?.findIndex((t) => t.id === a.ticket_id) ?? -1) + 1
+                        : 0;
+                      return (
+                        <p key={a.id} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          {a.ticket_id && ticketIdx > 0 ? `Ticket ${ticketIdx}: ` : ''}
+                          {a.label}
+                          {a.variant_label && ` – ${a.variant_label}`} × {a.quantity}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Payment Method */}
               <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                 <p className="text-sm font-medium text-muted-foreground mb-1">Payment Method</p>
