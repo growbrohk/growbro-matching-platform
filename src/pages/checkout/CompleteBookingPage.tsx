@@ -492,9 +492,9 @@ export default function CompleteBookingPage() {
                           <SelectTrigger>
                             <SelectValue placeholder="Choose..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
                             {addon.variants.map((v) => (
-                              <SelectItem key={v.id} value={v.id}>
+                              <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
                                 {v.name} – HK$ {v.price.toFixed(0)}
                               </SelectItem>
                             ))}
@@ -761,9 +761,9 @@ export default function CompleteBookingPage() {
                                             <SelectTrigger className="h-9">
                                               <SelectValue placeholder="Choose..." />
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
                                               {addon.variants.map((v) => (
-                                                <SelectItem key={v.id} value={v.id}>
+                                                <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
                                                   {v.name} – HK$ {v.price.toFixed(0)}
                                                 </SelectItem>
                                               ))}
@@ -957,9 +957,9 @@ export default function CompleteBookingPage() {
                                       <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Choose..." />
                                       </SelectTrigger>
-                                      <SelectContent>
+                                      <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
                                         {addon.variants.map((v) => (
-                                          <SelectItem key={v.id} value={v.id}>
+                                          <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
                                             {v.name} – HK$ {v.price.toFixed(0)}
                                           </SelectItem>
                                         ))}

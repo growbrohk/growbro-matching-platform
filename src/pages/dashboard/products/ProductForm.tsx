@@ -21,8 +21,9 @@ import {
   type ProductCategory,
 } from '@/lib/api/categories-and-tags';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
+import { PRODUCT_TYPE_LABELS, type ProductType } from '@/lib/types';
 
-type OrgProductType = 'physical';
+type OrgProductType = ProductType;
 
 type OrgProduct = {
   id: string;
@@ -222,7 +223,10 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
 
-  const [type] = useState<OrgProductType>('physical');
+  // Product type: when embedded, use props; otherwise user selects (physical / addon)
+  const [productType, setProductType] = useState<OrgProductType>(
+    props?.productType ?? (searchParams.get('type') === 'addon' ? 'addon' : 'physical')
+  );
   const [productKind, setProductKind] = useState<ProductKind | null>(initialKind);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -424,6 +428,11 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
+        
+        // Load product type (physical | addon)
+        if (!embedded) {
+          setProductType((p.type === 'addon' ? 'addon' : 'physical') as OrgProductType);
+        }
         
         // Load category_id
         setCategoryId(p.category_id || '');
@@ -903,7 +912,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
           .from('products')
           .insert({
             org_id: currentOrg.id,
-            type: props?.productType ?? 'physical',
+            type: embedded ? (props?.productType ?? 'physical') : productType,
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -919,7 +928,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         const { error: updateError } = await (supabase as any)
           .from('products')
           .update({
-            type: props?.productType ?? 'physical',
+            type: embedded ? (props?.productType ?? 'physical') : productType,
             title: title.trim(),
             description: description.trim() || null,
             base_price,
@@ -1387,6 +1396,27 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
               <Label htmlFor="title">Title</Label>
               <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" className="h-10" />
                 </div>
+
+                {/* Product Type (physical / add-on) - only on standalone form */}
+                {!embedded && (
+                  <div className="space-y-2">
+                    <Label htmlFor="productType">Product Type</Label>
+                    <Select value={productType} onValueChange={(v) => setProductType(v as OrgProductType)}>
+                      <SelectTrigger id="productType" className="h-10 max-w-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="physical">{PRODUCT_TYPE_LABELS.physical}</SelectItem>
+                        <SelectItem value="addon">{PRODUCT_TYPE_LABELS.addon}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-sm text-muted-foreground">
+                      {productType === 'addon'
+                        ? 'Add-ons are only available as event add-ons and are hidden from the main catalog.'
+                        : 'Physical products appear in your catalog and can be sold standalone.'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Product Photo */}
                 <div className="space-y-2">

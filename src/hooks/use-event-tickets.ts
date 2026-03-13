@@ -74,8 +74,8 @@ export function useEventTickets(eventId: string | undefined) {
       const orderLevelAddonsShown = new Set<string>();
       const formatAddon = (a: { label: string | null; variant_label: string | null; quantity: number }) => {
         const label = a.label || 'Add-on';
-        const variantPart = a.variant_label ? ` – ${a.variant_label}` : '';
-        return `${label}${variantPart} × ${a.quantity}`;
+        const variantPart = a.variant_label ? `${a.variant_label} – ` : '';
+        return `${variantPart}${label} × ${a.quantity}`;
       };
 
       return ticketRows.map((ticket): EventTicketRow => {
