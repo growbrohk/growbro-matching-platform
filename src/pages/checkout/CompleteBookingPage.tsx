@@ -492,9 +492,12 @@ export default function CompleteBookingPage() {
                           <SelectTrigger>
                             <SelectValue placeholder="Choose..." />
                           </SelectTrigger>
-                          <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
+                          <SelectContent
+                            className="max-h-60 max-w-[90vw] !overflow-auto"
+                            viewportClassName="min-w-[min(20rem,90vw)] w-max"
+                          >
                             {addon.variants.map((v) => (
-                              <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
+                              <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
                                 {v.name} – HK$ {v.price.toFixed(0)}
                               </SelectItem>
                             ))}
@@ -761,9 +764,12 @@ export default function CompleteBookingPage() {
                                             <SelectTrigger className="h-9">
                                               <SelectValue placeholder="Choose..." />
                                             </SelectTrigger>
-                                            <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
+                                            <SelectContent
+                                              className="max-h-60 max-w-[90vw] !overflow-auto"
+                                              viewportClassName="min-w-[min(20rem,90vw)] w-max"
+                                            >
                                               {addon.variants.map((v) => (
-                                                <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
+                                                <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
                                                   {v.name} – HK$ {v.price.toFixed(0)}
                                                 </SelectItem>
                                               ))}
@@ -957,9 +963,12 @@ export default function CompleteBookingPage() {
                                       <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Choose..." />
                                       </SelectTrigger>
-                                      <SelectContent className="min-w-[min(20rem,90vw)] max-h-60 overflow-y-auto">
+                                      <SelectContent
+                                        className="max-h-60 max-w-[90vw] !overflow-auto"
+                                        viewportClassName="min-w-[min(20rem,90vw)] w-max"
+                                      >
                                         {addon.variants.map((v) => (
-                                          <SelectItem key={v.id} value={v.id} className="whitespace-normal break-words py-2">
+                                          <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
                                             {v.name} – HK$ {v.price.toFixed(0)}
                                           </SelectItem>
                                         ))}
