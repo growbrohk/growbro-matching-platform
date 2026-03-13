@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Trash2, Package } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   getEventAddons,
@@ -40,6 +41,7 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
       product_id: string;
       is_required: boolean;
       sort_order: number;
+      fixed_quantity: number | null;
       product: {
         id: string;
         title: string;
@@ -90,9 +92,13 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
     if (showAddDialog) loadCatalog();
   }, [showAddDialog]);
 
-  const handleAddFromCatalog = async (productId: string, isRequired: boolean) => {
+  const handleAddFromCatalog = async (
+    productId: string,
+    isRequired: boolean,
+    fixedQuantity?: number | null
+  ) => {
     try {
-      await addEventAddon(eventId, productId, isRequired, addons.length);
+      await addEventAddon(eventId, productId, isRequired, addons.length, fixedQuantity);
       await loadAddons();
       setShowAddDialog(false);
       toast({ title: 'Add-on added' });
@@ -114,6 +120,18 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
   const handleToggleRequired = async (addonId: string, isRequired: boolean) => {
     try {
       await updateEventAddon(addonId, { is_required: isRequired });
+      await loadAddons();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateFixedQuantity = async (
+    addonId: string,
+    fixedQuantity: number | null
+  ) => {
+    try {
+      await updateEventAddon(addonId, { fixed_quantity: fixedQuantity });
       await loadAddons();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -162,43 +180,83 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
               {addons.map((addon) => (
                 <div
                   key={addon.id}
-                  className="flex items-center justify-between p-4 rounded-lg border"
+                  className="flex flex-col gap-3 p-4 rounded-lg border"
                   style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium" style={{ color: '#0F1F17' }}>
-                        {addon.product.title}
-                      </span>
-                      {addon.is_required && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                          Required
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium" style={{ color: '#0F1F17' }}>
+                          {addon.product.title}
                         </span>
-                      )}
+                        {addon.is_required && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                            Required
+                          </span>
+                        )}
+                        {addon.fixed_quantity != null && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Fixed: {addon.fixed_quantity}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {addon.product.variants.length > 1
+                          ? `${addon.product.variants.length} variants`
+                          : `HKD ${addon.product.base_price ?? 0}`}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {addon.product.variants.length > 1
-                        ? `${addon.product.variants.length} variants`
-                        : `HKD ${addon.product.base_price ?? 0}`}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={addon.is_required}
+                          onCheckedChange={(c) => handleToggleRequired(addon.id, c === true)}
+                        />
+                        Required
+                      </label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemove(addon.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox
-                        checked={addon.is_required}
-                        onCheckedChange={(c) => handleToggleRequired(addon.id, c === true)}
+                        checked={addon.fixed_quantity != null}
+                        onCheckedChange={(c) => {
+                          if (c === true) {
+                            handleUpdateFixedQuantity(addon.id, 1);
+                          } else {
+                            handleUpdateFixedQuantity(addon.id, null);
+                          }
+                        }}
                       />
-                      Required
+                      <span className="text-sm">Fixed quantity</span>
                     </label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemove(addon.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {addon.fixed_quantity != null && (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={addon.fixed_quantity}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!Number.isNaN(v) && v >= 1 && v <= 99) {
+                              handleUpdateFixedQuantity(addon.id, v);
+                            }
+                          }}
+                          className="w-16 h-8 text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground">per ticket</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -255,16 +313,20 @@ function AddFromCatalogDialog({
     base_price: number | null;
     variants: Array<{ id: string; name: string; price: number | null }>;
   }>;
-  onSelect: (productId: string, isRequired: boolean) => void;
+  onSelect: (productId: string, isRequired: boolean, fixedQuantity?: number | null) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string>('');
   const [isRequired, setIsRequired] = useState(false);
+  const [useFixedQuantity, setUseFixedQuantity] = useState(false);
+  const [fixedQuantity, setFixedQuantity] = useState(1);
 
   const handleAdd = () => {
     if (!selectedId) return;
-    onSelect(selectedId, isRequired);
+    onSelect(selectedId, isRequired, useFixedQuantity ? fixedQuantity : null);
     setSelectedId('');
     setIsRequired(false);
+    setUseFixedQuantity(false);
+    setFixedQuantity(1);
   };
 
   return (
@@ -293,6 +355,31 @@ function AddFromCatalogDialog({
             <Checkbox checked={isRequired} onCheckedChange={(c) => setIsRequired(c === true)} />
             <span className="text-sm">Required (guest must select before checkout)</span>
           </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={useFixedQuantity}
+                onCheckedChange={(c) => setUseFixedQuantity(c === true)}
+              />
+              <span className="text-sm">Fixed quantity (guest cannot change)</span>
+            </label>
+            {useFixedQuantity && (
+              <div className="flex items-center gap-2 pl-6">
+                <Input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={fixedQuantity}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(v) && v >= 1 && v <= 99) setFixedQuantity(v);
+                  }}
+                  className="w-16 h-8 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">per ticket</span>
+              </div>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -323,10 +410,18 @@ function QuickCreateAddonDialog({
   const { toast } = useToast();
   const [isRequired, setIsRequired] = useState(false);
   const [alsoShowInCatalog, setAlsoShowInCatalog] = useState(false);
+  const [useFixedQuantity, setUseFixedQuantity] = useState(false);
+  const [fixedQuantity, setFixedQuantity] = useState(1);
 
   const handleSuccess = async (productId: string) => {
     try {
-      await addEventAddon(eventId, productId, isRequired, addonsLength);
+      await addEventAddon(
+        eventId,
+        productId,
+        isRequired,
+        addonsLength,
+        useFixedQuantity ? fixedQuantity : null
+      );
       await onCreated();
       toast({ title: 'Add-on created and added' });
     } catch (err: any) {
@@ -345,6 +440,31 @@ function QuickCreateAddonDialog({
             <Checkbox checked={isRequired} onCheckedChange={(c) => setIsRequired(c === true)} />
             <span className="text-sm">Required (guest must select before checkout)</span>
           </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={useFixedQuantity}
+                onCheckedChange={(c) => setUseFixedQuantity(c === true)}
+              />
+              <span className="text-sm">Fixed quantity (guest cannot change)</span>
+            </label>
+            {useFixedQuantity && (
+              <div className="flex items-center gap-2 pl-6">
+                <Input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={fixedQuantity}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!Number.isNaN(v) && v >= 1 && v <= 99) setFixedQuantity(v);
+                  }}
+                  className="w-16 h-8 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">per ticket</span>
+              </div>
+            )}
+          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox checked={alsoShowInCatalog} onCheckedChange={(c) => setAlsoShowInCatalog(c === true)} />
             <span className="text-sm">Also show in product catalog</span>

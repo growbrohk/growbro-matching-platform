@@ -163,6 +163,47 @@ export default function CompleteBookingPage() {
     fetchAddons();
   }, [navigate]);
 
+  // Initialize required addons with fixed_quantity when they have no variants
+  useEffect(() => {
+    if (eventAddons.length === 0 || !event) return;
+    const requiredFixed = eventAddons.filter(
+      (a) => a.is_required && (a.fixed_quantity ?? null) != null && a.variants.length <= 1
+    );
+    if (requiredFixed.length === 0) return;
+
+    if (event.collect_attendee_info === 'per_ticket' && attendees.length > 0) {
+      setAddonSelectionsByAttendee((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        attendees.forEach((_, idx) => {
+          requiredFixed.forEach((addon) => {
+            const current = next[idx]?.[addon.product_id];
+            const fixedQty = addon.fixed_quantity ?? 1;
+            if (!current || current.qty === 0) {
+              next[idx] = { ...(next[idx] ?? {}), [addon.product_id]: { qty: fixedQty } };
+              changed = true;
+            }
+          });
+        });
+        return changed ? next : prev;
+      });
+    } else if (event.collect_attendee_info !== 'per_ticket') {
+      setAddonSelections((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        requiredFixed.forEach((addon) => {
+          const current = next[addon.product_id];
+          const fixedQty = addon.fixed_quantity ?? 1;
+          if (!current || current.qty === 0) {
+            next[addon.product_id] = { qty: fixedQty };
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [eventAddons, event?.id, event?.collect_attendee_info, attendees.length]);
+
   const isValidEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -485,7 +526,11 @@ export default function CompleteBookingPage() {
                           onValueChange={(v) =>
                             setAddonSelections((prev) => ({
                               ...prev,
-                              [addon.product_id]: { ...prev[addon.product_id], variantId: v, qty: 1 },
+                              [addon.product_id]: {
+                                ...prev[addon.product_id],
+                                variantId: v,
+                                qty: addon.fixed_quantity ?? 1,
+                              },
                             }))
                           }
                         >
@@ -506,21 +551,49 @@ export default function CompleteBookingPage() {
                         {sel.variantId && (
                           <div className="flex items-center gap-2">
                             <Label className="text-sm">Quantity</Label>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={sel.qty}
-                              onChange={(e) => {
-                                const q = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                setAddonSelections((prev) => ({
-                                  ...prev,
-                                  [addon.product_id]: { ...prev[addon.product_id], qty: q },
-                                }));
-                              }}
-                              className="w-20"
-                            />
+                            {addon.fixed_quantity != null ? (
+                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                            ) : (
+                              <Input
+                                type="number"
+                                min={1}
+                                value={sel.qty}
+                                onChange={(e) => {
+                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  setAddonSelections((prev) => ({
+                                    ...prev,
+                                    [addon.product_id]: { ...prev[addon.product_id], qty: q },
+                                  }));
+                                }}
+                                className="w-20"
+                              />
+                            )}
                           </div>
                         )}
+                      </div>
+                    ) : addon.fixed_quantity != null ? (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm">Quantity</Label>
+                        <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                        {!addon.is_required && (
+                          <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
+                            <Checkbox
+                              checked={sel.qty > 0}
+                              onCheckedChange={(c) =>
+                                setAddonSelections((prev) => ({
+                                  ...prev,
+                                  [addon.product_id]: {
+                                    qty: c === true ? addon.fixed_quantity! : 0,
+                                  },
+                                }))
+                              }
+                            />
+                            Include
+                          </label>
+                        )}
+                        <span className="text-sm text-muted-foreground">
+                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -695,7 +768,11 @@ export default function CompleteBookingPage() {
                                               ...prev,
                                               [index]: {
                                                 ...(prev[index] ?? {}),
-                                                [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
+                                                [addon.product_id]: {
+                                                  ...(prev[index]?.[addon.product_id] ?? {}),
+                                                  variantId: v,
+                                                  qty: addon.fixed_quantity ?? 1,
+                                                },
                                               },
                                             }))
                                           }
@@ -717,24 +794,55 @@ export default function CompleteBookingPage() {
                                         {sel.variantId && (
                                           <div className="flex items-center gap-2">
                                             <Label className="text-xs">Qty</Label>
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              value={sel.qty}
-                                              onChange={(e) => {
-                                                const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            {addon.fixed_quantity != null ? (
+                                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                            ) : (
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                value={sel.qty}
+                                                onChange={(e) => {
+                                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                  setAddonSelectionsByAttendee((prev) => ({
+                                                    ...prev,
+                                                    [index]: {
+                                                      ...(prev[index] ?? {}),
+                                                      [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                    },
+                                                  }));
+                                                }}
+                                                className="w-16 h-9"
+                                              />
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : addon.fixed_quantity != null ? (
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs">Qty</Label>
+                                        <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                        {!addon.is_required && (
+                                          <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
+                                            <Checkbox
+                                              checked={sel.qty > 0}
+                                              onCheckedChange={(c) =>
                                                 setAddonSelectionsByAttendee((prev) => ({
                                                   ...prev,
                                                   [index]: {
                                                     ...(prev[index] ?? {}),
-                                                    [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                    [addon.product_id]: {
+                                                      qty: c === true ? addon.fixed_quantity! : 0,
+                                                    },
                                                   },
-                                                }));
-                                              }}
-                                              className="w-16 h-9"
+                                                }))
+                                              }
                                             />
-                                          </div>
+                                            Include
+                                          </label>
                                         )}
+                                        <span className="text-xs text-muted-foreground">
+                                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                                        </span>
                                       </div>
                                     ) : (
                                       <div className="flex items-center gap-2">
@@ -955,7 +1063,11 @@ export default function CompleteBookingPage() {
                                           ...prev,
                                           [index]: {
                                             ...(prev[index] ?? {}),
-                                            [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
+                                            [addon.product_id]: {
+                                              ...(prev[index]?.[addon.product_id] ?? {}),
+                                              variantId: v,
+                                              qty: addon.fixed_quantity ?? 1,
+                                            },
                                           },
                                         }))
                                       }
@@ -977,24 +1089,55 @@ export default function CompleteBookingPage() {
                                     {sel.variantId && (
                                       <div className="flex items-center gap-2">
                                         <Label className="text-xs">Qty</Label>
-                                        <Input
-                                          type="number"
-                                          min={1}
-                                          value={sel.qty}
-                                          onChange={(e) => {
-                                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                        {addon.fixed_quantity != null ? (
+                                          <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                        ) : (
+                                          <Input
+                                            type="number"
+                                            min={1}
+                                            value={sel.qty}
+                                            onChange={(e) => {
+                                              const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                              setAddonSelectionsByAttendee((prev) => ({
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                },
+                                              }));
+                                            }}
+                                            className="w-16 h-9"
+                                          />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : addon.fixed_quantity != null ? (
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-xs">Qty</Label>
+                                    <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                    {!addon.is_required && (
+                                      <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
+                                        <Checkbox
+                                          checked={sel.qty > 0}
+                                          onCheckedChange={(c) =>
                                             setAddonSelectionsByAttendee((prev) => ({
                                               ...prev,
                                               [index]: {
                                                 ...(prev[index] ?? {}),
-                                                [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                [addon.product_id]: {
+                                                  qty: c === true ? addon.fixed_quantity! : 0,
+                                                },
                                               },
-                                            }));
-                                          }}
-                                          className="w-16 h-9"
+                                            }))
+                                          }
                                         />
-                                      </div>
+                                        Include
+                                      </label>
                                     )}
+                                    <span className="text-xs text-muted-foreground">
+                                      HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                                    </span>
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-2">

@@ -19,6 +19,7 @@ export interface EventAddonForCheckout {
   base_price: number;
   is_required: boolean;
   sort_order: number;
+  fixed_quantity?: number | null;
   variants: EventAddonVariant[];
 }
 
@@ -46,13 +47,15 @@ export async function addEventAddon(
   eventId: string,
   productId: string,
   isRequired: boolean = false,
-  sortOrder: number = 0
+  sortOrder: number = 0,
+  fixedQuantity?: number | null
 ): Promise<void> {
   const { error } = await supabase.from('event_addon_products').insert({
     event_id: eventId,
     product_id: productId,
     is_required: isRequired,
     sort_order: sortOrder,
+    fixed_quantity: fixedQuantity ?? null,
   });
 
   if (error) {
@@ -64,11 +67,11 @@ export async function addEventAddon(
 }
 
 /**
- * Update event addon (is_required, sort_order)
+ * Update event addon (is_required, sort_order, fixed_quantity)
  */
 export async function updateEventAddon(
   eventAddonId: string,
-  updates: { is_required?: boolean; sort_order?: number }
+  updates: { is_required?: boolean; sort_order?: number; fixed_quantity?: number | null }
 ): Promise<void> {
   const { error } = await supabase
     .from('event_addon_products')
@@ -179,6 +182,7 @@ export async function getEventAddons(eventId: string): Promise<
     product_id: string;
     is_required: boolean;
     sort_order: number;
+    fixed_quantity: number | null;
     product: {
       id: string;
       title: string;
@@ -196,6 +200,7 @@ export async function getEventAddons(eventId: string): Promise<
       product_id,
       is_required,
       sort_order,
+      fixed_quantity,
       products (
         id,
         title,
@@ -222,6 +227,7 @@ export async function getEventAddons(eventId: string): Promise<
       product_id: row.product_id,
       is_required: row.is_required,
       sort_order: row.sort_order,
+      fixed_quantity: row.fixed_quantity ?? null,
       product: {
         id: p?.id,
         title: p?.title,
