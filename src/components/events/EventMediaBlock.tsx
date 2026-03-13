@@ -1,5 +1,7 @@
 interface EventMediaBlockProps {
   previewImageUrl?: string | null;
+  /** Cache-bust key (e.g. event.updated_at) so browser fetches fresh image after upload */
+  cacheKey?: string | null;
   mode?: 'public' | 'preview';
 }
 
@@ -12,8 +14,14 @@ interface EventMediaBlockProps {
  */
 export default function EventMediaBlock({
   previewImageUrl,
+  cacheKey,
   mode = 'public',
 }: EventMediaBlockProps) {
+  // Build cache-busted URL so browser fetches fresh image after upload (same path = same URL = cached)
+  const imgSrc = previewImageUrl && cacheKey
+    ? `${previewImageUrl}${previewImageUrl.includes('?') ? '&' : '?'}v=${cacheKey}`
+    : previewImageUrl;
+
   // If preview image exists, show thumbnail
   if (previewImageUrl) {
     return (
@@ -23,7 +31,7 @@ export default function EventMediaBlock({
       >
         <div className="aspect-[4/5] w-full overflow-hidden rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
           <img
-            src={previewImageUrl}
+            src={imgSrc}
             alt="Event preview"
             className="w-full h-full object-cover object-center"
             onError={(e) => {

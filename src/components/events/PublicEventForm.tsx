@@ -490,6 +490,7 @@ export default function PublicEventForm({
               <div className="hidden md:block">
                 <EventMediaBlock 
                   previewImageUrl={event.instagram_preview_image_url} 
+                  cacheKey={event.updated_at}
                   mode={mode}
                 />
               </div>
@@ -499,6 +500,7 @@ export default function PublicEventForm({
             <div className="md:hidden">
               <EventMediaBlock 
                 previewImageUrl={event.instagram_preview_image_url} 
+                cacheKey={event.updated_at}
                 mode={mode}
               />
             </div>
