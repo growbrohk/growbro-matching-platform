@@ -70,6 +70,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   
   // Filters
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
   const [localSelectedSubtab, setLocalSelectedSubtab] = useState<'catalog' | 'pos' | 'orders'>('catalog');
   const [filterOpen, setFilterOpen] = useState(false);
   
@@ -256,10 +257,15 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   }, [currentOrg, toast]);
 
   // Compute available variant option values from products (before variant filters)
-  // This uses products filtered by physical/category/search only
+  // This uses products filtered by physical+addon/category/search/product-type (catalog includes add-on products)
   const productsBeforeVariantFilters = useMemo(() => {
-    let filtered = products.filter(p => p.type === 'physical');
-    
+    let filtered = products.filter(p => p.type === 'physical' || p.type === 'addon');
+
+    // Filter by product type (physical, addon)
+    if (selectedProductTypes.length > 0) {
+      filtered = filtered.filter(p => selectedProductTypes.includes(p.type));
+    }
+
     // Filter by category (multi-select)
     // Empty array or includes 'all' means no category filtering
     if (selectedCategoryIds.length > 0 && !selectedCategoryIds.includes('all')) {
@@ -281,7 +287,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     }
     
     return filtered;
-  }, [products, selectedCategoryIds, searchQuery]);
+  }, [products, selectedCategoryIds, selectedProductTypes, searchQuery]);
 
   // Get available rank1 and rank2 option values
   const rank1Options = useMemo(() => {
@@ -310,7 +316,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     return Array.from(values).sort();
   }, [productsBeforeVariantFilters, rank2]);
 
-  // Filter products by selected category, search query, and variant options (only physical products)
+  // Filter products by selected category, search query, and variant options (physical + addon)
   const filteredProducts = useMemo(() => {
     let filtered = productsBeforeVariantFilters;
     
@@ -371,12 +377,23 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   }, [isInBulkMode, filteredProducts, rank1]);
 
 
-  // Category counts (only physical products)
+  // Product type options with counts (for filter dropdown)
+  const productTypeOptions = useMemo(() => {
+    const relevantProducts = products.filter(p => p.type === 'physical' || p.type === 'addon');
+    const physicalCount = relevantProducts.filter(p => p.type === 'physical').length;
+    const addonCount = relevantProducts.filter(p => p.type === 'addon').length;
+    return [
+      { id: 'physical', name: 'Physical Product', count: physicalCount },
+      { id: 'addon', name: 'Add-on Only', count: addonCount },
+    ];
+  }, [products]);
+
+  // Category counts (physical + addon products)
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     
-    // Only count physical products
-    const relevantProducts = products.filter(p => p.type === 'physical');
+    // Count physical and addon products (catalog includes both)
+    const relevantProducts = products.filter(p => p.type === 'physical' || p.type === 'addon');
     
     counts.set('all', relevantProducts.length);
     
@@ -1167,6 +1184,9 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
         categoryOptions={categoryOptions}
         selectedCategoryIds={selectedCategoryIds}
         setSelectedCategoryIds={setSelectedCategoryIds}
+        productTypeOptions={productTypeOptions}
+        selectedProductTypes={selectedProductTypes}
+        setSelectedProductTypes={setSelectedProductTypes}
         rank1={rank1}
         rank1Options={rank1Options}
         selectedRank1Values={selectedRank1Values}

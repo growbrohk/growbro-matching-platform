@@ -236,6 +236,9 @@ export function ProductsContent({
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
                             {product.title}
+                            {product.type === 'addon' && (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">(add-on only)</span>
+                            )}
                           </h3>
                         </div>
                       </div>
@@ -249,6 +252,9 @@ export function ProductsContent({
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm sm:text-base font-semibold truncate" style={{ color: '#0F1F17' }}>
                             {product.title}
+                            {product.type === 'addon' && (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">(add-on only)</span>
+                            )}
                           </h3>
                         </div>
                       </button>

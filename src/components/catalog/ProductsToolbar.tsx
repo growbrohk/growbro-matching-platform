@@ -27,6 +27,9 @@ export interface ProductsToolbarProps {
   categoryOptions: Array<{ id: string; name: string; count: number }>;
   selectedCategoryIds: string[];
   setSelectedCategoryIds: (ids: string[]) => void;
+  productTypeOptions: Array<{ id: string; name: string; count: number }>;
+  selectedProductTypes: string[];
+  setSelectedProductTypes: (ids: string[]) => void;
   rank1: string;
   rank1Options: string[];
   selectedRank1Values: string[];
@@ -70,6 +73,9 @@ export function ProductsToolbar({
   categoryOptions,
   selectedCategoryIds,
   setSelectedCategoryIds,
+  productTypeOptions,
+  selectedProductTypes,
+  setSelectedProductTypes,
   rank1,
   rank1Options,
   selectedRank1Values,
@@ -160,6 +166,19 @@ export function ProductsToolbar({
                   isCategory={true}
                 />
 
+                {/* Row 2b: Product Type */}
+                <MultiSelectDropdown
+                  label="Product Type"
+                  options={productTypeOptions.map(opt => ({
+                    value: opt.id,
+                    label: opt.name,
+                    count: opt.count,
+                  }))}
+                  selected={selectedProductTypes}
+                  setSelected={setSelectedProductTypes}
+                  placeholder="All types"
+                />
+
                 {/* Row 3: Variant Filter (rank1) */}
                 {rank1 && rank1Options.length > 0 && (
                   <MultiSelectDropdown
@@ -200,6 +219,7 @@ export function ProductsToolbar({
                         setSelectedWarehouseId(mainWh.id);
                       }
                       setSelectedCategoryIds([]);
+                      setSelectedProductTypes([]);
                       setSelectedRank1Values([]);
                       setSelectedRank2Values([]);
                     }}
