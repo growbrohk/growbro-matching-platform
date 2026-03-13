@@ -9,6 +9,7 @@ export interface EventTicketRow {
   email: string | null;
   ticketType: string; // From ticket_types.name
   remark: string; // From order metadata or ticket metadata if available
+  addons: string; // Formatted add-on products (per-ticket + order-level on first ticket of order)
   scanned_at: string | null;
   order_id: string;
 }
@@ -56,10 +57,31 @@ export function useEventTickets(eventId: string | undefined) {
 
       if (error) throw error;
 
-      return (data || []).map((ticket): EventTicketRow => {
+      const ticketRows = data || [];
+
+      // Fetch order_addon_items for all orders in this result
+      const orderIds = [...new Set(ticketRows.map((t: { order_id: string }) => t.order_id))];
+      let addonItems: Array<{ order_id: string; ticket_id: string | null; label: string | null; variant_label: string | null; quantity: number }> = [];
+      if (orderIds.length > 0) {
+        const { data: addonData } = await supabase
+          .from('order_addon_items')
+          .select('order_id, ticket_id, label, variant_label, quantity')
+          .in('order_id', orderIds);
+        addonItems = addonData || [];
+      }
+
+      // Build addons string per ticket: per-ticket addons + order-level addons on first ticket of each order
+      const orderLevelAddonsShown = new Set<string>();
+      const formatAddon = (a: { label: string | null; variant_label: string | null; quantity: number }) => {
+        const label = a.label || 'Add-on';
+        const variantPart = a.variant_label ? ` – ${a.variant_label}` : '';
+        return `${label}${variantPart} × ${a.quantity}`;
+      };
+
+      return ticketRows.map((ticket): EventTicketRow => {
         const order = ticket.orders as any;
         const ticketType = ticket.ticket_types as any;
-        
+
         // Name: prefer ticket first_name/last_name, fallback to order buyer info
         const name = ticket.first_name && ticket.last_name
           ? `${ticket.first_name} ${ticket.last_name}`.trim()
@@ -79,6 +101,20 @@ export function useEventTickets(eventId: string | undefined) {
         // Remark: from ticket.remark column (prefer ticket remark, fallback to order metadata for backward compatibility)
         const remark = ticket.remark || order?.metadata?.remark || '';
 
+        // Add-ons: per-ticket (ticket_id = ticket.id) + order-level (ticket_id null) on first ticket of order
+        const perTicketAddons = addonItems.filter(
+          (a: { ticket_id: string | null }) => a.ticket_id === ticket.id
+        );
+        const orderLevelAddons =
+          !orderLevelAddonsShown.has(ticket.order_id)
+            ? addonItems.filter((a: { ticket_id: string | null; order_id: string }) => a.ticket_id == null && a.order_id === ticket.order_id)
+            : [];
+        if (orderLevelAddons.length > 0) {
+          orderLevelAddonsShown.add(ticket.order_id);
+        }
+        const allAddons = [...perTicketAddons, ...orderLevelAddons];
+        const addons = allAddons.length > 0 ? allAddons.map(formatAddon).join(', ') : '';
+
         return {
           id: ticket.id,
           status: ticket.status || 'valid',
@@ -87,6 +123,7 @@ export function useEventTickets(eventId: string | undefined) {
           email,
           ticketType: ticketTypeName,
           remark,
+          addons,
           scanned_at: ticket.scanned_at,
           order_id: ticket.order_id,
         };

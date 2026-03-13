@@ -22,10 +22,10 @@ import {
 const isCheckedIn = (status: string) => status === 'scanned';
 
 type SortKey = 'status' | 'name' | 'ticketType';
-type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'remark';
+type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'remark' | 'addons';
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark'];
-const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType'];
+const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
+const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'addons'];
 
 type Draft = { status?: 'valid' | 'scanned'; name?: string; remark?: string };
 
@@ -213,9 +213,10 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         const matchesEmail = ticket.email?.toLowerCase().includes(searchLower) || false;
         const matchesTicketType = ticket.ticketType?.toLowerCase().includes(searchLower) || false;
         const matchesRemark = ticket.remark?.toLowerCase().includes(searchLower) || false;
+        const matchesAddons = ticket.addons?.toLowerCase().includes(searchLower) || false;
         const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
         const matchesStatus = statusLabel.includes(searchLower);
-        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesStatus;
+        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesStatus;
       });
     }
 
@@ -437,7 +438,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     if (filteredTickets.length === 0) return;
 
     // Define column order and labels
-    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark'];
+    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
       name: 'Name',
@@ -445,6 +446,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       email: 'Email',
       ticketType: 'Ticket Type',
       remark: 'Remark',
+      addons: 'Add-ons',
     };
 
     // Filter to only visible columns in order
@@ -466,6 +468,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       return visibleOrderedColumns.map(col => {
         if (col === 'status') {
           return escapeCSV(isCheckedIn(ticket.status) ? 'Checked In' : 'Pending');
+        }
+        if (col === 'addons') {
+          return escapeCSV(ticket.addons || '');
         }
         return escapeCSV(ticket[col] || '');
       });
@@ -625,7 +630,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2">
-                    {(['status', 'name', 'phone', 'email', 'ticketType', 'remark'] as ColumnKey[]).map((column) => {
+                    {(['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'] as ColumnKey[]).map((column) => {
                       const columnLabels: Record<ColumnKey, string> = {
                         status: 'Status',
                         name: 'Name',
@@ -633,6 +638,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                         email: 'Email',
                         ticketType: 'Ticket Type',
                         remark: 'Remark',
+                        addons: 'Add-ons',
                       };
                       const isVisible = visibleColumns.includes(column);
                       const isLastVisible = visibleColumns.length === 1 && isVisible;
@@ -879,6 +885,13 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                       </TableHead>
                     );
                   }
+                  if (column === 'addons') {
+                    return (
+                      <TableHead key={column} className={`${baseClasses} min-w-[120px]`}>
+                        Add-ons
+                      </TableHead>
+                    );
+                  }
                   return null;
                 })}
               </TableRow>
@@ -1003,6 +1016,17 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                           title={ticket.remark ?? undefined}
                         >
                           {ticket.remark || '-'}
+                        </TableCell>
+                      );
+                    }
+                    if (column === 'addons') {
+                      return (
+                        <TableCell
+                          key={column}
+                          className={`max-w-[200px] truncate ${baseClasses}`}
+                          title={ticket.addons ?? undefined}
+                        >
+                          {ticket.addons || '-'}
                         </TableCell>
                       );
                     }
