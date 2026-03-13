@@ -663,6 +663,108 @@ export default function CompleteBookingPage() {
                               Fill in different info
                             </button>
                           )}
+                          {eventAddons.length > 0 && (
+                            <div className="space-y-3 pt-3 mt-3 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                              <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                                Add-ons for Attendee 1
+                              </p>
+                              {eventAddons.map((addon) => {
+                                const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
+                                const hasVariants = addon.variants.length > 1;
+                                return (
+                                  <div
+                                    key={addon.product_id}
+                                    className="p-3 rounded-xl border text-sm"
+                                    style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="font-medium">{addon.product_title}</span>
+                                      {addon.is_required && (
+                                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                                          Required
+                                        </span>
+                                      )}
+                                    </div>
+                                    {hasVariants ? (
+                                      <div className="space-y-2">
+                                        <Label className="text-xs">Select option</Label>
+                                        <Select
+                                          value={sel.variantId ?? ''}
+                                          onValueChange={(v) =>
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
+                                              },
+                                            }))
+                                          }
+                                        >
+                                          <SelectTrigger className="h-9">
+                                            <SelectValue placeholder="Choose..." />
+                                          </SelectTrigger>
+                                          <SelectContent
+                                            className="max-h-60 max-w-[90vw] !overflow-auto"
+                                            viewportClassName="min-w-[min(20rem,90vw)] w-max"
+                                          >
+                                            {addon.variants.map((v) => (
+                                              <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
+                                                {v.name} – HK$ {v.price.toFixed(0)}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        {sel.variantId && (
+                                          <div className="flex items-center gap-2">
+                                            <Label className="text-xs">Qty</Label>
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              value={sel.qty}
+                                              onChange={(e) => {
+                                                const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                setAddonSelectionsByAttendee((prev) => ({
+                                                  ...prev,
+                                                  [index]: {
+                                                    ...(prev[index] ?? {}),
+                                                    [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                  },
+                                                }));
+                                              }}
+                                              className="w-16 h-9"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-xs">Qty</Label>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={sel.qty}
+                                          onChange={(e) => {
+                                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]: { qty: q },
+                                              },
+                                            }));
+                                          }}
+                                          className="w-16 h-9"
+                                        />
+                                        <span className="text-xs text-muted-foreground">
+                                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </CardHeader>
                         <CollapsibleContent>
                           <CardContent className="space-y-4 pt-0">
@@ -724,108 +826,6 @@ export default function CompleteBookingPage() {
                                 disabled={usesContact}
                               />
                             </div>
-                            {eventAddons.length > 0 && (
-                              <div className="space-y-3 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                                <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                                  Add-ons for Attendee {index + 1}
-                                </p>
-                                {eventAddons.map((addon) => {
-                                  const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
-                                  const hasVariants = addon.variants.length > 1;
-                                  return (
-                                    <div
-                                      key={addon.product_id}
-                                      className="p-3 rounded-xl border text-sm"
-                                      style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
-                                    >
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="font-medium">{addon.product_title}</span>
-                                        {addon.is_required && (
-                                          <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                                            Required
-                                          </span>
-                                        )}
-                                      </div>
-                                      {hasVariants ? (
-                                        <div className="space-y-2">
-                                          <Label className="text-xs">Select option</Label>
-                                          <Select
-                                            value={sel.variantId ?? ''}
-                                            onValueChange={(v) =>
-                                              setAddonSelectionsByAttendee((prev) => ({
-                                                ...prev,
-                                                [index]: {
-                                                  ...(prev[index] ?? {}),
-                                                  [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), variantId: v, qty: 1 },
-                                                },
-                                              }))
-                                            }
-                                          >
-                                            <SelectTrigger className="h-9">
-                                              <SelectValue placeholder="Choose..." />
-                                            </SelectTrigger>
-                                            <SelectContent
-                                              className="max-h-60 max-w-[90vw] !overflow-auto"
-                                              viewportClassName="min-w-[min(20rem,90vw)] w-max"
-                                            >
-                                              {addon.variants.map((v) => (
-                                                <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
-                                                  {v.name} – HK$ {v.price.toFixed(0)}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                          {sel.variantId && (
-                                            <div className="flex items-center gap-2">
-                                              <Label className="text-xs">Qty</Label>
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                value={sel.qty}
-                                                onChange={(e) => {
-                                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                                  setAddonSelectionsByAttendee((prev) => ({
-                                                    ...prev,
-                                                    [index]: {
-                                                      ...(prev[index] ?? {}),
-                                                      [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
-                                                    },
-                                                  }));
-                                                }}
-                                                className="w-16 h-9"
-                                              />
-                                            </div>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center gap-2">
-                                          <Label className="text-xs">Qty</Label>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            value={sel.qty}
-                                            onChange={(e) => {
-                                              const q = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                              setAddonSelectionsByAttendee((prev) => ({
-                                                ...prev,
-                                                [index]: {
-                                                  ...(prev[index] ?? {}),
-                                                  [addon.product_id]: { qty: q },
-                                                },
-                                              }));
-                                            }}
-                                            className="w-16 h-9"
-                                          />
-                                          <span className="text-xs text-muted-foreground">
-                                            HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </CardContent>
                         </CollapsibleContent>
                       </Card>
