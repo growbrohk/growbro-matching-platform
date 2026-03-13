@@ -93,6 +93,7 @@ export default function EventForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
+  const [previewImageCacheKey, setPreviewImageCacheKey] = useState(0);
   const [uploadingPreview, setUploadingPreview] = useState(false);
   const [startAt, setStartAt] = useState<Date | null>(null);
   const [endAt, setEndAt] = useState<Date | null>(null);
@@ -385,6 +386,7 @@ export default function EventForm() {
 
       // Update state immediately
       setInstagramPreviewImageUrl(publicUrl);
+      setPreviewImageCacheKey(k => k + 1);
 
       // If eventId exists, persist immediately to database
       if (eventId) {
@@ -861,7 +863,7 @@ export default function EventForm() {
                 <div className="w-full max-w-[200px]">
                   <div className="aspect-[4/5] w-full overflow-hidden rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                     <img
-                      src={instagramPreviewImageUrl}
+                      src={`${instagramPreviewImageUrl}${instagramPreviewImageUrl.includes('?') ? '&' : '?'}v=${previewImageCacheKey}`}
                       alt="Instagram preview"
                       className="w-full h-full object-cover object-center"
                       onError={(e) => {
