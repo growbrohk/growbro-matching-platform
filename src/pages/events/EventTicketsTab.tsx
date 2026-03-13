@@ -1,4 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  createColumnHelper,
+  flexRender,
+  type ColumnSizingState,
+  type SortingState,
+  type VisibilityState,
+} from '@tanstack/react-table';
 import { useEventTickets } from '@/hooks/use-event-tickets';
 import { Loader2, Search, Filter, Settings, Pencil, ChevronUp, ChevronDown, Save, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -27,19 +37,31 @@ type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'remark'
 const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
 const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'addons'];
 
+const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
+  status: 90,
+  name: 130,
+  phone: 120,
+  email: 180,
+  ticketType: 120,
+  remark: 160,
+  addons: 140,
+};
+
 type Draft = { status?: 'valid' | 'scanned'; name?: string; remark?: string };
 
 type DefaultSortOption = {
   label: string;
   value: string;
-  sort: { key: SortKey; dir: 'asc' | 'desc' };
+  sort: { id: string; desc: boolean };
 };
 
 const DEFAULT_SORT_OPTIONS: DefaultSortOption[] = [
-  { label: 'Name (A–Z)', value: 'name-asc', sort: { key: 'name', dir: 'asc' } },
-  { label: 'Status (Pending first)', value: 'status-asc', sort: { key: 'status', dir: 'asc' } },
-  { label: 'Ticket Type (A–Z)', value: 'ticketType-asc', sort: { key: 'ticketType', dir: 'asc' } },
+  { label: 'Name (A–Z)', value: 'name-asc', sort: { id: 'name', desc: false } },
+  { label: 'Status (Pending first)', value: 'status-asc', sort: { id: 'status', desc: false } },
+  { label: 'Ticket Type (A–Z)', value: 'ticketType-asc', sort: { id: 'ticketType', desc: false } },
 ];
+
+const columnHelper = createColumnHelper<EventTicketRow>();
 
 export function EventTicketsTab({ eventId }: { eventId: string }) {
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
@@ -47,8 +69,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const [query, setQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [defaultSort, setDefaultSort] = useState<string>('name-asc');
   const [rememberPrefs, setRememberPrefs] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -63,6 +86,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     selectedTypes: `tickets:${eventId}:selectedTypes`,
     sort: `tickets:${eventId}:sort`,
     defaultSort: `tickets:${eventId}:defaultSort`,
+    columnSizing: `tickets:${eventId}:columnSizing`,
   }), [eventId]);
 
   // Load preferences from localStorage on mount
@@ -79,6 +103,19 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           const parsed = JSON.parse(storedColumns) as ColumnKey[];
           if (parsed.length > 0) {
             setVisibleColumns(parsed);
+          }
+        } catch (e) {
+          // Invalid JSON, use defaults
+        }
+      }
+
+      // Restore column sizing
+      const storedSizing = localStorage.getItem(storageKeys.columnSizing);
+      if (storedSizing) {
+        try {
+          const parsed = JSON.parse(storedSizing) as ColumnSizingState;
+          if (Object.keys(parsed).length > 0) {
+            setColumnSizing(parsed);
           }
         } catch (e) {
           // Invalid JSON, use defaults
@@ -111,7 +148,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       if (storedSort) {
         try {
           const parsed = JSON.parse(storedSort) as { key: SortKey; dir: 'asc' | 'desc' };
-          setSort(parsed);
+          setSorting([{ id: parsed.key, desc: parsed.dir === 'desc' }]);
           restoredSort = true;
         } catch (e) {
           // Invalid JSON
@@ -129,12 +166,12 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
     // Apply default sort only if we didn't restore a sort from localStorage
     if (!restoredSort) {
-      const currentDefaultSort = shouldRemember 
+      const currentDefaultSort = shouldRemember
         ? localStorage.getItem(storageKeys.defaultSort) || defaultSort
         : defaultSort;
       const option = DEFAULT_SORT_OPTIONS.find(opt => opt.value === currentDefaultSort);
       if (option) {
-        setSort(option.sort);
+        setSorting([option.sort]);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,8 +184,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       localStorage.setItem(storageKeys.visibleColumns, JSON.stringify(visibleColumns));
       localStorage.setItem(storageKeys.selectedStatuses, JSON.stringify(selectedStatuses));
       localStorage.setItem(storageKeys.selectedTypes, JSON.stringify(selectedTypes));
-      localStorage.setItem(storageKeys.sort, JSON.stringify(sort));
+      localStorage.setItem(storageKeys.sort, JSON.stringify(
+        sorting[0] ? { key: sorting[0].id as SortKey, dir: sorting[0].desc ? 'desc' : 'asc' } : null
+      ));
       localStorage.setItem(storageKeys.defaultSort, defaultSort);
+      localStorage.setItem(storageKeys.columnSizing, JSON.stringify(columnSizing));
     } else {
       // Clear all stored preferences
       localStorage.removeItem(storageKeys.remember);
@@ -157,41 +197,37 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       localStorage.removeItem(storageKeys.selectedTypes);
       localStorage.removeItem(storageKeys.sort);
       localStorage.removeItem(storageKeys.defaultSort);
+      localStorage.removeItem(storageKeys.columnSizing);
     }
-  }, [rememberPrefs, visibleColumns, selectedStatuses, selectedTypes, sort, defaultSort, storageKeys]);
+  }, [rememberPrefs, visibleColumns, selectedStatuses, selectedTypes, sorting, defaultSort, columnSizing, storageKeys]);
 
   // Helper functions for edit mode
-  const getFullName = (ticket: EventTicketRow): string => {
+  const getFullName = useCallback((ticket: EventTicketRow): string => {
     return ticket.name?.trim() || '-';
-  };
+  }, []);
 
-  const getDraftValue = <K extends keyof Draft>(ticket: EventTicketRow, field: K): Draft[K] | undefined => {
-    return draftById[ticket.id]?.[field];
-  };
-
-  const hasChanges = (ticket: EventTicketRow): boolean => {
+  const hasChanges = useCallback((ticket: EventTicketRow): boolean => {
     const draft = draftById[ticket.id];
     if (!draft) return false;
-    
+
     const originalStatus = ticket.status as 'valid' | 'scanned';
-    const originalName = getFullName(ticket);
+    const originalName = (ticket.name?.trim() || '-');
     const originalRemark = ticket.remark || '';
-    
-    // Normalize empty strings for comparison
+
     const normalizeName = (name: string) => (name.trim() || '-');
     const normalizeRemark = (remark: string) => (remark || '');
-    
+
     return (
       (draft.status !== undefined && draft.status !== originalStatus) ||
       (draft.name !== undefined && normalizeName(draft.name) !== normalizeName(originalName)) ||
       (draft.remark !== undefined && normalizeRemark(draft.remark) !== normalizeRemark(originalRemark))
     );
-  };
+  }, [draftById]);
 
   const editedCount = useMemo(() => {
     if (!tickets) return 0;
     return tickets.filter(hasChanges).length;
-  }, [tickets, draftById]);
+  }, [tickets, hasChanges]);
 
   // Get unique ticket types for filter options
   const uniqueTicketTypes = useMemo(() => {
@@ -230,62 +266,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       result = result.filter(ticket => selectedTypes.includes(ticket.ticketType));
     }
 
-    // Step 4: Apply sorting
-    if (sort) {
-      result = [...result].sort((a, b) => {
-        let comparison = 0;
-
-        if (sort.key === 'status') {
-          // Asc: Pending (valid) first, then Checked In (scanned)
-          // Desc: reverse
-          const aStatus = a.status === 'scanned' ? 1 : 0;
-          const bStatus = b.status === 'scanned' ? 1 : 0;
-          comparison = aStatus - bStatus;
-          // Tie-breaker: Name asc
-          if (comparison === 0) {
-            const aName = (a.name || '').toLowerCase();
-            const bName = (b.name || '').toLowerCase();
-            comparison = aName.localeCompare(bName);
-          }
-        } else if (sort.key === 'name') {
-          const aName = (a.name || '').toLowerCase();
-          const bName = (b.name || '').toLowerCase();
-          comparison = aName.localeCompare(bName);
-        } else if (sort.key === 'ticketType') {
-          const aType = (a.ticketType || '').toLowerCase();
-          const bType = (b.ticketType || '').toLowerCase();
-          comparison = aType.localeCompare(bType);
-          // Tie-breaker: Name asc
-          if (comparison === 0) {
-            const aName = (a.name || '').toLowerCase();
-            const bName = (b.name || '').toLowerCase();
-            comparison = aName.localeCompare(bName);
-          }
-        }
-
-        return sort.dir === 'asc' ? comparison : -comparison;
-      });
-    }
-
     return result;
-  }, [tickets, query, selectedStatuses, selectedTypes, sort]);
+  }, [tickets, query, selectedStatuses, selectedTypes]);
 
   const getStatusText = (status: string) => {
     if (isCheckedIn(status)) {
       return <span className="text-green-700">Checked In</span>;
     }
     return <span className="text-muted-foreground">Pending</span>;
-  };
-
-  const handleSort = (key: SortKey) => {
-    setSort(prev => {
-      if (prev?.key === key) {
-        // Toggle direction
-        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
-      }
-      // New column, start with asc
-      return { key, dir: 'asc' };
-    });
   };
 
   const hasActiveFilters = selectedStatuses.length > 0 || selectedTypes.length > 0;
@@ -298,7 +286,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const handleToggleColumn = (column: ColumnKey) => {
     setVisibleColumns(prev => {
       if (prev.includes(column)) {
-        // Prevent hiding the last column
         if (prev.length === 1) return prev;
         return prev.filter(c => c !== column);
       }
@@ -310,16 +297,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     setDefaultSort(value);
     const option = DEFAULT_SORT_OPTIONS.find(opt => opt.value === value);
     if (option) {
-      setSort(option.sort);
+      setSorting([option.sort]);
     }
   };
-
-  // Compute ordered columns based on edit mode
-  const orderedColumns = useMemo(() => {
-    const baseOrder = editMode ? EDIT_MODE_COLUMN_ORDER : DEFAULT_COLUMNS;
-    // Filter to only visible columns, preserving order
-    return baseOrder.filter(col => visibleColumns.includes(col));
-  }, [editMode, visibleColumns]);
 
   const handleEnterEditMode = () => {
     setEditMode(true);
@@ -336,7 +316,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
     setSaving(true);
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id ?? null;
 
@@ -344,7 +323,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         throw new Error('No tickets available');
       }
 
-      // Build update payloads for each edited ticket
       const updates = tickets
         .filter(hasChanges)
         .map(ticket => {
@@ -357,35 +335,29 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           const normalizedOriginalName = originalName === '-' ? '' : originalName;
           const originalRemark = ticket.remark || '';
 
-          // Handle name change: split into first_name/last_name
           if (draft.name !== undefined) {
             const normalizedDraftName = draft.name.trim();
             if (normalizedDraftName !== normalizedOriginalName) {
               if (normalizedDraftName) {
                 const nameParts = normalizedDraftName.split(/\s+/);
                 if (nameParts.length === 1) {
-                  // Single word -> first_name only
                   payload.first_name = nameParts[0];
                   payload.last_name = null;
                 } else {
-                  // Multiple words -> first word is first_name, rest is last_name
                   payload.first_name = nameParts[0];
                   payload.last_name = nameParts.slice(1).join(' ');
                 }
               } else {
-                // Empty string -> clear both
                 payload.first_name = null;
                 payload.last_name = null;
               }
             }
           }
 
-          // Handle remark change
           if (draft.remark !== undefined && draft.remark !== originalRemark) {
             payload.remark = draft.remark || null;
           }
 
-          // Handle status change
           if (draft.status !== undefined && draft.status !== originalStatus) {
             if (draft.status === 'scanned') {
               payload.status = 'scanned';
@@ -402,24 +374,20 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         })
         .filter((u): u is { id: string; payload: any } => u !== null);
 
-      // Execute all updates
       const results = await Promise.all(
         updates.map(u => supabase.from('tickets').update(u.payload).eq('id', u.id))
       );
 
-      // Check for errors
       const errors = results.filter(r => r.error);
       if (errors.length > 0) {
         throw new Error(`Failed to save ${errors.length} ticket(s)`);
       }
 
-      // Success
       toast({
         title: 'Success',
         description: `Saved ${editedCount} ticket(s)`,
       });
 
-      // Reset state and refetch
       setDraftById({});
       setEditMode(false);
       await refetch();
@@ -437,7 +405,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) return;
 
-    // Define column order and labels
     const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
@@ -449,10 +416,8 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       addons: 'Add-ons',
     };
 
-    // Filter to only visible columns in order
     const visibleOrderedColumns = columnOrder.filter(col => visibleColumns.includes(col));
 
-    // CSV escaping helper
     const escapeCSV = (value: string | null | undefined): string => {
       if (value === null || value === undefined) return '';
       const str = String(value);
@@ -462,7 +427,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       return str;
     };
 
-    // Build CSV rows
     const headers = visibleOrderedColumns.map(col => columnLabels[col]);
     const rows = filteredTickets.map(ticket => {
       return visibleOrderedColumns.map(col => {
@@ -476,13 +440,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       });
     });
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.join(',')),
     ].join('\n');
 
-    // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -495,6 +457,231 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     URL.revokeObjectURL(url);
   };
 
+  // Column definitions - use meta for reactive data to avoid recreating columns on every keystroke
+  const columns = useMemo(() => [
+    columnHelper.accessor('status', {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row, table }) => {
+        const ticket = row.original;
+        const meta = table.options.meta as { draftById: Record<string, Draft>; editMode: boolean } | undefined;
+        if (meta?.editMode) {
+          const draftStatus = meta.draftById[ticket.id]?.status ?? (ticket.status as 'valid' | 'scanned');
+          return (
+            <Select
+              value={draftStatus}
+              onValueChange={(value: 'valid' | 'scanned') => {
+                setDraftById(prev => ({
+                  ...prev,
+                  [ticket.id]: { ...prev[ticket.id], status: value },
+                }));
+              }}
+            >
+              <SelectTrigger className="h-8 px-2 text-sm rounded-none border-0 shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="valid">Pending</SelectItem>
+                <SelectItem value="scanned">Checked In</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
+        return getStatusText(ticket.status);
+      },
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const aStatus = rowA.original.status === 'scanned' ? 1 : 0;
+        const bStatus = rowB.original.status === 'scanned' ? 1 : 0;
+        if (aStatus !== bStatus) return aStatus - bStatus;
+        const aName = (rowA.original.name || '').toLowerCase();
+        const bName = (rowB.original.name || '').toLowerCase();
+        return aName.localeCompare(bName);
+      },
+      size: DEFAULT_COLUMN_SIZES.status,
+      minSize: 60,
+      maxSize: 200,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('name', {
+      id: 'name',
+      header: 'Name',
+      cell: ({ row, table }) => {
+        const ticket = row.original;
+        const meta = table.options.meta as { draftById: Record<string, Draft>; editMode: boolean } | undefined;
+        if (meta?.editMode) {
+          const draftName = meta.draftById[ticket.id]?.name ?? (ticket.name?.trim() || '-');
+          return (
+            <Input
+              value={draftName === '-' ? '' : draftName}
+              onChange={(e) => {
+                setDraftById(prev => ({
+                  ...prev,
+                  [ticket.id]: { ...prev[ticket.id], name: e.target.value },
+                }));
+              }}
+              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium whitespace-nowrap w-auto min-w-0"
+              placeholder="-"
+              style={{ textOverflow: 'clip', overflow: 'visible' }}
+            />
+          );
+        }
+        return (
+          <span className="font-medium whitespace-nowrap" title={ticket.name ?? undefined}>
+            {ticket.name?.trim() || '-'}
+          </span>
+        );
+      },
+      enableSorting: true,
+      size: DEFAULT_COLUMN_SIZES.name,
+      minSize: 80,
+      maxSize: 300,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('phone', {
+      id: 'phone',
+      header: 'Phone',
+      cell: ({ row }) => row.original.phone || '-',
+      size: DEFAULT_COLUMN_SIZES.phone,
+      minSize: 80,
+      maxSize: 200,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('email', {
+      id: 'email',
+      header: 'Email',
+      cell: ({ row }) => (
+        <span className="max-w-full truncate block" title={row.original.email ?? undefined}>
+          {row.original.email || '-'}
+        </span>
+      ),
+      size: DEFAULT_COLUMN_SIZES.email,
+      minSize: 100,
+      maxSize: 350,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('ticketType', {
+      id: 'ticketType',
+      header: 'Ticket Type',
+      cell: ({ row }) => row.original.ticketType || '-',
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const aType = (rowA.original.ticketType || '').toLowerCase();
+        const bType = (rowB.original.ticketType || '').toLowerCase();
+        const cmp = aType.localeCompare(bType);
+        if (cmp !== 0) return cmp;
+        const aName = (rowA.original.name || '').toLowerCase();
+        const bName = (rowB.original.name || '').toLowerCase();
+        return aName.localeCompare(bName);
+      },
+      size: DEFAULT_COLUMN_SIZES.ticketType,
+      minSize: 80,
+      maxSize: 300,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('remark', {
+      id: 'remark',
+      header: 'Remark',
+      cell: ({ row, table }) => {
+        const ticket = row.original;
+        const meta = table.options.meta as { draftById: Record<string, Draft>; editMode: boolean } | undefined;
+        if (meta?.editMode) {
+          const draftRemark = meta.draftById[ticket.id]?.remark ?? (ticket.remark || '');
+          return (
+            <Input
+              value={draftRemark}
+              onChange={(e) => {
+                setDraftById(prev => ({
+                  ...prev,
+                  [ticket.id]: { ...prev[ticket.id], remark: e.target.value },
+                }));
+              }}
+              className="h-8 px-2 text-sm rounded-none border-0 shadow-none w-auto min-w-0"
+              placeholder="-"
+              style={{ textOverflow: 'clip', overflow: 'visible' }}
+            />
+          );
+        }
+        return (
+          <span className="max-w-full truncate block" title={ticket.remark ?? undefined}>
+            {ticket.remark || '-'}
+          </span>
+        );
+      },
+      size: DEFAULT_COLUMN_SIZES.remark,
+      minSize: 80,
+      maxSize: 400,
+      enableResizing: true,
+    }),
+    columnHelper.accessor(row => row.addons ?? '', {
+      id: 'addons',
+      header: 'Add-ons',
+      cell: ({ row }) => (
+        <span className="max-w-full truncate block" title={row.original.addons ?? undefined}>
+          {row.original.addons || '-'}
+        </span>
+      ),
+      size: DEFAULT_COLUMN_SIZES.addons,
+      minSize: 80,
+      maxSize: 300,
+      enableResizing: true,
+    }),
+  ], []);
+
+  const safeVisibleColumns = useMemo(() => {
+    if (!visibleColumns || visibleColumns.length === 0) return DEFAULT_COLUMNS;
+    return visibleColumns;
+  }, [visibleColumns]);
+
+  const columnVisibility = useMemo((): VisibilityState => {
+    return Object.fromEntries(
+      (DEFAULT_COLUMNS as ColumnKey[]).map(c => [c, safeVisibleColumns.includes(c)])
+    );
+  }, [safeVisibleColumns]);
+
+  const columnOrder = useMemo(() => {
+    const baseOrder = editMode ? EDIT_MODE_COLUMN_ORDER : DEFAULT_COLUMNS;
+    return baseOrder;
+  }, [editMode]);
+
+  const table = useReactTable({
+    data: filteredTickets,
+    columns,
+    meta: {
+      draftById,
+      editMode,
+      setDraftById,
+    },
+    state: {
+      sorting,
+      columnVisibility,
+      columnOrder,
+      columnSizing,
+    },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: () => {},
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: () => {},
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
+    getRowId: (row) => row.id,
+  });
+
+  const isResizing = table.getState().columnSizingInfo?.isResizingColumn;
+
+  useEffect(() => {
+    if (isResizing) {
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      return () => {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+    }
+  }, [isResizing]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -505,7 +692,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
   return (
     <div className="space-y-2">
-      {/* Toolbar: Search + Filter + Settings + Edit + Scan */}
+      {/* Toolbar */}
       <div className="flex items-center gap-2">
         {editMode && (
           <div className="text-xs text-muted-foreground whitespace-nowrap">
@@ -540,7 +727,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
             </PopoverTrigger>
             <PopoverContent className="w-[340px] p-0" align="end">
               <div className="p-4 space-y-4">
-                {/* Row 1: Status */}
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Status</div>
                   <div className="space-y-2">
@@ -573,7 +759,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                   </div>
                 </div>
 
-                {/* Row 2: Ticket Type */}
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Ticket Type</div>
                   <div className="space-y-2 max-h-[200px] overflow-y-auto">
@@ -596,7 +781,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                   </div>
                 </div>
 
-                {/* Footer: Clear button */}
                 {hasActiveFilters && (
                   <div className="pt-2 border-t">
                     <Button
@@ -626,7 +810,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
             </PopoverTrigger>
             <PopoverContent className="w-[360px] p-4" align="end">
               <div className="space-y-4">
-                {/* Section 1: Columns */}
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2">
@@ -660,7 +843,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
                 <Separator />
 
-                {/* Section 2: Default Behavior */}
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Default Behavior</div>
                   <div className="space-y-3">
@@ -691,7 +873,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
 
                 <Separator />
 
-                {/* Section 3: Export */}
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Export</div>
                   <Button
@@ -709,7 +890,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
           </Popover>
           {editMode ? (
             <>
-              {/* Mobile: Icon-only Save button */}
               <Button
                 variant="default"
                 size="icon"
@@ -721,7 +901,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               >
                 <Save className="h-4 w-4" />
               </Button>
-              {/* Desktop: Save button with text */}
               <Button
                 variant="default"
                 size="sm"
@@ -734,7 +913,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <Save className="h-4 w-4 mr-2" />
                 Save {editedCount > 0 ? `(${editedCount})` : ''}
               </Button>
-              {/* Mobile: Icon-only Cancel button */}
               <Button
                 variant="outline"
                 size="icon"
@@ -746,7 +924,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               >
                 <X className="h-4 w-4" />
               </Button>
-              {/* Desktop: Cancel button with text */}
               <Button
                 variant="outline"
                 size="sm"
@@ -761,23 +938,20 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
               </Button>
             </>
           ) : (
-            <>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Edit"
-                title="Edit"
-                onClick={handleEnterEditMode}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label="Edit"
+              title="Edit"
+              onClick={handleEnterEditMode}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Tickets count */}
       {tickets && tickets.length > 0 && (
         <div className="text-xs text-muted-foreground mt-1">
           {filteredTickets.length === tickets.length
@@ -786,7 +960,6 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         </div>
       )}
 
-      {/* Sheet-like table or empty state */}
       {filteredTickets.length === 0 ? (
         <div className="w-full border border-border bg-background py-8 px-4 text-center">
           <p className="text-sm text-muted-foreground">
@@ -797,240 +970,77 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         </div>
       ) : (
         <div className="w-full overflow-x-auto border border-border bg-background">
-          <Table>
+          <Table className="table-fixed" style={{ minWidth: '100%' }}>
             <TableHeader>
-              <TableRow className="border-b border-border hover:bg-transparent">
-                {orderedColumns.map((column, index) => {
-                  const isLast = index === orderedColumns.length - 1;
-                  const baseClasses = `sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground ${isLast ? 'last:border-r-0' : ''}`;
-                  
-                  if (column === 'status') {
+              {(table.getHeaderGroups() ?? []).map(headerGroup => (
+                <TableRow key={headerGroup.id} className="border-b border-border hover:bg-transparent">
+                  {headerGroup.headers.map(header => {
+                    const colId = header.column.id as ColumnKey;
+                    const isLast = headerGroup.headers.indexOf(header) === headerGroup.headers.length - 1;
+                    const isSortable = header.column.getCanSort();
+                    const sortDir = header.column.getIsSorted();
+                    const baseClasses = `sticky top-0 z-10 h-auto border-r border-border bg-background px-2 py-1.5 text-xs font-medium text-muted-foreground ${isLast ? 'last:border-r-0' : ''}`;
                     return (
                       <TableHead
-                        key={column}
-                        className={`${baseClasses} cursor-pointer select-none`}
-                        onClick={() => handleSort('status')}
+                        key={header.id}
+                        className={`${baseClasses} ${isSortable ? 'cursor-pointer select-none' : ''} relative`}
+                        style={{
+                          width: header.getSize(),
+                          minWidth: header.getSize(),
+                          maxWidth: header.getSize(),
+                        }}
+                        onClick={isSortable ? header.column.getToggleSortingHandler() : undefined}
                       >
                         <div className="flex items-center gap-1">
-                          Status
-                          {sort?.key === 'status' && (
-                            sort.dir === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )
+                          {typeof header.column.columnDef.header === 'string'
+                            ? header.column.columnDef.header
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                          {isSortable && sortDir && (
+                            sortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
                           )}
                         </div>
+                        {header.column.getCanResize() && (
+                          <div
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            onTouchStart={(e) => {
+                              e.stopPropagation();
+                              header.getResizeHandler()(e);
+                            }}
+                            className={`absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none touch-none ${
+                              header.column.getIsResizing() ? 'bg-primary opacity-100' : 'hover:bg-border opacity-0 hover:opacity-100'
+                            }`}
+                            style={{ touchAction: 'none' }}
+                          />
+                        )}
                       </TableHead>
                     );
-                  }
-                  if (column === 'name') {
-                    return (
-                      <TableHead
-                        key={column}
-                        className={`${baseClasses} cursor-pointer select-none ${editMode ? 'min-w-[110px] w-fit' : 'w-[1%]'} whitespace-nowrap`}
-                        onClick={() => handleSort('name')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Name
-                          {sort?.key === 'name' && (
-                            sort.dir === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )
-                          )}
-                        </div>
-                      </TableHead>
-                    );
-                  }
-                  if (column === 'phone') {
-                    return (
-                      <TableHead key={column} className={baseClasses}>
-                        Phone
-                      </TableHead>
-                    );
-                  }
-                  if (column === 'email') {
-                    return (
-                      <TableHead key={column} className={baseClasses}>
-                        Email
-                      </TableHead>
-                    );
-                  }
-                  if (column === 'ticketType') {
-                    return (
-                      <TableHead
-                        key={column}
-                        className={`${baseClasses} cursor-pointer select-none`}
-                        onClick={() => handleSort('ticketType')}
-                      >
-                        <div className="flex items-center gap-1">
-                          Ticket Type
-                          {sort?.key === 'ticketType' && (
-                            sort.dir === 'asc' ? (
-                              <ChevronUp className="h-3 w-3" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3" />
-                            )
-                          )}
-                        </div>
-                      </TableHead>
-                    );
-                  }
-                  if (column === 'remark') {
-                    return (
-                      <TableHead key={column} className={`${baseClasses} ${editMode ? 'min-w-[160px]' : ''}`}>
-                        Remark
-                      </TableHead>
-                    );
-                  }
-                  if (column === 'addons') {
-                    return (
-                      <TableHead key={column} className={`${baseClasses} min-w-[120px]`}>
-                        Add-ons
-                      </TableHead>
-                    );
-                  }
-                  return null;
-                })}
-              </TableRow>
+                  })}
+                </TableRow>
+              ))}
             </TableHeader>
             <TableBody>
-              {filteredTickets.map((ticket) => (
-                <TableRow key={ticket.id} className="border-b border-border">
-                  {orderedColumns.map((column, index) => {
-                    const isLast = index === orderedColumns.length - 1;
+              {table.getRowModel().rows.map(row => (
+                <TableRow key={row.id} className="border-b border-border">
+                  {row.getVisibleCells().map(cell => {
+                    const isLast = row.getVisibleCells().indexOf(cell) === row.getVisibleCells().length - 1;
                     const baseClasses = `border-r border-border px-2 py-1.5 text-sm ${isLast ? 'last:border-r-0' : ''}`;
-                    
-                    if (column === 'status') {
-                      if (editMode) {
-                        const draftStatus = getDraftValue(ticket, 'status') ?? (ticket.status as 'valid' | 'scanned');
-                        return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20`}>
-                            <Select
-                              value={draftStatus}
-                              onValueChange={(value: 'valid' | 'scanned') => {
-                                setDraftById(prev => ({
-                                  ...prev,
-                                  [ticket.id]: { ...prev[ticket.id], status: value },
-                                }));
-                              }}
-                            >
-                              <SelectTrigger className="h-8 px-2 text-sm rounded-none border-0 shadow-none">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="valid">Pending</SelectItem>
-                                <SelectItem value="scanned">Checked In</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                        );
-                      }
-                      return (
-                        <TableCell key={column} className={baseClasses}>
-                          {getStatusText(ticket.status)}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'name') {
-                      if (editMode) {
-                        const draftName = getDraftValue(ticket, 'name') ?? getFullName(ticket);
-                        return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[110px] w-fit whitespace-nowrap overflow-visible`}>
-                            <Input
-                              value={draftName === '-' ? '' : draftName}
-                              onChange={(e) => {
-                                setDraftById(prev => ({
-                                  ...prev,
-                                  [ticket.id]: { ...prev[ticket.id], name: e.target.value },
-                                }));
-                              }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none font-medium whitespace-nowrap w-auto min-w-0"
-                              placeholder="-"
-                              style={{ textOverflow: 'clip', overflow: 'visible' }}
-                            />
-                          </TableCell>
-                        );
-                      }
-                      return (
-                        <TableCell
-                          key={column}
-                          className={`w-[1%] whitespace-nowrap ${baseClasses} font-medium`}
-                          title={ticket.name ?? undefined}
-                        >
-                          {ticket.name || '-'}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'phone') {
-                      return (
-                        <TableCell key={column} className={baseClasses}>
-                          {ticket.phone || '-'}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'email') {
-                      return (
-                        <TableCell
-                          key={column}
-                          className={`max-w-[180px] truncate ${baseClasses}`}
-                          title={ticket.email ?? undefined}
-                        >
-                          {ticket.email || '-'}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'ticketType') {
-                      return (
-                        <TableCell key={column} className={baseClasses}>
-                          {ticket.ticketType}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'remark') {
-                      if (editMode) {
-                        const draftRemark = getDraftValue(ticket, 'remark') ?? (ticket.remark || '');
-                        return (
-                          <TableCell key={column} className={`${baseClasses} bg-muted/20 min-w-[160px] whitespace-nowrap overflow-visible`}>
-                            <Input
-                              value={draftRemark}
-                              onChange={(e) => {
-                                setDraftById(prev => ({
-                                  ...prev,
-                                  [ticket.id]: { ...prev[ticket.id], remark: e.target.value },
-                                }));
-                              }}
-                              className="h-8 px-2 text-sm rounded-none border-0 shadow-none w-auto min-w-0"
-                              placeholder="-"
-                              style={{ textOverflow: 'clip', overflow: 'visible' }}
-                            />
-                          </TableCell>
-                        );
-                      }
-                      return (
-                        <TableCell
-                          key={column}
-                          className={`max-w-[200px] truncate ${baseClasses}`}
-                          title={ticket.remark ?? undefined}
-                        >
-                          {ticket.remark || '-'}
-                        </TableCell>
-                      );
-                    }
-                    if (column === 'addons') {
-                      return (
-                        <TableCell
-                          key={column}
-                          className={`max-w-[200px] truncate ${baseClasses}`}
-                          title={ticket.addons ?? undefined}
-                        >
-                          {ticket.addons || '-'}
-                        </TableCell>
-                      );
-                    }
-                    return null;
+                    const isEditCell = editMode && ['status', 'name', 'remark'].includes(cell.column.id);
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className={`${baseClasses} ${isEditCell ? 'bg-muted/20' : ''}`}
+                        style={{
+                          width: cell.column.getSize(),
+                          minWidth: cell.column.getSize(),
+                          maxWidth: cell.column.getSize(),
+                        }}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
                   })}
                 </TableRow>
               ))}
