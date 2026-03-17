@@ -155,10 +155,11 @@ Deno.serve(async (req) => {
       .eq('id', order.event_id)
       .single();
 
-    const { count: ticketsCount } = await supabase
+    const { data: tickets } = await supabase
       .from('tickets')
-      .select('id', { count: 'exact' })
-      .eq('order_id', order_id);
+      .select('id')
+      .eq('order_id', order_id)
+      .order('created_at');
 
     const { data: orderItems } = await supabase
       .from('order_items')
@@ -167,6 +168,16 @@ Deno.serve(async (req) => {
         ticket_type:ticket_types(id, name, valid_for_days)
       `)
       .eq('order_id', order_id);
+
+    const { data: orderAddonItems } = await supabase
+      .from('order_addon_items')
+      .select('label, variant_label, quantity, ticket_id')
+      .eq('order_id', order_id)
+      .order('created_at');
+
+    const ticketsCount = tickets?.length ?? 0;
+    const ticketIdToIndex = new Map<string, number>();
+    tickets?.forEach((t, i) => ticketIdToIndex.set(t.id, i + 1));
 
     // Ensure tickets exist before sending email
     if (!ticketsCount || ticketsCount === 0) {
@@ -220,6 +231,20 @@ Deno.serve(async (req) => {
     // Works for both free events and paid events (PayMe/FPS/Stripe) after confirmation
     const ticketUrl = `https://growbrohk.com/booking/success/${order_id}`;
 
+    const addonHtml =
+      (orderAddonItems?.length ?? 0) > 0
+        ? `<p><strong>Add-ons:</strong></p><ul style="margin:0 0 1em 0;padding-left:20px">${(orderAddonItems ?? [])
+            .map((a: { label: string | null; variant_label: string | null; quantity: number; ticket_id: string | null }) => {
+              const name = [a.label, a.variant_label].filter(Boolean).join(' – ');
+              const ticketPrefix =
+                a.ticket_id && ticketIdToIndex.has(a.ticket_id)
+                  ? `Ticket ${ticketIdToIndex.get(a.ticket_id)}: `
+                  : '';
+              return `<li>${ticketPrefix}${name} × ${a.quantity}</li>`;
+            })
+            .join('')}</ul>`
+        : '';
+
     /* ------------------------------------------------------------------------
        EMAIL HTML
     ------------------------------------------------------------------------ */
@@ -234,6 +259,7 @@ Deno.serve(async (req) => {
   <p><strong>Date & Time:</strong> ${eventStartAt}</p>
   <p><strong>Venue:</strong> ${venue}</p>
   <p><strong>Tickets:</strong> ${ticketQty}</p>
+  ${addonHtml}
   ${amount > 0 ? `<p><strong>Amount Paid:</strong> ${currency} ${amount.toFixed(2)}</p>` : ''}
 
   <p><strong>Order No:</strong> ${orderNo}</p>
