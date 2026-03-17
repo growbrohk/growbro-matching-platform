@@ -52,13 +52,14 @@ import PendingBookingPage from "./pages/booking/PendingBookingPage";
 import PendingConfirmationPage from "./pages/booking/PendingConfirmationPage";
 import SuccessfulBookingPage from "./pages/booking/SuccessfulBookingPage";
 import { AppLayout } from "./components/AppLayout";
+import { Button } from "./components/ui/button";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, currentOrg, orgMemberships, loading } = useAuth();
+  const { user, orgMemberships, orgMembershipsStatus, loading, refreshOrgMemberships } = useAuth();
 
   if (loading) {
     return (
@@ -72,7 +73,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
-  // If user has no org memberships, redirect to onboarding
+  // Still loading org memberships - show loading to avoid redirecting before we know
+  if (orgMembershipsStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      </div>
+    );
+  }
+
+  // Fetch failed - show retry option
+  if (orgMembershipsStatus === 'error') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4" style={{ backgroundColor: '#FBF8F4' }}>
+        <p className="text-center" style={{ color: '#0F1F17' }}>Unable to load your account. Please try again.</p>
+        <Button onClick={() => refreshOrgMemberships()} style={{ backgroundColor: '#0E7A3A' }}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // Only redirect to onboarding when we've confirmed user has no org memberships
   if (orgMemberships.length === 0) {
     return <Navigate to="/onboarding" replace />;
   }
@@ -81,9 +103,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, orgMemberships, loading } = useAuth();
+  const { user, orgMemberships, orgMembershipsStatus, loading } = useAuth();
 
   if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      </div>
+    );
+  }
+
+  // If user exists, wait for org memberships before deciding
+  if (user && orgMembershipsStatus === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
@@ -100,9 +131,18 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { user, orgMemberships, loading } = useAuth();
+  const { user, orgMemberships, orgMembershipsStatus, loading } = useAuth();
 
   if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      </div>
+    );
+  }
+
+  // If user exists, wait for org memberships before deciding
+  if (user && orgMembershipsStatus === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
@@ -125,7 +165,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
-  const { user, orgMemberships, loading } = useAuth();
+  const { user, orgMemberships, orgMembershipsStatus, loading } = useAuth();
 
   // If auth is still loading, show loading state
   if (loading) {
@@ -144,12 +184,24 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
+  // Still loading org memberships - wait before deciding to redirect
+  if (orgMembershipsStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#FBF8F4' }}>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" style={{ color: '#0E7A3A' }} />
+          <p style={{ color: '#0F1F17' }}>Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
+
   // If signed in and has org membership -> redirect to app dashboard
   if (user && orgMemberships.length > 0) {
     return <Navigate to="/app/dashboard" replace />;
   }
 
-  // If signed in and no org membership -> allow access to onboarding
+  // If signed in and no org membership (or error) -> allow access to onboarding
   return <>{children}</>;
 }
 

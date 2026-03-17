@@ -32,11 +32,14 @@ export interface OrgProfile {
   updated_at?: string;
 }
 
+type OrgMembershipsStatus = 'loading' | 'loaded' | 'error';
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   currentOrg: Org | null;
   orgMemberships: OrgMember[];
+  orgMembershipsStatus: OrgMembershipsStatus;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -52,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [currentOrg, setCurrentOrg] = useState<Org | null>(null);
   const [orgMemberships, setOrgMemberships] = useState<OrgMember[]>([]);
+  const [orgMembershipsStatus, setOrgMembershipsStatus] = useState<OrgMembershipsStatus>('loading');
   const [loading, setLoading] = useState(true);
 
   const fetchOrgMemberships = async (userId: string) => {
@@ -64,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching org memberships:', error);
       setOrgMemberships([]);
       setCurrentOrg(null);
+      setOrgMembershipsStatus('error');
       return;
     }
 
@@ -88,44 +93,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setCurrentOrg(orgData);
         }
       }
+      setOrgMembershipsStatus('loaded');
     } else {
       setOrgMemberships([]);
       setCurrentOrg(null);
+      setOrgMembershipsStatus('loaded');
     }
   };
 
   const refreshOrgMemberships = async () => {
     if (user) {
+      setOrgMembershipsStatus('loading');
       await fetchOrgMemberships(user.id);
     }
   };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('[auth]', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
-        
+        // INITIAL_SESSION is handled by getSession() below - skip to avoid duplicate fetch
+        if (event === 'INITIAL_SESSION') {
+          setLoading(false);
+          return;
+        }
         if (session?.user) {
-          await fetchOrgMemberships(session.user.id);
+          setOrgMembershipsStatus('loading');
+          fetchOrgMemberships(session.user.id);
         } else {
           setOrgMemberships([]);
           setCurrentOrg(null);
+          setOrgMembershipsStatus('loaded');
         }
         setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('[auth]', 'INITIAL_SESSION', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        await fetchOrgMemberships(session.user.id);
+        setOrgMembershipsStatus('loading');
+        fetchOrgMemberships(session.user.id);
       } else {
         setOrgMemberships([]);
         setCurrentOrg(null);
+        setOrgMembershipsStatus('loaded');
       }
       setLoading(false);
     });
@@ -166,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         currentOrg,
         orgMemberships,
+        orgMembershipsStatus,
         loading,
         signIn,
         signUp,
