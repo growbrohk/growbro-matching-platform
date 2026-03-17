@@ -40,6 +40,7 @@ import PublicPosterSpace from "./pages/public/PublicPosterSpace";
 import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import PublicProfile from "./pages/public/PublicProfile";
+import PublicProductPage from "./pages/public/PublicProductPage";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
 import TrackingRedirectHandler from "./pages/public/TrackingRedirectHandler";
 import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
@@ -446,6 +447,12 @@ function AppRoutes() {
       
       {/* Public Profile Page - Must be before generic orgSlug route */}
       <Route path="/profile/:orgSlug" element={<PublicProfile />} />
+      
+      {/* Public Product Page - Must be before /:orgSlug/:eventSlug */}
+      <Route path="/:orgSlug/products/:productId" element={<PublicProductPage />} />
+      
+      {/* Public Brand Page - Single segment, before event route */}
+      <Route path="/:brandSlug" element={<PublicProfile />} />
       
       {/* Explicit /org/* route - shows NotFound (hard cutover, no redirects) */}
       <Route path="/org/*" element={<NotFound />} />

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Edit, MessageSquare, UserPlus, Loader2, X } from 'lucide-react';
+import { Edit, MessageSquare, UserPlus, Loader2, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ export interface ProfileActionsProps {
   mode: 'owner' | 'public';
   onEdit?: () => void;
   otherOrgId?: string;
+  orgSlug?: string | null;
 }
 
 type ConnectionStatus = 'none' | 'outgoing_pending' | 'incoming_pending' | 'accepted' | 'blocked';
@@ -20,7 +21,7 @@ interface ConnectionStatusData {
   requested_by_org_id: string;
 }
 
-export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActionsProps) {
+export default function ProfileActions({ mode, onEdit, otherOrgId, orgSlug }: ProfileActionsProps) {
   const navigate = useNavigate();
   const { currentOrg } = useAuth();
   const queryClient = useQueryClient();
@@ -172,20 +173,33 @@ export default function ProfileActions({ mode, onEdit, otherOrgId }: ProfileActi
 
   if (mode === 'owner') {
     return (
-      <Button
-        onClick={() => {
-          if (onEdit) {
-            onEdit();
-          } else {
-            navigate('/app/settings/profile');
-          }
-        }}
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10"
-      >
-        <Edit className="h-5 w-5" />
-      </Button>
+      <div className="flex gap-2">
+        {orgSlug && (
+          <Button
+            onClick={() => window.open(`/${orgSlug}`, '_blank')}
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10"
+            title="Preview public page"
+          >
+            <Eye className="h-5 w-5" />
+          </Button>
+        )}
+        <Button
+          onClick={() => {
+            if (onEdit) {
+              onEdit();
+            } else {
+              navigate('/app/settings/profile');
+            }
+          }}
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10"
+        >
+          <Edit className="h-5 w-5" />
+        </Button>
+      </div>
     );
   }
 

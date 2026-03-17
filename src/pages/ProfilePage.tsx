@@ -74,7 +74,7 @@ export default function ProfilePage() {
     <div className="w-full px-6 py-6 md:py-8">
       <div className="relative">
         <div className="absolute top-0 right-0">
-          <ProfileActions mode="owner" />
+          <ProfileActions mode="owner" orgSlug={currentOrg.slug} />
         </div>
         <ProfileHeader
           org={currentOrg}

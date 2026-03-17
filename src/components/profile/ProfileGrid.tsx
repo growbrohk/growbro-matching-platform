@@ -19,32 +19,53 @@ interface GridItem {
   created_at: string;
 }
 
+export type TabVariant = 'owner' | 'brand_public';
+export type BrandPublicFilter = 'all' | 'products' | 'events';
+
 export interface ProfileGridProps {
   orgId: string;
   orgSlug?: string | null;
   mode: 'owner' | 'public';
+  tabVariant?: TabVariant;
 }
 
-export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) {
+export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner' }: ProfileGridProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'brand' | 'space'>('brand');
+  const [brandPublicFilter, setBrandPublicFilter] = useState<BrandPublicFilter>('all');
   const [loading, setLoading] = useState(true);
   const [brandItems, setBrandItems] = useState<GridItem[]>([]);
   const [spaceItems, setSpaceItems] = useState<GridItem[]>([]);
+  const [productItems, setProductItems] = useState<GridItem[]>([]);
+  const [eventItems, setEventItems] = useState<GridItem[]>([]);
   const [brandCount, setBrandCount] = useState(0);
   const [spaceCount, setSpaceCount] = useState(0);
+  const [productsCount, setProductsCount] = useState(0);
+  const [eventsCount, setEventsCount] = useState(0);
 
   useEffect(() => {
-    // Load counts for both tabs on mount
     loadCounts();
-    
-    if (activeTab === 'brand') {
-      loadBrandItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, orgSlug, mode]);
+
+  useEffect(() => {
+    if (tabVariant === 'brand_public') {
+      if (brandPublicFilter === 'all') {
+        loadBrandItems();
+      } else if (brandPublicFilter === 'products') {
+        loadProductItemsOnly();
+      } else {
+        loadEventItemsOnly();
+      }
     } else {
-      loadSpaceItems();
+      if (activeTab === 'brand') {
+        loadBrandItems();
+      } else {
+        loadSpaceItems();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, orgId, orgSlug, mode]);
+  }, [activeTab, brandPublicFilter, tabVariant, orgId, orgSlug, mode]);
 
   const loadCounts = async () => {
     try {
@@ -71,12 +92,14 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
           .eq('status', 'published'),
       ]);
 
-      const productsCount = productsCountResult.count || 0;
-      const eventsCount = eventsCountResult.count || 0;
+      const productsCountVal = productsCountResult.count || 0;
+      const eventsCountVal = eventsCountResult.count || 0;
       const spacesCount = spacesCountResult.count || 0;
 
-      setBrandCount(productsCount + eventsCount);
+      setBrandCount(productsCountVal + eventsCountVal);
       setSpaceCount(spacesCount);
+      setProductsCount(productsCountVal);
+      setEventsCount(eventsCountVal);
     } catch (error: any) {
       console.error('Error loading counts:', error);
     }
@@ -128,6 +151,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
           type: 'product' as const,
           title: p.title,
           imageUrl,
+          orgSlug: orgSlug || undefined,
           created_at: p.created_at,
         };
       });
@@ -200,6 +224,80 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
     }
   };
 
+  const loadProductItemsOnly = async () => {
+    try {
+      setLoading(true);
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('id, title, metadata, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(60);
+
+      if (error) throw error;
+
+      const items: GridItem[] = (products || []).map((p: any) => {
+        let imageUrl: string | null = null;
+        if (p.metadata?.photos && Array.isArray(p.metadata.photos) && p.metadata.photos.length > 0) {
+          imageUrl = p.metadata.photos[0];
+        } else if (p.metadata?.image) {
+          imageUrl = p.metadata.image;
+        }
+        return {
+          id: p.id,
+          type: 'product' as const,
+          title: p.title,
+          imageUrl,
+          orgSlug: orgSlug || undefined,
+          created_at: p.created_at,
+        };
+      });
+      setProductItems(items);
+    } catch (error: any) {
+      console.error('Error loading products:', error);
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEventItemsOnly = async () => {
+    try {
+      setLoading(true);
+      const query = supabase
+        .from('events')
+        .select('id, title, slug, instagram_preview_image_url, metadata, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(60);
+      const { data: events, error } = mode === 'public'
+        ? await query.eq('status', 'published')
+        : await query;
+
+      if (error) throw error;
+
+      const items: GridItem[] = (events || []).map((e: any) => {
+        let imageUrl: string | null = e.instagram_preview_image_url || null;
+        if (!imageUrl && e.metadata?.image) imageUrl = e.metadata.image;
+        return {
+          id: e.id,
+          type: 'event' as const,
+          title: e.title,
+          imageUrl,
+          slug: e.slug,
+          orgSlug: orgSlug || undefined,
+          created_at: e.created_at,
+        };
+      });
+      setEventItems(items);
+    } catch (error: any) {
+      console.error('Error loading events:', error);
+      toast.error('Failed to load events');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleItemClick = (item: GridItem) => {
     if (item.type === 'space' && item.shortCode) {
       // Navigate to space detail
@@ -212,10 +310,11 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
       // Navigate to event detail
       navigate(`/${item.orgSlug}/${item.slug}`);
     } else if (item.type === 'product') {
-      // For now, just show toast - product detail pages may not exist yet
-      toast.info('Product detail page coming soon');
-      // If product detail route exists, uncomment:
-      // navigate(`/app/products/${item.id}/edit`);
+      if (item.orgSlug) {
+        navigate(`/${item.orgSlug}/products/${item.id}`);
+      } else {
+        toast.info('Product detail page coming soon');
+      }
     } else {
       toast.info('Detail page coming soon');
     }
@@ -264,6 +363,43 @@ export default function ProfileGrid({ orgId, orgSlug, mode }: ProfileGridProps) 
       </div>
     );
   };
+
+  const getBrandPublicItems = () => {
+    if (brandPublicFilter === 'all') return brandItems;
+    if (brandPublicFilter === 'products') return productItems;
+    return eventItems;
+  };
+
+  if (tabVariant === 'brand_public') {
+    return (
+      <div className="w-full">
+        <div className="flex flex-wrap gap-2 mb-4">
+          {(['all', 'products', 'events'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setBrandPublicFilter(filter)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                brandPublicFilter === filter
+                  ? 'bg-foreground text-background'
+                  : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+              }`}
+              style={
+                brandPublicFilter === filter
+                  ? { backgroundColor: '#0F1F17', color: '#FBF8F4' }
+                  : {}
+              }
+            >
+              {filter === 'all' && `All (${brandCount})`}
+              {filter === 'products' && `Products (${productsCount})`}
+              {filter === 'events' && `Events (${eventsCount})`}
+            </button>
+          ))}
+        </div>
+        {renderGrid(getBrandPublicItems())}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

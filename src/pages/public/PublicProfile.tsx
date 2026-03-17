@@ -7,9 +7,18 @@ import ProfileGrid from '@/components/profile/ProfileGrid';
 import { getOrgBySlugWithProfile, getOrgStats } from '@/lib/api/orgs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConnectedCount } from '@/hooks/use-connected-count';
+import NotFound from '@/pages/NotFound';
+
+const RESERVED_ORG_SLUGS = [
+  'app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding',
+  'book', 'r', 'space', 'profile', 't', 'o', 'booking', 'org',
+  'messages', 'dashboard', 'collab', 'enquiries', 'orders',
+  'settings', 'account', 'products', 'catalog', 'notifications', 'checkout',
+];
 
 export default function PublicProfile() {
-  const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { orgSlug, brandSlug } = useParams<{ orgSlug?: string; brandSlug?: string }>();
+  const slug = orgSlug ?? brandSlug;
   const navigate = useNavigate();
   const { currentOrg, orgMemberships } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -28,7 +37,12 @@ export default function PublicProfile() {
   const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
 
   useEffect(() => {
-    if (!orgSlug) {
+    if (!slug) {
+      setLoading(false);
+      return;
+    }
+
+    if (RESERVED_ORG_SLUGS.includes(slug.toLowerCase())) {
       setLoading(false);
       return;
     }
@@ -38,7 +52,7 @@ export default function PublicProfile() {
         setLoading(true);
         
         // Fetch org with profile
-        const orgData = await getOrgBySlugWithProfile(orgSlug);
+        const orgData = await getOrgBySlugWithProfile(slug);
         if (!orgData) {
           setOrg(null);
           return;
@@ -58,7 +72,7 @@ export default function PublicProfile() {
     };
 
     loadProfile();
-  }, [orgSlug]);
+  }, [slug]);
 
   if (loading) {
     return (
@@ -66,6 +80,14 @@ export default function PublicProfile() {
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
       </div>
     );
+  }
+
+  if (!slug) {
+    return <NotFound />;
+  }
+
+  if (RESERVED_ORG_SLUGS.includes(slug.toLowerCase())) {
+    return <NotFound />;
   }
 
   if (!org) {
@@ -105,6 +127,7 @@ export default function PublicProfile() {
           orgId={org.id}
           orgSlug={org.slug}
           mode="public"
+          tabVariant="brand_public"
         />
       </div>
     </div>
