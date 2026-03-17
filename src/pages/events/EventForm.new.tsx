@@ -1810,6 +1810,7 @@ export default function EventForm() {
             </Button>
           </div>
         </div>
+        </div>
       </form>
 
       {/* Preview Dialog */}
