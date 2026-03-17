@@ -46,7 +46,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
   useEffect(() => {
     loadCounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, orgSlug, mode]);
+  }, [orgId, orgSlug, mode, tabVariant]);
 
   useEffect(() => {
     if (tabVariant === 'brand_public') {
@@ -69,12 +69,18 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
 
   const loadCounts = async () => {
     try {
+      // Products count - exclude addons when brand_public
+      let productsQuery = supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', orgId);
+      if (tabVariant === 'brand_public') {
+        productsQuery = productsQuery.eq('type', 'physical');
+      }
+
       // Fetch total counts for brand items (products + events)
       const [productsCountResult, eventsCountResult, spacesCountResult] = await Promise.all([
-        supabase
-          .from('products')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', orgId),
+        productsQuery,
         mode === 'public'
           ? supabase
               .from('events')
@@ -108,15 +114,20 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
   const loadBrandItems = async () => {
     try {
       setLoading(true);
-      
+
+      let productsQuery = supabase
+        .from('products')
+        .select('id, title, metadata, image_url, created_at')
+        .eq('org_id', orgId)
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (tabVariant === 'brand_public') {
+        productsQuery = productsQuery.eq('type', 'physical');
+      }
+
       // Fetch products and events in parallel
       const [productsResult, eventsResult] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, title, metadata, created_at')
-          .eq('org_id', orgId)
-          .order('created_at', { ascending: false })
-          .limit(60),
+        productsQuery,
         mode === 'public'
           ? supabase
               .from('events')
@@ -136,15 +147,11 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
       const products = (productsResult.data || []) as any[];
       const events = (eventsResult.data || []) as any[];
 
-      // Transform products
+      // Transform products - prefer image_url (photo upload/URL), fallback to metadata
       const productItems: GridItem[] = products.map((p) => {
-        // Extract first image from metadata.photos or metadata.image
-        let imageUrl: string | null = null;
-        if (p.metadata?.photos && Array.isArray(p.metadata.photos) && p.metadata.photos.length > 0) {
-          imageUrl = p.metadata.photos[0];
-        } else if (p.metadata?.image) {
-          imageUrl = p.metadata.image;
-        }
+        let imageUrl: string | null = p.image_url || null;
+        if (!imageUrl && p.metadata?.photos?.[0]) imageUrl = p.metadata.photos[0];
+        else if (!imageUrl && p.metadata?.image) imageUrl = p.metadata.image;
 
         return {
           id: p.id,
@@ -229,20 +236,18 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
       setLoading(true);
       const { data: products, error } = await supabase
         .from('products')
-        .select('id, title, metadata, created_at')
+        .select('id, title, metadata, image_url, created_at')
         .eq('org_id', orgId)
+        .eq('type', 'physical')
         .order('created_at', { ascending: false })
         .limit(60);
 
       if (error) throw error;
 
       const items: GridItem[] = (products || []).map((p: any) => {
-        let imageUrl: string | null = null;
-        if (p.metadata?.photos && Array.isArray(p.metadata.photos) && p.metadata.photos.length > 0) {
-          imageUrl = p.metadata.photos[0];
-        } else if (p.metadata?.image) {
-          imageUrl = p.metadata.image;
-        }
+        let imageUrl: string | null = p.image_url || null;
+        if (!imageUrl && p.metadata?.photos?.[0]) imageUrl = p.metadata.photos[0];
+        else if (!imageUrl && p.metadata?.image) imageUrl = p.metadata.image;
         return {
           id: p.id,
           type: 'product' as const,

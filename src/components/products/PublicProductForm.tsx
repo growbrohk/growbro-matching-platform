@@ -44,9 +44,11 @@ export default function PublicProductForm({
   );
   const [quantity, setQuantity] = useState(1);
 
-  // Get images from metadata
-  const photos: string[] =
-    product.metadata?.photos && Array.isArray(product.metadata.photos)
+  // Get images - prefer image_url (photo upload/URL), fallback to metadata
+  const imageUrl = (product as any).image_url;
+  const photos: string[] = imageUrl
+    ? [imageUrl]
+    : product.metadata?.photos && Array.isArray(product.metadata.photos)
       ? product.metadata.photos
       : product.metadata?.image
         ? [product.metadata.image]
