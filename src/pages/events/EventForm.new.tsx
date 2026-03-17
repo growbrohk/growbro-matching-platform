@@ -26,10 +26,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   createEvent, 
   updateEvent, 
   getEvent, 
+  deleteEvent,
   createTicketType, 
   updateTicketType, 
   deleteTicketType, 
@@ -126,6 +137,10 @@ export default function EventForm() {
 
   // Preview dialog state
   const [showPreview, setShowPreview] = useState(false);
+
+  // Delete dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Validation errors state
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -438,6 +453,29 @@ export default function EventForm() {
         description: error.message || 'Failed to remove preview photo',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!eventId || !currentOrg?.id) return;
+
+    try {
+      setDeleting(true);
+      await deleteEvent(eventId, currentOrg.id);
+      toast({
+        title: 'Success',
+        description: 'Event deleted successfully',
+      });
+      navigate('/app/catalog?tab=events');
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete event',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -1727,26 +1765,40 @@ export default function EventForm() {
 
         {/* Submit Button */}
         <div className="pt-6 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-          <div className="flex gap-4 justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (isEditMode && id) {
-                  navigate(`/app/events/${id}?tab=tickets`);
-                } else {
-                  navigate('/app/catalog?tab=events');
-                }
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving}
-              style={{ backgroundColor: '#0E7A3A' }}
-            >
+          <div className="flex gap-4 justify-between">
+            <div className="flex gap-2">
+              {isEditMode && eventId && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={saving || deleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Event
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (isEditMode && id) {
+                    navigate(`/app/events/${id}?tab=tickets`);
+                  } else {
+                    navigate('/app/catalog?tab=events');
+                  }
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving}
+                style={{ backgroundColor: '#0E7A3A' }}
+              >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1820,6 +1872,38 @@ export default function EventForm() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this event? This will permanently remove the event, all orders, tickets, and associated photos. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

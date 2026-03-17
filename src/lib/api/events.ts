@@ -247,6 +247,83 @@ export async function updateEvent(data: UpdateEventData): Promise<Event> {
 }
 
 /**
+ * Delete an event and all related data (orders, receipt photos, event preview photos).
+ * CASCADE removes: orders, order_items, order_addon_items, tickets, ticket_types, event_addon_products.
+ */
+export async function deleteEvent(eventId: string, orgId: string): Promise<void> {
+  // 1. Fetch orders for the event (before delete - we need order IDs and receipt_url)
+  const { data: orders, error: ordersError } = await supabase
+    .from('orders')
+    .select('id, receipt_url')
+    .eq('event_id', eventId);
+
+  if (ordersError) {
+    throw new Error(ordersError.message || 'Failed to fetch orders');
+  }
+
+  // 2. Delete payment receipt files for each order
+  if (orders && orders.length > 0) {
+    const receiptDeletePromises = orders
+      .filter((o) => o.receipt_url && String(o.receipt_url).trim())
+      .map(async (order) => {
+        let path = String(order.receipt_url!).trim();
+        if (path.startsWith('payment-receipts/')) {
+          path = path.replace(/^payment-receipts\//, '');
+        }
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          try {
+            const url = new URL(path);
+            const pathParts = url.pathname.split('/');
+            const bucketIndex = pathParts.findIndex((p) => p === 'payment-receipts');
+            if (bucketIndex !== -1) {
+              path = pathParts.slice(bucketIndex + 1).join('/');
+            }
+          } catch {
+            return;
+          }
+        }
+        try {
+          await supabase.storage.from('payment-receipts').remove([path]);
+        } catch (err) {
+          console.warn('Failed to delete receipt file:', path, err);
+        }
+      });
+    await Promise.all(receiptDeletePromises);
+  }
+
+  // 3. Delete event preview photos from event-previews bucket
+  const previewPrefix = `${orgId}/${eventId}`;
+  try {
+    const { data: files, error: listError } = await supabase.storage
+      .from('event-previews')
+      .list(previewPrefix, { limit: 100 });
+
+    if (!listError && files && files.length > 0) {
+      const pathsToRemove = files
+        .filter((f) => f.name)
+        .map((f) => `${previewPrefix}/${f.name}`);
+      if (pathsToRemove.length > 0) {
+        await supabase.storage.from('event-previews').remove(pathsToRemove);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to delete event preview photos:', err);
+    // Proceed with event delete - preview may not exist
+  }
+
+  // 4. Delete the event (CASCADE handles orders, ticket_types, event_addon_products, etc.)
+  const { error: deleteError } = await supabase
+    .from('events')
+    .delete()
+    .eq('id', eventId)
+    .eq('org_id', orgId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message || 'Failed to delete event');
+  }
+}
+
+/**
  * Get all events for an organization
  */
 export async function getEvents(orgId: string): Promise<Event[]> {
