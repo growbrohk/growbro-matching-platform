@@ -102,15 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         console.log('[auth]', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          setTimeout(() => {
-            fetchOrgMemberships(session.user.id);
-          }, 0);
+          await fetchOrgMemberships(session.user.id);
         } else {
           setOrgMemberships([]);
           setCurrentOrg(null);
@@ -119,12 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('[auth]', 'INITIAL_SESSION', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchOrgMemberships(session.user.id);
+        await fetchOrgMemberships(session.user.id);
+      } else {
+        setOrgMemberships([]);
+        setCurrentOrg(null);
       }
       setLoading(false);
     });
