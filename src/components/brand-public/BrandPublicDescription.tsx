@@ -66,8 +66,8 @@ export default function BrandPublicDescription({
                   {org.name}
                 </h2>
               </div>
-              {/* 2. Illustration */}
-              <div className="flex-shrink-0">
+              {/* 2. Illustration - align to bottom with brand and text */}
+              <div className="flex-shrink-0 flex items-end self-end">
                 {illustrationUrl ? (
                   <img
                     src={illustrationUrl}
@@ -83,8 +83,8 @@ export default function BrandPublicDescription({
                   </div>
                 )}
               </div>
-              {/* 3. Description text */}
-              <div className="flex-1 min-w-0 space-y-3 md:space-y-4">
+              {/* 3. Description text - align to bottom with brand and illustration */}
+              <div className="flex-1 min-w-0 flex flex-col justify-end space-y-3 md:space-y-4">
                 {intro && (
                   <p className="text-sm md:text-lg" style={{ color: BRAND_ACCENT }}>
                     {intro}
