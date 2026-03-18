@@ -46,7 +46,7 @@ export default function BrandPublicHero({
   const subheadline = profile?.hero_subheadline || '';
 
   return (
-    <section className="relative w-full min-h-[60vh] md:min-h-[70vh] flex flex-col">
+    <section className="relative w-full min-h-[40vh] md:min-h-[50vh] lg:min-h-[70vh] flex flex-col">
       {/* Header bar - fixed at top of hero */}
       <div
         className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 md:px-6"
@@ -79,7 +79,7 @@ export default function BrandPublicHero({
 
       {/* Hero banner carousel */}
       <div
-        className="relative flex-1 flex items-end min-h-[50vh] overflow-hidden"
+        className="relative flex-1 flex items-end min-h-[35vh] md:min-h-[45vh] lg:min-h-[50vh] overflow-hidden"
         style={bannerImages.length === 0 ? { backgroundColor: '#1a1a1a' } : undefined}
       >
         {bannerImages.length > 0 && (
