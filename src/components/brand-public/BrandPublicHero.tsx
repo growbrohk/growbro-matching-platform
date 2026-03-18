@@ -99,7 +99,6 @@ export default function BrandPublicHero({
                 }}
               />
             ))}
-            <div className="absolute inset-0 bg-black/40 z-[2]" />
           </>
         )}
         <div className="relative z-10 w-full px-4 pb-8 md:px-8 md:pb-12 lg:px-12 lg:pb-16 max-w-4xl lg:max-w-5xl">
