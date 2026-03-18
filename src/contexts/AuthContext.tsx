@@ -30,6 +30,17 @@ export interface OrgProfile {
   logo_url: string | null;
   created_at?: string;
   updated_at?: string;
+  // Brand page (block-like sections)
+  hero_banner_url?: string | null;
+  hero_headline?: string | null;
+  hero_subheadline?: string | null;
+  description_intro?: string | null;
+  description_body?: string | null;
+  description_images?: string[] | null;
+  description_tagline?: string | null;
+  footer_tagline?: string | null;
+  footer_contact_email?: string | null;
+  footer_links?: { label: string; url: string }[] | null;
 }
 
 type OrgMembershipsStatus = 'loading' | 'loaded' | 'error';

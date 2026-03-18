@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import ProfileHeader from '@/components/profile/ProfileHeader';
+import { Loader2, Pencil, Eye } from 'lucide-react';
 import ProfileActions from '@/components/profile/ProfileActions';
-import ProfileGrid from '@/components/profile/ProfileGrid';
+import BrandPublicHero from '@/components/brand-public/BrandPublicHero';
+import BrandPublicEvents from '@/components/brand-public/BrandPublicEvents';
+import BrandPublicDescription from '@/components/brand-public/BrandPublicDescription';
+import BrandPublicProducts from '@/components/brand-public/BrandPublicProducts';
+import BrandPublicFooter from '@/components/brand-public/BrandPublicFooter';
 import { getOrgBySlugWithProfile, getOrgStats } from '@/lib/api/orgs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConnectedCount } from '@/hooks/use-connected-count';
+import { useBrandPageData } from '@/hooks/use-brand-page-data';
 import NotFound from '@/pages/NotFound';
 
 const RESERVED_ORG_SLUGS = [
@@ -29,12 +33,14 @@ export default function PublicProfile() {
     connectCount: 0,
   });
 
-  // Check if user is a member of this org
   const isMemberOfOrg = org && orgMemberships.some((m) => m.org_id === org.id);
-  
-  // Fetch connected count for viewed org using hook (public mode)
+  const isOwner = isMemberOfOrg && currentOrg?.id === org?.id;
+  const [editMode, setEditMode] = useState(false);
+
   const { data: connectedCountData } = useConnectedCount(org?.id, true);
   const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
+
+  const { events, products, loading: dataLoading } = useBrandPageData(org?.id, org?.slug);
 
   useEffect(() => {
     if (!slug) {
@@ -50,17 +56,12 @@ export default function PublicProfile() {
     const loadProfile = async () => {
       try {
         setLoading(true);
-        
-        // Fetch org with profile
         const orgData = await getOrgBySlugWithProfile(slug);
         if (!orgData) {
           setOrg(null);
           return;
         }
-
         setOrg(orgData);
-
-        // Fetch stats
         const orgStats = await getOrgStats(orgData.id);
         setStats(orgStats);
       } catch (error: any) {
@@ -82,14 +83,8 @@ export default function PublicProfile() {
     );
   }
 
-  if (!slug) {
-    return <NotFound />;
-  }
-
-  if (RESERVED_ORG_SLUGS.includes(slug.toLowerCase())) {
-    return <NotFound />;
-  }
-
+  if (!slug) return <NotFound />;
+  if (RESERVED_ORG_SLUGS.includes(slug.toLowerCase())) return <NotFound />;
   if (!org) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -106,31 +101,55 @@ export default function PublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <div className="w-full px-6 py-6 md:py-8 max-w-4xl mx-auto">
-        <ProfileHeader
-          org={org}
-          profile={org.profile}
-          stats={stats}
-          mode="public"
-          connectedCount={connectedCount}
-          onConnectStatClick={
-            isMemberOfOrg
-              ? () => navigate(`/app/org/${org.id}/connections`)
-              : undefined
-          }
-        />
-        
-        <ProfileActions mode="public" otherOrgId={org.id} />
-        
-        <ProfileGrid
-          orgId={org.id}
-          orgSlug={org.slug}
-          mode="public"
-          tabVariant="brand_public"
-        />
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* Edit mode toggle - only for owner */}
+      {isOwner && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEditMode(!editMode)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium shadow-lg ${
+              editMode ? 'bg-amber-500 text-white' : 'bg-white text-gray-700 border border-gray-200'
+            }`}
+          >
+            {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            {editMode ? 'Preview' : 'Edit'}
+          </button>
+          <ProfileActions mode="public" otherOrgId={org.id} orgSlug={org.slug} />
+        </div>
+      )}
+
+      {/* Brand page layout */}
+      <BrandPublicHero
+        org={org}
+        profile={org.profile}
+        isOwner={isOwner}
+        isEditMode={editMode}
+        onEditClick={() => navigate('/app/settings/brand-page')}
+      />
+
+      <BrandPublicEvents
+        orgSlug={org.slug}
+        events={events}
+        loading={dataLoading}
+        isEditMode={editMode}
+      />
+
+      <BrandPublicDescription
+        org={org}
+        profile={org.profile}
+        isEditMode={editMode}
+        onEditClick={() => navigate('/app/settings/brand-page')}
+      />
+
+      <BrandPublicProducts
+        orgSlug={org.slug}
+        products={products}
+        loading={dataLoading}
+        isEditMode={editMode}
+      />
+
+      <BrandPublicFooter org={org} profile={org.profile} />
     </div>
   );
 }
-

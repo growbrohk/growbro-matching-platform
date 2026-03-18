@@ -25,6 +25,7 @@ import Catalog from "./pages/Catalog";
 import Settings from "./pages/Settings";
 import CatalogSettings from "./pages/settings/CatalogSettings";
 import ProfileSettings from "./pages/settings/ProfileSettings";
+import BrandPageSettings from "./pages/settings/BrandPageSettings";
 import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import CollabSearch from "./pages/collab/CollabSearch";
@@ -490,6 +491,7 @@ function AppRoutes() {
       <Route path="/app/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings/catalog" element={<ProtectedRoute><AppLayout><CatalogSettings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings/profile" element={<ProtectedRoute><AppLayout><ProfileSettings /></AppLayout></ProtectedRoute>} />
+      <Route path="/app/settings/brand-page" element={<ProtectedRoute><AppLayout><BrandPageSettings /></AppLayout></ProtectedRoute>} />
       
       {/* Account route - Profile page (new preferred route) */}
       <Route path="/app/account" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
