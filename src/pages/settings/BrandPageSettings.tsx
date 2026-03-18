@@ -395,7 +395,105 @@ export default function BrandPageSettings() {
         </CardContent>
       </Card>
 
-      {/* Catalog Layout */}
+      {/* Description */}
+      <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader>
+          <CardTitle>About Section</CardTitle>
+          <CardDescription>Layout: illustration + text, square photo carousel, tagline heading + paragraph</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Illustration (e.g. dog + frog mascot)</Label>
+            <div className="flex items-center gap-4">
+              {descriptionIllustrationUrl ? (
+                <img src={descriptionIllustrationUrl} alt="Illustration" className="h-24 w-24 object-contain rounded-lg border" />
+              ) : (
+                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingIllustration}
+                  onChange={uploadDescriptionIllustration}
+                />
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
+                  <Upload className="h-4 w-4" />
+                  {uploadingIllustration ? 'Uploading...' : 'Upload'}
+                </span>
+              </label>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Intro Paragraph (orange text)</Label>
+            <Textarea
+              value={descriptionIntro}
+              onChange={(e) => setDescriptionIntro(e.target.value)}
+              placeholder="First paragraph..."
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Body Paragraph (dark grey text)</Label>
+            <Textarea
+              value={descriptionBody}
+              onChange={(e) => setDescriptionBody(e.target.value)}
+              placeholder="Second paragraph..."
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Square Photo Carousel (up to 7)</Label>
+            <div className="grid grid-cols-4 md:grid-cols-7 gap-4">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="space-y-2">
+                  {descriptionImages[i] ? (
+                    <img src={descriptionImages[i]} alt="" className="aspect-square w-full object-cover rounded-lg" />
+                  ) : (
+                    <div className="aspect-square w-full rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingDesc === i}
+                      onChange={(e) => uploadDescriptionImage(i, e)}
+                    />
+                    <span className="text-xs text-primary cursor-pointer hover:underline">
+                      {uploadingDesc === i ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Tagline Heading</Label>
+            <Input
+              value={descriptionTagline}
+              onChange={(e) => setDescriptionTagline(e.target.value)}
+              placeholder="e.g. 777 run club isn't just events."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Tagline Paragraph</Label>
+            <Textarea
+              value={descriptionTaglineBody}
+              onChange={(e) => setDescriptionTaglineBody(e.target.value)}
+              placeholder="e.g. it's a proof that when we move together. we build something lasting - stronger bodies, stronger bonds, stronger brand love."
+              rows={3}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Events & Products Layout */}
       <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
         <CardHeader>
           <CardTitle>Events & Products Layout</CardTitle>
@@ -543,104 +641,6 @@ export default function BrandPageSettings() {
                 </div>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Description */}
-      <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-        <CardHeader>
-          <CardTitle>About Section</CardTitle>
-          <CardDescription>Layout: illustration + text, square photo carousel, tagline heading + paragraph</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Illustration (e.g. dog + frog mascot)</Label>
-            <div className="flex items-center gap-4">
-              {descriptionIllustrationUrl ? (
-                <img src={descriptionIllustrationUrl} alt="Illustration" className="h-24 w-24 object-contain rounded-lg border" />
-              ) : (
-                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
-                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                </div>
-              )}
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploadingIllustration}
-                  onChange={uploadDescriptionIllustration}
-                />
-                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
-                  <Upload className="h-4 w-4" />
-                  {uploadingIllustration ? 'Uploading...' : 'Upload'}
-                </span>
-              </label>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Intro Paragraph (orange text)</Label>
-            <Textarea
-              value={descriptionIntro}
-              onChange={(e) => setDescriptionIntro(e.target.value)}
-              placeholder="First paragraph..."
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Body Paragraph (dark grey text)</Label>
-            <Textarea
-              value={descriptionBody}
-              onChange={(e) => setDescriptionBody(e.target.value)}
-              placeholder="Second paragraph..."
-              rows={3}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Square Photo Carousel (up to 7)</Label>
-            <div className="grid grid-cols-4 md:grid-cols-7 gap-4">
-              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="space-y-2">
-                  {descriptionImages[i] ? (
-                    <img src={descriptionImages[i]} alt="" className="aspect-square w-full object-cover rounded-lg" />
-                  ) : (
-                    <div className="aspect-square w-full rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <label className="block">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={uploadingDesc === i}
-                      onChange={(e) => uploadDescriptionImage(i, e)}
-                    />
-                    <span className="text-xs text-primary cursor-pointer hover:underline">
-                      {uploadingDesc === i ? 'Uploading...' : 'Upload'}
-                    </span>
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Tagline Heading</Label>
-            <Input
-              value={descriptionTagline}
-              onChange={(e) => setDescriptionTagline(e.target.value)}
-              placeholder="e.g. 777 run club isn't just events."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Tagline Paragraph</Label>
-            <Textarea
-              value={descriptionTaglineBody}
-              onChange={(e) => setDescriptionTaglineBody(e.target.value)}
-              placeholder="e.g. it's a proof that when we move together. we build something lasting - stronger bodies, stronger bonds, stronger brand love."
-              rows={3}
-            />
           </div>
         </CardContent>
       </Card>
