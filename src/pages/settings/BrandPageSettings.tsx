@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowLeft, Upload, Image as ImageIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, Upload, Image as ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
@@ -38,6 +38,14 @@ export default function BrandPageSettings() {
   const [accentColor, setAccentColor] = useState('#E85D04');
   const [topSection, setTopSection] = useState<'events' | 'products' | 'both' | 'hidden'>('events');
   const [bottomSection, setBottomSection] = useState<'events' | 'products' | 'both' | 'hidden'>('products');
+  const [eventsFilter, setEventsFilter] = useState<'all' | 'non_expired'>('all');
+  const [eventsSort, setEventsSort] = useState<'manual' | 'random' | 'date' | 'creation'>('creation');
+  const [eventsDisplayOrder, setEventsDisplayOrder] = useState<string[]>([]);
+  const [productsFilter, setProductsFilter] = useState<'all' | 'in_sale_only'>('all');
+  const [productsSort, setProductsSort] = useState<'manual' | 'random' | 'date' | 'creation'>('creation');
+  const [productsDisplayOrder, setProductsDisplayOrder] = useState<string[]>([]);
+  const [reorderEvents, setReorderEvents] = useState<{ id: string; title: string }[]>([]);
+  const [reorderProducts, setReorderProducts] = useState<{ id: string; title: string }[]>([]);
   const [footerTagline, setFooterTagline] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
@@ -81,6 +89,12 @@ export default function BrandPageSettings() {
         setAccentColor(data.accent_color || '#E85D04');
         setTopSection((data as any).top_section || 'events');
         setBottomSection((data as any).bottom_section || 'products');
+        setEventsFilter((data as any).events_filter || 'all');
+        setEventsSort((data as any).events_sort || 'creation');
+        setEventsDisplayOrder(Array.isArray((data as any).events_display_order) ? (data as any).events_display_order : []);
+        setProductsFilter((data as any).products_filter || 'all');
+        setProductsSort((data as any).products_sort || 'creation');
+        setProductsDisplayOrder(Array.isArray((data as any).products_display_order) ? (data as any).products_display_order : []);
         setFooterTagline(data.footer_tagline || '');
         setFooterContactEmail(data.footer_contact_email || '');
         setFooterLinks(
@@ -104,6 +118,39 @@ export default function BrandPageSettings() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const loadReorderItems = useCallback(async () => {
+    if (!currentOrg?.id) return;
+    try {
+      const [eventsRes, productsRes] = await Promise.all([
+        supabase.from('events').select('id, title').eq('org_id', currentOrg.id).eq('status', 'published'),
+        supabase.from('products').select('id, title').eq('org_id', currentOrg.id).eq('type', 'physical'),
+      ]);
+      setReorderEvents((eventsRes.data || []).map((e: { id: string; title: string }) => ({ id: e.id, title: e.title })));
+      setReorderProducts((productsRes.data || []).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title })));
+    } catch (err) {
+      console.error('Error loading reorder items:', err);
+    }
+  }, [currentOrg?.id]);
+
+  useEffect(() => {
+    loadReorderItems();
+  }, [loadReorderItems]);
+
+  const getMergedOrder = (order: string[], items: { id: string; title: string }[]) => {
+    const ordered = order.filter((id) => items.some((x) => x.id === id));
+    const rest = items.filter((x) => !order.includes(x.id)).map((x) => x.id);
+    return [...ordered, ...rest];
+  };
+
+  const moveItem = (items: { id: string; title: string }[], order: string[], setOrder: (v: string[]) => void, index: number, direction: 'up' | 'down') => {
+    const merged = getMergedOrder(order, items);
+    const idx = direction === 'up' ? index - 1 : index + 1;
+    if (idx < 0 || idx >= merged.length) return;
+    const next = [...merged];
+    [next[index], next[idx]] = [next[idx], next[index]];
+    setOrder(next);
+  };
 
   const uploadHeroBannerImage = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -203,6 +250,12 @@ export default function BrandPageSettings() {
           accent_color: accentColor || '#E85D04',
           top_section: topSection,
           bottom_section: bottomSection,
+          events_filter: eventsFilter,
+          events_sort: eventsSort,
+          events_display_order: eventsDisplayOrder,
+          products_filter: productsFilter,
+          products_sort: productsSort,
+          products_display_order: productsDisplayOrder,
           hero_headline: heroHeadline || null,
           hero_subheadline: heroSubheadline || null,
           description_intro: descriptionIntro || null,
@@ -348,7 +401,7 @@ export default function BrandPageSettings() {
           <CardTitle>Events & Products Layout</CardTitle>
           <CardDescription>Choose what to show in the top and bottom rows between Hero and Footer</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="space-y-2">
             <Label>Top Row</Label>
             <Select value={topSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setTopSection(v)}>
@@ -376,6 +429,120 @@ export default function BrandPageSettings() {
                 <SelectItem value="hidden">Hidden</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="border-t pt-6 space-y-4">
+            <h3 className="font-medium text-sm" style={{ color: '#0F1F17' }}>Events</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Filter</Label>
+                <Select value={eventsFilter} onValueChange={(v: 'all' | 'non_expired') => setEventsFilter(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All events</SelectItem>
+                    <SelectItem value="non_expired">Non-expired only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Sort</Label>
+                <Select value={eventsSort} onValueChange={(v: 'manual' | 'random' | 'date' | 'creation') => setEventsSort(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="random">Random</SelectItem>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="creation">Creation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {eventsSort === 'manual' && (
+              <div className="space-y-2">
+                <Label>Reorder events</Label>
+                <div className="rounded-lg border bg-muted/30 divide-y max-h-48 overflow-y-auto">
+                  {getMergedOrder(eventsDisplayOrder, reorderEvents).map((id, idx) => {
+                    const item = reorderEvents.find((e) => e.id === id);
+                    if (!item) return null;
+                    return (
+                      <div key={id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="text-sm truncate flex-1">{item.title}</span>
+                        <div className="flex gap-1">
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveItem(reorderEvents, eventsDisplayOrder, setEventsDisplayOrder, idx, 'up')} disabled={idx === 0}>
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveItem(reorderEvents, eventsDisplayOrder, setEventsDisplayOrder, idx, 'down')} disabled={idx === getMergedOrder(eventsDisplayOrder, reorderEvents).length - 1}>
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {reorderEvents.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No events yet</p>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-6 space-y-4">
+            <h3 className="font-medium text-sm" style={{ color: '#0F1F17' }}>Products</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Filter</Label>
+                <Select value={productsFilter} onValueChange={(v: 'all' | 'in_sale_only') => setProductsFilter(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All products</SelectItem>
+                    <SelectItem value="in_sale_only">In sale only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Sort</Label>
+                <Select value={productsSort} onValueChange={(v: 'manual' | 'random' | 'date' | 'creation') => setProductsSort(v)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="random">Random</SelectItem>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="creation">Creation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {productsSort === 'manual' && (
+              <div className="space-y-2">
+                <Label>Reorder products</Label>
+                <div className="rounded-lg border bg-muted/30 divide-y max-h-48 overflow-y-auto">
+                  {getMergedOrder(productsDisplayOrder, reorderProducts).map((id, idx) => {
+                    const item = reorderProducts.find((p) => p.id === id);
+                    if (!item) return null;
+                    return (
+                      <div key={id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="text-sm truncate flex-1">{item.title}</span>
+                        <div className="flex gap-1">
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveItem(reorderProducts, productsDisplayOrder, setProductsDisplayOrder, idx, 'up')} disabled={idx === 0}>
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveItem(reorderProducts, productsDisplayOrder, setProductsDisplayOrder, idx, 'down')} disabled={idx === getMergedOrder(productsDisplayOrder, reorderProducts).length - 1}>
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {reorderProducts.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No products yet</p>}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

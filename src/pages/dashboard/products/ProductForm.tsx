@@ -231,6 +231,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
+  const [isOnSale, setIsOnSale] = useState(true);
   const [simpleStock, setSimpleStock] = useState('0'); // Stock for simple products
   
   // Category (using database tables)
@@ -417,7 +418,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     try {
         const { data: product, error: productError } = await (supabase as any)
           .from('products')
-          .select('id, org_id, type, title, description, base_price, metadata, image_url')
+          .select('id, org_id, type, title, description, base_price, metadata, image_url, is_on_sale')
           .eq('id', id)
           .eq('org_id', currentOrg.id)
           .single();
@@ -428,6 +429,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
+        setIsOnSale((p as { is_on_sale?: boolean }).is_on_sale !== false);
         
         // Load product type (physical | addon)
         if (!embedded) {
@@ -918,6 +920,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             base_price,
             category_id: categoryId || null,
             image_url: imageUrl || null,
+            is_on_sale: isOnSale,
           })
           .select('id')
           .single();
@@ -934,6 +937,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             base_price,
             category_id: categoryId || null,
             image_url: imageUrl || null,
+            is_on_sale: isOnSale,
           })
           .eq('id', id!)
           .eq('org_id', currentOrg.id);
@@ -1395,6 +1399,14 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                 <div className="space-y-2">
               <Label htmlFor="title">Title</Label>
               <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tote Bag" className="h-10" />
+                </div>
+
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                  <div>
+                    <Label htmlFor="is-on-sale">On sale</Label>
+                    <p className="text-sm text-muted-foreground">When off, product is out of sale and hidden when brand page filter is &quot;In sale only&quot;</p>
+                  </div>
+                  <Switch id="is-on-sale" checked={isOnSale} onCheckedChange={setIsOnSale} />
                 </div>
 
                 {/* Product Type (physical / add-on) - only on standalone form */}

@@ -19,10 +19,35 @@ export interface BrandProduct {
   price: number;
 }
 
-export function useBrandPageData(orgId: string, orgSlug: string | null) {
+export interface BrandPageProfileConfig {
+  events_filter?: 'all' | 'non_expired';
+  events_sort?: 'manual' | 'random' | 'date' | 'creation';
+  events_display_order?: string[];
+  products_filter?: 'all' | 'in_sale_only';
+  products_sort?: 'manual' | 'random' | 'date' | 'creation';
+  products_display_order?: string[];
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+export function useBrandPageData(orgId: string, orgSlug: string | null, profile?: BrandPageProfileConfig | null) {
   const [events, setEvents] = useState<BrandEvent[]>([]);
   const [products, setProducts] = useState<BrandProduct[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const eventsFilter = profile?.events_filter ?? 'all';
+  const eventsSort = profile?.events_sort ?? 'creation';
+  const eventsDisplayOrder = profile?.events_display_order ?? [];
+  const productsFilter = profile?.products_filter ?? 'all';
+  const productsSort = profile?.products_sort ?? 'creation';
+  const productsDisplayOrder = profile?.products_display_order ?? [];
 
   useEffect(() => {
     if (!orgId) {
@@ -33,25 +58,77 @@ export function useBrandPageData(orgId: string, orgSlug: string | null) {
     const load = async () => {
       try {
         setLoading(true);
-        const [eventsRes, productsRes] = await Promise.all([
-          supabase
-            .from('events')
-            .select('id, title, slug, start_at, day_2_start_at, instagram_preview_image_url, metadata')
-            .eq('org_id', orgId)
-            .eq('status', 'published')
-            .order('created_at', { ascending: false })
-            .limit(20),
-          supabase
-            .from('products')
-            .select('id, title, image_url, metadata, base_price')
-            .eq('org_id', orgId)
-            .eq('type', 'physical')
-            .order('created_at', { ascending: false })
-            .limit(20),
-        ]);
 
-        const eventsData = (eventsRes.data || []) as any[];
-        const productsData = (productsRes.data || []) as any[];
+        let eventsQuery = supabase
+          .from('events')
+          .select('id, title, slug, start_at, day_2_start_at, end_at, day_2_end_at, created_at, instagram_preview_image_url, metadata')
+          .eq('org_id', orgId)
+          .eq('status', 'published');
+
+        if (eventsSort === 'date') {
+          eventsQuery = eventsQuery.order('start_at', { ascending: true });
+        } else if (eventsSort === 'creation') {
+          eventsQuery = eventsQuery.order('created_at', { ascending: false });
+        } else {
+          eventsQuery = eventsQuery.order('created_at', { ascending: false });
+        }
+        eventsQuery = eventsQuery.limit(50);
+
+        let productsQuery = supabase
+          .from('products')
+          .select('id, title, image_url, metadata, base_price, created_at')
+          .eq('org_id', orgId)
+          .eq('type', 'physical');
+
+        if (productsFilter === 'in_sale_only') {
+          productsQuery = productsQuery.eq('is_on_sale', true);
+        }
+        if (productsSort === 'date' || productsSort === 'creation') {
+          productsQuery = productsQuery.order('created_at', { ascending: productsSort === 'date' });
+        } else {
+          productsQuery = productsQuery.order('created_at', { ascending: false });
+        }
+        productsQuery = productsQuery.limit(50);
+
+        const [eventsRes, productsRes] = await Promise.all([eventsQuery, productsQuery]);
+
+        let eventsData = (eventsRes.data || []) as any[];
+        let productsData = (productsRes.data || []) as any[];
+
+        if (eventsFilter === 'non_expired') {
+          eventsData = eventsData.filter((e) => {
+            const latestEnd = e.day_2_end_at || e.end_at;
+            return latestEnd && new Date(latestEnd) >= new Date();
+          });
+        }
+
+        if (eventsSort === 'manual' && eventsDisplayOrder.length > 0) {
+          const ordered = eventsDisplayOrder.filter((id) => eventsData.some((e) => e.id === id));
+          const orderMap = new Map(ordered.map((id, i) => [id, i]));
+          eventsData = [...eventsData].sort((a, b) => {
+            const ai = orderMap.get(a.id) ?? 9999;
+            const bi = orderMap.get(b.id) ?? 9999;
+            return ai - bi;
+          });
+        } else if (eventsSort === 'random') {
+          eventsData = shuffle(eventsData);
+        }
+
+        if (productsSort === 'manual' && productsDisplayOrder.length > 0) {
+          const orderSet = new Set(productsDisplayOrder);
+          const ordered = productsDisplayOrder.filter((id) => productsData.some((p) => p.id === id));
+          const orderMap = new Map(ordered.map((id, i) => [id, i]));
+          productsData = [...productsData].sort((a, b) => {
+            const ai = orderMap.get(a.id) ?? 9999;
+            const bi = orderMap.get(b.id) ?? 9999;
+            return ai - bi;
+          });
+        } else if (productsSort === 'random') {
+          productsData = shuffle(productsData);
+        }
+
+        eventsData = eventsData.slice(0, 20);
+        productsData = productsData.slice(0, 20);
 
         const eventIds = eventsData.map((e) => e.id);
         let minPriceByEvent: Record<string, number> = {};
@@ -111,7 +188,7 @@ export function useBrandPageData(orgId: string, orgSlug: string | null) {
     };
 
     load();
-  }, [orgId, orgSlug]);
+  }, [orgId, orgSlug, eventsFilter, eventsSort, JSON.stringify(eventsDisplayOrder), productsFilter, productsSort, JSON.stringify(productsDisplayOrder)]);
 
   return { events, products, loading };
 }

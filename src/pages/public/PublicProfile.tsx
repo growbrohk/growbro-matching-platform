@@ -40,7 +40,7 @@ export default function PublicProfile() {
   const { data: connectedCountData } = useConnectedCount(org?.id, true);
   const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
 
-  const { events, products, loading: dataLoading } = useBrandPageData(org?.id, org?.slug);
+  const { events, products, loading: dataLoading } = useBrandPageData(org?.id, org?.slug, org?.profile);
 
   useEffect(() => {
     if (!slug) {
