@@ -133,6 +133,7 @@ export default function PublicProfile() {
         events={events}
         loading={dataLoading}
         isEditMode={editMode}
+        accentColor={org.profile?.accent_color}
       />
 
       <BrandPublicDescription
@@ -147,6 +148,7 @@ export default function PublicProfile() {
         products={products}
         loading={dataLoading}
         isEditMode={editMode}
+        accentColor={org.profile?.accent_color}
       />
 
       <BrandPublicFooter org={org} profile={org.profile} />

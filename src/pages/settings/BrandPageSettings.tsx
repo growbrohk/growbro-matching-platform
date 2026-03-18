@@ -34,6 +34,7 @@ export default function BrandPageSettings() {
   const [descriptionIllustrationUrl, setDescriptionIllustrationUrl] = useState('');
   const [descriptionTagline, setDescriptionTagline] = useState('');
   const [descriptionTaglineBody, setDescriptionTaglineBody] = useState('');
+  const [accentColor, setAccentColor] = useState('#E85D04');
   const [footerTagline, setFooterTagline] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
@@ -74,6 +75,7 @@ export default function BrandPageSettings() {
         setDescriptionIllustrationUrl(data.description_illustration_url || '');
         setDescriptionTagline(data.description_tagline || '');
         setDescriptionTaglineBody(data.description_tagline_body || '');
+        setAccentColor(data.accent_color || '#E85D04');
         setFooterTagline(data.footer_tagline || '');
         setFooterContactEmail(data.footer_contact_email || '');
         setFooterLinks(
@@ -193,6 +195,7 @@ export default function BrandPageSettings() {
         .update({
           hero_banner_url: heroBannerImages[0] || null,
           hero_banner_images: heroBannerImages.filter(Boolean),
+          accent_color: accentColor || '#E85D04',
           hero_headline: heroHeadline || null,
           hero_subheadline: heroSubheadline || null,
           description_intro: descriptionIntro || null,
@@ -262,6 +265,29 @@ export default function BrandPageSettings() {
           <CardDescription>Main banner at the top of your brand page</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Accent Color</Label>
+            <p className="text-sm text-muted-foreground">Used for header, section labels, links, and footer</p>
+            <div className="flex items-center gap-4">
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                className="h-10 w-14 cursor-pointer rounded border border-input bg-muted"
+              />
+              <Input
+                value={accentColor}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^#?[0-9A-Fa-f]{0,6}$/.test(v)) {
+                    setAccentColor(v.startsWith('#') ? v : v ? `#${v}` : '#E85D04');
+                  }
+                }}
+                placeholder="#E85D04"
+                className="w-28 font-mono text-sm"
+              />
+            </div>
+          </div>
           <div className="space-y-2">
             <Label>Banner Carousel (3 photos)</Label>
             <div className="grid grid-cols-3 gap-4">

@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatShortEventDate } from '@/lib/utils/datetime';
 
-const BRAND_ACCENT = '#E85D04';
+const DEFAULT_ACCENT = '#E85D04';
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat('en-HK', {
@@ -28,6 +28,7 @@ interface BrandPublicEventsProps {
   events: EventItem[];
   loading?: boolean;
   isEditMode?: boolean;
+  accentColor?: string | null;
 }
 
 export default function BrandPublicEvents({
@@ -35,8 +36,10 @@ export default function BrandPublicEvents({
   events,
   loading,
   isEditMode,
+  accentColor = DEFAULT_ACCENT,
 }: BrandPublicEventsProps) {
   const navigate = useNavigate();
+  const accent = accentColor || DEFAULT_ACCENT;
 
   const handleEventClick = (e: EventItem) => {
     if (e.slug && orgSlug) {
@@ -48,7 +51,7 @@ export default function BrandPublicEvents({
     return (
       <section className="w-full px-4 py-4 md:py-6">
         <div className="max-w-6xl mx-auto">
-          <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: BRAND_ACCENT }}>
+          <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
             <h2 className="text-xl font-bold text-white">events</h2>
             <p className="text-sm text-white/80">#RunHNT</p>
           </div>
@@ -67,7 +70,7 @@ export default function BrandPublicEvents({
   return (
     <section className="w-full px-4 py-4 md:py-6 bg-muted/20">
       <div className="max-w-6xl mx-auto">
-        <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: BRAND_ACCENT }}>
+        <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
           <h2 className="text-xl font-bold text-white">events</h2>
           <p className="text-sm text-white/80">#RunHNT</p>
         </div>
@@ -91,7 +94,7 @@ export default function BrandPublicEvents({
                 </div>
               )}
               {event.priceFrom != null && (
-                <div className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs font-medium" style={{ backgroundColor: 'rgba(232, 93, 4, 0.75)', color: 'white' }}>
+                <div className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs font-medium" style={{ backgroundColor: accent, color: 'white' }}>
                   {event.priceFrom === 0 ? 'Free' : `From ${formatPrice(event.priceFrom)}`}
                 </div>
               )}

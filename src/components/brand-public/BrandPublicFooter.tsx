@@ -1,5 +1,4 @@
-
-const BRAND_ACCENT = '#E85D04';
+const DEFAULT_ACCENT = '#E85D04';
 
 interface BrandPublicFooterProps {
   org: { id: string; name: string; slug?: string | null };
@@ -8,18 +7,20 @@ interface BrandPublicFooterProps {
     hero_subheadline?: string | null;
     footer_tagline?: string | null;
     footer_contact_email?: string | null;
+    accent_color?: string | null;
   } | null;
 }
 
 export default function BrandPublicFooter({ org, profile }: BrandPublicFooterProps) {
   const logoUrl = profile?.logo_url || null;
+  const accentColor = profile?.accent_color || DEFAULT_ACCENT;
   const tagline = profile?.footer_tagline || profile?.hero_subheadline || 'One baby step at a time.';
   const contactEmail = profile?.footer_contact_email || '';
 
   return (
     <footer
       className="w-full px-4 py-10 md:py-12"
-      style={{ backgroundColor: BRAND_ACCENT }}
+      style={{ backgroundColor: accentColor }}
     >
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-6">
         <div className="space-y-2">

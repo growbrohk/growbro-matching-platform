@@ -10,12 +10,13 @@ interface BrandPublicHeroProps {
     hero_banner_images?: string[] | null;
     hero_headline?: string | null;
     hero_subheadline?: string | null;
+    accent_color?: string | null;
   } | null;
   isEditMode?: boolean;
   onEditClick?: () => void;
 }
 
-const BRAND_ACCENT = '#E85D04'; // Orange accent for brand pages
+const DEFAULT_ACCENT = '#E85D04';
 const CAROUSEL_INTERVAL_MS = 5000;
 
 export default function BrandPublicHero({
@@ -44,13 +45,14 @@ export default function BrandPublicHero({
 
   const headline = profile?.hero_headline || org.name;
   const subheadline = profile?.hero_subheadline || '';
+  const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
     <section className="relative w-full min-h-[40vh] md:min-h-[50vh] lg:min-h-[70vh] flex flex-col">
       {/* Header bar - fixed at top of hero */}
       <div
         className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 md:px-6"
-        style={{ backgroundColor: BRAND_ACCENT }}
+        style={{ backgroundColor: accentColor }}
       >
         <Link to={`/${org.slug || org.id}`} className="flex items-center gap-2">
           {logoUrl ? (

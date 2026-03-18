@@ -8,12 +8,13 @@ interface BrandPublicDescriptionProps {
     description_tagline?: string | null;
     description_tagline_body?: string | null;
     footer_links?: { label: string; url: string }[] | null;
+    accent_color?: string | null;
   } | null;
   isEditMode?: boolean;
   onEditClick?: () => void;
 }
 
-const BRAND_ACCENT = '#E85D04';
+const DEFAULT_ACCENT = '#E85D04';
 
 export default function BrandPublicDescription({
   org,
@@ -42,6 +43,8 @@ export default function BrandPublicDescription({
     links.length > 0;
 
   if (!hasContent && !isEditMode) return null;
+
+  const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
     <section className="w-full px-4 py-4 md:py-6">
@@ -86,7 +89,7 @@ export default function BrandPublicDescription({
               {/* 3. Description text - align to bottom with brand and illustration */}
               <div className="flex-1 min-w-0 flex flex-col justify-end space-y-3 md:space-y-4">
                 {intro && (
-                  <p className="text-sm md:text-lg" style={{ color: BRAND_ACCENT }}>
+                  <p className="text-sm md:text-lg" style={{ color: accentColor }}>
                     {intro}
                   </p>
                 )}
@@ -138,7 +141,7 @@ export default function BrandPublicDescription({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm font-medium hover:underline"
-                      style={{ color: BRAND_ACCENT }}
+                      style={{ color: accentColor }}
                     >
                       {link.label}
                     </a>

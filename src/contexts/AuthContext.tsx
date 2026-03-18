@@ -44,6 +44,7 @@ export interface OrgProfile {
   footer_tagline?: string | null;
   footer_contact_email?: string | null;
   footer_links?: { label: string; url: string }[] | null;
+  accent_color?: string | null;
 }
 
 type OrgMembershipsStatus = 'loading' | 'loaded' | 'error';
