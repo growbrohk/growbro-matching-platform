@@ -49,15 +49,15 @@ export default function BrandPublicEvents({
 
   if (loading) {
     return (
-      <section className="w-full px-4 py-4 md:py-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
-            <h2 className="text-xl font-bold text-white">events</h2>
-            <p className="text-sm text-white/80">#RunHNT</p>
+      <section className="w-full px-4 py-4 md:py-6 lg:py-8">
+        <div className="max-w-6xl lg:max-w-7xl mx-auto">
+          <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
+            <h2 className="text-xl lg:text-2xl font-bold text-white">events</h2>
+            <p className="text-sm lg:text-base text-white/80">#RunHNT</p>
           </div>
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="aspect-[4/5] w-48 md:w-56 flex-shrink-0 rounded-lg" />
+              <Skeleton key={i} className="aspect-[4/5] w-48 md:w-56 lg:w-64 flex-shrink-0 rounded-lg" />
             ))}
           </div>
         </div>
@@ -68,19 +68,19 @@ export default function BrandPublicEvents({
   if (events.length === 0 && !isEditMode) return null;
 
   return (
-    <section className="w-full px-4 py-4 md:py-6 bg-muted/20">
-      <div className="max-w-6xl mx-auto">
-        <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
-          <h2 className="text-xl font-bold text-white">events</h2>
-          <p className="text-sm text-white/80">#RunHNT</p>
+    <section className="w-full px-4 py-4 md:py-6 lg:py-8 bg-muted/20">
+      <div className="max-w-6xl lg:max-w-7xl mx-auto">
+        <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
+          <h2 className="text-xl lg:text-2xl font-bold text-white">events</h2>
+          <p className="text-sm lg:text-base text-white/80">#RunHNT</p>
         </div>
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
           {events.map((event) => (
             <button
               key={event.id}
               type="button"
               onClick={() => handleEventClick(event)}
-              className="relative flex-shrink-0 w-48 md:w-56 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
+              className="relative flex-shrink-0 w-48 md:w-56 lg:w-64 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
             >
               {event.imageUrl ? (
                 <img
@@ -94,14 +94,14 @@ export default function BrandPublicEvents({
                 </div>
               )}
               {event.priceFrom != null && (
-                <div className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs font-medium" style={{ backgroundColor: accent, color: 'white' }}>
+                <div className="absolute top-2 right-2 lg:top-3 lg:right-3 px-2 py-1 lg:px-3 lg:py-1.5 rounded-md text-xs lg:text-sm font-medium" style={{ backgroundColor: accent, color: 'white' }}>
                   {event.priceFrom === 0 ? 'Free' : `From ${formatPrice(event.priceFrom)}`}
                 </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/70 to-transparent space-y-1">
-                <p className="text-white font-medium text-sm truncate">{event.title}</p>
+              <div className="absolute inset-x-0 bottom-0 p-4 lg:p-5 bg-gradient-to-t from-black/70 to-transparent space-y-1">
+                <p className="text-white font-medium text-sm lg:text-base truncate">{event.title}</p>
                 {event.dateStrings && event.dateStrings.length > 0 && (
-                  <p className="text-white/90 text-xs truncate">
+                  <p className="text-white/90 text-xs lg:text-sm truncate">
                     {event.dateStrings.map(formatShortEventDate).join(', ')}
                   </p>
                 )}

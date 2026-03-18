@@ -47,17 +47,17 @@ export default function BrandPublicDescription({
   const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
-    <section className="w-full px-4 py-4 md:py-6">
-      <div className="max-w-6xl mx-auto">
+    <section className="w-full px-4 py-4 md:py-6 lg:py-10">
+      <div className="max-w-6xl lg:max-w-7xl mx-auto">
         <div className="flex">
           {/* Main content */}
           <div className="flex-1 min-w-0">
             {/* Top: 3 columns - Brand (vertical) | Illustration | Text - same layout on all breakpoints */}
-            <div className="flex flex-row gap-4 md:gap-6 lg:gap-8 mb-8 items-end">
+            <div className="flex flex-row gap-4 md:gap-6 lg:gap-10 mb-8 lg:mb-12 items-end">
               {/* 1. Vertical brand name - writing-mode flows text vertically without transform overflow */}
-              <div className="flex-shrink-0 w-8 md:w-10 flex items-end justify-end">
+              <div className="flex-shrink-0 w-8 md:w-10 lg:w-12 flex items-end justify-end">
                 <h2
-                  className="text-lg md:text-2xl lg:text-3xl font-bold py-1"
+                  className="text-lg md:text-2xl lg:text-4xl font-bold py-1"
                   style={{
                     color: '#0F1F17',
                     fontFamily: "'Inter Tight', sans-serif",
@@ -75,11 +75,11 @@ export default function BrandPublicDescription({
                   <img
                     src={illustrationUrl}
                     alt=""
-                    className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 object-contain"
+                    className="w-20 h-20 md:w-32 md:h-32 lg:w-48 lg:h-48 object-contain"
                   />
                 ) : (
                   <div
-                    className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg bg-muted/50 flex items-center justify-center"
+                    className="w-20 h-20 md:w-32 md:h-32 lg:w-48 lg:h-48 rounded-lg bg-muted/50 flex items-center justify-center"
                     style={{ border: '1px dashed rgba(0,0,0,0.2)' }}
                   >
                     <span className="text-xs text-muted-foreground">Illustration</span>
@@ -87,14 +87,14 @@ export default function BrandPublicDescription({
                 )}
               </div>
               {/* 3. Description text - align to bottom with brand and illustration */}
-              <div className="flex-1 min-w-0 flex flex-col justify-end space-y-3 md:space-y-4">
+              <div className="flex-1 min-w-0 flex flex-col justify-end space-y-3 md:space-y-4 lg:space-y-5">
                 {intro && (
-                  <p className="text-sm md:text-lg" style={{ color: accentColor }}>
+                  <p className="text-sm md:text-lg lg:text-xl" style={{ color: accentColor }}>
                     {intro}
                   </p>
                 )}
                 {body && (
-                  <p className="text-sm md:text-lg" style={{ color: '#0F1F17' }}>
+                  <p className="text-sm md:text-lg lg:text-xl" style={{ color: '#0F1F17' }}>
                     {body}
                   </p>
                 )}
@@ -103,11 +103,11 @@ export default function BrandPublicDescription({
 
             {/* Middle: Square photo carousel */}
             {images.length > 0 && (
-              <div className="flex gap-3 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-8">
+              <div className="flex gap-3 lg:gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-8 lg:mb-12">
                 {images.slice(0, 7).map((url, i) => (
                   <div
                     key={i}
-                    className="flex-shrink-0 w-28 md:w-32 aspect-square rounded-xl overflow-hidden bg-muted"
+                    className="flex-shrink-0 w-28 md:w-32 lg:w-40 aspect-square rounded-xl overflow-hidden bg-muted"
                   >
                     <img src={url} alt="" className="w-full h-full object-cover" />
                   </div>
@@ -116,18 +116,18 @@ export default function BrandPublicDescription({
             )}
 
             {/* Bottom: Tagline heading + paragraph, with links on right */}
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-              <div className="space-y-2">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 lg:gap-8">
+              <div className="space-y-2 lg:space-y-3">
                 {tagline && (
                   <h3
-                    className="text-xl font-bold"
+                    className="text-xl lg:text-2xl font-bold"
                     style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
                   >
                     {tagline}
                   </h3>
                 )}
                 {taglineBody && (
-                  <p className="text-base leading-relaxed" style={{ color: 'rgba(15,31,23,0.85)' }}>
+                  <p className="text-base lg:text-lg leading-relaxed" style={{ color: 'rgba(15,31,23,0.85)' }}>
                     {taglineBody}
                   </p>
                 )}
@@ -140,7 +140,7 @@ export default function BrandPublicDescription({
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm font-medium hover:underline"
+                      className="text-sm lg:text-base font-medium hover:underline"
                       style={{ color: accentColor }}
                     >
                       {link.label}

@@ -48,31 +48,31 @@ export default function BrandPublicHero({
   const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
-    <section className="relative w-full min-h-[40vh] md:min-h-[50vh] lg:min-h-[70vh] flex flex-col">
+    <section className="relative w-full min-h-[40vh] md:min-h-[45vh] lg:min-h-[55vh] flex flex-col">
       {/* Header bar - fixed at top of hero */}
       <div
-        className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 md:px-6"
+        className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 md:px-6 lg:px-8 lg:py-4"
         style={{ backgroundColor: accentColor }}
       >
         <Link to={`/${org.slug || org.id}`} className="flex items-center gap-2">
           {logoUrl ? (
-            <img src={logoUrl} alt={org.name} className="h-8 w-8 rounded-full object-cover" />
+            <img src={logoUrl} alt={org.name} className="h-8 w-8 lg:h-10 lg:w-10 rounded-full object-cover" />
           ) : (
-            <span className="text-lg font-bold text-white">{org.name.charAt(0)}</span>
+            <span className="text-lg lg:text-xl font-bold text-white">{org.name.charAt(0)}</span>
           )}
-          <span className="font-semibold text-white text-sm md:text-base">{org.name}</span>
+          <span className="font-semibold text-white text-sm md:text-base lg:text-lg">{org.name}</span>
         </Link>
         {isOwner ? (
           <Link
             to="/app/settings/brand-page"
-            className="text-sm font-medium text-white hover:underline"
+            className="text-sm lg:text-base font-medium text-white hover:underline"
           >
             Edit page
           </Link>
         ) : (
           <Link
             to="/auth"
-            className="text-sm font-medium text-white hover:underline"
+            className="text-sm lg:text-base font-medium text-white hover:underline"
           >
             Join us now
           </Link>
@@ -81,7 +81,7 @@ export default function BrandPublicHero({
 
       {/* Hero banner carousel */}
       <div
-        className="relative flex-1 flex items-end min-h-[35vh] md:min-h-[45vh] lg:min-h-[50vh] overflow-hidden"
+        className="relative flex-1 flex items-end min-h-[35vh] md:min-h-[38vh] lg:min-h-[45vh] overflow-hidden"
         style={bannerImages.length === 0 ? { backgroundColor: '#1a1a1a' } : undefined}
       >
         {bannerImages.length > 0 && (
@@ -102,12 +102,12 @@ export default function BrandPublicHero({
             <div className="absolute inset-0 bg-black/40 z-[2]" />
           </>
         )}
-        <div className="relative z-10 w-full px-4 pb-8 md:px-8 md:pb-12 max-w-4xl">
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
+        <div className="relative z-10 w-full px-4 pb-8 md:px-8 md:pb-12 lg:px-12 lg:pb-16 max-w-4xl lg:max-w-5xl">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white mb-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
             {headline}
           </h1>
           {subheadline && (
-            <p className="text-lg md:text-xl text-white/90">{subheadline}</p>
+            <p className="text-lg md:text-xl lg:text-2xl text-white/90">{subheadline}</p>
           )}
         </div>
         {isEditMode && onEditClick && (

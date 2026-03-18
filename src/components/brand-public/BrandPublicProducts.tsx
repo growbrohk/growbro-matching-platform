@@ -46,14 +46,14 @@ export default function BrandPublicProducts({
 
   if (loading) {
     return (
-      <section className="w-full px-4 py-4 md:py-6 bg-muted/20">
-        <div className="max-w-6xl mx-auto">
-          <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
-            <h2 className="text-xl font-bold text-white">merch</h2>
+      <section className="w-full px-4 py-4 md:py-6 lg:py-8 bg-muted/20">
+        <div className="max-w-6xl lg:max-w-7xl mx-auto">
+          <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
+            <h2 className="text-xl lg:text-2xl font-bold text-white">merch</h2>
           </div>
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="aspect-square w-36 md:w-40 flex-shrink-0 rounded-lg" />
+              <Skeleton key={i} className="aspect-square w-36 md:w-40 lg:w-48 flex-shrink-0 rounded-lg" />
             ))}
           </div>
         </div>
@@ -64,18 +64,18 @@ export default function BrandPublicProducts({
   if (products.length === 0 && !isEditMode) return null;
 
   return (
-    <section className="w-full px-4 py-4 md:py-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: accent }}>
-          <h2 className="text-xl font-bold text-white">merch</h2>
+    <section className="w-full px-4 py-4 md:py-6 lg:py-8">
+      <div className="max-w-6xl lg:max-w-7xl mx-auto">
+        <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
+          <h2 className="text-xl lg:text-2xl font-bold text-white">merch</h2>
         </div>
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
           {products.map((product) => (
             <button
               key={product.id}
               type="button"
               onClick={() => handleProductClick(product)}
-              className="flex-shrink-0 w-36 md:w-40 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
+              className="flex-shrink-0 w-36 md:w-40 lg:w-48 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
             >
               <div className="aspect-square w-full">
                 {product.imageUrl ? (
@@ -90,12 +90,12 @@ export default function BrandPublicProducts({
                   </div>
                 )}
               </div>
-              <div className="p-3">
-                <p className="font-medium text-sm truncate" style={{ color: '#0F1F17' }}>
+              <div className="p-3 lg:p-4">
+                <p className="font-medium text-sm lg:text-base truncate" style={{ color: '#0F1F17' }}>
                   {product.title}
                 </p>
                 {product.price != null && product.price > 0 && (
-                  <p className="text-sm font-semibold mt-0.5" style={{ color: accent }}>
+                  <p className="text-sm lg:text-base font-semibold mt-0.5" style={{ color: accent }}>
                     {formatPrice(product.price)}
                   </p>
                 )}
