@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { ShoppingCart } from 'lucide-react';
-import { usePublicCart } from '@/contexts/PublicCartContext';
+import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
 
 interface BrandPublicHeroProps {
   org: { id: string; name: string; slug?: string | null };
@@ -14,26 +12,15 @@ interface BrandPublicHeroProps {
     hero_subheadline?: string | null;
     accent_color?: string | null;
   } | null;
-  isEditMode?: boolean;
-  onEditClick?: () => void;
 }
 
-const DEFAULT_ACCENT = '#E85D04';
 const CAROUSEL_INTERVAL_MS = 5000;
 
 export default function BrandPublicHero({
   org,
   profile,
   isOwner,
-  isEditMode,
-  onEditClick,
 }: BrandPublicHeroProps) {
-  const { orgId, setOrgId, totalQty } = usePublicCart();
-  const logoUrl = profile?.logo_url || null;
-
-  useEffect(() => {
-    setOrgId(org.id);
-  }, [org.id, setOrgId]);
   const rawImages = profile?.hero_banner_images;
   const images: string[] = Array.isArray(rawImages)
     ? rawImages.filter((x): x is string => typeof x === 'string' && x.length > 0)
@@ -52,53 +39,10 @@ export default function BrandPublicHero({
 
   const headline = profile?.hero_headline || org.name;
   const subheadline = profile?.hero_subheadline || '';
-  const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
     <section className="relative w-full min-h-[40vh] md:min-h-[45vh] lg:min-h-[55vh] flex flex-col">
-      {/* Header bar - fixed at top of hero */}
-      <div
-        className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 md:px-6 lg:px-8 lg:py-4"
-        style={{ backgroundColor: accentColor }}
-      >
-        <Link to={`/${org.slug || org.id}`} className="flex items-center gap-2">
-          {logoUrl ? (
-            <img src={logoUrl} alt={org.name} className="h-8 w-8 lg:h-10 lg:w-10 rounded-full object-cover" />
-          ) : (
-            <span className="text-lg lg:text-xl font-bold text-white">{org.name.charAt(0)}</span>
-          )}
-          <span className="font-semibold text-white text-sm md:text-base lg:text-lg">{org.name}</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link
-            to={`/${org.slug || org.id}/checkout`}
-            className="relative p-2 rounded-lg hover:bg-white/20 transition-colors"
-            aria-label={totalQty > 0 ? `Cart with ${totalQty} items` : 'Cart'}
-          >
-            <ShoppingCart className="h-5 w-5 text-white" />
-            {orgId === org.id && totalQty > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-white text-xs font-bold text-black px-1">
-                {totalQty > 99 ? '99+' : totalQty}
-              </span>
-            )}
-          </Link>
-          {isOwner ? (
-          <Link
-            to="/app/settings/brand-page"
-            className="text-sm lg:text-base font-medium text-white hover:underline"
-          >
-            Edit page
-          </Link>
-        ) : (
-          <Link
-            to="/auth"
-            className="text-sm lg:text-base font-medium text-white hover:underline"
-          >
-            Join us now
-          </Link>
-        )}
-        </div>
-      </div>
+      <BrandPublicHeader org={org} profile={profile} showBackLink={false} isOwner={isOwner} />
 
       {/* Hero banner carousel */}
       <div
@@ -130,15 +74,6 @@ export default function BrandPublicHero({
             <p className="text-lg md:text-xl lg:text-2xl text-white/90">{subheadline}</p>
           )}
         </div>
-        {isEditMode && onEditClick && (
-          <button
-            type="button"
-            onClick={onEditClick}
-            className="absolute top-20 right-4 z-20 px-3 py-1.5 rounded-lg text-sm font-medium bg-white/90 text-gray-800 hover:bg-white"
-          >
-            Edit
-          </button>
-        )}
       </div>
     </section>
   );

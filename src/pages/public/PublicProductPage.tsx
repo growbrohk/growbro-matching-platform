@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { getProductWithVariants } from '@/lib/api/products';
 import { getOrgBySlugWithProfile } from '@/lib/api/orgs';
 import NotFound from '@/pages/NotFound';
+import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
 import PublicProductForm from '@/components/products/PublicProductForm';
 
 const RESERVED_ORG_SLUGS = [
@@ -79,6 +80,7 @@ export default function PublicProductPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <BrandPublicHeader org={org} profile={org.profile} showBackLink={true} isOwner={false} />
       <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12">
         <PublicProductForm
           product={productData.product}

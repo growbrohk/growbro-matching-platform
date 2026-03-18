@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Pencil, Eye } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import ProfileActions from '@/components/profile/ProfileActions';
 import BrandPublicHero from '@/components/brand-public/BrandPublicHero';
 import BrandPublicEvents from '@/components/brand-public/BrandPublicEvents';
@@ -35,7 +35,6 @@ export default function PublicProfile() {
 
   const isMemberOfOrg = org && orgMemberships.some((m) => m.org_id === org.id);
   const isOwner = isMemberOfOrg && currentOrg?.id === org?.id;
-  const [editMode, setEditMode] = useState(false);
 
   const { data: connectedCountData } = useConnectedCount(org?.id, true);
   const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
@@ -102,19 +101,8 @@ export default function PublicProfile() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Edit mode toggle - only for owner */}
       {isOwner && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setEditMode(!editMode)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium shadow-lg ${
-              editMode ? 'bg-amber-500 text-white' : 'bg-white text-gray-700 border border-gray-200'
-            }`}
-          >
-            {editMode ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-            {editMode ? 'Preview' : 'Edit'}
-          </button>
+        <div className="fixed top-14 md:top-16 right-4 z-50 flex items-center gap-2">
           <ProfileActions mode="public" otherOrgId={org.id} orgSlug={org.slug} />
         </div>
       )}
@@ -124,8 +112,6 @@ export default function PublicProfile() {
         org={org}
         profile={org.profile}
         isOwner={isOwner}
-        isEditMode={editMode}
-        onEditClick={() => navigate('/app/settings/brand-page')}
       />
 
       {(() => {
@@ -137,7 +123,7 @@ export default function PublicProfile() {
             orgSlug={org.slug}
             events={events}
             loading={dataLoading}
-            isEditMode={editMode}
+            isEditMode={false}
             accentColor={accentColor}
           />
         );
@@ -146,7 +132,7 @@ export default function PublicProfile() {
             orgSlug={org.slug}
             products={products}
             loading={dataLoading}
-            isEditMode={editMode}
+            isEditMode={false}
             accentColor={accentColor}
           />
         );
@@ -161,7 +147,7 @@ export default function PublicProfile() {
             <BrandPublicDescription
               org={org}
               profile={org.profile}
-              isEditMode={editMode}
+              isEditMode={false}
               onEditClick={() => navigate('/app/settings/brand-page')}
             />
             {bottomSection !== 'hidden' && (
