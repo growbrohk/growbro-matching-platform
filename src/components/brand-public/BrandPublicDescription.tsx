@@ -47,7 +47,7 @@ export default function BrandPublicDescription({
   const accentColor = profile?.accent_color || DEFAULT_ACCENT;
 
   return (
-    <section className="w-full px-4 py-4 md:py-6 lg:py-10">
+    <section className="w-full px-4 py-4 md:py-6 lg:py-10 bg-amber-50">
       <div className="max-w-6xl lg:max-w-7xl mx-auto">
         <div className="flex">
           {/* Main content */}
