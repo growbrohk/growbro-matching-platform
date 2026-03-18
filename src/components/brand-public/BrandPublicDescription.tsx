@@ -44,7 +44,7 @@ export default function BrandPublicDescription({
   if (!hasContent && !isEditMode) return null;
 
   return (
-    <section className="w-full px-4 py-12 md:py-16">
+    <section className="w-full px-4 py-6 md:py-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex">
           {/* Main content */}
