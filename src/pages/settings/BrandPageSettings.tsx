@@ -11,6 +11,10 @@ import { Loader2, ArrowLeft, Upload, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
+function withCacheBust(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
+}
+
 export default function BrandPageSettings() {
   const navigate = useNavigate();
   const { currentOrg } = useAuth();
@@ -103,7 +107,7 @@ export default function BrandPageSettings() {
         .upload(path, compressed, { upsert: true, contentType: 'image/webp' });
       if (error) throw error;
       const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
-      setHeroBannerUrl(data.publicUrl);
+      setHeroBannerUrl(withCacheBust(data.publicUrl));
       toast.success('Hero banner uploaded');
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
@@ -129,7 +133,7 @@ export default function BrandPageSettings() {
         .upload(path, compressed, { upsert: true, contentType: 'image/webp' });
       if (error) throw error;
       const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
-      setDescriptionIllustrationUrl(data.publicUrl);
+      setDescriptionIllustrationUrl(withCacheBust(data.publicUrl));
       toast.success('Illustration uploaded');
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
@@ -157,7 +161,7 @@ export default function BrandPageSettings() {
       const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
       setDescriptionImages((prev) => {
         const next = [...prev];
-        next[index] = data.publicUrl;
+        next[index] = withCacheBust(data.publicUrl);
         return next;
       });
       toast.success(`Image ${index + 1} uploaded`);
