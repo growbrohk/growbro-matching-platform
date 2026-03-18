@@ -43,7 +43,7 @@ export default function BrandPublicProducts({
 
   if (loading) {
     return (
-      <section className="w-full px-4 py-6 md:py-8 bg-muted/20">
+      <section className="w-full px-4 py-4 md:py-6 bg-muted/20">
         <div className="max-w-6xl mx-auto">
           <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: BRAND_ACCENT }}>
             <h2 className="text-xl font-bold text-white">merch</h2>
@@ -61,7 +61,7 @@ export default function BrandPublicProducts({
   if (products.length === 0 && !isEditMode) return null;
 
   return (
-    <section className="w-full px-4 py-6 md:py-8">
+    <section className="w-full px-4 py-4 md:py-6">
       <div className="max-w-6xl mx-auto">
         <div className="inline-block px-4 py-2 mb-6" style={{ backgroundColor: BRAND_ACCENT }}>
           <h2 className="text-xl font-bold text-white">merch</h2>
