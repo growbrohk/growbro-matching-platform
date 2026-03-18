@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 interface BrandPublicHeroProps {
@@ -6,6 +7,7 @@ interface BrandPublicHeroProps {
   profile: {
     logo_url?: string | null;
     hero_banner_url?: string | null;
+    hero_banner_images?: string[] | null;
     hero_headline?: string | null;
     hero_subheadline?: string | null;
   } | null;
@@ -14,6 +16,7 @@ interface BrandPublicHeroProps {
 }
 
 const BRAND_ACCENT = '#E85D04'; // Orange accent for brand pages
+const CAROUSEL_INTERVAL_MS = 5000;
 
 export default function BrandPublicHero({
   org,
@@ -23,7 +26,22 @@ export default function BrandPublicHero({
   onEditClick,
 }: BrandPublicHeroProps) {
   const logoUrl = profile?.logo_url || null;
-  const bannerUrl = profile?.hero_banner_url || null;
+  const rawImages = profile?.hero_banner_images;
+  const images: string[] = Array.isArray(rawImages)
+    ? rawImages.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  const fallbackUrl = profile?.hero_banner_url || null;
+  const bannerImages = images.length > 0 ? images : fallbackUrl ? [fallbackUrl] : [];
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (bannerImages.length <= 1) return;
+    const id = setInterval(() => {
+      setCurrentIndex((i) => (i + 1) % bannerImages.length);
+    }, CAROUSEL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [bannerImages.length]);
+
   const headline = profile?.hero_headline || org.name;
   const subheadline = profile?.hero_subheadline || '';
 
@@ -59,12 +77,29 @@ export default function BrandPublicHero({
         )}
       </div>
 
-      {/* Hero banner */}
+      {/* Hero banner carousel */}
       <div
-        className="relative flex-1 flex items-end min-h-[50vh]"
-        style={bannerUrl ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#1a1a1a' }}
+        className="relative flex-1 flex items-end min-h-[50vh] overflow-hidden"
+        style={bannerImages.length === 0 ? { backgroundColor: '#1a1a1a' } : undefined}
       >
-        <div className="absolute inset-0 bg-black/40" />
+        {bannerImages.length > 0 && (
+          <>
+            {bannerImages.map((url, i) => (
+              <div
+                key={url + i}
+                className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+                style={{
+                  backgroundImage: `url(${url})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  opacity: i === currentIndex ? 1 : 0,
+                  zIndex: i === currentIndex ? 1 : 0,
+                }}
+              />
+            ))}
+            <div className="absolute inset-0 bg-black/40 z-[2]" />
+          </>
+        )}
         <div className="relative z-10 w-full px-4 pb-8 md:px-8 md:pb-12 max-w-4xl">
           <h1 className="text-3xl md:text-5xl font-bold text-white mb-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
             {headline}

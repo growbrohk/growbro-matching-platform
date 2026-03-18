@@ -32,6 +32,7 @@ export interface OrgProfile {
   updated_at?: string;
   // Brand page (block-like sections)
   hero_banner_url?: string | null;
+  hero_banner_images?: string[] | null;
   hero_headline?: string | null;
   hero_subheadline?: string | null;
   description_intro?: string | null;

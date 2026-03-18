@@ -21,11 +21,11 @@ export default function BrandPageSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileExists, setProfileExists] = useState(true);
-  const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState<number | null>(null);
   const [uploadingDesc, setUploadingDesc] = useState<number | null>(null);
   const [uploadingIllustration, setUploadingIllustration] = useState(false);
 
-  const [heroBannerUrl, setHeroBannerUrl] = useState('');
+  const [heroBannerImages, setHeroBannerImages] = useState<string[]>(['', '', '']);
   const [heroHeadline, setHeroHeadline] = useState('');
   const [heroSubheadline, setHeroSubheadline] = useState('');
   const [descriptionIntro, setDescriptionIntro] = useState('');
@@ -55,7 +55,15 @@ export default function BrandPageSettings() {
         setProfileExists(false);
       } else if (!error && data) {
         setProfileExists(true);
-        setHeroBannerUrl(data.hero_banner_url || '');
+        const heroImgs = data.hero_banner_images;
+        const heroArr = Array.isArray(heroImgs) ? heroImgs : [];
+        if (heroArr.length > 0) {
+          setHeroBannerImages([heroArr[0] || '', heroArr[1] || '', heroArr[2] || '']);
+        } else if (data.hero_banner_url) {
+          setHeroBannerImages([data.hero_banner_url, '', '']);
+        } else {
+          setHeroBannerImages(['', '', '']);
+        }
         setHeroHeadline(data.hero_headline || '');
         setHeroSubheadline(data.hero_subheadline || '');
         setDescriptionIntro(data.description_intro || '');
@@ -90,29 +98,33 @@ export default function BrandPageSettings() {
     loadProfile();
   }, [loadProfile]);
 
-  const uploadHeroBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadHeroBannerImage = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentOrg?.id) return;
     e.target.value = '';
 
-    setUploadingHero(true);
+    setUploadingHero(index);
     try {
       const compressed = await compressReceiptImage(file, {
         targetSizeBytes: 500 * 1024,
         maxDimension: 1920,
       });
-      const path = `${currentOrg.id}/hero.webp`;
+      const path = `${currentOrg.id}/hero/${index + 1}.webp`;
       const { error } = await supabase.storage
         .from('brand-page-assets')
         .upload(path, compressed, { upsert: true, contentType: 'image/webp' });
       if (error) throw error;
       const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
-      setHeroBannerUrl(withCacheBust(data.publicUrl));
-      toast.success('Hero banner uploaded');
+      setHeroBannerImages((prev) => {
+        const next = [...prev];
+        next[index] = withCacheBust(data.publicUrl);
+        return next;
+      });
+      toast.success(`Hero image ${index + 1} uploaded`);
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
     } finally {
-      setUploadingHero(false);
+      setUploadingHero(null);
     }
   };
 
@@ -179,7 +191,8 @@ export default function BrandPageSettings() {
       const { error } = await (supabase
         .from('org_profiles' as any)
         .update({
-          hero_banner_url: heroBannerUrl || null,
+          hero_banner_url: heroBannerImages[0] || null,
+          hero_banner_images: heroBannerImages.filter(Boolean),
           hero_headline: heroHeadline || null,
           hero_subheadline: heroSubheadline || null,
           description_intro: descriptionIntro || null,
@@ -250,24 +263,31 @@ export default function BrandPageSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Banner Image</Label>
-            <div className="flex items-center gap-4">
-              {heroBannerUrl && (
-                <img src={heroBannerUrl} alt="Hero" className="h-24 w-40 object-cover rounded-lg" />
-              )}
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploadingHero}
-                  onChange={uploadHeroBanner}
-                />
-                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
-                  <Upload className="h-4 w-4" />
-                  {uploadingHero ? 'Uploading...' : 'Upload'}
-                </span>
-              </label>
+            <Label>Banner Carousel (3 photos)</Label>
+            <div className="grid grid-cols-3 gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-2">
+                  {heroBannerImages[i] ? (
+                    <img src={heroBannerImages[i]} alt="" className="aspect-[16/10] w-full object-cover rounded-lg" />
+                  ) : (
+                    <div className="aspect-[16/10] w-full rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <label className="block">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingHero === i}
+                      onChange={(e) => uploadHeroBannerImage(i, e)}
+                    />
+                    <span className="text-xs text-primary cursor-pointer hover:underline">
+                      {uploadingHero === i ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
           <div className="space-y-2">
