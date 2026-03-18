@@ -500,39 +500,41 @@ export default function BrandPageSettings() {
           <CardDescription>Choose what to show in the top and bottom rows between Hero and Footer</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label>Top Row</Label>
-            <Select value={topSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setTopSection(v)}>
-              <SelectTrigger className="w-full max-w-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="events">Events</SelectItem>
-                <SelectItem value="products">Products</SelectItem>
-                <SelectItem value="both">Both (Events + Products)</SelectItem>
-                <SelectItem value="hidden">Hidden</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Bottom Row</Label>
-            <Select value={bottomSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setBottomSection(v)}>
-              <SelectTrigger className="w-full max-w-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="events">Events</SelectItem>
-                <SelectItem value="products">Products</SelectItem>
-                <SelectItem value="both">Both (Events + Products)</SelectItem>
-                <SelectItem value="hidden">Hidden</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-row gap-4 flex-nowrap">
+            <div className="space-y-2 flex-1 min-w-0">
+              <Label>Top Row</Label>
+              <Select value={topSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setTopSection(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="events">Events</SelectItem>
+                  <SelectItem value="products">Products</SelectItem>
+                  <SelectItem value="both">Both (Events + Products)</SelectItem>
+                  <SelectItem value="hidden">Hidden</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 flex-1 min-w-0">
+              <Label>Bottom Row</Label>
+              <Select value={bottomSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setBottomSection(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="events">Events</SelectItem>
+                  <SelectItem value="products">Products</SelectItem>
+                  <SelectItem value="both">Both (Events + Products)</SelectItem>
+                  <SelectItem value="hidden">Hidden</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="border-t pt-6 space-y-4">
             <h3 className="font-medium text-sm" style={{ color: '#0F1F17' }}>Events</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
+            <div className="flex flex-row gap-4 flex-nowrap">
+              <div className="space-y-2 flex-1 min-w-0">
                 <Label>Filter</Label>
                 <Select value={eventsFilter} onValueChange={(v: 'all' | 'non_expired') => setEventsFilter(v)}>
                   <SelectTrigger className="w-full">
@@ -544,7 +546,7 @@ export default function BrandPageSettings() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 flex-1 min-w-0">
                 <Label>Sort</Label>
                 <Select value={eventsSort} onValueChange={(v: 'manual' | 'random' | 'date' | 'creation') => setEventsSort(v)}>
                   <SelectTrigger className="w-full">
@@ -588,8 +590,8 @@ export default function BrandPageSettings() {
 
           <div className="border-t pt-6 space-y-4">
             <h3 className="font-medium text-sm" style={{ color: '#0F1F17' }}>Products</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
+            <div className="flex flex-row gap-4 flex-nowrap">
+              <div className="space-y-2 flex-1 min-w-0">
                 <Label>Filter</Label>
                 <Select value={productsFilter} onValueChange={(v: 'all' | 'in_sale_only') => setProductsFilter(v)}>
                   <SelectTrigger className="w-full">
@@ -601,7 +603,7 @@ export default function BrandPageSettings() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 flex-1 min-w-0">
                 <Label>Sort</Label>
                 <Select value={productsSort} onValueChange={(v: 'manual' | 'random' | 'date' | 'creation') => setProductsSort(v)}>
                   <SelectTrigger className="w-full">
