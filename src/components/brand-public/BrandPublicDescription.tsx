@@ -46,57 +46,46 @@ export default function BrandPublicDescription({
   return (
     <section className="w-full px-4 py-12 md:py-16">
       <div className="max-w-6xl mx-auto">
-        {/* Mobile: Brand name at top */}
-        <div className="lg:hidden mb-6">
-          <h2
-            className="text-2xl font-bold"
-            style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
-          >
-            {org.name}
-          </h2>
-        </div>
-
         <div className="flex">
-          {/* Left: Vertical brand name - full height of section (desktop) */}
-          <div className="hidden lg:flex flex-shrink-0 w-24 lg:w-32 items-center justify-center">
-            <h2
-              className="text-2xl md:text-3xl font-bold whitespace-nowrap -rotate-90 origin-center"
-              style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
-            >
-              {org.name}
-            </h2>
-          </div>
-
-          {/* Right: Main content */}
-          <div className="flex-1 min-w-0 pl-0 lg:pl-8">
-            {/* Top: Illustration + description text (two columns) */}
-            <div className="flex flex-col md:flex-row gap-6 md:gap-8 mb-8">
-              {/* Left: Illustration (dog + frog) */}
+          {/* Main content */}
+          <div className="flex-1 min-w-0">
+            {/* Top: Brand | Illustration | Text - all bottom-aligned (reference layout) */}
+            <div className="flex gap-6 md:gap-8 mb-8 items-end overflow-x-auto pb-4 -mx-4 px-4 lg:overflow-visible lg:mx-0 lg:px-0 scrollbar-hide">
+              {/* 1. Vertical brand name - bottom aligns with illustration & text */}
+              <div className="flex-shrink-0 w-16 md:w-20 lg:w-24 flex items-end justify-center">
+                <h2
+                  className="text-xl md:text-2xl lg:text-3xl font-bold whitespace-nowrap rotate-90 origin-bottom"
+                  style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
+                >
+                  {org.name}
+                </h2>
+              </div>
+              {/* 2. Illustration - bottom aligns with body text */}
               <div className="flex-shrink-0">
                 {illustrationUrl ? (
                   <img
                     src={illustrationUrl}
                     alt=""
-                    className="w-32 h-32 md:w-40 md:h-40 object-contain"
+                    className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 object-contain"
                   />
                 ) : (
                   <div
-                    className="w-32 h-32 md:w-40 md:h-40 rounded-lg bg-muted/50 flex items-center justify-center"
+                    className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg bg-muted/50 flex items-center justify-center"
                     style={{ border: '1px dashed rgba(0,0,0,0.2)' }}
                   >
                     <span className="text-xs text-muted-foreground">Illustration</span>
                   </div>
                 )}
               </div>
-              {/* Right: Description paragraphs */}
-              <div className="flex-1 min-w-0 space-y-4">
+              {/* 3. Intro + body paragraphs */}
+              <div className="flex-shrink-0 min-w-[200px] max-w-[280px] lg:flex-1 lg:min-w-0 lg:max-w-none space-y-3 md:space-y-4">
                 {intro && (
-                  <p className="text-lg" style={{ color: BRAND_ACCENT }}>
+                  <p className="text-sm md:text-lg" style={{ color: BRAND_ACCENT }}>
                     {intro}
                   </p>
                 )}
                 {body && (
-                  <p className="text-lg" style={{ color: '#0F1F17' }}>
+                  <p className="text-sm md:text-lg" style={{ color: '#0F1F17' }}>
                     {body}
                   </p>
                 )}
