@@ -51,10 +51,7 @@ export default function BrandPublicEvents({
     return (
       <section className="w-full px-4 py-4 md:py-6 lg:py-8">
         <div className="max-w-6xl lg:max-w-7xl mx-auto">
-          <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
-            <h2 className="text-xl lg:text-2xl font-bold text-white">events</h2>
-            <p className="text-sm lg:text-base text-white/80">#RunHNT</p>
-          </div>
+          <h2 className="text-xl lg:text-2xl font-bold mb-6 lg:mb-8" style={{ color: accent }}>Event</h2>
           <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="aspect-[4/5] w-48 md:w-56 lg:w-64 flex-shrink-0 rounded-lg" />
@@ -70,10 +67,7 @@ export default function BrandPublicEvents({
   return (
     <section className="w-full px-4 py-4 md:py-6 lg:py-8 bg-muted/20">
       <div className="max-w-6xl lg:max-w-7xl mx-auto">
-        <div className="inline-block px-4 py-2 lg:px-6 lg:py-3 mb-6 lg:mb-8" style={{ backgroundColor: accent }}>
-          <h2 className="text-xl lg:text-2xl font-bold text-white">events</h2>
-          <p className="text-sm lg:text-base text-white/80">#RunHNT</p>
-        </div>
+        <h2 className="text-xl lg:text-2xl font-bold mb-6 lg:mb-8" style={{ color: accent }}>Event</h2>
         <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
           {events.map((event) => (
             <button
