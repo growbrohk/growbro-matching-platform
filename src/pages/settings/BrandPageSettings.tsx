@@ -19,6 +19,7 @@ export default function BrandPageSettings() {
   const [profileExists, setProfileExists] = useState(true);
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadingDesc, setUploadingDesc] = useState<number | null>(null);
+  const [uploadingIllustration, setUploadingIllustration] = useState(false);
 
   const [heroBannerUrl, setHeroBannerUrl] = useState('');
   const [heroHeadline, setHeroHeadline] = useState('');
@@ -26,7 +27,9 @@ export default function BrandPageSettings() {
   const [descriptionIntro, setDescriptionIntro] = useState('');
   const [descriptionBody, setDescriptionBody] = useState('');
   const [descriptionImages, setDescriptionImages] = useState<string[]>(['', '', '']);
+  const [descriptionIllustrationUrl, setDescriptionIllustrationUrl] = useState('');
   const [descriptionTagline, setDescriptionTagline] = useState('');
+  const [descriptionTaglineBody, setDescriptionTaglineBody] = useState('');
   const [footerTagline, setFooterTagline] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
@@ -56,7 +59,9 @@ export default function BrandPageSettings() {
         const imgs = data.description_images;
         const imgArr = Array.isArray(imgs) ? imgs : [];
         setDescriptionImages([imgArr[0] || '', imgArr[1] || '', imgArr[2] || '']);
+        setDescriptionIllustrationUrl(data.description_illustration_url || '');
         setDescriptionTagline(data.description_tagline || '');
+        setDescriptionTaglineBody(data.description_tagline_body || '');
         setFooterTagline(data.footer_tagline || '');
         setFooterContactEmail(data.footer_contact_email || '');
         setFooterLinks(
@@ -107,6 +112,32 @@ export default function BrandPageSettings() {
     }
   };
 
+  const uploadDescriptionIllustration = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentOrg?.id) return;
+    e.target.value = '';
+
+    setUploadingIllustration(true);
+    try {
+      const compressed = await compressReceiptImage(file, {
+        targetSizeBytes: 200 * 1024,
+        maxDimension: 800,
+      });
+      const path = `${currentOrg.id}/description/illustration.webp`;
+      const { error } = await supabase.storage
+        .from('brand-page-assets')
+        .upload(path, compressed, { upsert: true, contentType: 'image/webp' });
+      if (error) throw error;
+      const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
+      setDescriptionIllustrationUrl(data.publicUrl);
+      toast.success('Illustration uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploadingIllustration(false);
+    }
+  };
+
   const uploadDescriptionImage = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentOrg?.id) return;
@@ -150,7 +181,9 @@ export default function BrandPageSettings() {
           description_intro: descriptionIntro || null,
           description_body: descriptionBody || null,
           description_images: descriptionImages.filter(Boolean),
+          description_illustration_url: descriptionIllustrationUrl || null,
           description_tagline: descriptionTagline || null,
+          description_tagline_body: descriptionTaglineBody || null,
           footer_tagline: footerTagline || null,
           footer_contact_email: footerContactEmail || null,
           footer_links: footerLinks.filter((l) => l.label.trim() && l.url.trim()),
@@ -256,11 +289,36 @@ export default function BrandPageSettings() {
       <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
         <CardHeader>
           <CardTitle>About Section</CardTitle>
-          <CardDescription>Intro text and image gallery</CardDescription>
+          <CardDescription>Layout: illustration + text, square photo carousel, tagline heading + paragraph</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Intro Paragraph</Label>
+            <Label>Illustration (e.g. dog + frog mascot)</Label>
+            <div className="flex items-center gap-4">
+              {descriptionIllustrationUrl ? (
+                <img src={descriptionIllustrationUrl} alt="Illustration" className="h-24 w-24 object-contain rounded-lg border" />
+              ) : (
+                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploadingIllustration}
+                  onChange={uploadDescriptionIllustration}
+                />
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
+                  <Upload className="h-4 w-4" />
+                  {uploadingIllustration ? 'Uploading...' : 'Upload'}
+                </span>
+              </label>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Intro Paragraph (orange text)</Label>
             <Textarea
               value={descriptionIntro}
               onChange={(e) => setDescriptionIntro(e.target.value)}
@@ -269,7 +327,7 @@ export default function BrandPageSettings() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Body Paragraph</Label>
+            <Label>Body Paragraph (dark grey text)</Label>
             <Textarea
               value={descriptionBody}
               onChange={(e) => setDescriptionBody(e.target.value)}
@@ -278,14 +336,14 @@ export default function BrandPageSettings() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Gallery Images (up to 3)</Label>
+            <Label>Square Photo Carousel (up to 3)</Label>
             <div className="grid grid-cols-3 gap-4">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="space-y-2">
                   {descriptionImages[i] ? (
-                    <img src={descriptionImages[i]} alt="" className="aspect-[4/3] w-full object-cover rounded-lg" />
+                    <img src={descriptionImages[i]} alt="" className="aspect-square w-full object-cover rounded-lg" />
                   ) : (
-                    <div className="aspect-[4/3] w-full rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                    <div className="aspect-square w-full rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
                       <ImageIcon className="h-8 w-8 text-muted-foreground" />
                     </div>
                   )}
@@ -306,11 +364,20 @@ export default function BrandPageSettings() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Tagline</Label>
+            <Label>Tagline Heading</Label>
             <Input
               value={descriptionTagline}
               onChange={(e) => setDescriptionTagline(e.target.value)}
               placeholder="e.g. 777 run club isn't just events."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Tagline Paragraph</Label>
+            <Textarea
+              value={descriptionTaglineBody}
+              onChange={(e) => setDescriptionTaglineBody(e.target.value)}
+              placeholder="e.g. it's a proof that when we move together. we build something lasting - stronger bodies, stronger bonds, stronger brand love."
+              rows={3}
             />
           </div>
         </CardContent>

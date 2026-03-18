@@ -37,7 +37,9 @@ export interface OrgProfile {
   description_intro?: string | null;
   description_body?: string | null;
   description_images?: string[] | null;
+  description_illustration_url?: string | null;
   description_tagline?: string | null;
+  description_tagline_body?: string | null;
   footer_tagline?: string | null;
   footer_contact_email?: string | null;
   footer_links?: { label: string; url: string }[] | null;
