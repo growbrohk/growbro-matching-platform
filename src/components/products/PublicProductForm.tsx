@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { MessageSquare } from 'lucide-react';
+import { ShoppingCart, MessageSquare } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { usePublicCart } from '@/contexts/PublicCartContext';
 import type { Product, ProductVariant } from '@/lib/types';
 
 interface Org {
@@ -39,10 +41,16 @@ export default function PublicProductForm({
   org,
 }: PublicProductFormProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { setOrgId, addItem, totalQty } = usePublicCart();
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     variants.length > 0 ? variants[0].id : null
   );
   const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    setOrgId(org.id);
+  }, [org.id, setOrgId]);
 
   // Get images - prefer image_url (photo upload/URL), fallback to metadata
   const imageUrl = (product as any).image_url;
@@ -63,6 +71,31 @@ export default function PublicProductForm({
 
   const handleContactBrand = () => {
     navigate(`/messages/new?toOrg=${org.id}`);
+  };
+
+  const handleAddToCart = () => {
+    const variant = selectedVariant || variants[0];
+    if (!variant) {
+      toast({
+        title: 'Cannot add to cart',
+        description: 'Please select a variant.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const variantLabel = hasMultipleVariants ? variant.name : undefined;
+    addItem({
+      productId: product.id,
+      variantId: variant.id,
+      name: product.title,
+      variantLabel,
+      unitPrice: variant.price ?? product.base_price ?? 0,
+      qty: quantityNum,
+    });
+    toast({
+      title: 'Added to cart',
+      description: `${product.title}${variantLabel ? ` (${variantLabel})` : ''} x${quantityNum}`,
+    });
   };
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
@@ -170,19 +203,28 @@ export default function PublicProductForm({
           />
         </div>
 
-        {/* CTA - Contact for enquiry (MVP) */}
+        {/* CTA - Add to Cart primary, Contact secondary */}
         <div className="flex flex-col gap-3 pt-2">
           <Button
-            onClick={handleContactBrand}
+            onClick={handleAddToCart}
             size="lg"
             className="w-full h-12 rounded-2xl font-bold"
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Add to Cart
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full h-11 rounded-2xl"
+            onClick={handleContactBrand}
           >
             <MessageSquare className="h-4 w-4 mr-2" />
             Contact for enquiry
           </Button>
           <p className="text-sm text-muted-foreground">
-            Message the brand directly to enquire or purchase this product.
+            Questions? Message the brand directly.
           </p>
         </div>
       </div>

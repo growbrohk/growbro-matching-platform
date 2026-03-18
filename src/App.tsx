@@ -52,7 +52,12 @@ import PaymentPage from "./pages/booking/PaymentPage";
 import PendingBookingPage from "./pages/booking/PendingBookingPage";
 import PendingConfirmationPage from "./pages/booking/PendingConfirmationPage";
 import SuccessfulBookingPage from "./pages/booking/SuccessfulBookingPage";
+import PublicCheckoutPage from "./pages/checkout/PublicCheckoutPage";
+import ProductPaymentPage from "./pages/checkout/ProductPaymentPage";
+import ProductCheckoutSuccessPage from "./pages/checkout/ProductCheckoutSuccessPage";
+import ProductCheckoutPendingPage from "./pages/checkout/ProductCheckoutPendingPage";
 import { AppLayout } from "./components/AppLayout";
+import { PublicCartProvider } from "./contexts/PublicCartContext";
 import { Button } from "./components/ui/button";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
@@ -505,6 +510,12 @@ function AppRoutes() {
       {/* Public Product Page - Must be before /:orgSlug/:eventSlug */}
       <Route path="/:orgSlug/products/:productId" element={<PublicProductPage />} />
       
+      {/* Product checkout flow */}
+      <Route path="/:orgSlug/checkout" element={<PublicCheckoutPage />} />
+      <Route path="/:orgSlug/checkout/payment/:orderId" element={<ProductPaymentPage />} />
+      <Route path="/:orgSlug/checkout/success/:orderId" element={<ProductCheckoutSuccessPage />} />
+      <Route path="/:orgSlug/checkout/pending/:orderId" element={<ProductCheckoutPendingPage />} />
+      
       {/* Public Brand Page - Single segment, before event route */}
       <Route path="/:brandSlug" element={<PublicProfile />} />
       
@@ -538,7 +549,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <PublicCartProvider>
+            <AppRoutes />
+          </PublicCartProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

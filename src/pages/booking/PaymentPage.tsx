@@ -16,9 +16,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
@@ -26,9 +23,9 @@ import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatTicketTypeDateTime, formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
-import { CreditCard, Smartphone, QrCode, Loader2, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Loader2 } from 'lucide-react';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
+import { PaymentMethodSelector, type PaymentMethod } from '@/components/booking/PaymentMethodSelector';
 import type { ContactInfo } from '@/lib/types/booking';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -39,8 +36,6 @@ const BRAND = {
   beigeSoft: "#FBF8F4",
   dark: "#0F1F17",
 };
-
-type PaymentMethod = 'stripe' | 'payme' | 'fps';
 
 export default function PaymentPage() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -141,7 +136,7 @@ export default function PaymentPage() {
     fetchOrder();
   }, [orderId, navigate, toast]);
 
-  const selectMethod = (method: PaymentMethod) => {
+  const selectMethod = (method: PaymentMethod | null) => {
     if (selectedPaymentMethod !== method) {
       setReceiptFile(null); // Clear receipt file when switching payment methods
     }
@@ -578,271 +573,15 @@ export default function PaymentPage() {
 
       {/* Payment Methods */}
       <div className="container mx-auto px-4">
-        {availablePaymentMethods.length > 0 ? (
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-4" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Payment methods</h2>
-              <RadioGroup
-                value={selectedPaymentMethod || ''}
-                onValueChange={(value) => {
-                  selectMethod(value as PaymentMethod);
-                }}
-              >
-                <div className="space-y-3">
-                  {availablePaymentMethods.includes('stripe') && (
-                    <div>
-                      <Collapsible
-                        open={selectedPaymentMethod === 'stripe'}
-                        onOpenChange={(open) => {
-                          if (!open && selectedPaymentMethod === 'stripe') {
-                            setSelectedPaymentMethod(null);
-                          }
-                        }}
-                      >
-                        <CollapsibleTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2"
-                            style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              selectMethod('stripe');
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                selectMethod('stripe');
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <RadioGroupItem value="stripe" id="stripe" onClick={(e) => e.stopPropagation()} />
-                              <label htmlFor="stripe" className="flex items-center gap-3 cursor-pointer flex-1">
-                                <CreditCard className="h-5 w-5" style={{ color: BRAND.green }} />
-                                <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
-                              </label>
-                            </div>
-                            {selectedPaymentMethod === 'stripe' ? (
-                              <ChevronUp className="h-4 w-4" style={{ color: BRAND.green }} />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" style={{ color: BRAND.green }} />
-                            )}
-                          </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-2 px-4 pb-4">
-                          <p className="text-sm text-muted-foreground">
-                            You will be redirected to complete payment securely.
-                          </p>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                  )}
-
-                  {availablePaymentMethods.includes('payme') && (
-                    <div>
-                      <Collapsible
-                        open={selectedPaymentMethod === 'payme'}
-                        onOpenChange={(open) => {
-                          if (!open && selectedPaymentMethod === 'payme') {
-                            setSelectedPaymentMethod(null);
-                          }
-                        }}
-                      >
-                        <CollapsibleTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2"
-                            style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              selectMethod('payme');
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                selectMethod('payme');
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <RadioGroupItem value="payme" id="payme" onClick={(e) => e.stopPropagation()} />
-                              <label htmlFor="payme" className="flex items-center gap-3 cursor-pointer flex-1">
-                                <Smartphone className="h-5 w-5" style={{ color: BRAND.green }} />
-                                <div className="flex flex-col">
-                                  <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>PayMe</span>
-                                  <span className="text-xs text-muted-foreground">Upload Payme Receipt after successful payment</span>
-                                </div>
-                              </label>
-                            </div>
-                            {selectedPaymentMethod === 'payme' ? (
-                              <ChevronUp className="h-4 w-4" style={{ color: BRAND.green }} />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" style={{ color: BRAND.green }} />
-                            )}
-                          </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-2 px-4 pb-4 space-y-4">
-                          {event.payme_link && (
-                            <div>
-                              <Label className="text-sm font-medium mb-2 block">PayMe Payment Link</Label>
-                              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
-                                <span className="flex-1 text-sm truncate">{event.payme_link}</span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(event.payme_link!, '_blank');
-                                  }}
-                                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          <div>
-                            <Label htmlFor="payme-receipt" className="text-sm font-medium mb-2 block">
-                              Upload receipt
-                            </Label>
-                            <Input
-                              id="payme-receipt"
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={handleReceiptChange}
-                              className="cursor-pointer"
-                              style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                              disabled={isCompressing}
-                            />
-                            {isCompressing && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Compressing image...
-                              </p>
-                            )}
-                            {receiptFile && selectedPaymentMethod === 'payme' && !isCompressing && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Selected: {receiptFile.name}
-                              </p>
-                            )}
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                  )}
-
-                  {availablePaymentMethods.includes('fps') && (
-                    <div>
-                      <Collapsible
-                        open={selectedPaymentMethod === 'fps'}
-                        onOpenChange={(open) => {
-                          if (!open && selectedPaymentMethod === 'fps') {
-                            setSelectedPaymentMethod(null);
-                          }
-                        }}
-                      >
-                        <CollapsibleTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2"
-                            style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              selectMethod('fps');
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                selectMethod('fps');
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <RadioGroupItem value="fps" id="fps" onClick={(e) => e.stopPropagation()} />
-                              <label htmlFor="fps" className="flex items-center gap-3 cursor-pointer flex-1">
-                                <QrCode className="h-5 w-5" style={{ color: BRAND.green }} />
-                                <div className="flex flex-col">
-                                  <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>FPS</span>
-                                  <span className="text-xs text-muted-foreground">Upload FPS Receipt/Capscreen after successful payment</span>
-                                </div>
-                              </label>
-                            </div>
-                            {selectedPaymentMethod === 'fps' ? (
-                              <ChevronUp className="h-4 w-4" style={{ color: BRAND.green }} />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" style={{ color: BRAND.green }} />
-                            )}
-                          </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-2 px-4 pb-4 space-y-4">
-                          {event.fps_link && (
-                            <div>
-                              <Label className="text-sm font-medium mb-2 block">FPS Payment Link</Label>
-                              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/50">
-                                <span className="flex-1 text-sm truncate">{event.fps_link}</span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(event.fps_link!, '_blank');
-                                  }}
-                                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          <div>
-                            <Label htmlFor="fps-receipt" className="text-sm font-medium mb-2 block">
-                              Upload receipt
-                            </Label>
-                            <Input
-                              id="fps-receipt"
-                              type="file"
-                              accept="image/*,.pdf"
-                              onChange={handleReceiptChange}
-                              className="cursor-pointer"
-                              style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                              disabled={isCompressing}
-                            />
-                            {isCompressing && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Compressing image...
-                              </p>
-                            )}
-                            {receiptFile && selectedPaymentMethod === 'fps' && !isCompressing && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Selected: {receiptFile.name}
-                              </p>
-                            )}
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                  )}
-                </div>
-              </RadioGroup>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-muted-foreground text-center">
-                No payment methods are currently available. Please contact the event organizer.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <PaymentMethodSelector
+          availableMethods={availablePaymentMethods}
+          selectedMethod={selectedPaymentMethod}
+          onSelect={selectMethod}
+          receiptFile={receiptFile}
+          onReceiptChange={handleReceiptChange}
+          paymentLinks={{ payme: event.payme_link, fps: event.fps_link }}
+          isCompressing={isCompressing}
+        />
       </div>
 
       {/* Sticky CTA button */}

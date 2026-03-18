@@ -40,23 +40,49 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || req.headers.get("referer")?.replace(/\/$/, "") || "http://localhost:5173";
 
-    // Fetch order with event and order_items via RPC (returns consistent structure)
-    const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
+    // Try event order first
+    const { data: eventRpcData, error: eventRpcError } = await supabaseClient.rpc(
       "get_order_with_event_and_tickets",
       { p_order_id: order_id }
     );
 
-    if (rpcError || !rpcData) {
-      logStep("Order not found", { order_id, error: rpcError?.message });
-      throw new Error("Order not found");
+    let order: Record<string, unknown>;
+    let orderItems: Array<{ quantity: number; unit_price: number; ticket_type?: { name?: string }; product_name?: string; variant_label?: string }>;
+    let successUrl: string;
+    let cancelUrl: string;
+    let enableStripe = false;
+
+    if (!eventRpcError && eventRpcData?.order && eventRpcData?.event) {
+      // Event order
+      const event = eventRpcData.event;
+      order = eventRpcData.order;
+      orderItems = eventRpcData.order_items || [];
+      enableStripe = !!event.enable_stripe;
+      successUrl = `${origin}/booking/success/${order_id}`;
+      cancelUrl = `${origin}/booking/payment/${order_id}`;
+    } else {
+      // Try product order
+      const { data: productRpcData, error: productRpcError } = await supabaseClient.rpc(
+        "get_order_with_org_and_products",
+        { p_order_id: order_id }
+      );
+
+      if (productRpcError || !productRpcData?.order || !productRpcData?.org) {
+        logStep("Order not found", { order_id, error: productRpcError?.message });
+        throw new Error("Order not found");
+      }
+
+      const org = productRpcData.org;
+      order = productRpcData.order;
+      orderItems = productRpcData.order_items || [];
+      enableStripe = !!org.enable_stripe;
+      const orgSlug = org.slug || org.id;
+      successUrl = `${origin}/${orgSlug}/checkout/success/${order_id}`;
+      cancelUrl = `${origin}/${orgSlug}/checkout/payment/${order_id}`;
     }
 
-    const order = rpcData.order;
-    const event = rpcData.event;
-    const orderItems = rpcData.order_items || [];
-
-    if (!order || !event) {
-      throw new Error("Order or event not found");
+    if (!order) {
+      throw new Error("Order not found");
     }
 
     if (order.payment_status !== "unpaid") {
@@ -68,8 +94,8 @@ serve(async (req) => {
       throw new Error("Order has no amount to pay");
     }
 
-    if (!event.enable_stripe) {
-      throw new Error("Stripe is not enabled for this event");
+    if (!enableStripe) {
+      throw new Error("Stripe is not enabled for this order");
     }
 
     if (orderItems.length === 0) {
@@ -80,25 +106,29 @@ serve(async (req) => {
     logStep("Stripe initialized");
 
     // Build line items - Stripe uses smallest currency unit (cents for HKD)
-    const currency = (order.currency || "hkd").toLowerCase();
-    const lineItems = orderItems.map((item: { quantity: number; unit_price: number; ticket_type?: { name?: string } }) => ({
-      price_data: {
-        currency,
-        product_data: {
-          name: item.ticket_type?.name || "Ticket",
+    const currency = ((order.currency as string) || "hkd").toLowerCase();
+    const lineItems = orderItems.map((item) => {
+      const name = item.ticket_type?.name || item.product_name || "Item";
+      const variantLabel = item.variant_label ? ` (${item.variant_label})` : "";
+      return {
+        price_data: {
+          currency,
+          product_data: {
+            name: `${name}${variantLabel}`,
+          },
+          unit_amount: Math.round(Number(item.unit_price) * 100),
         },
-        unit_amount: Math.round(Number(item.unit_price) * 100), // Convert to cents
-      },
-      quantity: item.quantity,
-    }));
+        quantity: item.quantity,
+      };
+    });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
       metadata: { order_id },
-      success_url: `${origin}/booking/success/${order_id}`,
-      cancel_url: `${origin}/booking/payment/${order_id}`,
-      customer_email: order.buyer_email || undefined,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      customer_email: (order.buyer_email as string) || undefined,
     });
 
     logStep("Checkout session created", { sessionId: session.id });

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { ShoppingCart } from 'lucide-react';
+import { usePublicCart } from '@/contexts/PublicCartContext';
 
 interface BrandPublicHeroProps {
   org: { id: string; name: string; slug?: string | null };
@@ -26,7 +28,12 @@ export default function BrandPublicHero({
   isEditMode,
   onEditClick,
 }: BrandPublicHeroProps) {
+  const { orgId, setOrgId, totalQty } = usePublicCart();
   const logoUrl = profile?.logo_url || null;
+
+  useEffect(() => {
+    setOrgId(org.id);
+  }, [org.id, setOrgId]);
   const rawImages = profile?.hero_banner_images;
   const images: string[] = Array.isArray(rawImages)
     ? rawImages.filter((x): x is string => typeof x === 'string' && x.length > 0)
@@ -62,7 +69,20 @@ export default function BrandPublicHero({
           )}
           <span className="font-semibold text-white text-sm md:text-base lg:text-lg">{org.name}</span>
         </Link>
-        {isOwner ? (
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/${org.slug || org.id}/checkout`}
+            className="relative p-2 rounded-lg hover:bg-white/20 transition-colors"
+            aria-label={totalQty > 0 ? `Cart with ${totalQty} items` : 'Cart'}
+          >
+            <ShoppingCart className="h-5 w-5 text-white" />
+            {orgId === org.id && totalQty > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-white text-xs font-bold text-black px-1">
+                {totalQty > 99 ? '99+' : totalQty}
+              </span>
+            )}
+          </Link>
+          {isOwner ? (
           <Link
             to="/app/settings/brand-page"
             className="text-sm lg:text-base font-medium text-white hover:underline"
@@ -77,6 +97,7 @@ export default function BrandPublicHero({
             Join us now
           </Link>
         )}
+        </div>
       </div>
 
       {/* Hero banner carousel */}

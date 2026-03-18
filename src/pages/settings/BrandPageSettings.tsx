@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowLeft, Upload, Image as ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, ArrowLeft, Upload, Image as ImageIcon, ChevronUp, ChevronDown, CreditCard, Smartphone, QrCode } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
@@ -51,6 +52,11 @@ export default function BrandPageSettings() {
   const [footerBody, setFooterBody] = useState('');
   const [footerIllustrationUrl, setFooterIllustrationUrl] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
+  const [enableStripe, setEnableStripe] = useState(false);
+  const [enablePayme, setEnablePayme] = useState(false);
+  const [enableFps, setEnableFps] = useState(false);
+  const [paymeLink, setPaymeLink] = useState('');
+  const [fpsLink, setFpsLink] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
     { label: 'Meet us on the Run', url: '' },
     { label: 'FAQs', url: '' },
@@ -102,6 +108,11 @@ export default function BrandPageSettings() {
         setFooterBody((data as any).footer_body || '');
         setFooterIllustrationUrl((data as any).footer_illustration_url || '');
         setFooterContactEmail(data.footer_contact_email || '');
+        setEnableStripe((data as any).enable_stripe ?? false);
+        setEnablePayme((data as any).enable_payme ?? false);
+        setEnableFps((data as any).enable_fps ?? false);
+        setPaymeLink((data as any).payme_link || '');
+        setFpsLink((data as any).fps_link || '');
         setFooterLinks(
           Array.isArray(data.footer_links) && data.footer_links.length > 0
             ? data.footer_links
@@ -317,6 +328,11 @@ export default function BrandPageSettings() {
           footer_contact_email: footerContactEmail || null,
           footer_illustration_url: footerIllustrationUrl || null,
           footer_links: footerLinks.filter((l) => l.label.trim() && l.url.trim()),
+          enable_stripe: enableStripe || null,
+          enable_payme: enablePayme || null,
+          enable_fps: enableFps || null,
+          payme_link: paymeLink.trim() || null,
+          fps_link: fpsLink.trim() || null,
         })
         .eq('org_id', currentOrg.id)) as { error: any };
 
@@ -540,6 +556,57 @@ export default function BrandPageSettings() {
               rows={3}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Product Payment */}
+      <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader>
+          <CardTitle>Product Payment</CardTitle>
+          <CardDescription>Payment methods for product sales on your brand page. Customers can pay via Stripe (card), PayMe, or FPS.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox id="enable_stripe" checked={enableStripe} onCheckedChange={(v) => setEnableStripe(!!v)} />
+            <label htmlFor="enable_stripe" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <CreditCard className="h-4 w-4" />
+              Enable Stripe (credit card)
+            </label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox id="enable_payme" checked={enablePayme} onCheckedChange={(v) => setEnablePayme(!!v)} />
+            <label htmlFor="enable_payme" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <Smartphone className="h-4 w-4" />
+              Enable PayMe
+            </label>
+          </div>
+          {enablePayme && (
+            <div className="ml-6 space-y-2">
+              <Label>PayMe Link</Label>
+              <Input
+                value={paymeLink}
+                onChange={(e) => setPaymeLink(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+          )}
+          <div className="flex items-center space-x-2">
+            <Checkbox id="enable_fps" checked={enableFps} onCheckedChange={(v) => setEnableFps(!!v)} />
+            <label htmlFor="enable_fps" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <QrCode className="h-4 w-4" />
+              Enable FPS
+            </label>
+          </div>
+          {enableFps && (
+            <div className="ml-6 space-y-2">
+              <Label>FPS Link</Label>
+              <Input
+                value={fpsLink}
+                onChange={(e) => setFpsLink(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
