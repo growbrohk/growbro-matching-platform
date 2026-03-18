@@ -49,36 +49,41 @@ export default function BrandPublicDescription({
         <div className="flex">
           {/* Main content */}
           <div className="flex-1 min-w-0">
-            {/* Top: Brand | Illustration | Text - all bottom-aligned (reference layout) */}
-            <div className="flex gap-6 md:gap-8 mb-8 items-end overflow-x-auto pb-4 -mx-4 px-4 lg:overflow-visible lg:mx-0 lg:px-0 scrollbar-hide">
-              {/* 1. Vertical brand name - bottom aligns with illustration & text */}
-              <div className="flex-shrink-0 w-16 md:w-20 lg:w-24 flex items-end justify-center">
+            {/* Top: 3 columns - Brand (vertical) | Illustration | Text - same layout on all breakpoints */}
+            <div className="flex flex-row gap-4 md:gap-6 lg:gap-8 mb-8 items-end">
+              {/* 1. Vertical brand name - writing-mode flows text vertically without transform overflow */}
+              <div className="flex-shrink-0 w-8 md:w-10 flex items-end justify-end">
                 <h2
-                  className="text-xl md:text-2xl lg:text-3xl font-bold whitespace-nowrap rotate-90 origin-bottom"
-                  style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
+                  className="text-lg md:text-2xl lg:text-3xl font-bold py-1"
+                  style={{
+                    color: '#0F1F17',
+                    fontFamily: "'Inter Tight', sans-serif",
+                    writingMode: 'vertical-rl',
+                    textOrientation: 'mixed',
+                  }}
                 >
                   {org.name}
                 </h2>
               </div>
-              {/* 2. Illustration - bottom aligns with body text */}
+              {/* 2. Illustration */}
               <div className="flex-shrink-0">
                 {illustrationUrl ? (
                   <img
                     src={illustrationUrl}
                     alt=""
-                    className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 object-contain"
+                    className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 object-contain"
                   />
                 ) : (
                   <div
-                    className="w-24 h-24 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg bg-muted/50 flex items-center justify-center"
+                    className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 rounded-lg bg-muted/50 flex items-center justify-center"
                     style={{ border: '1px dashed rgba(0,0,0,0.2)' }}
                   >
                     <span className="text-xs text-muted-foreground">Illustration</span>
                   </div>
                 )}
               </div>
-              {/* 3. Intro + body paragraphs */}
-              <div className="flex-shrink-0 min-w-[200px] max-w-[280px] lg:flex-1 lg:min-w-0 lg:max-w-none space-y-3 md:space-y-4">
+              {/* 3. Description text */}
+              <div className="flex-1 min-w-0 space-y-3 md:space-y-4">
                 {intro && (
                   <p className="text-sm md:text-lg" style={{ color: BRAND_ACCENT }}>
                     {intro}
