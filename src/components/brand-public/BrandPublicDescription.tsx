@@ -103,7 +103,7 @@ export default function BrandPublicDescription({
 
             {/* Middle: Square photo carousel */}
             {images.length > 0 && (
-              <div className="flex gap-3 lg:gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-8 lg:mb-12">
+              <div className="flex gap-3 lg:gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-4 lg:mb-6">
                 {images.slice(0, 7).map((url, i) => (
                   <div
                     key={i}
