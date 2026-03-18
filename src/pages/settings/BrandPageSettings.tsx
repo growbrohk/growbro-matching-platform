@@ -122,16 +122,33 @@ export default function BrandPageSettings() {
   const loadReorderItems = useCallback(async () => {
     if (!currentOrg?.id) return;
     try {
+      const eventsQuery = supabase
+        .from('events')
+        .select('id, title, end_at, day_2_end_at')
+        .eq('org_id', currentOrg.id)
+        .eq('status', 'published');
       const [eventsRes, productsRes] = await Promise.all([
-        supabase.from('events').select('id, title').eq('org_id', currentOrg.id).eq('status', 'published'),
-        supabase.from('products').select('id, title').eq('org_id', currentOrg.id).eq('type', 'physical'),
+        eventsQuery,
+        (supabase.from('products') as any).select('id, title, is_on_sale').eq('org_id', currentOrg.id).eq('type', 'physical'),
       ]);
-      setReorderEvents((eventsRes.data || []).map((e: { id: string; title: string }) => ({ id: e.id, title: e.title })));
-      setReorderProducts((productsRes.data || []).map((p: { id: string; title: string }) => ({ id: p.id, title: p.title })));
+      let eventsData = (eventsRes.data || []) as { id: string; title: string; end_at?: string; day_2_end_at?: string | null }[];
+      if (eventsFilter === 'non_expired') {
+        const now = new Date();
+        eventsData = eventsData.filter((e) => {
+          const latestEnd = e.day_2_end_at || e.end_at;
+          return latestEnd && new Date(latestEnd) >= now;
+        });
+      }
+      let productsData = (productsRes.data || []) as { id: string; title: string; is_on_sale?: boolean }[];
+      if (productsFilter === 'in_sale_only') {
+        productsData = productsData.filter((p: { is_on_sale?: boolean }) => p.is_on_sale !== false);
+      }
+      setReorderEvents(eventsData.map((e) => ({ id: e.id, title: e.title })));
+      setReorderProducts(productsData.map((p) => ({ id: p.id, title: p.title })));
     } catch (err) {
       console.error('Error loading reorder items:', err);
     }
-  }, [currentOrg?.id]);
+  }, [currentOrg?.id, eventsFilter, productsFilter]);
 
   useEffect(() => {
     loadReorderItems();
