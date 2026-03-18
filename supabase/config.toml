@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.send-confirmation-email]
 verify_jwt = false
 
+[functions.send-product-order-confirmation-email]
+verify_jwt = false
+
 [functions.order-created-message]
 verify_jwt = false
 
