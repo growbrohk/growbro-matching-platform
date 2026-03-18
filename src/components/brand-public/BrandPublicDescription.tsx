@@ -53,7 +53,7 @@ export default function BrandPublicDescription({
           {/* Main content */}
           <div className="flex-1 min-w-0">
             {/* Top: 3 columns - Brand (vertical) | Illustration | Text - same layout on all breakpoints */}
-            <div className="flex flex-row gap-4 md:gap-6 lg:gap-10 mb-8 lg:mb-12 items-end">
+            <div className="flex flex-row gap-4 md:gap-6 lg:gap-10 mb-4 lg:mb-6 items-end">
               {/* 1. Vertical brand name - writing-mode flows text vertically without transform overflow */}
               <div className="flex-shrink-0 w-8 md:w-10 lg:w-12 flex items-end justify-end">
                 <h2
@@ -103,7 +103,7 @@ export default function BrandPublicDescription({
 
             {/* Middle: Square photo carousel */}
             {images.length > 0 && (
-              <div className="flex gap-3 lg:gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-4 lg:mb-6">
+              <div className="flex gap-3 lg:gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-2 lg:mb-3">
                 {images.slice(0, 7).map((url, i) => (
                   <div
                     key={i}
