@@ -1,9 +1,7 @@
--- RPC: create_product_order - Creates product order for checkout (guest or authenticated)
--- RPC: get_order_with_org_and_products - Fetches product order with org and items for payment/success pages
+-- Fix: create_product_order was inserting status='unpaid' which violates
+-- orders.status CHECK (status IN ('pending', 'paid', 'cancelled', 'refunded')).
+-- Use status='pending' instead; payment_status='unpaid' remains correct.
 
--- ============================================================================
--- 1. create_product_order
--- ============================================================================
 CREATE OR REPLACE FUNCTION create_product_order(
   p_org_id UUID,
   p_items JSONB,
@@ -116,7 +114,7 @@ BEGIN
   -- Generate order number
   v_order_no := 'PROD-' || UPPER(TO_CHAR(NOW(), 'yymmdd')) || '-' || SUBSTRING(REPLACE(gen_random_uuid()::TEXT, '-', ''), 1, 8);
 
-  -- Create order
+  -- Create order (status='pending' satisfies order_status_check; payment_status='unpaid' is correct)
   INSERT INTO orders (
     order_type,
     event_id,
@@ -211,103 +209,3 @@ BEGIN
   RETURN v_order_id;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION create_product_order TO authenticated;
-GRANT EXECUTE ON FUNCTION create_product_order TO anon;
-
-COMMENT ON FUNCTION create_product_order IS 'Creates a product order for checkout. Validates stock, creates order and order_items. No auth required (guest checkout).';
-
--- ============================================================================
--- 2. get_order_with_org_and_products
--- ============================================================================
-CREATE OR REPLACE FUNCTION get_order_with_org_and_products(p_order_id UUID)
-RETURNS JSONB
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_order JSONB;
-  v_org JSONB;
-  v_order_items JSONB;
-  v_result JSONB;
-  v_org_id UUID;
-BEGIN
-  -- Validate order exists and is product order
-  SELECT o.host_org_id INTO v_org_id
-  FROM orders o
-  WHERE o.id = p_order_id AND o.order_type = 'product';
-
-  IF v_org_id IS NULL THEN
-    RETURN NULL;
-  END IF;
-
-  -- Fetch order
-  SELECT jsonb_build_object(
-    'id', o.id,
-    'order_type', o.order_type,
-    'host_org_id', o.host_org_id,
-    'buyer_user_id', o.buyer_user_id,
-    'buyer_first_name', o.buyer_first_name,
-    'buyer_last_name', o.buyer_last_name,
-    'buyer_email', o.buyer_email,
-    'buyer_phone', o.buyer_phone,
-    'total_amount', o.total_amount,
-    'currency', o.currency,
-    'order_no', o.order_no,
-    'status', o.status,
-    'payment_status', o.payment_status,
-    'payment_method', o.payment_method,
-    'fulfillment_status', o.fulfillment_status,
-    'receipt_url', o.receipt_url,
-    'submitted_at', o.submitted_at,
-    'paid_at', o.paid_at,
-    'created_at', o.created_at
-  ) INTO v_order
-  FROM orders o
-  WHERE o.id = p_order_id;
-
-  -- Fetch org with payment config from org_profiles
-  SELECT jsonb_build_object(
-    'id', o.id,
-    'name', o.name,
-    'slug', o.slug,
-    'enable_stripe', COALESCE(op.enable_stripe, false),
-    'enable_payme', COALESCE(op.enable_payme, false),
-    'enable_fps', COALESCE(op.enable_fps, false),
-    'payme_link', op.payme_link,
-    'fps_link', op.fps_link
-  ) INTO v_org
-  FROM orgs o
-  LEFT JOIN org_profiles op ON op.org_id = o.id
-  WHERE o.id = v_org_id;
-
-  -- Fetch order items (product order: ticket_type_id can be null, use metadata)
-  SELECT COALESCE(jsonb_agg(
-    jsonb_build_object(
-      'id', oi.id,
-      'quantity', oi.quantity,
-      'unit_price', oi.unit_price,
-      'subtotal', oi.subtotal,
-      'metadata', COALESCE(oi.metadata, '{}'::jsonb),
-      'product_name', COALESCE(oi.metadata->>'product_name', 'Item'),
-      'variant_label', oi.metadata->>'variant_label'
-    )
-  ), '[]'::jsonb) INTO v_order_items
-  FROM order_items oi
-  WHERE oi.order_id = p_order_id;
-
-  v_result := jsonb_build_object(
-    'order', v_order,
-    'org', v_org,
-    'order_items', v_order_items
-  );
-
-  RETURN v_result;
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION get_order_with_org_and_products TO authenticated;
-GRANT EXECUTE ON FUNCTION get_order_with_org_and_products TO anon;
-
-COMMENT ON FUNCTION get_order_with_org_and_products IS 'Returns product order with org and order_items for payment/success pages. Public access for checkout flow.';
