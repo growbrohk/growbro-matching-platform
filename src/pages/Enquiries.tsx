@@ -183,23 +183,24 @@ export default function Enquiries() {
         
         // Also add to allEnquiries for filtering/sorting compatibility
         for (const order of hostOrderCards) {
+          const isProductOrder = !order.event_id;
           allEnquiries.push({
             id: order.order_id,
             type: 'sales_order',
             status: order.fulfillment_status === 'confirmed' ? 'confirmed' : order.fulfillment_status === 'pending_confirmation' ? 'waiting_confirmation' : 'archived',
             brand: {
-              name: 'Event Order',
+              name: isProductOrder ? 'Product Order' : 'Event Order',
             },
             item: {
-              name: order.event_title || 'Event',
+              name: order.event_title || (isProductOrder ? 'Product' : 'Event'),
               thumbnailUrl: order.event_cover_image_url || undefined,
-              type: 'event',
+              type: isProductOrder ? 'product' : 'event',
             },
             previewText: `Order ${order.order_no || order.order_id.slice(0, 8)}`,
             date: order.updated_at,
             unread: order.fulfillment_status === 'pending_confirmation',
             channel: 'Website',
-            productType: 'ticket',
+            productType: isProductOrder ? 'product' : 'ticket',
           });
         }
       }

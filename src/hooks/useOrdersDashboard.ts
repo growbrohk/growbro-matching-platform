@@ -109,22 +109,15 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
       const startISO = start.toISOString();
       const endISO = end.toISOString();
 
-      // Query orders - need to filter by org_id
-      // For event orders: filter via events.org_id using a subquery or RPC
-      // For now, query all orders in range and filter client-side by checking events
-      // Better approach: use RPC or join, but RLS might handle org filtering
-      
-      // First, get event IDs for this org
+      // Query event orders (event_id in org's events)
       const { data: orgEvents } = await supabase
         .from('events')
         .select('id')
         .eq('org_id', currentOrg.id);
-
       const eventIds = (orgEvents || []).map((e: any) => e.id);
 
-      // Query orders for these events
-      // If no events exist for org, return empty result
-      let ordersQuery = supabase
+      // Query product orders (host_org_id = current org)
+      const productOrdersQuery = supabase
         .from('orders')
         .select(`
           id,
@@ -138,55 +131,48 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
           order_type,
           metadata
         `)
+        .eq('order_type', 'product')
+        .eq('host_org_id', currentOrg.id)
         .gte('created_at', startISO)
-        .lte('created_at', endISO);
+        .lte('created_at', endISO)
+        .order('created_at', { ascending: false });
 
-      // Filter by event_id if we have events
+      const { data: productOrdersData } = await productOrdersQuery;
+
+      // Query event orders
+      let eventOrdersData: any[] = [];
       if (eventIds.length > 0) {
-        ordersQuery = ordersQuery.in('event_id', eventIds);
-      } else {
-        // No events for this org, return empty result
-        return {
-          revenueTotal: 0,
-          ordersCount: 0,
-          ordersCountSubmittedPaid: 0,
-          pendingCountSubmitted: 0,
-          pendingOrders: [],
-          allOrders: [],
-          pendingCount: 0,
-          completedCount: 0,
-          allCount: 0,
-        };
+        const { data } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            created_at,
+            total_amount,
+            payment_status,
+            fulfillment_status,
+            receipt_url,
+            order_no,
+            event_id,
+            order_type,
+            metadata
+          `)
+          .in('event_id', eventIds)
+          .gte('created_at', startISO)
+          .lte('created_at', endISO)
+          .order('created_at', { ascending: false });
+        eventOrdersData = data || [];
       }
 
-      const { data: ordersData, error: ordersError } = await ordersQuery.order('created_at', { ascending: false });
+      // Merge and dedupe by id
+      const allOrdersData = [...eventOrdersData];
+      (productOrdersData || []).forEach((o: any) => {
+        if (!allOrdersData.some((e: any) => e.id === o.id)) {
+          allOrdersData.push(o);
+        }
+      });
+      allOrdersData.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      if (ordersError) {
-        console.error('Error fetching orders:', ordersError);
-        // If join fails, try direct query (might need RLS or different structure)
-        // For now, return empty data
-        return {
-          revenueTotal: 0,
-          ordersCount: 0,
-          ordersCountSubmittedPaid: 0,
-          pendingCountSubmitted: 0,
-          pendingOrders: [],
-          allOrders: [],
-          pendingCount: 0,
-          completedCount: 0,
-          allCount: 0,
-        };
-      }
-
-      // Orders are already filtered by event_id server-side
-      // For product orders: TODO - need to check product.org_id (skip for now)
-      const rawOrders = (ordersData || [])
-        .filter((order: any) => {
-          // Only include event orders for now
-          // Product orders would need separate query with product.org_id join
-          return order.order_type === 'event' || !order.order_type;
-        })
-        .map((order: any) => ({
+      const rawOrders = allOrdersData.map((order: any) => ({
           id: order.id,
           created_at: order.created_at,
           total_amount: Number(order.total_amount) || 0,
@@ -229,14 +215,14 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         });
       }
 
-      // Batch fetch order_items
+      // Batch fetch order_items (include metadata for product orders)
       const orderIds = rawOrders.map((o: any) => o.id);
-      const orderItemsMap = new Map<string, Array<{ ticket_type_id: string; quantity: number }>>();
+      const orderItemsMap = new Map<string, Array<{ ticket_type_id: string | null; quantity: number; metadata?: any }>>();
       
       if (orderIds.length > 0) {
         const { data: orderItemsData } = await supabase
           .from('order_items')
-          .select('order_id, ticket_type_id, quantity')
+          .select('order_id, ticket_type_id, quantity, metadata')
           .in('order_id', orderIds);
         
         (orderItemsData || []).forEach((item: any) => {
@@ -246,14 +232,17 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
           orderItemsMap.get(item.order_id)!.push({
             ticket_type_id: item.ticket_type_id,
             quantity: item.quantity,
+            metadata: item.metadata,
           });
         });
       }
 
-      // Batch fetch ticket_types
+      // Batch fetch ticket_types (for event orders)
       const ticketTypeIds = new Set<string>();
       orderItemsMap.forEach((items) => {
-        items.forEach((item) => ticketTypeIds.add(item.ticket_type_id));
+        items.forEach((item) => {
+          if (item.ticket_type_id) ticketTypeIds.add(item.ticket_type_id);
+        });
       });
       
       const ticketTypesMap = new Map<string, { name: string }>();
@@ -269,36 +258,67 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         });
       }
 
+      // Batch fetch product images (for product orders)
+      const productIds = new Set<string>();
+      orderItemsMap.forEach((items) => {
+        items.forEach((item) => {
+          const pid = item.metadata?.product_id;
+          if (pid) productIds.add(pid);
+        });
+      });
+      const productsMap = new Map<string, { title: string; image_url: string | null }>();
+      if (productIds.size > 0) {
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('id, title, image_url')
+          .in('id', Array.from(productIds));
+        (productsData || []).forEach((p: any) => {
+          productsMap.set(p.id, { title: p.title, image_url: p.image_url || null });
+        });
+      }
+
       // Build displayName and previewImageUrl for each order
       const orders: Order[] = rawOrders.map((order: any) => {
         const event = order.event_id ? eventsMap.get(order.event_id) : null;
         const orderItems = orderItemsMap.get(order.id) || [];
         
-        // Build display name
         let displayName = '';
-        if (orderItems.length > 0 && event) {
-          // Has order items (tickets)
-          const firstTicketType = ticketTypesMap.get(orderItems[0].ticket_type_id);
+        let previewImageUrl: string | null = null;
+
+        if (order.order_type === 'product') {
+          // Product order: use first product name from order_items metadata
+          const firstItem = orderItems[0];
+          const productName = firstItem?.metadata?.product_name
+            || (firstItem?.metadata?.product_id && productsMap.get(firstItem.metadata.product_id)?.title)
+            || 'Product Order';
+          if (orderItems.length > 1) {
+            displayName = `${productName} +${orderItems.length - 1} more`;
+          } else {
+            displayName = productName;
+          }
+          previewImageUrl = firstItem?.metadata?.product_id
+            ? productsMap.get(firstItem.metadata.product_id)?.image_url || null
+            : null;
+        } else if (orderItems.length > 0 && event) {
+          // Event order with tickets
+          const firstTicketType = ticketTypesMap.get(orderItems[0].ticket_type_id!);
           if (firstTicketType) {
             const ticketName = firstTicketType.name;
             if (orderItems.length > 1) {
-              displayName = `${event.title} — ${ticketName} +${orderItems.length - 1} more`;
+              displayName = `${event!.title} — ${ticketName} +${orderItems.length - 1} more`;
             } else {
-              displayName = `${event.title} — ${ticketName}`;
+              displayName = `${event!.title} — ${ticketName}`;
             }
           } else {
-            displayName = event.title;
+            displayName = event!.title;
           }
+          previewImageUrl = event?.instagram_preview_image_url || null;
         } else if (event) {
-          // Event only, no order items
           displayName = event.title;
+          previewImageUrl = event.instagram_preview_image_url || null;
         } else {
-          // Fallback
           displayName = `Order ${order.order_no || order.id.slice(0, 6)}`;
         }
-
-        // Get preview image URL
-        const previewImageUrl = event?.instagram_preview_image_url || null;
 
         return {
           ...order,

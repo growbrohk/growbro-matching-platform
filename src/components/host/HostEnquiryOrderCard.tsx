@@ -26,13 +26,13 @@ export interface HostOrderCardData {
   buyer_phone: string | null;
   total_amount: number;
   currency: string;
-  event_id: string;
-  event_title: string;
-  event_start_at: string;
+  event_id: string | null; // null for product orders
+  event_title: string; // event name or product name
+  event_start_at: string | null;
   event_location_text: string | null;
   event_cover_image_url: string | null;
   org_id: string;
-  tickets_count: number;
+  tickets_count: number; // ticket count for events, item count for products
 }
 
 interface HostEnquiryOrderCardProps {
@@ -227,7 +227,7 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
         {/* ROW 1: Header */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-gray-700 truncate min-w-0">
-            Event Ticket — {order.event_title}
+            {order.event_id ? `Event Ticket — ${order.event_title}` : `Product Order — ${order.event_title}`}
           </span>
           <span className="text-xs text-gray-400 shrink-0">{formatTimeAgo(order.updated_at)}</span>
         </div>
@@ -287,10 +287,12 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
                 {order.buyer_phone && ` • ${order.buyer_phone}`}
               </div>
 
-              {/* Tickets Count + Price */}
+              {/* Tickets/Items Count + Price */}
               <div className="text-sm text-gray-500 truncate">
-                {order.tickets_count} ticket{order.tickets_count !== 1 ? 's' : ''} •{' '}
-                {formatAmount(order.total_amount, order.currency)}
+                {order.event_id
+                  ? `${order.tickets_count} ticket${order.tickets_count !== 1 ? 's' : ''}`
+                  : `${order.tickets_count} item${order.tickets_count !== 1 ? 's' : ''}`}{' '}
+                • {formatAmount(order.total_amount, order.currency)}
               </div>
             </div>
           </div>
