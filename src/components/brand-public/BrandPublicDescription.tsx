@@ -104,7 +104,7 @@ export default function BrandPublicDescription({
                 {images.slice(0, 3).map((url, i) => (
                   <div
                     key={i}
-                    className="flex-shrink-0 w-64 aspect-square rounded-xl overflow-hidden bg-muted"
+                    className="flex-shrink-0 w-40 md:w-48 aspect-square rounded-xl overflow-hidden bg-muted"
                   >
                     <img src={url} alt="" className="w-full h-full object-cover" />
                   </div>
