@@ -1,7 +1,17 @@
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatShortEventDate } from '@/lib/utils/datetime';
 
 const BRAND_ACCENT = '#E85D04';
+
+function formatPrice(amount: number): string {
+  return new Intl.NumberFormat('en-HK', {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
 interface EventItem {
   id: string;
@@ -9,6 +19,8 @@ interface EventItem {
   slug?: string | null;
   imageUrl: string | null;
   orgSlug?: string | null;
+  dateStrings?: string[];
+  priceFrom?: number | null;
 }
 
 interface BrandPublicEventsProps {
@@ -42,7 +54,7 @@ export default function BrandPublicEvents({
           </div>
           <div className="flex gap-4 overflow-x-auto pb-4">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="aspect-[4/5] w-36 md:w-40 flex-shrink-0 rounded-lg" />
+              <Skeleton key={i} className="aspect-[4/5] w-48 md:w-56 flex-shrink-0 rounded-lg" />
             ))}
           </div>
         </div>
@@ -65,7 +77,7 @@ export default function BrandPublicEvents({
               key={event.id}
               type="button"
               onClick={() => handleEventClick(event)}
-              className="relative flex-shrink-0 w-36 md:w-40 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
+              className="relative flex-shrink-0 w-48 md:w-56 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
             >
               {event.imageUrl ? (
                 <img
@@ -78,8 +90,18 @@ export default function BrandPublicEvents({
                   <span className="text-sm text-muted-foreground px-2 text-center">{event.title}</span>
                 </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+              {event.priceFrom != null && (
+                <div className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs font-medium" style={{ backgroundColor: 'rgba(232, 93, 4, 0.75)', color: 'white' }}>
+                  {event.priceFrom === 0 ? 'Free' : `From ${formatPrice(event.priceFrom)}`}
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/70 to-transparent space-y-1">
                 <p className="text-white font-medium text-sm truncate">{event.title}</p>
+                {event.dateStrings && event.dateStrings.length > 0 && (
+                  <p className="text-white/90 text-xs truncate">
+                    {event.dateStrings.map(formatShortEventDate).join(', ')}
+                  </p>
+                )}
               </div>
             </button>
           ))}

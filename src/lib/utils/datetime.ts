@@ -79,6 +79,18 @@ export function utcToDatetimeLocal(utcIsoString: string): string {
 }
 
 /**
+ * Format event date as "Mar 18" for compact display (e.g. event cards)
+ */
+export function formatShortEventDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    timeZone: TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
  * Format event date as "Jan 4 (Sun)" for display
  */
 export function formatEventDate(dateString: string): string {
