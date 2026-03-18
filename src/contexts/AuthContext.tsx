@@ -45,6 +45,8 @@ export interface OrgProfile {
   footer_contact_email?: string | null;
   footer_links?: { label: string; url: string }[] | null;
   accent_color?: string | null;
+  top_section?: 'events' | 'products' | 'both' | 'hidden' | null;
+  bottom_section?: 'events' | 'products' | 'both' | 'hidden' | null;
 }
 
 type OrgMembershipsStatus = 'loading' | 'loaded' | 'error';

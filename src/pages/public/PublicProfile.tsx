@@ -128,28 +128,51 @@ export default function PublicProfile() {
         onEditClick={() => navigate('/app/settings/brand-page')}
       />
 
-      <BrandPublicEvents
-        orgSlug={org.slug}
-        events={events}
-        loading={dataLoading}
-        isEditMode={editMode}
-        accentColor={org.profile?.accent_color}
-      />
-
-      <BrandPublicDescription
-        org={org}
-        profile={org.profile}
-        isEditMode={editMode}
-        onEditClick={() => navigate('/app/settings/brand-page')}
-      />
-
-      <BrandPublicProducts
-        orgSlug={org.slug}
-        products={products}
-        loading={dataLoading}
-        isEditMode={editMode}
-        accentColor={org.profile?.accent_color}
-      />
+      {(() => {
+        const topSection = org.profile?.top_section || 'events';
+        const bottomSection = org.profile?.bottom_section || 'products';
+        const accentColor = org.profile?.accent_color;
+        const renderEvents = () => (
+          <BrandPublicEvents
+            orgSlug={org.slug}
+            events={events}
+            loading={dataLoading}
+            isEditMode={editMode}
+            accentColor={accentColor}
+          />
+        );
+        const renderProducts = () => (
+          <BrandPublicProducts
+            orgSlug={org.slug}
+            products={products}
+            loading={dataLoading}
+            isEditMode={editMode}
+            accentColor={accentColor}
+          />
+        );
+        return (
+          <>
+            {topSection !== 'hidden' && (
+              <>
+                {(topSection === 'events' || topSection === 'both') && renderEvents()}
+                {(topSection === 'products' || topSection === 'both') && renderProducts()}
+              </>
+            )}
+            <BrandPublicDescription
+              org={org}
+              profile={org.profile}
+              isEditMode={editMode}
+              onEditClick={() => navigate('/app/settings/brand-page')}
+            />
+            {bottomSection !== 'hidden' && (
+              <>
+                {(bottomSection === 'events' || bottomSection === 'both') && renderEvents()}
+                {(bottomSection === 'products' || bottomSection === 'both') && renderProducts()}
+              </>
+            )}
+          </>
+        );
+      })()}
 
       <BrandPublicFooter org={org} profile={org.profile} />
     </div>

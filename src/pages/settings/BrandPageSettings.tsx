@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, Upload, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
@@ -35,6 +36,8 @@ export default function BrandPageSettings() {
   const [descriptionTagline, setDescriptionTagline] = useState('');
   const [descriptionTaglineBody, setDescriptionTaglineBody] = useState('');
   const [accentColor, setAccentColor] = useState('#E85D04');
+  const [topSection, setTopSection] = useState<'events' | 'products' | 'both' | 'hidden'>('events');
+  const [bottomSection, setBottomSection] = useState<'events' | 'products' | 'both' | 'hidden'>('products');
   const [footerTagline, setFooterTagline] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
@@ -76,6 +79,8 @@ export default function BrandPageSettings() {
         setDescriptionTagline(data.description_tagline || '');
         setDescriptionTaglineBody(data.description_tagline_body || '');
         setAccentColor(data.accent_color || '#E85D04');
+        setTopSection((data as any).top_section || 'events');
+        setBottomSection((data as any).bottom_section || 'products');
         setFooterTagline(data.footer_tagline || '');
         setFooterContactEmail(data.footer_contact_email || '');
         setFooterLinks(
@@ -196,6 +201,8 @@ export default function BrandPageSettings() {
           hero_banner_url: heroBannerImages[0] || null,
           hero_banner_images: heroBannerImages.filter(Boolean),
           accent_color: accentColor || '#E85D04',
+          top_section: topSection,
+          bottom_section: bottomSection,
           hero_headline: heroHeadline || null,
           hero_subheadline: heroSubheadline || null,
           description_intro: descriptionIntro || null,
@@ -331,6 +338,44 @@ export default function BrandPageSettings() {
               onChange={(e) => setHeroSubheadline(e.target.value)}
               placeholder="e.g. One baby step at a time."
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Catalog Layout */}
+      <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
+        <CardHeader>
+          <CardTitle>Events & Products Layout</CardTitle>
+          <CardDescription>Choose what to show in the top and bottom rows between Hero and Footer</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Top Row</Label>
+            <Select value={topSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setTopSection(v)}>
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="events">Events</SelectItem>
+                <SelectItem value="products">Products</SelectItem>
+                <SelectItem value="both">Both (Events + Products)</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Bottom Row</Label>
+            <Select value={bottomSection} onValueChange={(v: 'events' | 'products' | 'both' | 'hidden') => setBottomSection(v)}>
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="events">Events</SelectItem>
+                <SelectItem value="products">Products</SelectItem>
+                <SelectItem value="both">Both (Events + Products)</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
