@@ -30,7 +30,7 @@ export default function BrandPageSettings() {
   const [heroSubheadline, setHeroSubheadline] = useState('');
   const [descriptionIntro, setDescriptionIntro] = useState('');
   const [descriptionBody, setDescriptionBody] = useState('');
-  const [descriptionImages, setDescriptionImages] = useState<string[]>(['', '', '']);
+  const [descriptionImages, setDescriptionImages] = useState<string[]>(['', '', '', '', '', '', '']);
   const [descriptionIllustrationUrl, setDescriptionIllustrationUrl] = useState('');
   const [descriptionTagline, setDescriptionTagline] = useState('');
   const [descriptionTaglineBody, setDescriptionTaglineBody] = useState('');
@@ -70,7 +70,7 @@ export default function BrandPageSettings() {
         setDescriptionBody(data.description_body || '');
         const imgs = data.description_images;
         const imgArr = Array.isArray(imgs) ? imgs : [];
-        setDescriptionImages([imgArr[0] || '', imgArr[1] || '', imgArr[2] || '']);
+        setDescriptionImages([imgArr[0] || '', imgArr[1] || '', imgArr[2] || '', imgArr[3] || '', imgArr[4] || '', imgArr[5] || '', imgArr[6] || '']);
         setDescriptionIllustrationUrl(data.description_illustration_url || '');
         setDescriptionTagline(data.description_tagline || '');
         setDescriptionTaglineBody(data.description_tagline_body || '');
@@ -360,9 +360,9 @@ export default function BrandPageSettings() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Square Photo Carousel (up to 3)</Label>
-            <div className="grid grid-cols-3 gap-4">
-              {[0, 1, 2].map((i) => (
+            <Label>Square Photo Carousel (up to 7)</Label>
+            <div className="grid grid-cols-4 md:grid-cols-7 gap-4">
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="space-y-2">
                   {descriptionImages[i] ? (
                     <img src={descriptionImages[i]} alt="" className="aspect-square w-full object-cover rounded-lg" />
