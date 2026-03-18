@@ -60,6 +60,7 @@ export default function BrandPublicDescription({
                     fontFamily: "'Inter Tight', sans-serif",
                     writingMode: 'vertical-rl',
                     textOrientation: 'mixed',
+                    transform: 'rotate(180deg)',
                   }}
                 >
                   {org.name}
