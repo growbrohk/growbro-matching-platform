@@ -42,7 +42,7 @@ export default function BrandPublicEvents({
           </div>
           <div className="flex gap-4 overflow-x-auto pb-4">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="aspect-[4/5] w-64 flex-shrink-0 rounded-lg" />
+              <Skeleton key={i} className="aspect-[4/5] w-44 md:w-48 flex-shrink-0 rounded-lg" />
             ))}
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function BrandPublicEvents({
               key={event.id}
               type="button"
               onClick={() => handleEventClick(event)}
-              className="relative flex-shrink-0 w-64 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
+              className="relative flex-shrink-0 w-44 md:w-48 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
             >
               {event.imageUrl ? (
                 <img

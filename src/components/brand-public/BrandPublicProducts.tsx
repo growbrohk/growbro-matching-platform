@@ -50,7 +50,7 @@ export default function BrandPublicProducts({
           </div>
           <div className="flex gap-4 overflow-x-auto pb-4">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="aspect-square w-48 flex-shrink-0 rounded-lg" />
+              <Skeleton key={i} className="aspect-square w-36 md:w-40 flex-shrink-0 rounded-lg" />
             ))}
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function BrandPublicProducts({
               key={product.id}
               type="button"
               onClick={() => handleProductClick(product)}
-              className="flex-shrink-0 w-48 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
+              className="flex-shrink-0 w-36 md:w-40 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
             >
               <div className="aspect-square w-full">
                 {product.imageUrl ? (
