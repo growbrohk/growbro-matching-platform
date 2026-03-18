@@ -42,7 +42,9 @@ export interface OrgProfile {
   description_tagline?: string | null;
   description_tagline_body?: string | null;
   footer_tagline?: string | null;
+  footer_body?: string | null;
   footer_contact_email?: string | null;
+  footer_illustration_url?: string | null;
   footer_links?: { label: string; url: string }[] | null;
   accent_color?: string | null;
   top_section?: 'events' | 'products' | 'both' | 'hidden' | null;

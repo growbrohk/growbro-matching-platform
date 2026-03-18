@@ -25,6 +25,7 @@ export default function BrandPageSettings() {
   const [uploadingHero, setUploadingHero] = useState<number | null>(null);
   const [uploadingDesc, setUploadingDesc] = useState<number | null>(null);
   const [uploadingIllustration, setUploadingIllustration] = useState(false);
+  const [uploadingFooterIllustration, setUploadingFooterIllustration] = useState(false);
 
   const [heroBannerImages, setHeroBannerImages] = useState<string[]>(['', '', '']);
   const [heroHeadline, setHeroHeadline] = useState('');
@@ -47,6 +48,8 @@ export default function BrandPageSettings() {
   const [reorderEvents, setReorderEvents] = useState<{ id: string; title: string }[]>([]);
   const [reorderProducts, setReorderProducts] = useState<{ id: string; title: string }[]>([]);
   const [footerTagline, setFooterTagline] = useState('');
+  const [footerBody, setFooterBody] = useState('');
+  const [footerIllustrationUrl, setFooterIllustrationUrl] = useState('');
   const [footerContactEmail, setFooterContactEmail] = useState('');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
     { label: 'Meet us on the Run', url: '' },
@@ -96,6 +99,8 @@ export default function BrandPageSettings() {
         setProductsSort((data as any).products_sort || 'creation');
         setProductsDisplayOrder(Array.isArray((data as any).products_display_order) ? (data as any).products_display_order : []);
         setFooterTagline(data.footer_tagline || '');
+        setFooterBody((data as any).footer_body || '');
+        setFooterIllustrationUrl((data as any).footer_illustration_url || '');
         setFooterContactEmail(data.footer_contact_email || '');
         setFooterLinks(
           Array.isArray(data.footer_links) && data.footer_links.length > 0
@@ -225,6 +230,32 @@ export default function BrandPageSettings() {
     }
   };
 
+  const uploadFooterIllustration = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentOrg?.id) return;
+    e.target.value = '';
+
+    setUploadingFooterIllustration(true);
+    try {
+      const compressed = await compressReceiptImage(file, {
+        targetSizeBytes: 200 * 1024,
+        maxDimension: 800,
+      });
+      const path = `${currentOrg.id}/footer/illustration.webp`;
+      const { error } = await supabase.storage
+        .from('brand-page-assets')
+        .upload(path, compressed, { upsert: true, contentType: 'image/webp' });
+      if (error) throw error;
+      const { data } = supabase.storage.from('brand-page-assets').getPublicUrl(path);
+      setFooterIllustrationUrl(withCacheBust(data.publicUrl));
+      toast.success('Footer illustration uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploadingFooterIllustration(false);
+    }
+  };
+
   const uploadDescriptionImage = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentOrg?.id) return;
@@ -282,7 +313,9 @@ export default function BrandPageSettings() {
           description_tagline: descriptionTagline || null,
           description_tagline_body: descriptionTaglineBody || null,
           footer_tagline: footerTagline || null,
+          footer_body: footerBody || null,
           footer_contact_email: footerContactEmail || null,
+          footer_illustration_url: footerIllustrationUrl || null,
           footer_links: footerLinks.filter((l) => l.label.trim() && l.url.trim()),
         })
         .eq('org_id', currentOrg.id)) as { error: any };
@@ -668,16 +701,63 @@ export default function BrandPageSettings() {
       <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
         <CardHeader>
           <CardTitle>Footer</CardTitle>
-          <CardDescription>Footer tagline and contact</CardDescription>
+          <CardDescription>Footer tagline, body text, contact, and logo-area illustration</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Footer Tagline</Label>
+            <Label>Footer Tagline (header)</Label>
             <Input
               value={footerTagline}
               onChange={(e) => setFooterTagline(e.target.value)}
               placeholder="e.g. Run to explore. One baby step at a time."
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Footer Body</Label>
+            <Textarea
+              value={footerBody}
+              onChange={(e) => setFooterBody(e.target.value)}
+              placeholder="e.g. A push to refine, a push to explore and a push to make a better life."
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Logo Area Illustration</Label>
+            <p className="text-sm text-muted-foreground">Shown in the footer logo area (replaces org logo when set)</p>
+            <div className="flex items-center gap-4">
+              {footerIllustrationUrl ? (
+                <img src={footerIllustrationUrl} alt="Footer illustration" className="h-24 w-24 object-contain rounded-lg border" />
+              ) : (
+                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingFooterIllustration}
+                    onChange={uploadFooterIllustration}
+                  />
+                  <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
+                    <Upload className="h-4 w-4" />
+                    {uploadingFooterIllustration ? 'Uploading...' : 'Upload'}
+                  </span>
+                </label>
+                {footerIllustrationUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFooterIllustrationUrl('')}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Contact Email</Label>
