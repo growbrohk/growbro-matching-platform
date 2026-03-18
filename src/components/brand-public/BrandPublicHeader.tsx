@@ -55,19 +55,12 @@ export default function BrandPublicHeader({
             </span>
           )}
         </Link>
-        {isOwner ? (
+        {isOwner && (
           <Link
             to="/app/settings/brand-page"
             className="text-sm lg:text-base font-medium text-white hover:underline"
           >
             Edit page
-          </Link>
-        ) : (
-          <Link
-            to="/auth"
-            className="text-sm lg:text-base font-medium text-white hover:underline"
-          >
-            Join us now
           </Link>
         )}
       </div>
