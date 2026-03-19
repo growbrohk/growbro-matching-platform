@@ -193,8 +193,12 @@ export interface TicketTypeAccessVariant {
   allowed_affiliates?: string[] | null;
   price_override?: number | null;
   discount_percent?: number | null;
+  quota?: number | null;
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
+  /** Calculated: remaining when variant has quota. remaining = quota - sold_count */
+  remaining_count?: number;
 }
 
 export interface TicketType {

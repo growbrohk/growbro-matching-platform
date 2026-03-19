@@ -68,6 +68,8 @@ interface AccessVariantForm {
   allowed_affiliates?: string[] | null;
   price_override?: string | null;
   discount_percent?: string | null;
+  quota?: string | null;
+  is_active?: boolean;
 }
 
 interface TicketTypeForm {
@@ -217,6 +219,8 @@ export default function EventForm() {
                 allowed_affiliates: v.allowed_affiliates || null,
                 price_override: v.price_override != null ? v.price_override.toString() : null,
                 discount_percent: v.discount_percent != null ? v.discount_percent.toString() : null,
+                quota: v.quota != null ? v.quota.toString() : null,
+                is_active: (v as any).is_active !== false,
               }))
             : [{
                 visibility_mode: (t.visibility_mode || 'public') as 'public' | 'code' | 'affiliate' | 'hidden',
@@ -224,6 +228,8 @@ export default function EventForm() {
                 allowed_affiliates: t.allowed_affiliates || null,
                 price_override: null,
                 discount_percent: null,
+                quota: null,
+                is_active: true,
               }];
           return {
             id: t.id,
@@ -298,7 +304,7 @@ export default function EventForm() {
       visibility_mode: 'public',
       access_code: null,
       allowed_affiliates: null,
-      access_variants: [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }],
+      access_variants: [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null, quota: null, is_active: true }],
       is_active: true,
       availability_mode: 'always',
       available_start_at: null,
@@ -339,8 +345,8 @@ export default function EventForm() {
   const handleAddAccessVariant = (ticketIndex: number) => {
     setTicketTypes(ticketTypes.map((tt, i) => {
       if (i !== ticketIndex) return tt;
-      const variants = tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }];
-      return { ...tt, access_variants: [...variants, { visibility_mode: 'code', access_code: '', allowed_affiliates: null, price_override: null, discount_percent: null }] };
+      const variants = tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null, quota: null, is_active: true }];
+      return { ...tt, access_variants: [...variants, { visibility_mode: 'code', access_code: '', allowed_affiliates: null, price_override: null, discount_percent: null, quota: null, is_active: true }] };
     }));
   };
 
@@ -353,7 +359,7 @@ export default function EventForm() {
     }));
   };
 
-  const handleUpdateAccessVariant = (ticketIndex: number, variantIndex: number, field: keyof AccessVariantForm, value: string | string[] | null, extra?: Partial<AccessVariantForm>) => {
+  const handleUpdateAccessVariant = (ticketIndex: number, variantIndex: number, field: keyof AccessVariantForm, value: string | string[] | boolean | null, extra?: Partial<AccessVariantForm>) => {
     setTicketTypes(ticketTypes.map((tt, i) => {
       if (i !== ticketIndex) return tt;
       const variants = [...(tt.access_variants || [])];
@@ -699,6 +705,8 @@ export default function EventForm() {
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
             price_override: v.price_override ? parseFloat(v.price_override) : null,
             discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+            quota: v.quota ? parseInt(v.quota, 10) : null,
+            is_active: v.is_active !== false,
           }));
 
           if (tt.id && !tt.isNew) {
@@ -808,6 +816,8 @@ export default function EventForm() {
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
             price_override: v.price_override ? parseFloat(v.price_override) : null,
             discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+            quota: v.quota ? parseInt(v.quota, 10) : null,
+            is_active: v.is_active !== false,
           }));
 
           const priceStr = (tt.price || '').trim();
@@ -1513,7 +1523,7 @@ export default function EventForm() {
                       <p className="text-xs text-muted-foreground mb-3">
                         Add multiple access rules. Each can have a different price or discount %.
                       </p>
-                      {(tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }]).map((variant, vIdx) => (
+                      {(tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null, quota: null, is_active: true }]).map((variant, vIdx) => (
                         <div key={vIdx} className="mb-4 p-4 rounded-lg border space-y-3" style={{ borderColor: 'rgba(14,122,58,0.2)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
                           <div className="flex items-start justify-between gap-2">
                             <Select
@@ -1530,11 +1540,21 @@ export default function EventForm() {
                                 <SelectItem value="hidden">Hidden</SelectItem>
                               </SelectContent>
                             </Select>
-                            {(tt.access_variants?.length ?? 1) > 1 && (
-                              <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveAccessVariant(index, vIdx)} className="text-red-600 hover:text-red-700">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <Label htmlFor={`variant-active-${index}-${vIdx}`} className="text-xs">Active</Label>
+                                <Switch
+                                  id={`variant-active-${index}-${vIdx}`}
+                                  checked={variant.is_active !== false}
+                                  onCheckedChange={(checked) => handleUpdateAccessVariant(index, vIdx, 'is_active', checked)}
+                                />
+                              </div>
+                              {(tt.access_variants?.length ?? 1) > 1 && (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveAccessVariant(index, vIdx)} className="text-red-600 hover:text-red-700">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                           {variant.visibility_mode === 'code' && (
                             <div className="flex gap-2">
@@ -1597,6 +1617,21 @@ export default function EventForm() {
                               </div>
                             </div>
                           )}
+                          <div>
+                            <Label className="text-xs font-medium">Quota (optional)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={variant.quota ?? ''}
+                              onChange={(e) => {
+                                const v = e.target.value.trim();
+                                handleUpdateAccessVariant(index, vIdx, 'quota', v ? v : null);
+                              }}
+                              placeholder="Use ticket type quota"
+                              className="mt-1 max-w-[120px]"
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">Max tickets through this variant. Leave empty to use ticket type quota.</p>
+                          </div>
                           {variant.visibility_mode === 'code' && variant.access_code && eventId && eventSlug && currentOrg?.slug && (
                             <div>
                               <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>

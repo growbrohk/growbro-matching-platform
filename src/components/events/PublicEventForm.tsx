@@ -192,6 +192,10 @@ export default function PublicEventForm({
       return null;
     }
 
+    // Filter to active variants only
+    const activeVariants = variants.filter(v => (v as any).is_active !== false && v.is_active !== false);
+    if (activeVariants.length === 0) return null;
+
     // Find matching variant (priority: code > affiliate > public)
     // Supabase returns snake_case; support both for robustness
     const vMode = (v: TicketTypeAccessVariant) => (v as any).visibility_mode ?? v.visibility_mode;
@@ -199,22 +203,31 @@ export default function PublicEventForm({
     const vAffiliates = (v: TicketTypeAccessVariant) => (v as any).allowed_affiliates ?? v.allowed_affiliates;
     const vPriceOverride = (v: TicketTypeAccessVariant) => (v as any).price_override ?? (v as any).priceOverride ?? v.price_override;
     const vDiscountPercent = (v: TicketTypeAccessVariant) => (v as any).discount_percent ?? (v as any).discountPercent ?? v.discount_percent;
+    const vQuota = (v: TicketTypeAccessVariant) => (v as any).quota ?? v.quota;
+    const vRemaining = (v: TicketTypeAccessVariant) => (v as any).remaining_count ?? v.remaining_count;
+
+    const hasQuotaRemaining = (v: TicketTypeAccessVariant) => {
+      const quota = vQuota(v);
+      if (quota == null) return true;
+      const remaining = vRemaining(v);
+      return remaining == null || remaining > 0;
+    };
 
     let matched: TicketTypeAccessVariant | null = null;
     if (codeParam) {
-      const codeVariant = variants.find(v => vMode(v) === 'code' && vCode(v) === codeParam);
+      const codeVariant = activeVariants.find(v => vMode(v) === 'code' && vCode(v) === codeParam && hasQuotaRemaining(v));
       if (codeVariant) matched = codeVariant;
     }
     if (!matched && refParam) {
-      const affiliateVariant = variants.find(v => {
+      const affiliateVariant = activeVariants.find(v => {
         const mode = vMode(v);
         const allowed = vAffiliates(v);
-        return mode === 'affiliate' && (!allowed || allowed.length === 0 || allowed.includes(refParam));
+        return mode === 'affiliate' && (!allowed || allowed.length === 0 || allowed.includes(refParam)) && hasQuotaRemaining(v);
       });
       if (affiliateVariant) matched = affiliateVariant;
     }
     if (!matched) {
-      const publicVariant = variants.find(v => vMode(v) === 'public');
+      const publicVariant = activeVariants.find(v => vMode(v) === 'public' && hasQuotaRemaining(v));
       if (publicVariant) matched = publicVariant;
     }
     if (!matched) return null;
@@ -428,7 +441,7 @@ export default function PublicEventForm({
 
     // Build booking draft from selections (use effective price for discounted variants)
     const lines: BookingDraft['lines'] = [];
-    visibleTicketTypesWithPrice.forEach(({ tt, effectivePrice }) => {
+    visibleTicketTypesWithPrice.forEach(({ tt, effectivePrice, variant }) => {
       const qty = selections[tt.id] || 0;
       if (qty > 0) {
         const finalQty = Math.max(1, qty);
@@ -438,6 +451,7 @@ export default function PublicEventForm({
           unitPrice: effectivePrice,
           qty: finalQty,
           ticketTypeId: tt.id,
+          ticketTypeAccessVariantId: variant?.id ?? null,
           dateTimeLabel: formatTicketTypeDateTime(event, tt),
         });
       }
@@ -551,10 +565,13 @@ export default function PublicEventForm({
                   Tickets
                 </p>
                 {visibleTicketTypes.length > 0 ? (
-                  visibleTicketTypesWithPrice.map(({ tt, effectivePrice, discountPercent }) => {
+                  visibleTicketTypesWithPrice.map(({ tt, effectivePrice, discountPercent, variant }) => {
                     const availability = isTicketAvailable(tt);
                     const isUnavailable = !availability.available;
                     const showDiscount = discountPercent != null && discountPercent > 0;
+                    const remainingCount = variant?.quota != null && variant?.remaining_count != null
+                      ? variant.remaining_count
+                      : (tt.remaining_count !== undefined ? tt.remaining_count : (tt.quota < 999999 ? tt.quota : undefined));
                     
                     return (
                       <div
@@ -590,24 +607,9 @@ export default function PublicEventForm({
                                 </span>
                               )}
                               {(() => {
-                                // Show remaining count logic:
-                                // 1. If show_remaining_count is false, don't show
-                                // 2. If threshold_to_show is set, only show when remaining_count <= threshold_to_show
-                                // 3. Otherwise, show if remaining_count is available
                                 const showRemaining = tt.show_remaining_count !== false;
-                                const remainingCount = tt.remaining_count !== undefined ? tt.remaining_count : (tt.quota < 999999 ? tt.quota : undefined);
-                                
-                                if (!showRemaining || remainingCount === undefined) {
-                                  return null;
-                                }
-                                
-                                if (tt.threshold_to_show !== null && tt.threshold_to_show !== undefined) {
-                                  // Only show if remaining_count <= threshold_to_show
-                                  if (remainingCount > tt.threshold_to_show) {
-                                    return null;
-                                  }
-                                }
-                                
+                                if (!showRemaining || remainingCount === undefined) return null;
+                                if (tt.threshold_to_show != null && remainingCount > tt.threshold_to_show) return null;
                                 return (
                                   <span className="text-xs text-muted-foreground">
                                     {remainingCount} {remainingCount === 1 ? 'remaining' : 'remaining'}
@@ -638,7 +640,10 @@ export default function PublicEventForm({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {[0, 1, 2, 3, 4].map((num) => (
+                              {(() => {
+                                const maxQty = remainingCount != null ? Math.min(4, remainingCount) : 4;
+                                return [0, 1, 2, 3, 4].filter(n => n <= maxQty);
+                              })().map((num) => (
                                 <SelectItem key={num} value={num.toString()}>
                                   {num}
                                 </SelectItem>

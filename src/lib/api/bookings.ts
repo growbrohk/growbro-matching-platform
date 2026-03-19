@@ -116,13 +116,20 @@ export async function createBooking(
   const buyerUserId = user?.id || null;
 
   // Prepare order lines from draft - ONLY ticket_type_id and quantity (NO prices)
-  // Server will compute unit_price and subtotal from ticket_types.price
+  // Server will compute unit_price and subtotal from ticket_types.price or variant effective price
+  // Include ticket_type_access_variant_id when purchasing via a variant (code/affiliate)
   const orderLines = draft.lines
     .filter(line => line.qty > 0)
-    .map(line => ({
-      ticket_type_id: line.ticketTypeId,
-      quantity: line.qty,
-    }));
+    .map(line => {
+      const base = {
+        ticket_type_id: line.ticketTypeId,
+        quantity: line.qty,
+      };
+      if (line.ticketTypeAccessVariantId) {
+        return { ...base, ticket_type_access_variant_id: line.ticketTypeAccessVariantId };
+      }
+      return base;
+    });
 
   // Prepare addon lines - product_id, product_variant_id?, quantity (NO prices - server computes)
   // Per-ticket mode: include ticket_index so add-ons attach to specific tickets

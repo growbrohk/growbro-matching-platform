@@ -80,6 +80,8 @@ export interface TicketTypeAccessVariantInput {
   allowed_affiliates?: string[] | null;
   price_override?: number | null;
   discount_percent?: number | null;
+  quota?: number | null;
+  is_active?: boolean;
 }
 
 export interface CreateTicketTypeData {
@@ -554,6 +556,8 @@ async function syncTicketTypeAccessVariants(
     allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
     price_override: v.price_override ?? null,
     discount_percent: v.discount_percent ?? null,
+    quota: v.quota ?? null,
+    is_active: v.is_active !== false,
   }));
 
   const { error } = await supabase.from('ticket_type_access_variants').insert(rows);
@@ -580,6 +584,27 @@ export async function getTicketTypeAccessVariants(ticketTypeIds: string[]): Prom
   }
 
   return (data || []) as TicketTypeAccessVariant[];
+}
+
+/**
+ * Fetch remaining count per variant (for variants with quota)
+ */
+export async function getVariantRemainingCounts(eventId: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc('get_variant_remaining_counts', {
+    p_event_id: eventId,
+  });
+
+  if (error) {
+    console.warn('[getVariantRemainingCounts] Failed:', error);
+    return new Map();
+  }
+
+  const result = new Map<string, number>();
+  for (const row of (data || []) as { variant_id: string; sold_count: number; quota: number }[]) {
+    const remaining = Math.max(0, (row.quota ?? 0) - (row.sold_count ?? 0));
+    result.set(row.variant_id, remaining);
+  }
+  return result;
 }
 
 /**
@@ -620,12 +645,16 @@ export async function getTicketTypes(
 
   if (includeAccessVariants && ticketTypes.length > 0) {
     try {
-      const variants = await getTicketTypeAccessVariants(ticketTypes.map((tt) => tt.id));
+      const [variants, variantRemaining] = await Promise.all([
+        getTicketTypeAccessVariants(ticketTypes.map((tt) => tt.id)),
+        getVariantRemainingCounts(eventId),
+      ]);
       const variantsByTicketType = new Map<string, TicketTypeAccessVariant[]>();
       for (const v of variants) {
         const ticketTypeId = (v as any).ticket_type_id ?? v.ticket_type_id;
         const list = variantsByTicketType.get(ticketTypeId) || [];
-        list.push(v);
+        const remaining = v.quota != null ? variantRemaining.get(v.id) : undefined;
+        list.push({ ...v, remaining_count: remaining });
         variantsByTicketType.set(ticketTypeId, list);
       }
       ticketTypes = ticketTypes.map((tt) => ({

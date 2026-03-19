@@ -9,6 +9,8 @@ export interface BookingDraftLine {
   unitPrice: number;
   qty: number;
   ticketTypeId: string; // Reference to ticket type
+  /** Variant used when purchasing via code/affiliate. For per-variant quota tracking. */
+  ticketTypeAccessVariantId?: string | null;
   dateTimeLabel?: string; // e.g., "Fri 6 Dec 18:00–22:00"
 }
 
