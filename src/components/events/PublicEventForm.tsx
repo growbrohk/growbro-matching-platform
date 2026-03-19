@@ -193,29 +193,39 @@ export default function PublicEventForm({
     }
 
     // Find matching variant (priority: code > affiliate > public)
+    // Supabase returns snake_case; support both for robustness
+    const vMode = (v: TicketTypeAccessVariant) => (v as any).visibility_mode ?? v.visibility_mode;
+    const vCode = (v: TicketTypeAccessVariant) => (v as any).access_code ?? v.access_code;
+    const vAffiliates = (v: TicketTypeAccessVariant) => (v as any).allowed_affiliates ?? v.allowed_affiliates;
+    const vPriceOverride = (v: TicketTypeAccessVariant) => (v as any).price_override ?? (v as any).priceOverride ?? v.price_override;
+    const vDiscountPercent = (v: TicketTypeAccessVariant) => (v as any).discount_percent ?? (v as any).discountPercent ?? v.discount_percent;
+
     let matched: TicketTypeAccessVariant | null = null;
     if (codeParam) {
-      const codeVariant = variants.find(v => v.visibility_mode === 'code' && v.access_code === codeParam);
+      const codeVariant = variants.find(v => vMode(v) === 'code' && vCode(v) === codeParam);
       if (codeVariant) matched = codeVariant;
     }
     if (!matched && refParam) {
-      const affiliateVariant = variants.find(v =>
-        v.visibility_mode === 'affiliate' &&
-        (!v.allowed_affiliates || v.allowed_affiliates.length === 0 || v.allowed_affiliates.includes(refParam))
-      );
+      const affiliateVariant = variants.find(v => {
+        const mode = vMode(v);
+        const allowed = vAffiliates(v);
+        return mode === 'affiliate' && (!allowed || allowed.length === 0 || allowed.includes(refParam));
+      });
       if (affiliateVariant) matched = affiliateVariant;
     }
     if (!matched) {
-      const publicVariant = variants.find(v => v.visibility_mode === 'public');
+      const publicVariant = variants.find(v => vMode(v) === 'public');
       if (publicVariant) matched = publicVariant;
     }
     if (!matched) return null;
 
+    const priceOverride = vPriceOverride(matched);
+    const discountPercentVal = vDiscountPercent(matched);
     let effectivePrice = basePrice;
-    if (matched.price_override != null) {
-      effectivePrice = matched.price_override;
-    } else if (matched.discount_percent != null) {
-      effectivePrice = basePrice * (1 - matched.discount_percent / 100);
+    if (priceOverride != null && priceOverride !== '') {
+      effectivePrice = Number(priceOverride);
+    } else if (discountPercentVal != null && discountPercentVal !== '') {
+      effectivePrice = basePrice * (1 - Number(discountPercentVal) / 100);
     }
     const discountPercent = effectivePrice < basePrice
       ? Math.round((1 - effectivePrice / basePrice) * 100)

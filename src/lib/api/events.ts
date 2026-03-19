@@ -523,6 +523,7 @@ export async function deleteTicketType(ticketTypeId: string): Promise<void> {
 
 /**
  * Sync access variants for a ticket type. Replaces all existing variants with the provided list.
+ * Also updates ticket_types.visibility_mode, access_code, allowed_affiliates for legacy fallback.
  */
 async function syncTicketTypeAccessVariants(
   ticketTypeId: string,
@@ -530,6 +531,19 @@ async function syncTicketTypeAccessVariants(
 ): Promise<void> {
   // Delete existing variants
   await supabase.from('ticket_type_access_variants').delete().eq('ticket_type_id', ticketTypeId);
+
+  // Pick primary variant for legacy fallback: prefer public so ticket shows without code when variants fail to load
+  const primary =
+    variants.find((v) => v.visibility_mode === 'public') ||
+    variants.find((v) => v.visibility_mode === 'code') ||
+    variants.find((v) => v.visibility_mode === 'affiliate') ||
+    variants[0];
+  const legacyUpdate: Record<string, unknown> = {
+    visibility_mode: primary?.visibility_mode ?? 'public',
+    access_code: primary?.visibility_mode === 'code' ? (primary.access_code || null) : null,
+    allowed_affiliates: primary?.visibility_mode === 'affiliate' ? (primary.allowed_affiliates || null) : null,
+  };
+  await supabase.from('ticket_types').update(legacyUpdate).eq('id', ticketTypeId);
 
   if (variants.length === 0) return;
 
@@ -605,17 +619,23 @@ export async function getTicketTypes(
   }
 
   if (includeAccessVariants && ticketTypes.length > 0) {
-    const variants = await getTicketTypeAccessVariants(ticketTypes.map((tt) => tt.id));
-    const variantsByTicketType = new Map<string, TicketTypeAccessVariant[]>();
-    for (const v of variants) {
-      const list = variantsByTicketType.get(v.ticket_type_id) || [];
-      list.push(v);
-      variantsByTicketType.set(v.ticket_type_id, list);
+    try {
+      const variants = await getTicketTypeAccessVariants(ticketTypes.map((tt) => tt.id));
+      const variantsByTicketType = new Map<string, TicketTypeAccessVariant[]>();
+      for (const v of variants) {
+        const ticketTypeId = (v as any).ticket_type_id ?? v.ticket_type_id;
+        const list = variantsByTicketType.get(ticketTypeId) || [];
+        list.push(v);
+        variantsByTicketType.set(ticketTypeId, list);
+      }
+      ticketTypes = ticketTypes.map((tt) => ({
+        ...tt,
+        access_variants: variantsByTicketType.get(tt.id) || [],
+      }));
+    } catch (err) {
+      console.warn('[getTicketTypes] Failed to fetch access variants, using legacy visibility:', err);
+      // Continue with empty access_variants - PublicEventForm will use legacy visibility_mode/access_code
     }
-    ticketTypes = ticketTypes.map((tt) => ({
-      ...tt,
-      access_variants: variantsByTicketType.get(tt.id) || [],
-    }));
   }
 
   return ticketTypes;
