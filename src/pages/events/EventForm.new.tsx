@@ -49,7 +49,7 @@ import {
   type CreateTicketTypeData 
 } from '@/lib/api/events';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { Event, TicketType } from '@/lib/types';
+import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload, X } from 'lucide-react';
 import EventDescription from '@/components/events/EventDescription';
@@ -62,6 +62,14 @@ import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 
+interface AccessVariantForm {
+  visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
+  price_override?: string | null;
+  discount_percent?: string | null;
+}
+
 interface TicketTypeForm {
   id?: string;
   name: string;
@@ -72,6 +80,7 @@ interface TicketTypeForm {
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  access_variants?: AccessVariantForm[];
   is_active?: boolean;
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: Date | null;
@@ -197,27 +206,45 @@ export default function EventForm() {
         setEventMetadata(metadata);
         setTicketTermsAndConditions(metadata.ticket_terms_and_conditions ?? DEFAULT_EVENT_TICKET_TERMS);
 
-        // Load ticket types
-        const types = await getTicketTypes(id);
+        // Load ticket types with access variants
+        const types = await getTicketTypes(id, false, true);
         setExistingTicketTypes(types);
-        setTicketTypes(types.map(t => ({
-          id: t.id,
-          name: t.name,
-          price: t.price.toString(),
-          quota: t.quota.toString(),
-          isNew: false,
-          description: t.description || '',
-          visibility_mode: t.visibility_mode || 'public',
-          access_code: t.access_code || null,
-          allowed_affiliates: t.allowed_affiliates || null,
-          is_active: t.is_active !== undefined ? t.is_active : true,
-          availability_mode: t.availability_mode || 'always',
-          available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
-          available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
-          valid_for_days: (t.valid_for_days as 'day_1' | 'day_2' | 'both') || 'day_1',
-          show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
-          threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
-        })));
+        setTicketTypes(types.map(t => {
+          const variants = t.access_variants && t.access_variants.length > 0
+            ? t.access_variants.map((v: TicketTypeAccessVariant) => ({
+                visibility_mode: v.visibility_mode,
+                access_code: v.access_code || null,
+                allowed_affiliates: v.allowed_affiliates || null,
+                price_override: v.price_override != null ? v.price_override.toString() : null,
+                discount_percent: v.discount_percent != null ? v.discount_percent.toString() : null,
+              }))
+            : [{
+                visibility_mode: (t.visibility_mode || 'public') as 'public' | 'code' | 'affiliate' | 'hidden',
+                access_code: t.access_code || null,
+                allowed_affiliates: t.allowed_affiliates || null,
+                price_override: null,
+                discount_percent: null,
+              }];
+          return {
+            id: t.id,
+            name: t.name,
+            price: t.price.toString(),
+            quota: t.quota.toString(),
+            isNew: false,
+            description: t.description || '',
+            visibility_mode: t.visibility_mode || 'public',
+            access_code: t.access_code || null,
+            allowed_affiliates: t.allowed_affiliates || null,
+            access_variants: variants,
+            is_active: t.is_active !== undefined ? t.is_active : true,
+            availability_mode: t.availability_mode || 'always',
+            available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
+            available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
+            valid_for_days: (t.valid_for_days as 'day_1' | 'day_2' | 'both') || 'day_1',
+            show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
+            threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
+          };
+        }));
 
         // Show sections if they have data
         if (types.length > 0) setShowTicketTypesSection(true);
@@ -271,6 +298,7 @@ export default function EventForm() {
       visibility_mode: 'public',
       access_code: null,
       allowed_affiliates: null,
+      access_variants: [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }],
       is_active: true,
       availability_mode: 'always',
       available_start_at: null,
@@ -299,11 +327,6 @@ export default function EventForm() {
     ));
   };
 
-  const handleGenerateCode = (index: number) => {
-    const code = generateAccessCode();
-    updateTicketTypeForm(index, 'access_code', code);
-  };
-
   const handleAffiliatesChange = (index: number, value: string) => {
     // Parse comma-separated values and trim whitespace
     const affiliates = value
@@ -311,6 +334,39 @@ export default function EventForm() {
       .map(s => s.trim())
       .filter(s => s.length > 0);
     updateTicketTypeForm(index, 'allowed_affiliates', affiliates.length > 0 ? affiliates : null);
+  };
+
+  const handleAddAccessVariant = (ticketIndex: number) => {
+    setTicketTypes(ticketTypes.map((tt, i) => {
+      if (i !== ticketIndex) return tt;
+      const variants = tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }];
+      return { ...tt, access_variants: [...variants, { visibility_mode: 'code', access_code: '', allowed_affiliates: null, price_override: null, discount_percent: null }] };
+    }));
+  };
+
+  const handleRemoveAccessVariant = (ticketIndex: number, variantIndex: number) => {
+    setTicketTypes(ticketTypes.map((tt, i) => {
+      if (i !== ticketIndex) return tt;
+      const variants = tt.access_variants || [];
+      if (variants.length <= 1) return tt;
+      return { ...tt, access_variants: variants.filter((_, vi) => vi !== variantIndex) };
+    }));
+  };
+
+  const handleUpdateAccessVariant = (ticketIndex: number, variantIndex: number, field: keyof AccessVariantForm, value: string | string[] | null, extra?: Partial<AccessVariantForm>) => {
+    setTicketTypes(ticketTypes.map((tt, i) => {
+      if (i !== ticketIndex) return tt;
+      const variants = [...(tt.access_variants || [])];
+      const v = variants[variantIndex];
+      if (!v) return tt;
+      variants[variantIndex] = { ...v, [field]: value, ...extra };
+      return { ...tt, access_variants: variants };
+    }));
+  };
+
+  const handleGenerateCodeForVariant = (ticketIndex: number, variantIndex: number) => {
+    const code = generateAccessCode();
+    handleUpdateAccessVariant(ticketIndex, variantIndex, 'access_code', code);
   };
 
   const handlePreviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -637,9 +693,16 @@ export default function EventForm() {
             }
           }
 
+          const accessVariants = (tt.access_variants || []).map((v) => ({
+            visibility_mode: v.visibility_mode,
+            access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+            allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+            price_override: v.price_override ? parseFloat(v.price_override) : null,
+            discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+          }));
+
           if (tt.id && !tt.isNew) {
             // Update existing
-            // If price is empty or whitespace, treat as 0 (free)
             const priceStr = (tt.price || '').trim();
             const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
             await updateTicketType({
@@ -648,9 +711,7 @@ export default function EventForm() {
               price: ticketPrice,
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-              visibility_mode: tt.visibility_mode || 'public',
-              access_code: tt.access_code || null,
-              allowed_affiliates: tt.allowed_affiliates || null,
+              access_variants: accessVariants.length > 0 ? accessVariants : undefined,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
@@ -662,7 +723,6 @@ export default function EventForm() {
             });
           } else {
             // Create new
-            // If price is empty or whitespace, treat as 0 (free)
             const priceStr = (tt.price || '').trim();
             const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
             await createTicketType({
@@ -671,9 +731,7 @@ export default function EventForm() {
               price: ticketPrice,
               quota: parseInt(tt.quota),
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-              visibility_mode: tt.visibility_mode || 'public',
-              access_code: tt.access_code || null,
-              allowed_affiliates: tt.allowed_affiliates || null,
+              access_variants: accessVariants.length > 0 ? accessVariants : undefined,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
               availability_mode: availabilityMode,
               available_start_at: availableStartAt,
@@ -744,7 +802,14 @@ export default function EventForm() {
             }
           }
 
-          // If price is empty or whitespace, treat as 0 (free)
+          const accessVariantsCreate = (tt.access_variants || []).map((v) => ({
+            visibility_mode: v.visibility_mode,
+            access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+            allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+            price_override: v.price_override ? parseFloat(v.price_override) : null,
+            discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+          }));
+
           const priceStr = (tt.price || '').trim();
           const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
           await createTicketType({
@@ -753,9 +818,7 @@ export default function EventForm() {
             price: ticketPrice,
             quota: parseInt(tt.quota),
             metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-            visibility_mode: tt.visibility_mode || 'public',
-            access_code: tt.access_code || null,
-            allowed_affiliates: tt.allowed_affiliates || null,
+            access_variants: accessVariantsCreate.length > 0 ? accessVariantsCreate : undefined,
             is_active: tt.is_active !== undefined ? tt.is_active : true,
             availability_mode: availabilityMode,
             available_start_at: availableStartAt,
@@ -1442,139 +1505,122 @@ export default function EventForm() {
                       </div>
                     </div>
 
-                    {/* Access & Visibility Section */}
+                    {/* Access & Visibility Section - Multiple variants per ticket */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-                        <Label htmlFor={`visibility-mode-${index}`} className="text-xs md:text-sm font-medium sm:pt-2 sm:w-[120px] sm:flex-shrink-0">
-                          Access & Visibility
-                        </Label>
-                        <div className="flex-1 sm:max-w-[260px]">
-                          <Select
-                            value={tt.visibility_mode || 'public'}
-                            onValueChange={(value) => updateTicketTypeForm(index, 'visibility_mode', value as any)}
-                          >
-                            <SelectTrigger id={`visibility-mode-${index}`} className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="public">Public</SelectItem>
-                              <SelectItem value="code">Code</SelectItem>
-                              <SelectItem value="affiliate">Affiliate</SelectItem>
-                              <SelectItem value="hidden">Hidden</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {tt.visibility_mode === 'code' && (
-                            <div className="mt-3 space-y-3" style={{ marginLeft: '0' }}>
-                              <div className="flex gap-2">
-                                <Input
-                                  type="text"
-                                  value={tt.access_code || ''}
-                                  onChange={(e) => updateTicketTypeForm(index, 'access_code', e.target.value || null)}
-                                  placeholder="Enter access code"
-                                  className="flex-1"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleGenerateCode(index)}
-                                >
-                                  Generate code
-                                </Button>
-                              </div>
-                              {eventId && eventSlug && currentOrg?.slug && tt.access_code && (
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
-                                  <div className="flex gap-2">
-                                    <Input
-                                      readOnly
-                                      value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${tt.access_code}`}
-                                      className="flex-1 font-mono text-xs"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={async () => {
-                                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${tt.access_code}`;
-                                        try {
-                                          await navigator.clipboard.writeText(url);
-                                          toast({
-                                            title: 'Copied!',
-                                            description: 'Ticket link copied to clipboard',
-                                          });
-                                        } catch (err) {
-                                          toast({
-                                            title: 'Error',
-                                            description: 'Failed to copy link',
-                                            variant: 'destructive',
-                                          });
-                                        }
-                                      }}
-                                      className="flex-shrink-0"
-                                    >
-                                      <Copy className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
+                      <Label className="text-xs md:text-sm font-medium block mb-3">
+                        Access & Visibility
+                      </Label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Add multiple access rules. Each can have a different price or discount %.
+                      </p>
+                      {(tt.access_variants || [{ visibility_mode: 'public', access_code: null, allowed_affiliates: null, price_override: null, discount_percent: null }]).map((variant, vIdx) => (
+                        <div key={vIdx} className="mb-4 p-4 rounded-lg border space-y-3" style={{ borderColor: 'rgba(14,122,58,0.2)', backgroundColor: 'rgba(251,248,244,0.3)' }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <Select
+                              value={variant.visibility_mode}
+                              onValueChange={(value) => handleUpdateAccessVariant(index, vIdx, 'visibility_mode', value as any)}
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="public">Public</SelectItem>
+                                <SelectItem value="code">Code</SelectItem>
+                                <SelectItem value="affiliate">Affiliate</SelectItem>
+                                <SelectItem value="hidden">Hidden</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {(tt.access_variants?.length ?? 1) > 1 && (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => handleRemoveAccessVariant(index, vIdx)} className="text-red-600 hover:text-red-700">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          {variant.visibility_mode === 'code' && (
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                value={variant.access_code || ''}
+                                onChange={(e) => handleUpdateAccessVariant(index, vIdx, 'access_code', e.target.value || null)}
+                                placeholder="Enter access code"
+                                className="flex-1"
+                              />
+                              <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateCodeForVariant(index, vIdx)}>
+                                Generate
+                              </Button>
                             </div>
                           )}
-                          {tt.visibility_mode === 'affiliate' && (
-                            <div className="mt-3 space-y-3" style={{ marginLeft: '0' }}>
-                              <Textarea
-                                value={tt.allowed_affiliates?.join(', ') || ''}
-                                onChange={(e) => handleAffiliatesChange(index, e.target.value)}
-                                placeholder="Enter allowed affiliate slugs (comma-separated, optional)"
-                                rows={2}
-                                className="text-sm"
-                              />
-                              {eventId && eventSlug && currentOrg?.slug && (
-                                <div>
-                                  <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
-                                  <div className="flex gap-2">
-                                    <Input
-                                      readOnly
-                                      value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?ref=${tt.allowed_affiliates?.[0] || 'affiliate-slug'}`}
-                                      className="flex-1 font-mono text-xs"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={async () => {
-                                        const ref = tt.allowed_affiliates?.[0] || 'affiliate-slug';
-                                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}?ref=${ref}`;
-                                        try {
-                                          await navigator.clipboard.writeText(url);
-                                          toast({
-                                            title: 'Copied!',
-                                            description: 'Ticket link copied to clipboard',
-                                          });
-                                        } catch (err) {
-                                          toast({
-                                            title: 'Error',
-                                            description: 'Failed to copy link',
-                                            variant: 'destructive',
-                                          });
-                                        }
-                                      }}
-                                      className="flex-shrink-0"
-                                    >
-                                      <Copy className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                  {(!tt.allowed_affiliates || tt.allowed_affiliates.length === 0) && (
-                                    <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                                      Replace affiliate-slug with the partner&apos;s slug when sharing
-                                    </p>
-                                  )}
-                                </div>
-                              )}
+                          {variant.visibility_mode === 'affiliate' && (
+                            <Textarea
+                              value={variant.allowed_affiliates?.join(', ') || ''}
+                              onChange={(e) => {
+                                const affiliates = e.target.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                                handleUpdateAccessVariant(index, vIdx, 'allowed_affiliates', affiliates.length > 0 ? affiliates : null);
+                              }}
+                              placeholder="Allowed affiliate slugs (comma-separated)"
+                              rows={2}
+                              className="text-sm"
+                            />
+                          )}
+                          {(variant.visibility_mode === 'code' || variant.visibility_mode === 'affiliate') && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs font-medium">New price ($)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={variant.price_override ?? ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value.trim();
+                                    handleUpdateAccessVariant(index, vIdx, 'price_override', v ? v : null, v ? { discount_percent: null } : undefined);
+                                  }}
+                                  placeholder="Override price"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs font-medium">Discount %</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="1"
+                                  value={variant.discount_percent ?? ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value.trim();
+                                    handleUpdateAccessVariant(index, vIdx, 'discount_percent', v ? v : null, v ? { price_override: null } : undefined);
+                                  }}
+                                  placeholder="e.g. 20"
+                                  className="mt-1"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {variant.visibility_mode === 'code' && variant.access_code && eventId && eventSlug && currentOrg?.slug && (
+                            <div>
+                              <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
+                              <div className="flex gap-2">
+                                <Input readOnly value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${variant.access_code}`} className="flex-1 font-mono text-xs" />
+                                <Button type="button" variant="outline" size="sm" onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${variant.access_code}`);
+                                    toast({ title: 'Copied!', description: 'Ticket link copied to clipboard' });
+                                  } catch (err) {
+                                    toast({ title: 'Error', description: 'Failed to copy', variant: 'destructive' });
+                                  }
+                                }}>
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
+                      ))}
+                      <Button type="button" variant="outline" size="sm" onClick={() => handleAddAccessVariant(index)} className="mt-2">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add access variant
+                      </Button>
                     </div>
 
                     {/* Remaining Count Display Settings */}

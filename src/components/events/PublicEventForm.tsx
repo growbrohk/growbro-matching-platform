@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-import type { Event, TicketType } from '@/lib/types';
+import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -170,63 +170,88 @@ export default function PublicEventForm({
     return { available: false, reason: 'Unknown availability mode' };
   }, [event]);
 
-  // Filter visible tickets
-  const visibleTicketTypes = ticketTypes.filter(tt => {
-    const visibilityMode = tt.visibility_mode || 'public';
-    
-    // Hidden tickets are never visible
-    if (visibilityMode === 'hidden') {
-      return false;
-    }
-    
-    // Public tickets are always visible (even if inactive, they'll be shown as disabled)
-    if (visibilityMode === 'public') {
-      return true;
-    }
-    
-    // Code-gated tickets require matching code
-    if (visibilityMode === 'code') {
-      return codeParam !== null && codeParam === tt.access_code;
-    }
-    
-    // Affiliate-gated tickets require ref param
-    if (visibilityMode === 'affiliate') {
-      if (!refParam) {
-        return false;
-      }
-      // If allowed_affiliates is set, ref must be in the list
-      if (tt.allowed_affiliates && tt.allowed_affiliates.length > 0) {
-        return tt.allowed_affiliates.includes(refParam);
-      }
-      // If allowed_affiliates is null/empty, any ref unlocks it
-      return true;
-    }
-    
-    return false;
-  });
-  
-  // Check if there are any code-only or affiliate-only tickets (for hint messages)
-  const hasCodeOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'code');
-  const hasAffiliateOnlyTickets = ticketTypes.some(tt => (tt.visibility_mode || 'public') === 'affiliate');
+  // Resolve matching variant and effective price for a ticket type
+  const resolveVariantAndPrice = useCallback((tt: TicketType): { variant: TicketTypeAccessVariant | null; effectivePrice: number; discountPercent: number | null } | null => {
+    const basePrice = tt.price;
+    const variants = tt.access_variants || [];
 
-  // Memoize visibility check to prevent unnecessary recalculations
-  const getTicketVisibility = useCallback((tt: TicketType): boolean => {
-    const visibilityMode = tt.visibility_mode || 'public';
-    
-    if (visibilityMode === 'hidden') return false;
-    if (visibilityMode === 'public') return true;
-    if (visibilityMode === 'code') {
-      return codeParam !== null && codeParam === tt.access_code;
-    }
-    if (visibilityMode === 'affiliate') {
-      if (!refParam) return false;
-      if (tt.allowed_affiliates && tt.allowed_affiliates.length > 0) {
-        return tt.allowed_affiliates.includes(refParam);
+    if (variants.length === 0) {
+      // Legacy: use visibility_mode/access_code/allowed_affiliates
+      const mode = tt.visibility_mode || 'public';
+      if (mode === 'hidden') return null;
+      if (mode === 'public') return { variant: null, effectivePrice: basePrice, discountPercent: null };
+      if (mode === 'code') {
+        if (codeParam === null || codeParam !== tt.access_code) return null;
+        return { variant: null, effectivePrice: basePrice, discountPercent: null };
       }
-      return true;
+      if (mode === 'affiliate') {
+        if (!refParam) return null;
+        if (tt.allowed_affiliates && tt.allowed_affiliates.length > 0 && !tt.allowed_affiliates.includes(refParam)) return null;
+        return { variant: null, effectivePrice: basePrice, discountPercent: null };
+      }
+      return null;
     }
-    return false;
+
+    // Find matching variant (priority: code > affiliate > public)
+    let matched: TicketTypeAccessVariant | null = null;
+    if (codeParam) {
+      const codeVariant = variants.find(v => v.visibility_mode === 'code' && v.access_code === codeParam);
+      if (codeVariant) matched = codeVariant;
+    }
+    if (!matched && refParam) {
+      const affiliateVariant = variants.find(v =>
+        v.visibility_mode === 'affiliate' &&
+        (!v.allowed_affiliates || v.allowed_affiliates.length === 0 || v.allowed_affiliates.includes(refParam))
+      );
+      if (affiliateVariant) matched = affiliateVariant;
+    }
+    if (!matched) {
+      const publicVariant = variants.find(v => v.visibility_mode === 'public');
+      if (publicVariant) matched = publicVariant;
+    }
+    if (!matched) return null;
+
+    let effectivePrice = basePrice;
+    if (matched.price_override != null) {
+      effectivePrice = matched.price_override;
+    } else if (matched.discount_percent != null) {
+      effectivePrice = basePrice * (1 - matched.discount_percent / 100);
+    }
+    const discountPercent = effectivePrice < basePrice
+      ? Math.round((1 - effectivePrice / basePrice) * 100)
+      : null;
+    return { variant: matched, effectivePrice, discountPercent };
   }, [codeParam, refParam]);
+
+  // Visible tickets with resolved variant and effective price
+  const visibleTicketTypesWithPrice = useMemo(() => {
+    return ticketTypes
+      .map(tt => ({ tt, resolved: resolveVariantAndPrice(tt) }))
+      .filter((x): x is { tt: TicketType; resolved: NonNullable<ReturnType<typeof resolveVariantAndPrice>> } => x.resolved !== null)
+      .map(({ tt, resolved }) => ({ tt, ...resolved }));
+  }, [ticketTypes, resolveVariantAndPrice]);
+
+  const visibleTicketTypes = visibleTicketTypesWithPrice.map(x => x.tt);
+
+  // Check if there are any code-only or affiliate-only tickets (for hint messages)
+  const hasCodeOnlyTickets = ticketTypes.some(tt => {
+    const variants = tt.access_variants || [];
+    if (variants.length > 0) {
+      return variants.some(v => v.visibility_mode === 'code') && !variants.some(v => v.visibility_mode === 'public');
+    }
+    return (tt.visibility_mode || 'public') === 'code';
+  });
+  const hasAffiliateOnlyTickets = ticketTypes.some(tt => {
+    const variants = tt.access_variants || [];
+    if (variants.length > 0) {
+      return variants.some(v => v.visibility_mode === 'affiliate') && !variants.some(v => v.visibility_mode === 'public');
+    }
+    return (tt.visibility_mode || 'public') === 'affiliate';
+  });
+
+  const getTicketVisibility = useCallback((tt: TicketType): boolean => {
+    return resolveVariantAndPrice(tt) !== null;
+  }, [resolveVariantAndPrice]);
 
   // Track previous code/ref params to detect actual changes
   const prevCodeParamRef = useRef(codeParam);
@@ -357,9 +382,9 @@ export default function PublicEventForm({
   };
 
   const calculateSubtotal = (): number => {
-    return visibleTicketTypes.reduce((total, tt) => {
+    return visibleTicketTypesWithPrice.reduce((total, { tt, effectivePrice }) => {
       const qty = selections[tt.id] || 0;
-      return total + (tt.price * qty);
+      return total + (effectivePrice * qty);
     }, 0);
   };
 
@@ -391,17 +416,16 @@ export default function PublicEventForm({
       return;
     }
 
-    // Build booking draft from selections
+    // Build booking draft from selections (use effective price for discounted variants)
     const lines: BookingDraft['lines'] = [];
-    visibleTicketTypes.forEach((tt) => {
+    visibleTicketTypesWithPrice.forEach(({ tt, effectivePrice }) => {
       const qty = selections[tt.id] || 0;
       if (qty > 0) {
-        // Ensure qty is at least 1
         const finalQty = Math.max(1, qty);
         lines.push({
-          label: tt.name, // e.g., "1-Day Ticket"
-          optionLabel: 'Adult', // Default to "Adult" for now
-          unitPrice: tt.price,
+          label: tt.name,
+          optionLabel: 'Adult',
+          unitPrice: effectivePrice,
           qty: finalQty,
           ticketTypeId: tt.id,
           dateTimeLabel: formatTicketTypeDateTime(event, tt),
@@ -517,9 +541,10 @@ export default function PublicEventForm({
                   Tickets
                 </p>
                 {visibleTicketTypes.length > 0 ? (
-                  visibleTicketTypes.map((tt) => {
+                  visibleTicketTypesWithPrice.map(({ tt, effectivePrice, discountPercent }) => {
                     const availability = isTicketAvailable(tt);
                     const isUnavailable = !availability.available;
+                    const showDiscount = discountPercent != null && discountPercent > 0;
                     
                     return (
                       <div
@@ -540,10 +565,20 @@ export default function PublicEventForm({
                             <p className="text-sm text-muted-foreground mt-0.5">
                               {formatTicketTypeDateTime(event, tt)}
                             </p>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                                ${tt.price.toFixed(2)}
-                              </span>
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                              {showDiscount ? (
+                                <>
+                                  <span className="text-sm text-muted-foreground line-through">${tt.price.toFixed(2)}</span>
+                                  <span className="text-base font-medium" style={{ color: '#0E7A3A' }}>${effectivePrice.toFixed(2)}</span>
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(14,122,58,0.15)', color: '#0E7A3A' }}>
+                                    {discountPercent}% off
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                                  ${effectivePrice.toFixed(2)}
+                                </span>
+                              )}
                               {(() => {
                                 // Show remaining count logic:
                                 // 1. If show_remaining_count is false, don't show
@@ -680,15 +715,15 @@ export default function PublicEventForm({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              {visibleTicketTypes
-                .filter(tt => (selections[tt.id] || 0) > 0)
-                .map(tt => (
+              {visibleTicketTypesWithPrice
+                .filter(({ tt }) => (selections[tt.id] || 0) > 0)
+                .map(({ tt, effectivePrice }) => (
                   <div key={tt.id} className="flex justify-between items-center">
                     <span className="text-sm">
                       {tt.name} × {selections[tt.id]}
                     </span>
                     <span className="text-sm font-medium">
-                      ${(tt.price * (selections[tt.id] || 0)).toFixed(2)}
+                      ${(effectivePrice * (selections[tt.id] || 0)).toFixed(2)}
                     </span>
                   </div>
                 ))}

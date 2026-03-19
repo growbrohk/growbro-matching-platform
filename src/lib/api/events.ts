@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import type { Event, TicketType } from '@/lib/types';
+import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 
 /**
  * Convert a string to a URL-friendly slug
@@ -74,6 +74,14 @@ export interface UpdateEventData extends Partial<Omit<CreateEventData, 'org_id'>
   id: string;
 }
 
+export interface TicketTypeAccessVariantInput {
+  visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
+  price_override?: number | null;
+  discount_percent?: number | null;
+}
+
 export interface CreateTicketTypeData {
   event_id: string;
   name: string;
@@ -83,6 +91,7 @@ export interface CreateTicketTypeData {
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  access_variants?: TicketTypeAccessVariantInput[];
   is_active?: boolean;
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
@@ -98,6 +107,7 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   visibility_mode?: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
+  access_variants?: TicketTypeAccessVariantInput[];
   is_active?: boolean;
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
@@ -434,28 +444,47 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
     if (updateError) {
       console.warn('Failed to update ticket type fields:', updateError);
     }
-
-    const { data: updatedTicketType, error: finalError } = await supabase
-      .from('ticket_types')
-      .select('*')
-      .eq('id', ticketTypeId)
-      .single();
-
-    if (finalError) {
-      throw new Error(finalError.message || 'Failed to fetch updated ticket type');
-    }
-
-    return updatedTicketType as TicketType;
   }
 
-  return ticketType as TicketType;
+  // Sync access variants: use access_variants if provided, else create one from legacy fields
+  if (data.access_variants !== undefined && data.access_variants.length > 0) {
+    await syncTicketTypeAccessVariants(ticketTypeId, data.access_variants);
+  } else {
+    // Legacy: create single variant from visibility_mode/access_code/allowed_affiliates
+    const mode = data.visibility_mode ?? 'public';
+    await syncTicketTypeAccessVariants(ticketTypeId, [
+      {
+        visibility_mode: mode,
+        access_code: mode === 'code' ? (data.access_code ?? null) : null,
+        allowed_affiliates: mode === 'affiliate' ? (data.allowed_affiliates ?? null) : null,
+      },
+    ]);
+  }
+
+  const { data: updatedTicketType, error: finalError } = await supabase
+    .from('ticket_types')
+    .select('*')
+    .eq('id', ticketTypeId)
+    .single();
+
+  if (finalError) {
+    throw new Error(finalError.message || 'Failed to fetch updated ticket type');
+  }
+
+  const result = updatedTicketType as TicketType;
+  if (data.access_variants !== undefined) {
+    result.access_variants = (await getTicketTypeAccessVariants([ticketTypeId])).filter(
+      (v) => v.ticket_type_id === ticketTypeId
+    );
+  }
+  return result;
 }
 
 /**
  * Update an existing ticket type
  */
 export async function updateTicketType(data: UpdateTicketTypeData): Promise<TicketType> {
-  const { id, ...updateData } = data;
+  const { id, access_variants, ...updateData } = data;
 
   const { data: ticketType, error } = await supabase
     .from('ticket_types')
@@ -468,7 +497,14 @@ export async function updateTicketType(data: UpdateTicketTypeData): Promise<Tick
     throw new Error(error.message || 'Failed to update ticket type');
   }
 
-  return ticketType as TicketType;
+  const result = ticketType as TicketType;
+
+  if (access_variants !== undefined) {
+    await syncTicketTypeAccessVariants(id, access_variants);
+    result.access_variants = (await getTicketTypeAccessVariants([id])).filter((v) => v.ticket_type_id === id);
+  }
+
+  return result;
 }
 
 /**
@@ -486,12 +522,65 @@ export async function deleteTicketType(ticketTypeId: string): Promise<void> {
 }
 
 /**
+ * Sync access variants for a ticket type. Replaces all existing variants with the provided list.
+ */
+async function syncTicketTypeAccessVariants(
+  ticketTypeId: string,
+  variants: TicketTypeAccessVariantInput[]
+): Promise<void> {
+  // Delete existing variants
+  await supabase.from('ticket_type_access_variants').delete().eq('ticket_type_id', ticketTypeId);
+
+  if (variants.length === 0) return;
+
+  const rows = variants.map((v) => ({
+    ticket_type_id: ticketTypeId,
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ?? null,
+    discount_percent: v.discount_percent ?? null,
+  }));
+
+  const { error } = await supabase.from('ticket_type_access_variants').insert(rows);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to sync access variants');
+  }
+}
+
+/**
+ * Fetch access variants for given ticket type IDs
+ */
+export async function getTicketTypeAccessVariants(ticketTypeIds: string[]): Promise<TicketTypeAccessVariant[]> {
+  if (ticketTypeIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('ticket_type_access_variants')
+    .select('*')
+    .in('ticket_type_id', ticketTypeIds)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch access variants');
+  }
+
+  return (data || []) as TicketTypeAccessVariant[];
+}
+
+/**
  * Get all ticket types for an event
  * Optionally includes remaining_count if useRemainingCount is true
+ * Optionally includes access_variants if includeAccessVariants is true
  */
-export async function getTicketTypes(eventId: string, useRemainingCount: boolean = false): Promise<TicketType[]> {
+export async function getTicketTypes(
+  eventId: string,
+  useRemainingCount: boolean = false,
+  includeAccessVariants: boolean = false
+): Promise<TicketType[]> {
+  let ticketTypes: TicketType[];
+
   if (useRemainingCount) {
-    // Use RPC function to get ticket types with remaining count
     const { data, error } = await supabase.rpc('get_ticket_types_with_remaining', {
       p_event_id: eventId
     });
@@ -500,9 +589,8 @@ export async function getTicketTypes(eventId: string, useRemainingCount: boolean
       throw new Error(error.message || 'Failed to fetch ticket types');
     }
 
-    return (data || []) as TicketType[];
+    ticketTypes = (data || []) as TicketType[];
   } else {
-    // Standard query without remaining count
     const { data, error } = await supabase
       .from('ticket_types')
       .select('*')
@@ -513,8 +601,24 @@ export async function getTicketTypes(eventId: string, useRemainingCount: boolean
       throw new Error(error.message || 'Failed to fetch ticket types');
     }
 
-    return (data || []) as TicketType[];
+    ticketTypes = (data || []) as TicketType[];
   }
+
+  if (includeAccessVariants && ticketTypes.length > 0) {
+    const variants = await getTicketTypeAccessVariants(ticketTypes.map((tt) => tt.id));
+    const variantsByTicketType = new Map<string, TicketTypeAccessVariant[]>();
+    for (const v of variants) {
+      const list = variantsByTicketType.get(v.ticket_type_id) || [];
+      list.push(v);
+      variantsByTicketType.set(v.ticket_type_id, list);
+    }
+    ticketTypes = ticketTypes.map((tt) => ({
+      ...tt,
+      access_variants: variantsByTicketType.get(tt.id) || [],
+    }));
+  }
+
+  return ticketTypes;
 }
 
 /**

@@ -185,6 +185,18 @@ export interface Event {
   updated_at: string;
 }
 
+export interface TicketTypeAccessVariant {
+  id: string;
+  ticket_type_id: string;
+  visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
+  price_override?: number | null;
+  discount_percent?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TicketType {
   id: string;
   event_id: string;
@@ -206,6 +218,8 @@ export interface TicketType {
   remaining_count?: number; // Calculated field: quota - sold tickets (valid/scanned)
   created_at: string;
   updated_at: string;
+  /** Access variants (multiple visibility rules per ticket type). Populated when fetching with includeAccessVariants. */
+  access_variants?: TicketTypeAccessVariant[];
 }
 
 export interface Order {
