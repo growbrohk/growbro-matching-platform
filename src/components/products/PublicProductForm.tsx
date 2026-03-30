@@ -360,11 +360,6 @@ export default function PublicProductForm({
             </h1>
             <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
               {displayPrice > 0 ? formatPrice(displayPrice) : 'Free'}
-              {hasMultipleVariants && displayPrice > 0 && (
-                <span className="text-base font-normal text-muted-foreground ml-1">
-                  (per variant)
-                </span>
-              )}
             </p>
           </div>
 
