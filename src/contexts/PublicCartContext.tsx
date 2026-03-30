@@ -11,6 +11,7 @@ export interface PublicCartItem {
   variantId?: string;
   name: string;
   variantLabel?: string;
+  imageUrl?: string | null;
   qty: number;
   unitPrice: number;
 }
@@ -82,7 +83,12 @@ export function PublicCartProvider({ children }: { children: ReactNode }) {
         );
         if (existing >= 0) {
           const next = [...prev];
-          next[existing] = { ...next[existing], qty: next[existing].qty + qty };
+          const cur = next[existing];
+          next[existing] = {
+            ...cur,
+            qty: cur.qty + qty,
+            imageUrl: item.imageUrl ?? cur.imageUrl,
+          };
           return next;
         }
         return [...prev, { ...item, qty }];

@@ -3,15 +3,20 @@
  * Route: /:orgSlug/checkout
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Minus, Plus, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
 import { createProductOrder } from '@/lib/api/product-checkout';
+import {
+  getPhysicalProductSummariesForOrg,
+  relatedProductCardImageUrl,
+  type RelatedProductSummary,
+} from '@/lib/api/products';
 import { getOrgBySlugWithProfile, type OrgWithProfile } from '@/lib/api/orgs';
 import type { ContactInfo } from '@/lib/types/booking';
 
@@ -31,6 +36,71 @@ function formatPrice(amount: number): string {
   }).format(amount);
 }
 
+function formatCarouselPrice(amount: number): string {
+  return new Intl.NumberFormat('en-HK', {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function YouMayAlsoLikeCarousel({
+  products,
+  orgSlug,
+}: {
+  products: RelatedProductSummary[];
+  orgSlug: string;
+}) {
+  const navigate = useNavigate();
+  if (products.length === 0) return null;
+
+  return (
+    <section aria-label="You may also like" className="mt-10 md:mt-14">
+      <h2
+        className="text-lg md:text-xl font-semibold mb-4 md:mb-6"
+        style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
+      >
+        You may also like
+      </h2>
+      <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-1 px-1 scrollbar-hide">
+        {products.map((p) => {
+          const img = relatedProductCardImageUrl(p);
+          const price = p.base_price != null ? Number(p.base_price) : 0;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => navigate(`/${orgSlug}/products/${p.id}`)}
+              className="flex-shrink-0 w-36 md:w-40 lg:w-48 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
+            >
+              <div className="aspect-square w-full bg-muted">
+                {img ? (
+                  <img src={img} alt={p.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground px-2 text-center">{p.title}</span>
+                  </div>
+                )}
+              </div>
+              <div className="p-3 lg:p-4 bg-background">
+                <p className="font-medium text-sm lg:text-base truncate" style={{ color: BRAND.dark }}>
+                  {p.title}
+                </p>
+                {price > 0 && (
+                  <p className="text-sm lg:text-base font-semibold mt-0.5" style={{ color: BRAND.green }}>
+                    {formatCarouselPrice(price)}
+                  </p>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function PublicCheckoutPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
@@ -38,6 +108,7 @@ export default function PublicCheckoutPage() {
   const { setOrgId, cart, updateItemQty, removeItem, totalQty, total, clearCart } = usePublicCart();
   const [org, setOrg] = useState<OrgWithProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProductSummary[]>([]);
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
@@ -45,6 +116,8 @@ export default function PublicCheckoutPage() {
     phone: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const cartProductKey = useMemo(() => cart.map((c) => c.productId).sort().join(','), [cart]);
 
   useEffect(() => {
     if (!orgSlug) {
@@ -69,6 +142,30 @@ export default function PublicCheckoutPage() {
     };
     load();
   }, [orgSlug, navigate, setOrgId]);
+
+  useEffect(() => {
+    if (!org?.id) return;
+    const profile = org.profile as { products_filter?: string } | null | undefined;
+    const inSaleOnly = profile?.products_filter === 'in_sale_only';
+    const excludeIds = cart.map((c) => c.productId);
+    let cancelled = false;
+    (async () => {
+      try {
+        const related = await getPhysicalProductSummariesForOrg(org.id, {
+          inSaleOnly,
+          limit: 12,
+          excludeIds,
+        });
+        if (!cancelled) setRelatedProducts(related);
+      } catch (e) {
+        console.error('Error loading related products:', e);
+        if (!cancelled) setRelatedProducts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [org?.id, org?.profile, cartProductKey]);
 
   const handleContactUpdate = (info: ContactInfo) => {
     setContactInfo(info);
@@ -133,7 +230,7 @@ export default function PublicCheckoutPage() {
     );
   }
 
-  if (!org) return null;
+  if (!org || !orgSlug) return null;
 
   if (cart.length === 0 && !loading) {
     return (
@@ -159,6 +256,7 @@ export default function PublicCheckoutPage() {
               Continue shopping
             </Button>
           </div>
+          <YouMayAlsoLikeCarousel products={relatedProducts} orgSlug={orgSlug} />
         </div>
       </div>
     );
@@ -180,66 +278,90 @@ export default function PublicCheckoutPage() {
           className="rounded-2xl border bg-background p-5 md:p-6 mb-6"
           style={{ borderColor: PANEL_BORDER }}
         >
-          <h2
-            className="text-base font-semibold mb-1"
-            style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
-          >
-            My bag
-          </h2>
-          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            {totalQty} {totalQty === 1 ? 'item' : 'items'}
-          </p>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4">
+            <h2
+              className="text-base font-semibold"
+              style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+            >
+              My bag
+            </h2>
+            <p className="text-sm tabular-nums" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              {totalQty} {totalQty === 1 ? 'item' : 'items'} | {formatPrice(total)}
+            </p>
+          </div>
           <div className="divide-y divide-[rgba(14,122,58,0.14)]">
             {cart.map((item, index) => (
-              <div
-                key={`${item.productId}-${item.variantId || 'nv'}-${index}`}
-                className="flex items-start justify-between gap-4 py-4 first:pt-0"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium" style={{ color: BRAND.dark }}>
-                    {item.name}
-                  </div>
-                  {item.variantLabel && (
-                    <div className="text-sm text-muted-foreground">{item.variantLabel}</div>
-                  )}
-                  <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
-                    {formatPrice(item.unitPrice)} each
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
+              <div key={`${item.productId}-${item.variantId || 'nv'}-${index}`} className="py-4 first:pt-0">
+                <div className="flex gap-3 md:gap-4">
                   <div
-                    className="flex items-center gap-1 rounded-xl border px-2 py-1"
+                    className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center border"
                     style={{ borderColor: PANEL_BORDER }}
                   >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => updateItemQty(index, -1)}
-                      disabled={isSubmitting}
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <span className="w-8 text-center font-medium text-sm">{item.qty}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => updateItemQty(index, 1)}
-                      disabled={isSubmitting}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <ShoppingCart className="h-8 w-8 text-muted-foreground/35" aria-hidden />
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive"
-                    onClick={() => removeItem(index)}
-                    disabled={isSubmitting}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium" style={{ color: BRAND.dark }}>
+                          {item.name}
+                        </div>
+                        {item.variantLabel && (
+                          <div className="text-sm text-muted-foreground mt-0.5">{item.variantLabel}</div>
+                        )}
+                        <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
+                          {formatPrice(item.unitPrice)} each
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeItem(index)}
+                        disabled={isSubmitting}
+                        aria-label="Remove item"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+                      <div
+                        className="flex items-center gap-1 rounded-xl border px-2 py-1"
+                        style={{ borderColor: PANEL_BORDER }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItemQty(index, -1)}
+                          disabled={isSubmitting}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="text-sm text-muted-foreground px-1">
+                          Qty <span className="font-medium text-foreground">{item.qty}</span>
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItemQty(index, 1)}
+                          disabled={isSubmitting}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <span
+                        className="text-sm font-semibold tabular-nums"
+                        style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
+                      >
+                        {formatPrice(item.unitPrice * item.qty)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -254,6 +376,8 @@ export default function PublicCheckoutPage() {
             </span>
           </div>
         </div>
+
+        <YouMayAlsoLikeCarousel products={relatedProducts} orgSlug={orgSlug} />
 
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">

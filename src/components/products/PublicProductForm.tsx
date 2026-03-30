@@ -18,7 +18,7 @@ import {
 import { ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
-import type { RelatedProductSummary } from '@/lib/api/products';
+import { relatedProductCardImageUrl, type RelatedProductSummary } from '@/lib/api/products';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls } from '@/lib/utils/product-media';
 
@@ -43,16 +43,6 @@ function formatPrice(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
-}
-
-function cardImageUrl(p: RelatedProductSummary): string | null {
-  if (p.image_url) return p.image_url;
-  const meta = p.metadata as Record<string, unknown> | undefined;
-  if (!meta || typeof meta !== 'object') return null;
-  const photos = meta.photos;
-  if (Array.isArray(photos) && typeof photos[0] === 'string') return photos[0];
-  const img = meta.image;
-  return typeof img === 'string' ? img : null;
 }
 
 export default function PublicProductForm({
@@ -137,6 +127,7 @@ export default function PublicProductForm({
       variantId: variant.id,
       name: product.title,
       variantLabel,
+      imageUrl: mainSrc,
       unitPrice: variant.price ?? product.base_price ?? 0,
       qty: quantityNum,
     });
@@ -316,7 +307,7 @@ export default function PublicProductForm({
           </h2>
           <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-1 px-1 scrollbar-hide">
             {relatedProducts.map((p) => {
-              const img = cardImageUrl(p);
+              const img = relatedProductCardImageUrl(p);
               const price = p.base_price != null ? Number(p.base_price) : 0;
               return (
                 <button

@@ -176,6 +176,17 @@ export type RelatedProductSummary = {
   base_price: number | null;
 };
 
+/** Resolve image URL for carousel cards (image_url, metadata.photos, metadata.image). */
+export function relatedProductCardImageUrl(p: RelatedProductSummary): string | null {
+  if (p.image_url) return p.image_url;
+  const meta = p.metadata as Record<string, unknown> | undefined;
+  if (!meta || typeof meta !== 'object') return null;
+  const photos = meta.photos;
+  if (Array.isArray(photos) && typeof photos[0] === 'string') return photos[0];
+  const img = meta.image;
+  return typeof img === 'string' ? img : null;
+}
+
 /**
  * Other physical products from the same org (e.g. PDP “You may also like”).
  */
@@ -201,6 +212,35 @@ export async function getRelatedPhysicalProducts(
   const { data, error } = await query;
   if (error) throw error;
   return (data as RelatedProductSummary[]) || [];
+}
+
+/**
+ * Physical products for carousels (e.g. bag “You may also like”) with optional excludes.
+ */
+export async function getPhysicalProductSummariesForOrg(
+  orgId: string,
+  opts?: { inSaleOnly?: boolean; limit?: number; excludeIds?: string[] },
+): Promise<RelatedProductSummary[]> {
+  const want = opts?.limit ?? 12;
+  const exclude = new Set(opts?.excludeIds ?? []);
+  const fetchLimit = Math.min(want + exclude.size + 12, 48);
+
+  let query = supabase
+    .from('products')
+    .select('id, title, image_url, metadata, base_price')
+    .eq('org_id', orgId)
+    .eq('type', 'physical')
+    .order('created_at', { ascending: false })
+    .limit(fetchLimit);
+
+  if (opts?.inSaleOnly) {
+    query = query.eq('is_on_sale', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data as RelatedProductSummary[]) || [];
+  return rows.filter((p) => !exclude.has(p.id)).slice(0, want);
 }
 
 // ============================================================================
