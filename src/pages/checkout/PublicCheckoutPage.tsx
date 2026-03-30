@@ -178,6 +178,14 @@ export default function PublicCheckoutPage() {
     [cart, weightByProductId],
   );
 
+  /** Integer kg billed (matches server CEIL(actual total kg)) for door / SF Locker */
+  const billableShippingKg = useMemo(() => {
+    if (deliveryMethod === 'event_pickup') return 0;
+    if (totalShippingKg <= 0) return 0;
+    const rounded = Number(totalShippingKg.toFixed(6));
+    return Math.ceil(rounded);
+  }, [deliveryMethod, totalShippingKg]);
+
   const shippingRatePerKg = useMemo(() => {
     if (deliveryMethod === 'door') return SHIPPING_RATE_DOOR;
     if (deliveryMethod === 'sf_locker') return SHIPPING_RATE_SF;
@@ -186,8 +194,14 @@ export default function PublicCheckoutPage() {
 
   const shippingFee = useMemo(() => {
     if (deliveryMethod === 'event_pickup') return 0;
-    return Math.round(totalShippingKg * shippingRatePerKg * 100) / 100;
-  }, [deliveryMethod, totalShippingKg, shippingRatePerKg]);
+    return Math.round(billableShippingKg * shippingRatePerKg * 100) / 100;
+  }, [deliveryMethod, billableShippingKg, shippingRatePerKg]);
+
+  const showActualShippingWeight =
+    deliveryMethod !== 'event_pickup' &&
+    totalShippingKg > 0 &&
+    billableShippingKg > 0 &&
+    Number(totalShippingKg.toFixed(4)) !== billableShippingKg;
 
   const grandTotal = total + shippingFee;
 
@@ -778,10 +792,23 @@ export default function PublicCheckoutPage() {
             </div>
             {deliveryMethod !== 'event_pickup' && (
               <div className="flex justify-between gap-4 tabular-nums">
-                <span style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  Shipping ({totalShippingKg > 0 ? `${totalShippingKg} kg` : '—'} × HK${shippingRatePerKg}/kg)
+                <span className="text-right min-w-0" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  {billableShippingKg > 0 ? (
+                    <>
+                      Shipping: {billableShippingKg} kg billed × HK${shippingRatePerKg}/kg
+                      {showActualShippingWeight && (
+                        <span className="block text-xs mt-0.5 font-normal">
+                          Actual weight: {Number(totalShippingKg.toFixed(3))} kg
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>Shipping (— × HK${shippingRatePerKg}/kg)</>
+                  )}
                 </span>
-                <span style={{ color: BRAND.dark }}>{formatPrice(shippingFee)}</span>
+                <span className="shrink-0" style={{ color: BRAND.dark }}>
+                  {formatPrice(shippingFee)}
+                </span>
               </div>
             )}
             {deliveryMethod === 'event_pickup' && (

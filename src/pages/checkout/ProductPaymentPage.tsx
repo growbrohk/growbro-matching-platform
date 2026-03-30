@@ -364,6 +364,11 @@ export default function ProductPaymentPage() {
             const shippingFee = Number(meta?.shipping_fee ?? 0);
             const kg = meta?.shipping_weight_kg;
             const kgLabel = kg != null && kg !== '' ? String(kg) : null;
+            const billableKg = meta?.shipping_billable_kg;
+            const billableLabel =
+              billableKg != null && billableKg !== '' && dm !== 'event_pickup'
+                ? String(billableKg)
+                : null;
             const rate = meta?.shipping_rate_per_kg;
             const det = meta?.delivery_details as Record<string, unknown> | undefined;
             const methodLabel =
@@ -379,9 +384,21 @@ export default function ProductPaymentPage() {
                 <p className="text-sm font-medium text-muted-foreground mb-2">Delivery</p>
                 <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
                   {methodLabel}
-                  {kgLabel != null && dm !== 'event_pickup' ? ` · ${kgLabel} kg` : ''}
+                  {billableLabel != null
+                    ? ` · ${billableLabel} kg billed`
+                    : kgLabel != null && dm !== 'event_pickup'
+                      ? ` · ${kgLabel} kg`
+                      : ''}
                   {rate != null && Number(rate) > 0 ? ` @ HK$${Number(rate)}/kg` : ''}
                 </p>
+                {billableLabel != null &&
+                  kgLabel != null &&
+                  dm !== 'event_pickup' &&
+                  Number(kg) !== Number(billableKg) && (
+                    <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.55)' }}>
+                      Actual weight: {kgLabel} kg
+                    </p>
+                  )}
                 {shippingFee > 0 && (
                   <p className="text-sm mt-1 tabular-nums" style={{ color: 'rgba(15,31,23,0.72)' }}>
                     Shipping: {formatPrice(shippingFee, currency)}

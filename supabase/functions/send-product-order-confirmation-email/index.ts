@@ -182,11 +182,20 @@ Deno.serve(async (req) => {
               : dm;
       const fee = orderMeta?.shipping_fee != null ? Number(orderMeta.shipping_fee) : 0;
       const kg = orderMeta?.shipping_weight_kg != null ? String(orderMeta.shipping_weight_kg) : '';
+      const billableKg =
+        orderMeta?.shipping_billable_kg != null ? String(orderMeta.shipping_billable_kg) : '';
       const rate = orderMeta?.shipping_rate_per_kg != null ? String(orderMeta.shipping_rate_per_kg) : '';
       const det = orderMeta?.delivery_details as Record<string, unknown> | undefined;
       const lines: string[] = [`<p><strong>Method:</strong> ${escapeHtml(methodLabel)}</p>`];
-      if (kg && dm !== 'event_pickup') {
-        lines.push(`<p><strong>Total weight:</strong> ${escapeHtml(kg)} kg</p>`);
+      if (dm !== 'event_pickup') {
+        if (billableKg) {
+          lines.push(`<p><strong>Billed weight:</strong> ${escapeHtml(billableKg)} kg</p>`);
+          if (kg && Number(kg) !== Number(billableKg)) {
+            lines.push(`<p><strong>Actual weight:</strong> ${escapeHtml(kg)} kg</p>`);
+          }
+        } else if (kg) {
+          lines.push(`<p><strong>Total weight:</strong> ${escapeHtml(kg)} kg</p>`);
+        }
       }
       if (rate && Number(rate) > 0) {
         lines.push(`<p><strong>Rate:</strong> HK$${escapeHtml(rate)}/kg</p>`);
