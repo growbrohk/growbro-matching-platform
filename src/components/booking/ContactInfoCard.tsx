@@ -121,7 +121,7 @@ export function ContactInfoCard({
             type="text"
             value={contactInfo.firstName}
             onChange={(e) => handleInlineUpdate('firstName', e.target.value)}
-            className="mt-1"
+            className="mt-1 rounded-2xl"
             placeholder="Enter first name"
           />
         </div>
@@ -134,7 +134,7 @@ export function ContactInfoCard({
             type="text"
             value={contactInfo.lastName}
             onChange={(e) => handleInlineUpdate('lastName', e.target.value)}
-            className="mt-1"
+            className="mt-1 rounded-2xl"
             placeholder="Enter last name"
           />
         </div>
@@ -149,7 +149,7 @@ export function ContactInfoCard({
               type="tel"
               value={contactInfo.phone}
               onChange={(e) => handleInlineUpdate('phone', e.target.value)}
-              className="mt-1"
+              className="mt-1 rounded-2xl"
               placeholder="Enter phone number"
             />
           </div>
@@ -163,7 +163,7 @@ export function ContactInfoCard({
             type="email"
             value={contactInfo.email}
             onChange={(e) => handleInlineUpdate('email', e.target.value)}
-            className="mt-1"
+            className="mt-1 rounded-2xl"
             placeholder="Enter email address"
           />
         </div>

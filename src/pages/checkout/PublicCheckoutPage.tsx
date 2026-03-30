@@ -6,13 +6,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Minus, Plus, Trash2, ShoppingCart, Loader2, ArrowLeft } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
+import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
 import { createProductOrder } from '@/lib/api/product-checkout';
-import { getOrgBySlugWithProfile } from '@/lib/api/orgs';
+import { getOrgBySlugWithProfile, type OrgWithProfile } from '@/lib/api/orgs';
 import type { ContactInfo } from '@/lib/types/booking';
 
 const BRAND = {
@@ -20,6 +20,8 @@ const BRAND = {
   beigeSoft: '#FBF8F4',
   dark: '#0F1F17',
 };
+
+const PANEL_BORDER = 'rgba(14,122,58,0.14)';
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat('en-HK', {
@@ -33,8 +35,8 @@ export default function PublicCheckoutPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { orgId, setOrgId, cart, updateItemQty, removeItem, totalQty, total, clearCart } = usePublicCart();
-  const [org, setOrg] = useState<{ id: string; name: string; slug: string | null } | null>(null);
+  const { setOrgId, cart, updateItemQty, removeItem, totalQty, total, clearCart } = usePublicCart();
+  const [org, setOrg] = useState<OrgWithProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     firstName: '',
@@ -125,7 +127,7 @@ export default function PublicCheckoutPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: BRAND.beigeSoft }}>
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: BRAND.green }} />
       </div>
     );
@@ -135,26 +137,23 @@ export default function PublicCheckoutPage() {
 
   if (cart.length === 0 && !loading) {
     return (
-      <div className="min-h-screen" style={{ backgroundColor: BRAND.beigeSoft }}>
-        <div className="container mx-auto px-4 py-8">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(`/${orgSlug}`)}
-            className="mb-6"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
+      <div className="min-h-screen bg-muted/30">
+        <BrandPublicHeader org={org} profile={org.profile} showBackLink={true} isOwner={false} />
+        <div className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12">
           <div className="text-center py-16">
             <ShoppingCart className="h-16 w-16 mx-auto mb-4 opacity-50" style={{ color: BRAND.green }} />
-            <h2 className="text-xl font-semibold mb-2" style={{ color: BRAND.dark }}>
-              Your cart is empty
-            </h2>
-            <p className="text-muted-foreground mb-6">
-              Add some products to get started
+            <h1
+              className="text-2xl md:text-3xl font-bold mb-2"
+              style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
+            >
+              Bag
+            </h1>
+            <p className="text-muted-foreground mb-6" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              There are no items in your bag.
             </p>
             <Button
               onClick={() => navigate(`/${orgSlug}`)}
+              className="rounded-2xl h-12 px-8 font-bold"
               style={{ backgroundColor: BRAND.green, color: 'white' }}
             >
               Continue shopping
@@ -166,88 +165,96 @@ export default function PublicCheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen pb-32" style={{ backgroundColor: BRAND.beigeSoft }}>
-      <div className="container mx-auto px-4 py-6">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(`/${orgSlug}`)}
-          className="mb-6 -ml-2"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to {org.name}
-        </Button>
+    <div className="min-h-screen bg-muted/30 pb-32">
+      <BrandPublicHeader org={org} profile={org.profile} showBackLink={true} isOwner={false} />
 
-        <h1 className="text-2xl font-bold mb-6" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
-          Checkout
+      <div className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12">
+        <h1
+          className="text-2xl md:text-3xl font-bold mb-2"
+          style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
+        >
+          Bag
         </h1>
 
-        {/* Cart items */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <h2 className="font-semibold mb-4" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-              Order summary ({totalQty} {totalQty === 1 ? 'item' : 'items'})
-            </h2>
-            <div className="space-y-4">
-              {cart.map((item, index) => (
-                <div
-                  key={`${item.productId}-${item.variantId || 'nv'}-${index}`}
-                  className="flex items-start justify-between gap-4 py-3 border-b last:border-0"
-                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium" style={{ color: BRAND.dark }}>
-                      {item.name}
-                    </div>
-                    {item.variantLabel && (
-                      <div className="text-sm text-muted-foreground">{item.variantLabel}</div>
-                    )}
-                    <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
-                      {formatPrice(item.unitPrice)} each
-                    </div>
+        <div
+          className="rounded-2xl border bg-background p-5 md:p-6 mb-6"
+          style={{ borderColor: PANEL_BORDER }}
+        >
+          <h2
+            className="text-base font-semibold mb-1"
+            style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+          >
+            My bag
+          </h2>
+          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            {totalQty} {totalQty === 1 ? 'item' : 'items'}
+          </p>
+          <div className="divide-y divide-[rgba(14,122,58,0.14)]">
+            {cart.map((item, index) => (
+              <div
+                key={`${item.productId}-${item.variantId || 'nv'}-${index}`}
+                className="flex items-start justify-between gap-4 py-4 first:pt-0"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium" style={{ color: BRAND.dark }}>
+                    {item.name}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 border rounded-lg px-2 py-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateItemQty(index, -1)}
-                        disabled={isSubmitting}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center font-medium">{item.qty}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateItemQty(index, 1)}
-                        disabled={isSubmitting}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
+                  {item.variantLabel && (
+                    <div className="text-sm text-muted-foreground">{item.variantLabel}</div>
+                  )}
+                  <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
+                    {formatPrice(item.unitPrice)} each
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div
+                    className="flex items-center gap-1 rounded-xl border px-2 py-1"
+                    style={{ borderColor: PANEL_BORDER }}
+                  >
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => removeItem(index)}
+                      className="h-7 w-7"
+                      onClick={() => updateItemQty(index, -1)}
                       disabled={isSubmitting}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="w-8 text-center font-medium text-sm">{item.qty}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => updateItemQty(index, 1)}
+                      disabled={isSubmitting}
+                    >
+                      <Plus className="h-3 w-3" />
                     </Button>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    onClick={() => removeItem(index)}
+                    disabled={isSubmitting}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-between text-lg font-semibold pt-4 mt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-              <span style={{ color: BRAND.dark }}>Total</span>
-              <span style={{ color: BRAND.green }}>{formatPrice(total)}</span>
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            ))}
+          </div>
+          <div
+            className="flex justify-between text-lg font-semibold pt-4 mt-2 border-t"
+            style={{ borderColor: PANEL_BORDER }}
+          >
+            <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>Total</span>
+            <span style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
+              {formatPrice(total)}
+            </span>
+          </div>
+        </div>
 
-        {/* Contact info */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
@@ -265,18 +272,18 @@ export default function PublicCheckoutPage() {
             description="Required for order confirmation"
             showPhone={true}
             requiredFields={{ firstName: true, lastName: true, email: false, phone: false }}
+            alwaysExpanded
           />
         </div>
       </div>
 
-      {/* Sticky CTA */}
       <div
         className="fixed bottom-0 left-0 right-0 border-t p-4 safe-area-bottom"
-        style={{ backgroundColor: BRAND.beigeSoft, borderColor: 'rgba(14,122,58,0.14)' }}
+        style={{ backgroundColor: BRAND.beigeSoft, borderColor: PANEL_BORDER }}
       >
-        <div className="container mx-auto">
+        <div className="max-w-7xl mx-auto px-4">
           <Button
-            className="w-full text-white h-12 text-base font-semibold"
+            className="w-full text-white h-12 text-base font-bold rounded-2xl"
             style={{ backgroundColor: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}
             onClick={handleProceedToPayment}
             disabled={isSubmitting || cart.length === 0}

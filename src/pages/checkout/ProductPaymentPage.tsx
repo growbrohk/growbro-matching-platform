@@ -6,10 +6,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
+import { getOrgBySlugWithProfile, type OrgWithProfile } from '@/lib/api/orgs';
 import { getOrderWithOrgAndProducts } from '@/lib/api/product-checkout';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { getProductCheckoutRoute } from '@/lib/utils/product-checkout-route';
@@ -25,6 +25,8 @@ const BRAND = {
   beigeSoft: '#FBF8F4',
   dark: '#0F1F17',
 };
+
+const PANEL_BORDER = 'rgba(14,122,58,0.14)';
 
 function formatPrice(amount: number, currency = 'HKD'): string {
   return `${currency === 'HKD' ? 'HK$' : currency} ${amount.toFixed(2)}`;
@@ -47,6 +49,7 @@ export default function ProductPaymentPage() {
     email: '',
     phone: '',
   });
+  const [profileOrg, setProfileOrg] = useState<OrgWithProfile | null>(null);
 
   useEffect(() => {
     if (!orderId || !orgSlug) {
@@ -74,6 +77,12 @@ export default function ProductPaymentPage() {
           email: orderData.order.buyer_email || '',
           phone: orderData.order.buyer_phone || '',
         });
+        try {
+          const orgProfile = await getOrgBySlugWithProfile(orgSlug);
+          setProfileOrg(orgProfile);
+        } catch {
+          setProfileOrg(null);
+        }
         setLoading(false);
 
         if (redirectedRef.current) return;
@@ -279,11 +288,8 @@ export default function ProductPaymentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen" style={{ backgroundColor: BRAND.beigeSoft }}>
-        <div className="container mx-auto px-4 py-8">
-          <Skeleton className="h-32 w-full mb-4" />
-          <Skeleton className="h-64 w-full" />
-        </div>
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: BRAND.green }} />
       </div>
     );
   }
@@ -305,10 +311,23 @@ export default function ProductPaymentPage() {
     return null;
   }
 
+  const headerOrg = profileOrg ?? {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+  };
+
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: BRAND.beigeSoft }}>
-      <div className="container mx-auto px-4 pt-8 pb-6">
-        <h1 className="text-2xl font-bold mb-6" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
+    <div className="min-h-screen bg-muted/30 pb-24">
+      <BrandPublicHeader
+        org={headerOrg}
+        profile={profileOrg?.profile ?? null}
+        showBackLink={true}
+        isOwner={false}
+      />
+
+      <div className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12">
+        <h1 className="text-2xl md:text-3xl font-bold mb-6" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
           Payment
         </h1>
 
@@ -319,30 +338,31 @@ export default function ProductPaymentPage() {
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Total amount</p>
         </div>
 
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <p className="font-semibold text-lg mb-2" style={{ color: BRAND.dark }}>
-              Order from {org.name}
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">Order #{order.order_no}</p>
-            <div className="border-t pt-4" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-              <p className="text-sm font-medium text-muted-foreground mb-2">Items</p>
-              <div className="space-y-1">
-                {order_items.map((item, idx) => (
-                  <p key={idx} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                    {item.quantity}x {item.product_name}
-                    {item.variant_label ? ` (${item.variant_label})` : ''}
-                  </p>
-                ))}
-              </div>
+        <div
+          className="rounded-2xl border bg-background p-5 md:p-6 mb-6"
+          style={{ borderColor: PANEL_BORDER }}
+        >
+          <p className="font-semibold text-lg mb-2" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
+            Order from {org.name}
+          </p>
+          <p className="text-sm text-muted-foreground mb-4">Order #{order.order_no}</p>
+          <div className="border-t pt-4" style={{ borderColor: PANEL_BORDER }}>
+            <p className="text-sm font-medium text-muted-foreground mb-2">Items</p>
+            <div className="space-y-1">
+              {order_items.map((item, idx) => (
+                <p key={idx} className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  {item.quantity}x {item.product_name}
+                  {item.variant_label ? ` (${item.variant_label})` : ''}
+                </p>
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
-            <h3 className="text-base font-semibold" style={{ color: BRAND.dark }}>
+            <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
               Contact info
             </h3>
           </div>
@@ -353,11 +373,12 @@ export default function ProductPaymentPage() {
             description="For payment receipts and order updates"
             showPhone={true}
             requiredFields={{ firstName: true, lastName: true, email: false, phone: false }}
+            alwaysExpanded
           />
         </div>
       </div>
 
-      <div className="container mx-auto px-4">
+      <div className="w-full max-w-7xl mx-auto px-4">
         <PaymentMethodSelector
           availableMethods={availablePaymentMethods}
           selectedMethod={selectedPaymentMethod}
@@ -372,11 +393,11 @@ export default function ProductPaymentPage() {
       {availablePaymentMethods.length > 0 && (
         <div
           className="fixed bottom-0 left-0 right-0 border-t p-4 safe-area-bottom"
-          style={{ backgroundColor: BRAND.beigeSoft, borderColor: 'rgba(14,122,58,0.14)' }}
+          style={{ backgroundColor: BRAND.beigeSoft, borderColor: PANEL_BORDER }}
         >
-          <div className="container mx-auto">
+          <div className="max-w-7xl mx-auto px-4">
             <Button
-              className="w-full text-white h-12 text-base font-semibold"
+              className="w-full text-white h-12 text-base font-bold rounded-2xl"
               style={{ backgroundColor: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}
               onClick={handleCTAClick}
               disabled={
