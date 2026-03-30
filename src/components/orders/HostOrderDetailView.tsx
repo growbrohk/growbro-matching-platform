@@ -63,7 +63,7 @@ function keyLabel(k: string): string {
   return k.replace(/_/g, ' ');
 }
 
-function DeliveryDetailsRows(details: Record<string, unknown>) {
+function DeliveryDetailsRows({ details }: { details: Record<string, unknown> }) {
   const entries = Object.entries(details).filter(([, v]) => v != null && String(v).trim() !== '');
   if (entries.length === 0) return null;
   return (
