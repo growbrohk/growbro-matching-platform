@@ -27,6 +27,11 @@ import {
   mergeProductDetailMetadata,
 } from '@/lib/utils/product-media';
 
+/** Catalog uploads: not the 50KB receipt target — product pages need clearer images. */
+const PRODUCT_PHOTO_TARGET_BYTES = 500 * 1024;
+const PRODUCT_PHOTO_MAX_DIMENSION = 2048;
+const PRODUCT_PHOTO_HARD_CAP_BYTES = 1024 * 1024;
+
 type OrgProductType = ProductType;
 
 type OrgProduct = {
@@ -302,12 +307,15 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
       throw new Error('File size must be less than 3MB');
     }
 
-    // Compress image
-    const compressedFile = await compressReceiptImage(file);
+    const compressedFile = await compressReceiptImage(file, {
+      targetSizeBytes: PRODUCT_PHOTO_TARGET_BYTES,
+      maxDimension: PRODUCT_PHOTO_MAX_DIMENSION,
+    });
 
-    // Enforce hard cap: post-compression <= 50KB
-    if (compressedFile.size > 50 * 1024) {
-      throw new Error('Image is too large even after compression. Please try another image.');
+    if (compressedFile.size > PRODUCT_PHOTO_HARD_CAP_BYTES) {
+      throw new Error(
+        'Image is still too large after compression. Try a smaller or lower-resolution photo.',
+      );
     }
 
     // Determine upload path: org/{orgId}/products/{productId or draftId}/{timestamp}.webp
@@ -1516,7 +1524,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                         disabled={uploadingImage}
                       />
                       <p className="text-sm text-muted-foreground">
-                        Max 3MB. We compress before upload.
+                        Max 3MB before upload. We resize (long edge 2048px) and compress (WebP, ~500KB target).
                       </p>
                     </TabsContent>
                   </Tabs>
@@ -1560,7 +1568,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                 <div className="space-y-2">
                   <Label>Additional photos (product page)</Label>
                   <p className="text-sm text-muted-foreground">
-                    Shown after the primary photo. Up to {MAX_PRODUCT_GALLERY_EXTRA} URLs (same rules as primary: 3MB max, compressed on upload).
+                    Shown after the primary photo. Up to {MAX_PRODUCT_GALLERY_EXTRA} extra images (same upload rules as primary).
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <Input
