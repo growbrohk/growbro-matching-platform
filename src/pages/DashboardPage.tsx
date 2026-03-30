@@ -367,7 +367,9 @@ export default function DashboardPage() {
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
                 priceLabel={formatMoney(order.total_amount)}
-                onDetails={() => navigate(`/app/orders/${order.id}`)}
+                onDetails={() =>
+                  navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
+                }
                 onConfirm={() => {
                   // Invalidate queries to refresh data
                   queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });

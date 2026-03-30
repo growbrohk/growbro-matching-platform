@@ -80,9 +80,13 @@ function getDateRange(rangeKey: RangeKey): { start: Date; end: Date } {
  * - Enquiries count: placeholder query returning 0 (table may not exist)
  * - Product orders: currently skipped (would need product.org_id join)
  */
-export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
+export function useOrdersDashboard(
+  rangeKey: RangeKey = '30d',
+  options?: { enabled?: boolean }
+) {
   const { currentOrg } = useAuth();
   const { start, end } = getDateRange(rangeKey);
+  const enabled = options?.enabled !== false;
 
   return useQuery({
     queryKey: ['orders-dashboard', currentOrg?.id, rangeKey],
@@ -359,6 +363,6 @@ export function useOrdersDashboard(rangeKey: RangeKey = '30d') {
         allCount,
       };
     },
-    enabled: !!currentOrg,
+    enabled: enabled && !!currentOrg,
   });
 }

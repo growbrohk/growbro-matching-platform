@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { useOrdersDashboard, RangeKey, formatMoney } from '@/hooks/useOrdersDashboard';
 import { OrderListRowCompact } from '@/components/OrderListRowCompact';
+import { HostOrderDetailView } from '@/components/orders/HostOrderDetailView';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -11,40 +12,46 @@ type OrderTab = 'pending' | 'completed' | 'all';
 
 /**
  * OrdersPage - Mobile-first orders list matching screenshot layout
- * 
+ *
  * Tab definitions:
  * - Pending: payment_status = 'submitted'
  * - Completed: payment_status = 'paid' OR fulfillment_status = 'confirmed'
  * - All: pending OR confirmed orders only (excludes cancelled/refunded/failed)
  */
 export default function OrdersPage() {
+  const { orderId } = useParams<{ orderId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+  const isList = !orderId;
+
   // Get range from URL or default to 30d
   const rangeParam = searchParams.get('range') as RangeKey | null;
-  const range: RangeKey = rangeParam && ['today', '7d', '30d', '90d'].includes(rangeParam) 
-    ? rangeParam 
-    : '30d';
-  
+  const range: RangeKey =
+    rangeParam && ['today', '7d', '30d', '90d'].includes(rangeParam) ? rangeParam : '30d';
+
   // Get tab from URL or default to 'all'
   const tabParam = searchParams.get('tab') as OrderTab | null;
   const [selectedTab, setSelectedTab] = useState<OrderTab>(
-    tabParam && ['pending', 'completed', 'all'].includes(tabParam) 
-      ? tabParam 
-      : 'all'
+    tabParam && ['pending', 'completed', 'all'].includes(tabParam) ? tabParam : 'all'
   );
 
-  const { data: dashboardData, isLoading } = useOrdersDashboard(range);
+  const { data: dashboardData, isLoading } = useOrdersDashboard(range, { enabled: isList });
 
-  // Update URL when tab changes
+  // Update URL when tab changes (list only)
   useEffect(() => {
+    if (!isList) return;
     const params = new URLSearchParams(searchParams);
     params.set('tab', selectedTab);
     params.set('range', range);
     setSearchParams(params, { replace: true });
-  }, [selectedTab, range, searchParams, setSearchParams]);
+  }, [selectedTab, range, searchParams, setSearchParams, isList]);
+
+  const listSearch = searchParams.toString() ? `?${searchParams.toString()}` : '';
+
+  if (orderId) {
+    return <HostOrderDetailView orderId={orderId} listSearch={listSearch} />;
+  }
 
   if (isLoading) {
     return (
@@ -59,7 +66,7 @@ export default function OrdersPage() {
   // Get filtered orders based on selected tab
   const getFilteredOrders = () => {
     const { allOrders = [] } = dashboardData || {};
-    
+
     switch (selectedTab) {
       case 'pending':
         return allOrders.filter((o) => o.payment_status === 'submitted');
@@ -70,8 +77,8 @@ export default function OrdersPage() {
       case 'all':
       default:
         // All tab: only show orders where payment_status IN ('submitted','paid')
-        return allOrders.filter((o) => 
-          o.payment_status === 'submitted' || o.payment_status === 'paid'
+        return allOrders.filter(
+          (o) => o.payment_status === 'submitted' || o.payment_status === 'paid'
         );
     }
   };
@@ -125,8 +132,10 @@ export default function OrdersPage() {
               ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
               : '';
             // Show confirm only for pending orders: payment_status='submitted' OR fulfillment_status='pending_confirmation'
-            const showConfirm = order.payment_status === 'submitted' || order.fulfillment_status === 'pending_confirmation';
-            
+            const showConfirm =
+              order.payment_status === 'submitted' ||
+              order.fulfillment_status === 'pending_confirmation';
+
             return (
               <OrderListRowCompact
                 key={order.id}
@@ -134,7 +143,7 @@ export default function OrdersPage() {
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
                 priceLabel={formatMoney(order.total_amount)}
-                onDetails={() => navigate(`/app/orders/${order.id}`)}
+                onDetails={() => navigate(`/app/orders/${order.id}${listSearch}`)}
                 onConfirm={() => {
                   // Invalidate queries to refresh data
                   queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });

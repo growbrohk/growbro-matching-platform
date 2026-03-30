@@ -23,6 +23,14 @@ export interface CreateBookingData {
   attendees?: AttendeeInfo[];
 }
 
+export interface TicketTypeAccessVariantSnapshot {
+  id: string;
+  visibility_mode: string;
+  access_code: string | null;
+  price_override: number | null;
+  discount_percent: number | null;
+}
+
 export interface OrderWithEvent {
   id: string;
   event_id: string;
@@ -38,6 +46,8 @@ export interface OrderWithEvent {
   payment_status: 'unpaid' | 'pending' | 'submitted' | 'paid' | 'failed' | 'refunded' | null;
   fulfillment_status: 'pending_confirmation' | 'confirmed' | 'cancelled' | null;
   order_no: string | null;
+  /** Order-level JSONB (tracking, notes, etc.) */
+  metadata: Record<string, unknown> | null;
   receipt_url: string | null;
   payment_reference_link: string | null;
   submitted_at: string | null;
@@ -63,10 +73,13 @@ export interface OrderWithEvent {
   };
   order_items: Array<{
     id: string;
-    ticket_type_id: string;
+    ticket_type_id: string | null;
     quantity: number;
     unit_price: number;
     subtotal: number;
+    metadata: Record<string, unknown> | null;
+    ticket_type_access_variant_id: string | null;
+    access_variant: TicketTypeAccessVariantSnapshot | null;
     ticket_type: {
       id: string;
       name: string;
@@ -271,6 +284,11 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     console.warn('Tickets data is not an array:', tickets);
   }
 
+  const meta =
+    orderData.metadata && typeof orderData.metadata === 'object' && !Array.isArray(orderData.metadata)
+      ? (orderData.metadata as Record<string, unknown>)
+      : null;
+
   const result: OrderWithEvent = {
     id: orderData.id,
     event_id: orderData.event_id,
@@ -284,8 +302,9 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     status: orderData.status,
     payment_method: orderData.payment_method,
     payment_status: orderData.payment_status,
-    fulfillment_status: orderData.fulfillment_status,
-    order_no: orderData.order_no,
+    fulfillment_status: orderData.fulfillment_status ?? null,
+    order_no: orderData.order_no ?? null,
+    metadata: meta,
     receipt_url: orderData.receipt_url,
     payment_reference_link: orderData.payment_reference_link,
     submitted_at: orderData.submitted_at,
@@ -309,18 +328,45 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       fps_link: eventData.fps_link,
       org_id: eventData.org_id,
     },
-    order_items: orderItems.map((item: any) => ({
-      id: item.id,
-      ticket_type_id: item.ticket_type_id,
-      quantity: Number(item.quantity),
-      unit_price: Number(item.unit_price),
-      subtotal: Number(item.subtotal),
-      ticket_type: {
-        id: item.ticket_type.id,
-        name: item.ticket_type.name,
-        valid_for_days: item.ticket_type?.valid_for_days ?? null,
-      },
-    })),
+    order_items: orderItems.map((item: any) => {
+      const itemMeta =
+        item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+          ? (item.metadata as Record<string, unknown>)
+          : null;
+      const av = item.access_variant;
+      const access_variant: TicketTypeAccessVariantSnapshot | null =
+        av && typeof av === 'object' && av.id
+          ? {
+              id: String(av.id),
+              visibility_mode: String(av.visibility_mode ?? ''),
+              access_code: av.access_code ?? null,
+              price_override: av.price_override != null ? Number(av.price_override) : null,
+              discount_percent: av.discount_percent != null ? Number(av.discount_percent) : null,
+            }
+          : null;
+      const tt = item.ticket_type;
+      return {
+        id: item.id,
+        ticket_type_id: item.ticket_type_id ?? null,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        subtotal: Number(item.subtotal),
+        metadata: itemMeta,
+        ticket_type_access_variant_id: item.ticket_type_access_variant_id ?? null,
+        access_variant,
+        ticket_type: tt?.id
+          ? {
+              id: tt.id,
+              name: tt.name ?? 'Ticket',
+              valid_for_days: tt.valid_for_days ?? null,
+            }
+          : {
+              id: item.ticket_type_id || '',
+              name: 'Ticket',
+              valid_for_days: null,
+            },
+      };
+    }),
     order_addon_items: orderAddonItems.map((item: any) => ({
       id: item.id,
       product_id: item.product_id,
