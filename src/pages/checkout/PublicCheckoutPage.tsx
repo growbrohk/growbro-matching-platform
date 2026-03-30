@@ -14,6 +14,7 @@ import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
 import { createProductOrder } from '@/lib/api/product-checkout';
 import {
   getPhysicalProductSummariesForOrg,
+  getProductPrimaryPhotoUrlsByIds,
   relatedProductCardImageUrl,
   type RelatedProductSummary,
 } from '@/lib/api/products';
@@ -109,6 +110,7 @@ export default function PublicCheckoutPage() {
   const [org, setOrg] = useState<OrgWithProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [relatedProducts, setRelatedProducts] = useState<RelatedProductSummary[]>([]);
+  const [photoByProductId, setPhotoByProductId] = useState<Record<string, string>>({});
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
@@ -166,6 +168,31 @@ export default function PublicCheckoutPage() {
       cancelled = true;
     };
   }, [org?.id, org?.profile, cartProductKey]);
+
+  useEffect(() => {
+    const idsNeedingPhoto = [
+      ...new Set(
+        cart.filter((c) => !String(c.imageUrl || '').trim()).map((c) => c.productId),
+      ),
+    ];
+    if (idsNeedingPhoto.length === 0) {
+      setPhotoByProductId({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const map = await getProductPrimaryPhotoUrlsByIds(idsNeedingPhoto);
+        if (!cancelled) setPhotoByProductId(map);
+      } catch (e) {
+        console.error('Error loading product photos for cart:', e);
+        if (!cancelled) setPhotoByProductId({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cart, cartProductKey]);
 
   const handleContactUpdate = (info: ContactInfo) => {
     setContactInfo(info);
@@ -290,15 +317,18 @@ export default function PublicCheckoutPage() {
             </p>
           </div>
           <div className="divide-y divide-[rgba(14,122,58,0.14)]">
-            {cart.map((item, index) => (
+            {cart.map((item, index) => {
+              const linePhoto =
+                String(item.imageUrl || '').trim() || photoByProductId[item.productId] || '';
+              return (
               <div key={`${item.productId}-${item.variantId || 'nv'}-${index}`} className="py-4 first:pt-0">
                 <div className="flex gap-3 md:gap-4">
                   <div
                     className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center border"
                     style={{ borderColor: PANEL_BORDER }}
                   >
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                    {linePhoto ? (
+                      <img src={linePhoto} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <ShoppingCart className="h-8 w-8 text-muted-foreground/35" aria-hidden />
                     )}
@@ -364,7 +394,8 @@ export default function PublicCheckoutPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
           <div
             className="flex justify-between text-lg font-semibold pt-4 mt-2 border-t"

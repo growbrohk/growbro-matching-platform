@@ -5,6 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { Product, ProductType, ProductVariant } from '@/lib/types';
+import { collectProductPhotoUrls } from '@/lib/utils/product-media';
 
 // ============================================================================
 // TYPES
@@ -241,6 +242,27 @@ export async function getPhysicalProductSummariesForOrg(
   if (error) throw error;
   const rows = (data as RelatedProductSummary[]) || [];
   return rows.filter((p) => !exclude.has(p.id)).slice(0, want);
+}
+
+/**
+ * Primary gallery image per product id (for cart lines missing imageUrl, e.g. legacy localStorage).
+ */
+export async function getProductPrimaryPhotoUrlsByIds(productIds: string[]): Promise<Record<string, string>> {
+  if (productIds.length === 0) return {};
+  const unique = [...new Set(productIds)];
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, image_url, metadata')
+    .in('id', unique);
+
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const row of data || []) {
+    const urls = collectProductPhotoUrls(row as { image_url?: string | null; metadata?: Record<string, unknown> });
+    const first = urls[0];
+    if (first) out[row.id] = first;
+  }
+  return out;
 }
 
 // ============================================================================

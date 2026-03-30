@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import { relatedProductCardImageUrl, type RelatedProductSummary } from '@/lib/api/products';
 import type { Product, ProductVariant } from '@/lib/types';
-import { collectProductPhotoUrls } from '@/lib/utils/product-media';
+import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
 
 interface Org {
   id: string;
@@ -122,12 +122,16 @@ export default function PublicProductForm({
       return;
     }
     const variantLabel = hasMultipleVariants ? variant.name : undefined;
+    const productRow = product as Product & { image_url?: string | null };
+    const variantPhoto = collectVariantPhotoUrl(variant);
+    const lineImageUrl =
+      mainSrc ?? variantPhoto ?? photos[0] ?? productRow.image_url?.trim() ?? null;
     addItem({
       productId: product.id,
       variantId: variant.id,
       name: product.title,
       variantLabel,
-      imageUrl: mainSrc,
+      imageUrl: lineImageUrl,
       unitPrice: variant.price ?? product.base_price ?? 0,
       qty: quantityNum,
     });

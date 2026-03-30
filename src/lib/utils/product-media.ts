@@ -65,3 +65,15 @@ export function collectProductPhotoUrls(product: {
 
   return urls;
 }
+
+/** Single image URL from variant metadata (if your catalog stores per-variant photos). */
+export function collectVariantPhotoUrl(variant: { metadata?: MetadataLike }): string | null {
+  const m = variant.metadata;
+  if (!m || typeof m !== 'object') return null;
+  const o = m as Record<string, unknown>;
+  for (const key of ['image_url', 'image', 'photo_url', 'thumbnail_url']) {
+    const v = o[key];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
