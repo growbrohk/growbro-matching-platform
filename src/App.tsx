@@ -42,6 +42,7 @@ import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import PublicProfile from "./pages/public/PublicProfile";
 import PublicProductPage from "./pages/public/PublicProductPage";
+import PublicProductByIdRedirect from "./pages/public/PublicProductByIdRedirect";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
 import TrackingRedirectHandler from "./pages/public/TrackingRedirectHandler";
 import MessagesComposerPage from "./pages/messages/MessagesComposerPage";
@@ -506,6 +507,9 @@ function AppRoutes() {
       
       {/* Public Profile Page - Must be before generic orgSlug route */}
       <Route path="/profile/:orgSlug" element={<PublicProfile />} />
+      
+      {/* Short product URL → canonical /:orgSlug/products/:productId */}
+      <Route path="/products/:productId" element={<PublicProductByIdRedirect />} />
       
       {/* Public Product Page - Must be before /:orgSlug/:eventSlug */}
       <Route path="/:orgSlug/products/:productId" element={<PublicProductPage />} />

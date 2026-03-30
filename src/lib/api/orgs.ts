@@ -14,7 +14,7 @@ export interface OrgWithProfile {
 /**
  * Generate slug from org name (matches database function logic)
  */
-function generateSlugFromName(name: string): string {
+export function generateSlugFromName(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -125,6 +125,23 @@ export async function getOrgBySlugWithProfile(orgSlug: string): Promise<OrgWithP
     ...org,
     profile: profile || null,
   };
+}
+
+/**
+ * Resolve the public URL slug for an org (for redirects). Uses stored slug when set;
+ * otherwise derives from name the same way canonical brand URLs do when slug is absent.
+ */
+export async function getPublicOrgSlugForOrgId(orgId: string): Promise<string | null> {
+  const { data: org, error } = await supabase
+    .from('orgs')
+    .select('slug,name')
+    .eq('id', orgId)
+    .single();
+
+  if (error || !org) return null;
+  if (org.slug) return org.slug;
+  if (org.name) return generateSlugFromName(org.name);
+  return null;
 }
 
 /**

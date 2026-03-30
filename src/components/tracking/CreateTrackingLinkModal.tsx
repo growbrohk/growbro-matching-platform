@@ -144,8 +144,9 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       return null;
     }
     if (destinationType === 'product' && selectedProductId) {
-      // Assuming product pages follow similar pattern
-      // Adjust based on your actual product URL structure
+      if (currentOrg?.slug) {
+        return `/${currentOrg.slug}/products/${selectedProductId}`;
+      }
       return `/products/${selectedProductId}`;
     }
     if (destinationType === 'custom' && customUrl) {

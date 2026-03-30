@@ -42,14 +42,14 @@ export default function TrackingRedirect() {
         }
 
         if (result.destination_type === 'product' && result.destination_id) {
-          // Redirect to product page (if implemented)
-          navigate(`/products/${result.destination_id}`);
+          // Short URL; PublicProductByIdRedirect resolves org slug to canonical path
+          navigate(`/products/${result.destination_id}`, { replace: true });
           return;
         }
 
         if (result.destination_type === 'event' && result.destination_id) {
           // Redirect to event page (if implemented)
-          navigate(`/events/${result.destination_id}`);
+          navigate(`/events/${result.destination_id}`, { replace: true });
           return;
         }
 

@@ -18,8 +18,13 @@ export default function PublicEventPage() {
   const refParam = searchParams.get('ref');
   const tidParam = searchParams.get('tid');
 
-  // Reserved org slugs that should not be used
-  const RESERVED_ORG_SLUGS = ['app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding', 'book', 'r'];
+  // Reserved org slugs that should not be used (align with PublicProfile / PublicProductPage)
+  const RESERVED_ORG_SLUGS = [
+    'app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding',
+    'book', 'r', 'space', 'profile', 't', 'o', 'booking', 'org',
+    'messages', 'dashboard', 'collab', 'enquiries', 'orders',
+    'settings', 'account', 'products', 'catalog', 'notifications', 'checkout',
+  ];
 
   // Capture tracking_link_id (tid) from URL and store in localStorage
   useEffect(() => {
