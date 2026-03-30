@@ -14,10 +14,8 @@ import { getOrderWithOrgAndProducts } from '@/lib/api/product-checkout';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { getProductCheckoutRoute } from '@/lib/utils/product-checkout-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
-import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import { PaymentMethodSelector, type PaymentMethod } from '@/components/booking/PaymentMethodSelector';
 import { supabase } from '@/integrations/supabase/client';
-import type { ContactInfo } from '@/lib/types/booking';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
 
 const BRAND = {
@@ -43,12 +41,6 @@ export default function ProductPaymentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
   const redirectedRef = useRef(false);
-  const [contactInfo, setContactInfo] = useState<ContactInfo>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-  });
   const [profileOrg, setProfileOrg] = useState<OrgWithProfile | null>(null);
 
   useEffect(() => {
@@ -71,12 +63,6 @@ export default function ProductPaymentPage() {
         }
 
         setData(orderData);
-        setContactInfo({
-          firstName: orderData.order.buyer_first_name || '',
-          lastName: orderData.order.buyer_last_name || '',
-          email: orderData.order.buyer_email || '',
-          phone: orderData.order.buyer_phone || '',
-        });
         try {
           const orgProfile = await getOrgBySlugWithProfile(orgSlug);
           setProfileOrg(orgProfile);
@@ -250,30 +236,6 @@ export default function ProductPaymentPage() {
     }
   };
 
-  const handleContactInfoUpdate = async (info: ContactInfo) => {
-    if (!orderId) return;
-    try {
-      const { error } = await supabase.rpc('update_order_contact_info' as any, {
-        p_order_id: orderId,
-        p_buyer_first_name: info.firstName || null,
-        p_buyer_last_name: info.lastName || null,
-        p_buyer_email: info.email?.trim() ? info.email.trim().toLowerCase() : null,
-        p_buyer_phone: info.phone || null,
-      });
-      if (error) throw error;
-      setContactInfo(info);
-      const updated = await getOrderWithOrgAndProducts(orderId);
-      if (updated) setData(updated);
-      toast({ title: 'Contact info updated' });
-    } catch (err: any) {
-      toast({
-        title: 'Error',
-        description: err?.message || 'Failed to update contact info.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleCTAClick = () => {
     if (selectedPaymentMethod === 'stripe') handleStripePayment();
     else if (selectedPaymentMethod === 'payme' || selectedPaymentMethod === 'fps') handleManualPaymentSubmit();
@@ -436,15 +398,25 @@ export default function ProductPaymentPage() {
               Contact info
             </h3>
           </div>
-          <ContactInfoCard
-            contactInfo={contactInfo}
-            onUpdate={handleContactInfoUpdate}
-            title="Contact info"
-            description="For payment receipts and order updates"
-            showPhone={true}
-            requiredFields={{ firstName: true, lastName: true, email: false, phone: false }}
-            alwaysExpanded
-          />
+          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            From checkout — used for receipts and order updates
+          </p>
+          <div
+            className="rounded-2xl border bg-background p-5 md:p-6"
+            style={{ borderColor: PANEL_BORDER }}
+          >
+            <p className="text-sm font-medium text-muted-foreground mb-1">Contact</p>
+            <p className="text-sm whitespace-pre-line" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              {(() => {
+                const name = [order.buyer_first_name, order.buyer_last_name].filter(Boolean).join(' ').trim();
+                const lines: string[] = [];
+                if (name) lines.push(name);
+                if (order.buyer_email?.trim()) lines.push(order.buyer_email.trim());
+                if (order.buyer_phone?.trim()) lines.push(order.buyer_phone.trim());
+                return lines.length ? lines.join('\n') : '—';
+              })()}
+            </p>
+          </div>
         </div>
       </div>
 
