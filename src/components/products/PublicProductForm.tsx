@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,8 +19,13 @@ import { ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import { relatedProductCardImageUrl, type RelatedProductSummary } from '@/lib/api/products';
+import { getVariantConfig } from '@/lib/api/variant-config';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
+import {
+  getVariantHierarchy,
+  getVariantOptionValue,
+} from '@/lib/utils/variant-parser';
 
 interface Org {
   id: string;
@@ -55,9 +60,139 @@ export default function PublicProductForm({
   const navigate = useNavigate();
   const { toast } = useToast();
   const { setOrgId, addItem } = usePublicCart();
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    variants.length > 0 ? variants[0].id : null,
+
+  const activeVariants = useMemo(
+    () => variants.filter((v) => v.active !== false),
+    [variants],
   );
+
+  const [variantRankOrder, setVariantRankOrder] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await getVariantConfig(org.id);
+        if (!cancelled) {
+          setVariantRankOrder([c.rank1, c.rank2].filter(Boolean));
+        }
+      } catch {
+        if (!cancelled) setVariantRankOrder([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id]);
+
+  const hierarchy = useMemo(
+    () => getVariantHierarchy(activeVariants.map((v) => v.name), variantRankOrder),
+    [activeVariants, variantRankOrder],
+  );
+  const useHierarchicalPicker = hierarchy.length >= 1;
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
+    const first = activeVariants[0];
+    return first?.id ?? null;
+  });
+  const [optionSelections, setOptionSelections] = useState<Record<string, string>>({});
+  const pickerInitKeyRef = useRef('');
+
+  useEffect(() => {
+    const first = activeVariants[0];
+    setSelectedVariantId((prev) => {
+      if (first && !activeVariants.some((v) => v.id === prev)) {
+        return first.id;
+      }
+      if (!first) return null;
+      return prev ?? first.id;
+    });
+  }, [product.id, activeVariants]);
+
+  useEffect(() => {
+    pickerInitKeyRef.current = '';
+  }, [product.id]);
+
+  useEffect(() => {
+    if (!useHierarchicalPicker || activeVariants.length === 0) return;
+    const key = `${product.id}|${hierarchy.join('\0')}|${activeVariants.map((v) => v.id).join(',')}`;
+    if (pickerInitKeyRef.current === key) return;
+    pickerInitKeyRef.current = key;
+
+    const base = activeVariants[0];
+    const next: Record<string, string> = {};
+    for (const h of hierarchy) {
+      const val = getVariantOptionValue(base.name, h);
+      if (val) next[h] = val;
+    }
+    for (let i = 1; i < hierarchy.length; i++) {
+      const pool = activeVariants.filter((v) => {
+        for (let j = 0; j < i; j++) {
+          const keyOpt = hierarchy[j];
+          const want = next[keyOpt];
+          if (!want) return false;
+          if (getVariantOptionValue(v.name, keyOpt) !== want) return false;
+        }
+        return true;
+      });
+      const optKey = hierarchy[i];
+      const vals = [
+        ...new Set(
+          pool
+            .map((v) => getVariantOptionValue(v.name, optKey))
+            .filter((x): x is string => Boolean(x)),
+        ),
+      ].sort((a, b) => a.localeCompare(b));
+      if (!next[optKey] || !vals.includes(next[optKey])) {
+        next[optKey] = vals[0] ?? '';
+      }
+    }
+    setOptionSelections(next);
+  }, [product.id, useHierarchicalPicker, activeVariants, hierarchy]);
+
+  const handleOptionChange = useCallback(
+    (depth: number, value: string) => {
+      setOptionSelections((prev) => {
+        const next = { ...prev, [hierarchy[depth]]: value };
+        for (let i = depth + 1; i < hierarchy.length; i++) {
+          const pool = activeVariants.filter((v) => {
+            for (let j = 0; j < i; j++) {
+              const key = hierarchy[j];
+              const want = next[key];
+              if (!want) return false;
+              if (getVariantOptionValue(v.name, key) !== want) return false;
+            }
+            return true;
+          });
+          const optKey = hierarchy[i];
+          const vals = [
+            ...new Set(
+              pool
+                .map((v) => getVariantOptionValue(v.name, optKey))
+                .filter((x): x is string => Boolean(x)),
+            ),
+          ].sort((a, b) => a.localeCompare(b));
+          next[optKey] = vals[0] ?? '';
+        }
+        return next;
+      });
+    },
+    [hierarchy, activeVariants],
+  );
+
+  const effectiveSelectedVariant = useMemo(() => {
+    if (activeVariants.length === 0) return undefined;
+    if (useHierarchicalPicker) {
+      const matches = activeVariants.filter((v) =>
+        hierarchy.every((h) => {
+          const sel = optionSelections[h];
+          return sel && getVariantOptionValue(v.name, h) === sel;
+        }),
+      );
+      return matches[0];
+    }
+    return activeVariants.find((v) => v.id === selectedVariantId) ?? activeVariants[0];
+  }, [activeVariants, useHierarchicalPicker, hierarchy, optionSelections, selectedVariantId]);
+
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
@@ -105,14 +240,13 @@ export default function PublicProductForm({
 
   const mainSrc = photos[selectedImageIndex] ?? photos[0] ?? null;
 
-  const selectedVariant = variants.find((v) => v.id === selectedVariantId);
-  const displayPrice = selectedVariant?.price ?? product.base_price ?? 0;
-  const hasMultipleVariants = variants.length > 1;
+  const displayPrice = effectiveSelectedVariant?.price ?? product.base_price ?? 0;
+  const hasMultipleVariants = activeVariants.length > 1;
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
 
   const handleAddToCart = () => {
-    const variant = selectedVariant || variants[0];
+    const variant = effectiveSelectedVariant;
     if (!variant) {
       toast({
         title: 'Cannot add to cart',
@@ -226,31 +360,82 @@ export default function PublicProductForm({
             </p>
           </div>
 
-          {hasMultipleVariants && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                Variant
-              </label>
-              <Select
-                value={selectedVariantId || ''}
-                onValueChange={(v) => setSelectedVariantId(v)}
-              >
-                <SelectTrigger className="w-full rounded-2xl">
-                  <SelectValue placeholder="Select variant" />
-                </SelectTrigger>
-                <SelectContent>
-                  {variants
-                    .filter((v) => v.active !== false)
-                    .map((v) => (
+          {hasMultipleVariants &&
+            (useHierarchicalPicker ? (
+              <div className="space-y-4">
+                {hierarchy.map((optionName, depth) => {
+                  const filtered = activeVariants.filter((v) => {
+                    for (let j = 0; j < depth; j++) {
+                      const key = hierarchy[j];
+                      const sel = optionSelections[key];
+                      if (!sel) return false;
+                      if (getVariantOptionValue(v.name, key) !== sel) return false;
+                    }
+                    return true;
+                  });
+                  const choices = [
+                    ...new Set(
+                      filtered
+                        .map((v) => getVariantOptionValue(v.name, optionName))
+                        .filter((x): x is string => Boolean(x)),
+                    ),
+                  ].sort((a, b) => a.localeCompare(b));
+                  const current = optionSelections[optionName] ?? choices[0] ?? '';
+
+                  return (
+                    <div key={optionName} className="space-y-2">
+                      <label
+                        className="text-sm font-medium"
+                        style={{ color: '#0F1F17' }}
+                      >
+                        {optionName}
+                      </label>
+                      {choices.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No options</p>
+                      ) : (
+                        <Select
+                          value={current}
+                          onValueChange={(v) => handleOptionChange(depth, v)}
+                        >
+                          <SelectTrigger className="w-full rounded-2xl">
+                            <SelectValue placeholder={`Select ${optionName}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {choices.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                {c}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                  Variant
+                </label>
+                <Select
+                  value={selectedVariantId || ''}
+                  onValueChange={(v) => setSelectedVariantId(v)}
+                >
+                  <SelectTrigger className="w-full rounded-2xl">
+                    <SelectValue placeholder="Select variant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeVariants.map((v) => (
                       <SelectItem key={v.id} value={v.id}>
                         {v.name}
                         {v.price != null && v.price > 0 ? ` - ${formatPrice(v.price)}` : ''}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
 
           <div className="space-y-2">
             <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
