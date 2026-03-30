@@ -168,6 +168,41 @@ export async function getProductsByType(
   return data || [];
 }
 
+export type RelatedProductSummary = {
+  id: string;
+  title: string;
+  image_url: string | null;
+  metadata: Record<string, unknown>;
+  base_price: number | null;
+};
+
+/**
+ * Other physical products from the same org (e.g. PDP “You may also like”).
+ */
+export async function getRelatedPhysicalProducts(
+  orgId: string,
+  excludeProductId: string,
+  opts?: { inSaleOnly?: boolean; limit?: number },
+): Promise<RelatedProductSummary[]> {
+  const limit = opts?.limit ?? 12;
+  let query = supabase
+    .from('products')
+    .select('id, title, image_url, metadata, base_price')
+    .eq('org_id', orgId)
+    .eq('type', 'physical')
+    .neq('id', excludeProductId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (opts?.inSaleOnly) {
+    query = query.eq('is_on_sale', true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data as RelatedProductSummary[]) || [];
+}
+
 // ============================================================================
 // PRODUCT VARIANTS
 // ============================================================================

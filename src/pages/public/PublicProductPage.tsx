@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { getProductWithVariants } from '@/lib/api/products';
+import {
+  getProductWithVariants,
+  getRelatedPhysicalProducts,
+  type RelatedProductSummary,
+} from '@/lib/api/products';
 import { getOrgBySlugWithProfile } from '@/lib/api/orgs';
 import NotFound from '@/pages/NotFound';
 import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
@@ -19,6 +23,7 @@ export default function PublicProductPage() {
   const [loading, setLoading] = useState(true);
   const [productData, setProductData] = useState<{ product: any; variants: any[] } | null>(null);
   const [org, setOrg] = useState<any>(null);
+  const [relatedProducts, setRelatedProducts] = useState<RelatedProductSummary[] | null>(null);
 
   useEffect(() => {
     if (!orgSlug || !productId) {
@@ -34,6 +39,7 @@ export default function PublicProductPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setRelatedProducts(null);
         const [productResult, orgResult] = await Promise.all([
           getProductWithVariants(productId),
           getOrgBySlugWithProfile(orgSlug),
@@ -42,6 +48,7 @@ export default function PublicProductPage() {
         if (!productResult || !orgResult) {
           setProductData(null);
           setOrg(null);
+          setRelatedProducts(null);
           return;
         }
 
@@ -49,15 +56,30 @@ export default function PublicProductPage() {
         if (productResult.product.org_id !== orgResult.id) {
           setProductData(null);
           setOrg(null);
+          setRelatedProducts(null);
           return;
         }
 
         setProductData(productResult);
         setOrg(orgResult);
+
+        const profile = orgResult.profile as { products_filter?: string } | null | undefined;
+        const inSaleOnly = profile?.products_filter === 'in_sale_only';
+        try {
+          const related = await getRelatedPhysicalProducts(orgResult.id, productId, {
+            inSaleOnly,
+            limit: 12,
+          });
+          setRelatedProducts(related);
+        } catch (relErr) {
+          console.error('Error fetching related products:', relErr);
+          setRelatedProducts([]);
+        }
       } catch (error) {
         console.error('Error fetching product:', error);
         setProductData(null);
         setOrg(null);
+        setRelatedProducts(null);
       } finally {
         setLoading(false);
       }
@@ -81,11 +103,13 @@ export default function PublicProductPage() {
   return (
     <div className="min-h-screen bg-muted/30">
       <BrandPublicHeader org={org} profile={org.profile} showBackLink={true} isOwner={false} />
-      <div className="w-full max-w-6xl mx-auto px-4 py-8 md:py-12">
+      <div className="w-full max-w-7xl mx-auto px-4 py-8 md:py-12">
         <PublicProductForm
           product={productData.product}
           variants={productData.variants}
           org={org}
+          orgSlug={orgSlug!}
+          relatedProducts={relatedProducts ?? []}
         />
       </div>
     </div>

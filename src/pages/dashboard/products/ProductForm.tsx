@@ -22,6 +22,10 @@ import {
 } from '@/lib/api/categories-and-tags';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { PRODUCT_TYPE_LABELS, type ProductType } from '@/lib/types';
+import {
+  MAX_PRODUCT_GALLERY_EXTRA,
+  mergeProductDetailMetadata,
+} from '@/lib/utils/product-media';
 
 type OrgProductType = ProductType;
 
@@ -258,6 +262,12 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [photoMode, setPhotoMode] = useState<'url' | 'upload'>('upload');
   const [imageUrl, setImageUrl] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingGalleryImage, setUploadingGalleryImage] = useState(false);
+  const [metadataBase, setMetadataBase] = useState<Record<string, unknown>>({});
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [galleryUrlInput, setGalleryUrlInput] = useState('');
+  const [metadataProductDetails, setMetadataProductDetails] = useState('');
+  const [metadataSizeFit, setMetadataSizeFit] = useState('');
   const [draftId] = useState<string>(() => {
     // Generate draftId on first render for create mode
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -276,9 +286,9 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const canSubmit = useMemo(() => {
     if (!currentOrg?.id) return false;
     if (!title.trim()) return false;
-    if (uploadingImage) return false; // Disable save while uploading
+    if (uploadingImage || uploadingGalleryImage) return false;
     return true;
-  }, [currentOrg?.id, title, uploadingImage]);
+  }, [currentOrg?.id, title, uploadingImage, uploadingGalleryImage]);
 
   // Helper function to upload product image
   const uploadProductImage = async (file: File): Promise<string> => {
@@ -447,6 +457,23 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
           setImageUrl('');
           setPhotoMode('upload');
         }
+
+        const rawMeta =
+          p.metadata && typeof p.metadata === 'object' && !Array.isArray(p.metadata)
+            ? { ...(p.metadata as Record<string, unknown>) }
+            : {};
+        setMetadataBase(rawMeta);
+        const extraGallery = Array.isArray(rawMeta.gallery_urls)
+          ? (rawMeta.gallery_urls as unknown[])
+              .filter((u): u is string => typeof u === 'string')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        setGalleryUrls(extraGallery.slice(0, MAX_PRODUCT_GALLERY_EXTRA));
+        setMetadataProductDetails(
+          typeof rawMeta.product_details === 'string' ? rawMeta.product_details : '',
+        );
+        setMetadataSizeFit(typeof rawMeta.size_and_fit === 'string' ? rawMeta.size_and_fit : '');
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -907,6 +934,11 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     setSaving(true);
     try {
       const base_price = toDecimalOrNull(basePrice);
+      const productMetadata = mergeProductDetailMetadata(metadataBase, {
+        galleryUrls,
+        productDetails: metadataProductDetails,
+        sizeAndFit: metadataSizeFit,
+      });
 
       let productId = id;
       if (!isEditMode) {
@@ -921,6 +953,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             category_id: categoryId || null,
             image_url: imageUrl || null,
             is_on_sale: isOnSale,
+            metadata: productMetadata,
           })
           .select('id')
           .single();
@@ -938,6 +971,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             category_id: categoryId || null,
             image_url: imageUrl || null,
             is_on_sale: isOnSale,
+            metadata: productMetadata,
           })
           .eq('id', id!)
           .eq('org_id', currentOrg.id);
@@ -1524,8 +1558,144 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Additional photos (product page)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Shown after the primary photo. Up to {MAX_PRODUCT_GALLERY_EXTRA} URLs (same rules as primary: 3MB max, compressed on upload).
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      type="url"
+                      value={galleryUrlInput}
+                      onChange={(e) => setGalleryUrlInput(e.target.value)}
+                      placeholder="https://…"
+                      className="h-10 flex-1"
+                      disabled={uploadingGalleryImage || galleryUrls.length >= MAX_PRODUCT_GALLERY_EXTRA}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 whitespace-nowrap"
+                      disabled={
+                        uploadingGalleryImage || galleryUrls.length >= MAX_PRODUCT_GALLERY_EXTRA
+                      }
+                      onClick={() => {
+                        const t = galleryUrlInput.trim();
+                        if (!t) return;
+                        if (galleryUrls.length >= MAX_PRODUCT_GALLERY_EXTRA) return;
+                        if (t === imageUrl.trim() || galleryUrls.includes(t)) {
+                          toast({
+                            title: 'Duplicate image',
+                            description: 'That URL is already used.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        setGalleryUrls((prev) => [...prev, t].slice(0, MAX_PRODUCT_GALLERY_EXTRA));
+                        setGalleryUrlInput('');
+                      }}
+                    >
+                      Add URL
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="galleryUpload"
+                      type="file"
+                      accept="image/*"
+                      className="h-10"
+                      disabled={
+                        uploadingGalleryImage || galleryUrls.length >= MAX_PRODUCT_GALLERY_EXTRA
+                      }
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (galleryUrls.length >= MAX_PRODUCT_GALLERY_EXTRA) return;
+                        setUploadingGalleryImage(true);
+                        try {
+                          const url = await uploadProductImage(file);
+                          if (url === imageUrl.trim() || galleryUrls.includes(url)) {
+                            toast({
+                              title: 'Duplicate image',
+                              description: 'That image is already in the gallery.',
+                              variant: 'destructive',
+                            });
+                            return;
+                          }
+                          setGalleryUrls((prev) =>
+                            [...prev, url].slice(0, MAX_PRODUCT_GALLERY_EXTRA),
+                          );
+                          toast({ title: 'Image added', description: 'Added to additional photos' });
+                        } catch (error: any) {
+                          console.error('Gallery upload failed:', error);
+                          toast({
+                            title: 'Upload failed',
+                            description: error.message || 'Failed to upload image',
+                            variant: 'destructive',
+                          });
+                        } finally {
+                          setUploadingGalleryImage(false);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                  {uploadingGalleryImage && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Uploading additional photo…
+                    </div>
+                  )}
+                  {galleryUrls.length > 0 && (
+                    <ul className="flex flex-wrap gap-2 pt-1">
+                      {galleryUrls.map((u, idx) => (
+                        <li key={`${u}-${idx}`} className="relative group">
+                          <img
+                            src={u}
+                            alt=""
+                            className="h-20 w-20 object-cover rounded-lg border"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute -top-2 -right-2 h-7 w-7 rounded-full opacity-90"
+                            onClick={() =>
+                              setGalleryUrls((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" className="min-h-24" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="metadataProductDetails">Product details (product page)</Label>
+                  <Textarea
+                    id="metadataProductDetails"
+                    value={metadataProductDetails}
+                    onChange={(e) => setMetadataProductDetails(e.target.value)}
+                    placeholder="Materials, care, SKU highlights, etc."
+                    className="min-h-20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="metadataSizeFit">Size &amp; fit (product page)</Label>
+                  <Textarea
+                    id="metadataSizeFit"
+                    value={metadataSizeFit}
+                    onChange={(e) => setMetadataSizeFit(e.target.value)}
+                    placeholder="Fit notes, model size, measurements…"
+                    className="min-h-20"
+                  />
                 </div>
 
                 <div className="space-y-2">

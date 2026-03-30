@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,10 +9,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { ShoppingCart, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
+import type { RelatedProductSummary } from '@/lib/api/products';
 import type { Product, ProductVariant } from '@/lib/types';
+import { collectProductPhotoUrls } from '@/lib/utils/product-media';
 
 interface Org {
   id: string;
@@ -24,6 +32,8 @@ interface PublicProductFormProps {
   product: Product;
   variants: ProductVariant[];
   org: Org;
+  orgSlug: string;
+  relatedProducts?: RelatedProductSummary[];
 }
 
 function formatPrice(amount: number): string {
@@ -35,16 +45,28 @@ function formatPrice(amount: number): string {
   }).format(amount);
 }
 
+function cardImageUrl(p: RelatedProductSummary): string | null {
+  if (p.image_url) return p.image_url;
+  const meta = p.metadata as Record<string, unknown> | undefined;
+  if (!meta || typeof meta !== 'object') return null;
+  const photos = meta.photos;
+  if (Array.isArray(photos) && typeof photos[0] === 'string') return photos[0];
+  const img = meta.image;
+  return typeof img === 'string' ? img : null;
+}
+
 export default function PublicProductForm({
   product,
   variants,
   org,
+  orgSlug,
+  relatedProducts = [],
 }: PublicProductFormProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { setOrgId, addItem, totalQty } = usePublicCart();
+  const { setOrgId, addItem } = usePublicCart();
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    variants.length > 0 ? variants[0].id : null
+    variants.length > 0 ? variants[0].id : null,
   );
   const [quantity, setQuantity] = useState(1);
 
@@ -52,26 +74,56 @@ export default function PublicProductForm({
     setOrgId(org.id);
   }, [org.id, setOrgId]);
 
-  // Get images - prefer image_url (photo upload/URL), fallback to metadata
-  const imageUrl = (product as any).image_url;
-  const photos: string[] = imageUrl
-    ? [imageUrl]
-    : product.metadata?.photos && Array.isArray(product.metadata.photos)
-      ? product.metadata.photos
-      : product.metadata?.image
-        ? [product.metadata.image]
-        : [];
-  const mainImage = photos[0] || null;
+  const photos = useMemo(
+    () => collectProductPhotoUrls(product as Product & { image_url?: string | null }),
+    [product],
+  );
+
+  const meta = product.metadata || {};
+  const productDetails =
+    typeof meta.product_details === 'string' ? meta.product_details.trim() : '';
+  const sizeFit = typeof meta.size_and_fit === 'string' ? meta.size_and_fit.trim() : '';
+  const descriptionText = (product.description || '').trim();
+
+  const accordionSections = useMemo(() => {
+    const sections: { id: string; title: string; body: string }[] = [];
+    if (descriptionText) {
+      sections.push({ id: 'description', title: 'Description', body: descriptionText });
+    }
+    if (productDetails) {
+      sections.push({
+        id: 'product-details',
+        title: 'Product Details',
+        body: productDetails,
+      });
+    }
+    if (sizeFit) {
+      sections.push({ id: 'size-fit', title: 'Size & Fit', body: sizeFit });
+    }
+    return sections;
+  }, [descriptionText, productDetails, sizeFit]);
+
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
+  useEffect(() => {
+    if (photos.length === 0) {
+      setSelectedImageIndex(0);
+      return;
+    }
+    setSelectedImageIndex((i) => (i >= photos.length ? 0 : i));
+  }, [photos.length]);
+
+  const mainSrc = photos[selectedImageIndex] ?? photos[0] ?? null;
+
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
-  const displayPrice =
-    selectedVariant?.price ?? product.base_price ?? 0;
+  const displayPrice = selectedVariant?.price ?? product.base_price ?? 0;
   const hasMultipleVariants = variants.length > 1;
 
   const handleContactBrand = () => {
     navigate(`/messages/new?toOrg=${org.id}`);
   };
+
+  const quantityNum = Math.max(1, Math.min(99, quantity));
 
   const handleAddToCart = () => {
     const variant = selectedVariant || variants[0];
@@ -98,150 +150,233 @@ export default function PublicProductForm({
     });
   };
 
-  const quantityNum = Math.max(1, Math.min(99, quantity));
+  const openAccordionDefaults = accordionSections.map((s) => s.id);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-      {/* Image gallery */}
-      <div className="space-y-4">
-        <div
-          className="aspect-square w-full rounded-2xl overflow-hidden bg-muted flex items-center justify-center"
-          style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
-        >
-          {(mainImage || photos[0]) ? (
-            <img
-              src={photos[selectedImageIndex] || mainImage || photos[0]}
-              alt={product.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className="text-sm text-muted-foreground">No image</span>
-          )}
-        </div>
-        {photos.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {photos.map((p, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setSelectedImageIndex(i)}
-                className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                  selectedImageIndex === i
-                    ? 'border-primary ring-2 ring-primary/20'
-                    : 'border-transparent hover:border-muted-foreground/30'
-                }`}
+    <div className="space-y-10 md:space-y-14">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+        {/* Gallery */}
+        <div className="w-full">
+          <div className="flex flex-col-reverse lg:flex-row gap-4 lg:gap-5">
+            {photos.length > 1 && (
+              <div
+                className="
+                  flex flex-row lg:flex-col gap-2 lg:gap-3
+                  overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto lg:max-h-[min(85vh,640px)]
+                  w-full lg:w-[76px] shrink-0 lg:shrink-0
+                  pb-1 lg:pb-0
+                  -mx-1 px-1 lg:mx-0 lg:px-0
+                "
               >
+                {photos.map((p, i) => (
+                  <button
+                    key={`${p}-${i}`}
+                    type="button"
+                    onClick={() => setSelectedImageIndex(i)}
+                    className={`
+                      flex-shrink-0 w-16 h-16 lg:w-[76px] lg:h-[76px] rounded-xl overflow-hidden border-2 transition-colors
+                      ${
+                        selectedImageIndex === i
+                          ? 'border-primary ring-2 ring-primary/20'
+                          : 'border-transparent hover:border-muted-foreground/30'
+                      }
+                    `}
+                  >
+                    <img src={p} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div
+              className="aspect-square w-full rounded-2xl overflow-hidden bg-muted flex items-center justify-center min-w-0 flex-1"
+              style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
+            >
+              {mainSrc ? (
                 <img
-                  src={p}
-                  alt=""
+                  src={mainSrc}
+                  alt={product.title}
                   className="w-full h-full object-cover"
                 />
-              </button>
-            ))}
+              ) : (
+                <span className="text-sm text-muted-foreground">No image</span>
+              )}
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Product info */}
-      <div className="space-y-6">
-        <div>
-          <h1
-            className="text-2xl md:text-3xl font-bold mb-2"
-            style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
-          >
-            {product.title}
-          </h1>
-          <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
-            {displayPrice > 0 ? formatPrice(displayPrice) : 'Free'}
-            {hasMultipleVariants && displayPrice > 0 && (
-              <span className="text-base font-normal text-muted-foreground ml-1">
-                (per variant)
-              </span>
-            )}
-          </p>
         </div>
 
-        {/* Variant selector */}
-        {hasMultipleVariants && (
+        {/* Buy box */}
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <div>
+            <h1
+              className="text-2xl md:text-3xl font-bold mb-2"
+              style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
+            >
+              {product.title}
+            </h1>
+            <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
+              {displayPrice > 0 ? formatPrice(displayPrice) : 'Free'}
+              {hasMultipleVariants && displayPrice > 0 && (
+                <span className="text-base font-normal text-muted-foreground ml-1">
+                  (per variant)
+                </span>
+              )}
+            </p>
+          </div>
+
+          {hasMultipleVariants && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                Variant
+              </label>
+              <Select
+                value={selectedVariantId || ''}
+                onValueChange={(v) => setSelectedVariantId(v)}
+              >
+                <SelectTrigger className="w-full rounded-2xl">
+                  <SelectValue placeholder="Select variant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {variants
+                    .filter((v) => v.active !== false)
+                    .map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.name}
+                        {v.price != null && v.price > 0 ? ` - ${formatPrice(v.price)}` : ''}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-              Variant
+              Quantity
             </label>
-            <Select
-              value={selectedVariantId || ''}
-              onValueChange={(v) => setSelectedVariantId(v)}
-            >
-              <SelectTrigger className="w-full rounded-2xl">
-                <SelectValue placeholder="Select variant" />
-              </SelectTrigger>
-              <SelectContent>
-                {variants
-                  .filter((v) => v.active !== false)
-                  .map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name}
-                      {v.price != null && v.price > 0 ? ` - ${formatPrice(v.price)}` : ''}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              value={quantityNum}
+              onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+              className="w-24 rounded-2xl"
+            />
           </div>
-        )}
 
-        {/* Quantity */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-            Quantity
-          </label>
-          <Input
-            type="number"
-            min={1}
-            max={99}
-            value={quantityNum}
-            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
-            className="w-24 rounded-2xl"
-          />
-        </div>
-
-        {/* CTA - Add to Cart primary, Contact secondary */}
-        <div className="flex flex-col gap-3 pt-2">
-          <Button
-            onClick={handleAddToCart}
-            size="lg"
-            className="w-full h-12 rounded-2xl font-bold"
-            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Add to Cart
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full h-11 rounded-2xl"
-            onClick={handleContactBrand}
-          >
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Contact for enquiry
-          </Button>
-          <p className="text-sm text-muted-foreground">
-            Questions? Message the brand directly.
-          </p>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button
+              onClick={handleAddToCart}
+              size="lg"
+              className="w-full h-12 rounded-2xl font-bold"
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Add to Cart
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full h-11 rounded-2xl"
+              onClick={handleContactBrand}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Contact for enquiry
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Questions? Message the brand directly.
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Description - below on mobile, or in a second row */}
-      {product.description && (
-        <div className="md:col-span-2 pt-8 border-t" style={{ borderColor: 'rgba(0,0,0,0.1)' }}>
-          <h2 className="text-lg font-semibold mb-4" style={{ color: '#0F1F17' }}>
-            Description
-          </h2>
-          <div
-            className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-wrap"
-            style={{ color: 'rgba(15,31,23,0.8)' }}
+      {accordionSections.length > 0 && (
+        <section
+          className="border-t pt-2"
+          style={{ borderColor: 'rgba(0,0,0,0.1)' }}
+          aria-label="Product information"
+        >
+          <Accordion
+            type="multiple"
+            defaultValue={openAccordionDefaults}
+            className="w-full"
           >
-            {product.description}
+            {accordionSections.map((s) => (
+              <AccordionItem key={s.id} value={s.id} className="border-muted">
+                <AccordionTrigger
+                  className="text-base hover:no-underline py-4"
+                  style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
+                >
+                  {s.title}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div
+                    className="prose prose-sm max-w-none whitespace-pre-wrap pb-2"
+                    style={{ color: 'rgba(15,31,23,0.85)' }}
+                  >
+                    {s.body}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </section>
+      )}
+
+      {relatedProducts.length > 0 && (
+        <section aria-label="You may also like">
+          <h2
+            className="text-lg md:text-xl font-semibold mb-4 md:mb-6"
+            style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
+          >
+            You may also like
+          </h2>
+          <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-1 px-1 scrollbar-hide">
+            {relatedProducts.map((p) => {
+              const img = cardImageUrl(p);
+              const price = p.base_price != null ? Number(p.base_price) : 0;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => navigate(`/${orgSlug}/products/${p.id}`)}
+                  className="flex-shrink-0 w-36 md:w-40 lg:w-48 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
+                >
+                  <div className="aspect-square w-full bg-muted">
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={p.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground px-2 text-center">
+                          {p.title}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 lg:p-4 bg-background">
+                    <p
+                      className="font-medium text-sm lg:text-base truncate"
+                      style={{ color: '#0F1F17' }}
+                    >
+                      {p.title}
+                    </p>
+                    {price > 0 && (
+                      <p
+                        className="text-sm lg:text-base font-semibold mt-0.5"
+                        style={{ color: '#0E7A3A' }}
+                      >
+                        {formatPrice(price)}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
