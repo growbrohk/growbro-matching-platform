@@ -25,6 +25,7 @@ import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/pro
 import {
   getVariantHierarchy,
   getVariantOptionValue,
+  orderVariantValuesForDisplay,
 } from '@/lib/utils/variant-parser';
 
 interface Org {
@@ -67,6 +68,7 @@ export default function PublicProductForm({
   );
 
   const [variantRankOrder, setVariantRankOrder] = useState<string[]>([]);
+  const [variantValueOrders, setVariantValueOrders] = useState<Record<string, string[]>>({});
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -74,9 +76,13 @@ export default function PublicProductForm({
         const c = await getVariantConfig(org.id);
         if (!cancelled) {
           setVariantRankOrder([c.rank1, c.rank2].filter(Boolean));
+          setVariantValueOrders(c.value_orders || {});
         }
       } catch {
-        if (!cancelled) setVariantRankOrder([]);
+        if (!cancelled) {
+          setVariantRankOrder([]);
+          setVariantValueOrders({});
+        }
       }
     })();
     return () => {
@@ -114,7 +120,7 @@ export default function PublicProductForm({
 
   useEffect(() => {
     if (!useHierarchicalPicker || activeVariants.length === 0) return;
-    const key = `${product.id}|${hierarchy.join('\0')}|${activeVariants.map((v) => v.id).join(',')}`;
+    const key = `${product.id}|${hierarchy.join('\0')}|${activeVariants.map((v) => v.id).join(',')}|${JSON.stringify(variantValueOrders)}`;
     if (pickerInitKeyRef.current === key) return;
     pickerInitKeyRef.current = key;
 
@@ -135,19 +141,20 @@ export default function PublicProductForm({
         return true;
       });
       const optKey = hierarchy[i];
-      const vals = [
+      const rawVals = [
         ...new Set(
           pool
             .map((v) => getVariantOptionValue(v.name, optKey))
             .filter((x): x is string => Boolean(x)),
         ),
-      ].sort((a, b) => a.localeCompare(b));
+      ];
+      const vals = orderVariantValuesForDisplay(rawVals, optKey, variantValueOrders[optKey]);
       if (!next[optKey] || !vals.includes(next[optKey])) {
         next[optKey] = vals[0] ?? '';
       }
     }
     setOptionSelections(next);
-  }, [product.id, useHierarchicalPicker, activeVariants, hierarchy]);
+  }, [product.id, useHierarchicalPicker, activeVariants, hierarchy, variantValueOrders]);
 
   const handleOptionChange = useCallback(
     (depth: number, value: string) => {
@@ -164,19 +171,20 @@ export default function PublicProductForm({
             return true;
           });
           const optKey = hierarchy[i];
-          const vals = [
+          const rawVals = [
             ...new Set(
               pool
                 .map((v) => getVariantOptionValue(v.name, optKey))
                 .filter((x): x is string => Boolean(x)),
             ),
-          ].sort((a, b) => a.localeCompare(b));
+          ];
+          const vals = orderVariantValuesForDisplay(rawVals, optKey, variantValueOrders[optKey]);
           next[optKey] = vals[0] ?? '';
         }
         return next;
       });
     },
-    [hierarchy, activeVariants],
+    [hierarchy, activeVariants, variantValueOrders],
   );
 
   const effectiveSelectedVariant = useMemo(() => {
@@ -373,13 +381,18 @@ export default function PublicProductForm({
                     }
                     return true;
                   });
-                  const choices = [
+                  const rawChoices = [
                     ...new Set(
                       filtered
                         .map((v) => getVariantOptionValue(v.name, optionName))
                         .filter((x): x is string => Boolean(x)),
                     ),
-                  ].sort((a, b) => a.localeCompare(b));
+                  ];
+                  const choices = orderVariantValuesForDisplay(
+                    rawChoices,
+                    optionName,
+                    variantValueOrders[optionName],
+                  );
                   const current = optionSelections[optionName] ?? choices[0] ?? '';
 
                   return (

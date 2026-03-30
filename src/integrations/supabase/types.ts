@@ -883,6 +883,7 @@ export type Database = {
           rank1: string
           rank2: string
           updated_at: string
+          value_orders: Json
         }
         Insert: {
           created_at?: string
@@ -890,6 +891,7 @@ export type Database = {
           rank1?: string
           rank2?: string
           updated_at?: string
+          value_orders?: Json
         }
         Update: {
           created_at?: string
@@ -897,6 +899,7 @@ export type Database = {
           rank1?: string
           rank2?: string
           updated_at?: string
+          value_orders?: Json
         }
         Relationships: [
           {

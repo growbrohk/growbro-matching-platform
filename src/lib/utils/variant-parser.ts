@@ -165,3 +165,105 @@ export function getVariantHierarchy(
   return sortVariantOptionNames(uniqueNames, customOrder);
 }
 
+
+/** Normalize for comparing saved order with live variant values */
+function normalizeOptionValueKey(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+const APPAREL_SIZE_ORDER: string[] = [
+  'XXXS',
+  '3XS',
+  'XXS',
+  '2XS',
+  'XS',
+  'S',
+  'M',
+  'L',
+  'XL',
+  'XXL',
+  'XXXL',
+  'XXXXL',
+  'XXXXXL',
+];
+
+const APPAREL_SIZE_INDEX: Map<string, number> = new Map();
+APPAREL_SIZE_ORDER.forEach((label, i) => {
+  APPAREL_SIZE_INDEX.set(label, i);
+});
+
+/**
+ * Map a display value to apparel size sort index, or null if unknown.
+ */
+function apparelSizeSortIndex(raw: string): number | null {
+  let compact = raw.trim().toUpperCase().replace(/\s+/g, '');
+  if (!compact) return null;
+  // Common aliases → canonical token
+  if (compact === '2XL') compact = 'XXL';
+  if (compact === '3XL') compact = 'XXXL';
+  if (compact === '4XL') compact = 'XXXXL';
+  if (compact === '5XL') compact = 'XXXXXL';
+  const direct = APPAREL_SIZE_INDEX.get(compact);
+  if (direct !== undefined) return direct;
+  return null;
+}
+
+function isLikelyApparelSizeOption(optionName: string): boolean {
+  return /size|尺寸|尺碼|码|碼/i.test(optionName);
+}
+
+/**
+ * Sort standalone value lists using apparel size heuristics when option looks like Size,
+ * else alphabetical.
+ */
+export function sortVariantOptionValues(values: string[], optionName: string): string[] {
+  const copy = [...values];
+  if (isLikelyApparelSizeOption(optionName)) {
+    copy.sort((a, b) => {
+      const ia = apparelSizeSortIndex(a);
+      const ib = apparelSizeSortIndex(b);
+      if (ia !== null && ib !== null) return ia - ib;
+      if (ia !== null) return -1;
+      if (ib !== null) return 1;
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+    return copy;
+  }
+  copy.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return copy;
+}
+
+/**
+ * Apply org-saved value order first, then smart size / alphabetical for the rest.
+ */
+export function orderVariantValuesForDisplay(
+  values: string[],
+  optionName: string,
+  savedOrder?: string[] | null,
+): string[] {
+  const unique = [...new Set(values)];
+  if (!savedOrder || savedOrder.length === 0) {
+    return sortVariantOptionValues(unique, optionName);
+  }
+
+  const byKey = new Map<string, string>();
+  for (const u of unique) {
+    byKey.set(normalizeOptionValueKey(u), u);
+  }
+
+  const used = new Set<string>();
+  const ordered: string[] = [];
+
+  for (const sav of savedOrder) {
+    const canonical = byKey.get(normalizeOptionValueKey(sav));
+    if (canonical && !used.has(canonical)) {
+      ordered.push(canonical);
+      used.add(canonical);
+    }
+  }
+
+  const remainder = unique.filter((u) => !used.has(u));
+  const remainderSorted = sortVariantOptionValues(remainder, optionName);
+  return [...ordered, ...remainderSorted];
+}
+

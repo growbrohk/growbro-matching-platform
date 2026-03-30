@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Plus, Edit, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getUniqueVariantOptionNames } from '@/lib/utils/variant-parser';
+import { getUniqueVariantOptionNames, getVariantOptionValue, orderVariantValuesForDisplay } from '@/lib/utils/variant-parser';
 import { getVariantConfig, upsertVariantConfig, type VariantConfig } from '@/lib/api/variant-config';
 import {
   AlertDialog,
@@ -60,6 +60,8 @@ export default function CatalogSettings() {
   const [variantOptions, setVariantOptions] = useState<string[]>([]);
   const [allVariantNames, setAllVariantNames] = useState<string[]>([]);
   const [variantConfig, setVariantConfig] = useState<VariantConfig | null>(null);
+  const [valueOrderDialogOption, setValueOrderDialogOption] = useState<string | null>(null);
+  const [valueOrderDraft, setValueOrderDraft] = useState<string[]>([]);
   
   // Edit dialogs
   const [editCategoryDialog, setEditCategoryDialog] = useState<{ 
@@ -385,8 +387,68 @@ export default function CatalogSettings() {
     const rank1 = order[0] || 'Color';
     const rank2 = order[1] || 'Size';
     
-    const config = await upsertVariantConfig(currentOrg.id, { rank1, rank2 });
+    const config = await upsertVariantConfig(currentOrg.id, {
+      rank1,
+      rank2,
+      value_orders: variantConfig?.value_orders ?? {},
+    });
     setVariantConfig(config);
+  };
+
+  const openValueOrderEditor = (optionName: string) => {
+    const distinct = new Set<string>();
+    for (const n of allVariantNames) {
+      const v = getVariantOptionValue(n, optionName);
+      if (v) distinct.add(v);
+    }
+    const ordered = orderVariantValuesForDisplay(
+      [...distinct],
+      optionName,
+      variantConfig?.value_orders?.[optionName],
+    );
+    setValueOrderDraft(ordered);
+    setValueOrderDialogOption(optionName);
+  };
+
+  const moveValueDraftUp = (index: number) => {
+    if (index <= 0) return;
+    setValueOrderDraft((prev) => {
+      const next = [...prev];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      return next;
+    });
+  };
+
+  const moveValueDraftDown = (index: number) => {
+    setValueOrderDraft((prev) => {
+      if (index >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      return next;
+    });
+  };
+
+  const saveValueOrderDraft = async () => {
+    if (!currentOrg || !valueOrderDialogOption) return;
+    setSaving(true);
+    try {
+      const merged = {
+        ...(variantConfig?.value_orders ?? {}),
+        [valueOrderDialogOption]: valueOrderDraft,
+      };
+      const config = await upsertVariantConfig(currentOrg.id, {
+        rank1: variantConfig?.rank1 ?? 'Color',
+        rank2: variantConfig?.rank2 ?? 'Size',
+        value_orders: merged,
+      });
+      setVariantConfig(config);
+      toast.success('Display order saved for ' + valueOrderDialogOption);
+      setValueOrderDialogOption(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save value order');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ============================================================================
@@ -552,8 +614,8 @@ export default function CatalogSettings() {
                 Variant Option Order
               </CardTitle>
               <CardDescription>
-                Control the order of variant options (e.g., Color, Size) for inventory hierarchy display.
-                This order determines how variants are grouped in the inventory page.
+                Control the order of variant options (e.g., Color, Size) for inventory and your shop.
+                Use &quot;Order values&quot; to set how choices appear within each option (e.g. XS–XXL).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 p-4 md:p-6 pt-0">
@@ -580,6 +642,7 @@ export default function CatalogSettings() {
                       <li>Rank 1 options appear first in inventory hierarchy</li>
                       <li>Rank 2 options appear nested under Rank 1</li>
                       <li>Drag to reorder using the up/down arrows</li>
+                      <li>Use Order values to sort choices inside each option on the public product page</li>
                     </ul>
                   </div>
 
@@ -601,7 +664,16 @@ export default function CatalogSettings() {
                             </p>
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mr-1"
+                            onClick={() => openValueOrderEditor(option)}
+                            disabled={saving}
+                          >
+                            Order values
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -637,6 +709,71 @@ export default function CatalogSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+
+
+      {/* Variant value order */}
+      <Dialog open={valueOrderDialogOption !== null} onOpenChange={(open) => !saving && !open && setValueOrderDialogOption(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Order values: {valueOrderDialogOption}</DialogTitle>
+            <DialogDescription>
+              Values appear in this order on your public product page. New values you add later are appended using smart sorting.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[min(60vh,24rem)] overflow-y-auto py-2">
+            {valueOrderDraft.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No values found.</p>
+            ) : (
+              valueOrderDraft.map((val, idx) => (
+                <div
+                  key={`${val}-${idx}`}
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg border"
+                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                >
+                  <span className="text-sm font-medium truncate" style={{ color: '#0F1F17' }}>
+                    {val}
+                  </span>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => moveValueDraftUp(idx)}
+                      disabled={saving || idx === 0}
+                      title="Move up"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => moveValueDraftDown(idx)}
+                      disabled={saving || idx === valueOrderDraft.length - 1}
+                      title="Move down"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setValueOrderDialogOption(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => saveValueOrderDraft()}
+              disabled={saving || valueOrderDraft.length === 0}
+              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+            >
+              Save order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Category Dialog */}
       <Dialog open={editCategoryDialog.open} onOpenChange={(open) => !saving && setEditCategoryDialog({ ...editCategoryDialog, open })}>
