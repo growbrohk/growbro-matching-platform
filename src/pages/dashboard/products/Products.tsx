@@ -1217,6 +1217,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
         isPosMode={selectedSubtab === 'pos'}
         cartItemCount={selectedSubtab === 'pos' ? cart.reduce((sum, item) => sum + item.qty, 0) : 0}
         onCartClick={selectedSubtab === 'pos' ? () => setCartOpen(true) : undefined}
+        isOrdersMode={selectedSubtab === 'orders'}
       />
 
       <BulkDialogs

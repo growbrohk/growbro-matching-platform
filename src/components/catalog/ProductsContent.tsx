@@ -1,13 +1,18 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChevronDown, ChevronRight, ChevronsDown, Edit } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { ChevronDown, ChevronRight, ChevronsDown, Edit, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { useOrdersDashboard, formatMoney } from '@/hooks/useOrdersDashboard';
+import { OrderListRowCompact } from '@/components/OrderListRowCompact';
+import { cn } from '@/lib/utils';
 import { VariantCombinationsTable } from './VariantCombinationsTable';
 import { VariantPicker } from '@/components/pos/VariantPicker';
 import type { ProductCategory } from '@/lib/api/categories-and-tags';
 import type { ProductWithDetails, Warehouse, InventoryItem, ProductVariant } from '@/pages/dashboard/products/Products';
 import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+
+type CatalogOrderTab = 'pending' | 'completed' | 'all';
 
 export interface ProductsContentProps {
   products: ProductWithDetails[];
@@ -84,9 +89,13 @@ export function ProductsContent({
   cart,
   onAddToCart,
 }: ProductsContentProps) {
-  const { currentOrg } = useAuth();
+  const queryClient = useQueryClient();
   const [variantPickerOpen, setVariantPickerOpen] = useState(false);
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<{ product: ProductWithDetails; variants: ProductVariant[] } | null>(null);
+  const [ordersTab, setOrdersTab] = useState<CatalogOrderTab>('all');
+  const { data: ordersDashboardData, isLoading: ordersDashboardLoading } = useOrdersDashboard('30d', {
+    enabled: selectedSubtab === 'orders',
+  });
 
   const formatVariantLabel = (variant: ProductVariant): string => {
     return variant.name
@@ -150,21 +159,107 @@ export function ProductsContent({
     }
   };
 
-  // If orders subtab is selected, render placeholder
   if (selectedSubtab === 'orders') {
+    if (ordersDashboardLoading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+        </div>
+      );
+    }
+
+    const productOrders = (ordersDashboardData?.allOrders ?? []).filter((o) => o.order_type === 'product');
+    const pendingCount = productOrders.filter((o) => o.payment_status === 'submitted').length;
+    const completedCount = productOrders.filter(
+      (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
+    ).length;
+    const allCount = productOrders.filter(
+      (o) => o.payment_status === 'submitted' || o.payment_status === 'paid'
+    ).length;
+
+    const getFilteredProductOrders = () => {
+      switch (ordersTab) {
+        case 'pending':
+          return productOrders.filter((o) => o.payment_status === 'submitted');
+        case 'completed':
+          return productOrders.filter(
+            (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
+          );
+        case 'all':
+        default:
+          return productOrders.filter(
+            (o) => o.payment_status === 'submitted' || o.payment_status === 'paid'
+          );
+      }
+    };
+
+    const tabs: { key: CatalogOrderTab; label: string; count: number }[] = [
+      { key: 'pending', label: 'Pending', count: pendingCount },
+      { key: 'completed', label: 'Completed', count: completedCount },
+      { key: 'all', label: 'All', count: allCount },
+    ];
+
+    const listSearch = `?range=30d&tab=${ordersTab}`;
+    const filtered = getFilteredProductOrders();
+
     return (
-      <div className="space-y-4 md:space-y-6">
-        <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
-          <CardHeader>
-            <CardTitle>Orders</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-muted-foreground">Coming soon.</p>
-            <Button disabled style={{ backgroundColor: '#0E7A3A', color: 'white' }}>
-              Create Order
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="w-full space-y-6">
+        <div className="flex gap-1 bg-gray-200 rounded-full p-1 flex-nowrap">
+          {tabs.map((tab) => {
+            const isSelected = ordersTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setOrdersTab(tab.key)}
+                className={cn(
+                  'flex-1 min-w-0 px-4 py-2 rounded-full text-sm font-medium transition-colors',
+                  isSelected
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="truncate">{tab.label}</span>
+                  <span className="shrink-0">{tab.count}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="space-y-0">
+          {filtered.length === 0 ? (
+            <div className="py-8 text-center text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              No product orders found
+            </div>
+          ) : (
+            filtered.map((order) => {
+              const timestamp = order.created_at
+                ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
+                : '';
+              const showConfirm =
+                order.payment_status === 'submitted' ||
+                order.fulfillment_status === 'pending_confirmation';
+
+              return (
+                <OrderListRowCompact
+                  key={order.id}
+                  name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
+                  createdAtLabel={timestamp}
+                  imageUrl={order.previewImageUrl}
+                  priceLabel={formatMoney(order.total_amount)}
+                  onDetails={() => navigate(`/app/orders/${order.id}${listSearch}`)}
+                  onConfirm={() => {
+                    queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+                  }}
+                  showConfirm={showConfirm}
+                  orderId={order.id}
+                />
+              );
+            })
+          )}
+        </div>
       </div>
     );
   }

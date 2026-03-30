@@ -60,6 +60,8 @@ export interface ProductsToolbarProps {
   isPosMode?: boolean;
   cartItemCount?: number;
   onCartClick?: () => void;
+  /** When true, catalog search/bulk chrome is hidden (e.g. Products Orders subtab). */
+  isOrdersMode?: boolean;
 }
 
 export function ProductsToolbar({
@@ -106,7 +108,12 @@ export function ProductsToolbar({
   isPosMode = false,
   cartItemCount = 0,
   onCartClick,
+  isOrdersMode = false,
 }: ProductsToolbarProps) {
+  if (isOrdersMode) {
+    return null;
+  }
+
   return (
     <>
       {/* Toolbar: Search + Edit + Add Product */}
