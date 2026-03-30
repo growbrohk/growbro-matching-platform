@@ -15,7 +15,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { ShoppingCart, MessageSquare } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import type { RelatedProductSummary } from '@/lib/api/products';
@@ -118,10 +118,6 @@ export default function PublicProductForm({
   const selectedVariant = variants.find((v) => v.id === selectedVariantId);
   const displayPrice = selectedVariant?.price ?? product.base_price ?? 0;
   const hasMultipleVariants = variants.length > 1;
-
-  const handleContactBrand = () => {
-    navigate(`/messages/new?toOrg=${org.id}`);
-  };
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
 
@@ -273,18 +269,6 @@ export default function PublicProductForm({
               <ShoppingCart className="h-4 w-4 mr-2" />
               Add to Cart
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full h-11 rounded-2xl"
-              onClick={handleContactBrand}
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Contact for enquiry
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              Questions? Message the brand directly.
-            </p>
           </div>
         </div>
       </div>
