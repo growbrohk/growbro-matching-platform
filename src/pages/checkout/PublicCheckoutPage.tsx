@@ -1,17 +1,31 @@
 /**
- * Public product checkout page - Cart review + contact info + create order
+ * Public product checkout page - Cart review + shipping + contact info + create order
  * Route: /:orgSlug/checkout
  */
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Minus, Plus, ShoppingCart, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { usePublicCart } from '@/contexts/PublicCartContext';
+import { usePublicCart, type PublicCartItem } from '@/contexts/PublicCartContext';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
-import { createProductOrder } from '@/lib/api/product-checkout';
+import {
+  createProductOrder,
+  type CreateProductOrderDelivery,
+  type ProductDeliveryMethod,
+} from '@/lib/api/product-checkout';
 import {
   getPhysicalProductSummariesForOrg,
   getProductPrimaryPhotoUrlsByIds,
@@ -20,6 +34,8 @@ import {
 } from '@/lib/api/products';
 import { getOrgBySlugWithProfile, type OrgWithProfile } from '@/lib/api/orgs';
 import type { ContactInfo } from '@/lib/types/booking';
+import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 const BRAND = {
   green: '#0E7A3A',
@@ -28,6 +44,9 @@ const BRAND = {
 };
 
 const PANEL_BORDER = 'rgba(14,122,58,0.14)';
+
+const SHIPPING_RATE_DOOR = 25;
+const SHIPPING_RATE_SF = 16;
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat('en-HK', {
@@ -44,6 +63,30 @@ function formatCarouselPrice(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function parseShippingWeightKgFromMeta(metadata: unknown): number {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 0;
+  const raw = (metadata as Record<string, unknown>).shipping_weight_kg;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return raw;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return 0;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function kgPerUnitForLine(item: PublicCartItem, weightByProductId: Record<string, number>): number {
+  if (item.weightKgPerUnit != null && Number.isFinite(item.weightKgPerUnit) && item.weightKgPerUnit >= 0) {
+    return item.weightKgPerUnit;
+  }
+  const w = weightByProductId[item.productId];
+  if (w != null && Number.isFinite(w) && w >= 0) return w;
+  return 0;
 }
 
 function YouMayAlsoLikeCarousel({
@@ -111,15 +154,42 @@ export default function PublicCheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [relatedProducts, setRelatedProducts] = useState<RelatedProductSummary[]>([]);
   const [photoByProductId, setPhotoByProductId] = useState<Record<string, string>>({});
+  const [weightByProductId, setWeightByProductId] = useState<Record<string, number>>({});
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
   });
+  const [deliveryMethod, setDeliveryMethod] = useState<ProductDeliveryMethod>('door');
+  const [doorCountry, setDoorCountry] = useState('Hong Kong (SAR)');
+  const [doorBuilding, setDoorBuilding] = useState('');
+  const [doorStreet, setDoorStreet] = useState('');
+  const [doorRegion, setDoorRegion] = useState('');
+  const [doorDistrict, setDoorDistrict] = useState('');
+  const [sfLockerAddress, setSfLockerAddress] = useState('');
+  const [sfLockerCode, setSfLockerCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const cartProductKey = useMemo(() => cart.map((c) => c.productId).sort().join(','), [cart]);
+
+  const totalShippingKg = useMemo(
+    () => cart.reduce((s, item) => s + item.qty * kgPerUnitForLine(item, weightByProductId), 0),
+    [cart, weightByProductId],
+  );
+
+  const shippingRatePerKg = useMemo(() => {
+    if (deliveryMethod === 'door') return SHIPPING_RATE_DOOR;
+    if (deliveryMethod === 'sf_locker') return SHIPPING_RATE_SF;
+    return 0;
+  }, [deliveryMethod]);
+
+  const shippingFee = useMemo(() => {
+    if (deliveryMethod === 'event_pickup') return 0;
+    return Math.round(totalShippingKg * shippingRatePerKg * 100) / 100;
+  }, [deliveryMethod, totalShippingKg, shippingRatePerKg]);
+
+  const grandTotal = total + shippingFee;
 
   useEffect(() => {
     if (!orgSlug) {
@@ -194,8 +264,80 @@ export default function PublicCheckoutPage() {
     };
   }, [cart, cartProductKey]);
 
+  useEffect(() => {
+    if (!org?.id || cart.length === 0) {
+      setWeightByProductId({});
+      return;
+    }
+    const needIds = [
+      ...new Set(
+        cart
+          .filter(
+            (c) =>
+              c.weightKgPerUnit == null ||
+              !Number.isFinite(c.weightKgPerUnit),
+          )
+          .map((c) => c.productId),
+      ),
+    ];
+    if (needIds.length === 0) {
+      setWeightByProductId({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, metadata')
+          .eq('org_id', org.id)
+          .in('id', needIds);
+        if (cancelled || error || !data) return;
+        const map: Record<string, number> = {};
+        for (const row of data) {
+          map[row.id as string] = parseShippingWeightKgFromMeta(row.metadata);
+        }
+        if (!cancelled) setWeightByProductId(map);
+      } catch (e) {
+        console.error('Error loading product shipping weights:', e);
+        if (!cancelled) setWeightByProductId({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [org?.id, cartProductKey, cart]);
+
   const handleContactUpdate = (info: ContactInfo) => {
     setContactInfo(info);
+  };
+
+  const buildDeliveryPayload = (): CreateProductOrderDelivery | null => {
+    if (deliveryMethod === 'door') {
+      return {
+        delivery_method: 'door',
+        delivery_details: {
+          country: doorCountry.trim() || undefined,
+          building: doorBuilding.trim(),
+          street: doorStreet.trim(),
+          region: doorRegion.trim() || undefined,
+          district: doorDistrict.trim() || undefined,
+        },
+      };
+    }
+    if (deliveryMethod === 'sf_locker') {
+      return {
+        delivery_method: 'sf_locker',
+        delivery_details: {
+          sf_locker_address: sfLockerAddress.trim(),
+          sf_locker_code: sfLockerCode.trim(),
+        },
+      };
+    }
+    return {
+      delivery_method: 'event_pickup',
+      delivery_details: {},
+    };
   };
 
   const handleProceedToPayment = async () => {
@@ -217,6 +359,57 @@ export default function PublicCheckoutPage() {
       return;
     }
 
+    if (!contactInfo.phone?.trim()) {
+      toast({
+        title: 'Phone required',
+        description: 'Please enter your phone number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!contactInfo.email?.trim() || !isValidEmail(contactInfo.email)) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter a valid email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (deliveryMethod === 'door') {
+      if (!doorBuilding.trim() || !doorStreet.trim()) {
+        toast({
+          title: 'Address required',
+          description: 'Please enter building and street for door delivery',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else if (deliveryMethod === 'sf_locker') {
+      if (!sfLockerAddress.trim() || !sfLockerCode.trim()) {
+        toast({
+          title: 'Locker details required',
+          description: 'Please enter SF locker address and code',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    if (deliveryMethod !== 'event_pickup' && totalShippingKg <= 0) {
+      toast({
+        title: 'Shipping weight missing',
+        description:
+          'Each product needs a shipping weight (kg) in the seller catalog for this delivery option. Remove items or choose pick up.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const delivery = buildDeliveryPayload();
+    if (!delivery) return;
+
     setIsSubmitting(true);
     try {
       const items = cart.map((item) => ({
@@ -228,12 +421,18 @@ export default function PublicCheckoutPage() {
         variant_label: item.variantLabel || null,
       }));
 
-      const orderId = await createProductOrder(org.id, items, {
-        first_name: contactInfo.firstName.trim(),
-        last_name: contactInfo.lastName.trim(),
-        email: contactInfo.email?.trim() || null,
-        phone: contactInfo.phone?.trim() || null,
-      });
+      const orderId = await createProductOrder(
+        org.id,
+        items,
+        {
+          first_name: contactInfo.firstName.trim(),
+          last_name: contactInfo.lastName.trim(),
+          email: contactInfo.email.trim().toLowerCase(),
+          phone: contactInfo.phone.trim(),
+        },
+        undefined,
+        delivery,
+      );
 
       clearCart();
       navigate(`/${orgSlug}/checkout/payment/${orderId}`);
@@ -321,90 +520,88 @@ export default function PublicCheckoutPage() {
               const linePhoto =
                 String(item.imageUrl || '').trim() || photoByProductId[item.productId] || '';
               return (
-              <div key={`${item.productId}-${item.variantId || 'nv'}-${index}`} className="py-4 first:pt-0">
-                <div className="flex gap-3 md:gap-4">
-                  <div
-                    className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center border"
-                    style={{ borderColor: PANEL_BORDER }}
-                  >
-                    {linePhoto ? (
-                      <img src={linePhoto} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <ShoppingCart className="h-8 w-8 text-muted-foreground/35" aria-hidden />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <div className="font-medium" style={{ color: BRAND.dark }}>
-                          {item.name}
-                        </div>
-                        {item.variantLabel && (
-                          <div className="text-sm text-muted-foreground mt-0.5">{item.variantLabel}</div>
-                        )}
-                        <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
-                          {formatPrice(item.unitPrice)} each
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeItem(index)}
-                        disabled={isSubmitting}
-                        aria-label="Remove item"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                <div key={`${item.productId}-${item.variantId || 'nv'}-${index}`} className="py-4 first:pt-0">
+                  <div className="flex gap-3 md:gap-4">
+                    <div
+                      className="w-20 h-20 md:w-24 md:h-24 shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center border"
+                      style={{ borderColor: PANEL_BORDER }}
+                    >
+                      {linePhoto ? (
+                        <img src={linePhoto} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ShoppingCart className="h-8 w-8 text-muted-foreground/35" aria-hidden />
+                      )}
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
-                      <div
-                        className="flex items-center gap-1 rounded-xl border px-2 py-1"
-                        style={{ borderColor: PANEL_BORDER }}
-                      >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium" style={{ color: BRAND.dark }}>
+                            {item.name}
+                          </div>
+                          {item.variantLabel && (
+                            <div className="text-sm text-muted-foreground mt-0.5">{item.variantLabel}</div>
+                          )}
+                          <div className="text-sm font-semibold mt-1" style={{ color: BRAND.green }}>
+                            {formatPrice(item.unitPrice)} each
+                          </div>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7"
-                          onClick={() => updateItemQty(index, -1)}
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeItem(index)}
                           disabled={isSubmitting}
+                          aria-label="Remove item"
                         >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="text-sm text-muted-foreground px-1">
-                          Qty <span className="font-medium text-foreground">{item.qty}</span>
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => updateItemQty(index, 1)}
-                          disabled={isSubmitting}
-                        >
-                          <Plus className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
                       </div>
-                      <span
-                        className="text-sm font-semibold tabular-nums"
-                        style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
-                      >
-                        {formatPrice(item.unitPrice * item.qty)}
-                      </span>
+                      <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+                        <div
+                          className="flex items-center gap-1 rounded-xl border px-2 py-1"
+                          style={{ borderColor: PANEL_BORDER }}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateItemQty(index, -1)}
+                            disabled={isSubmitting}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="text-sm text-muted-foreground px-1">
+                            Qty <span className="font-medium text-foreground">{item.qty}</span>
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateItemQty(index, 1)}
+                            disabled={isSubmitting}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <span
+                          className="text-sm font-semibold tabular-nums"
+                          style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}
+                        >
+                          {formatPrice(item.unitPrice * item.qty)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
+              );
             })}
           </div>
           <div
-            className="flex justify-between text-lg font-semibold pt-4 mt-2 border-t"
+            className="flex justify-between text-base font-semibold pt-4 mt-2 border-t"
             style={{ borderColor: PANEL_BORDER }}
           >
-            <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>Total</span>
-            <span style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
-              {formatPrice(total)}
-            </span>
+            <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>Subtotal</span>
+            <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>{formatPrice(total)}</span>
           </div>
         </div>
 
@@ -414,11 +611,144 @@ export default function PublicCheckoutPage() {
           <div className="flex items-center gap-2 mb-3">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
             <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
+              Shipping address
+            </h3>
+          </div>
+          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
+            Select delivery method
+          </p>
+
+          <div
+            className="border rounded-2xl p-4 md:p-5 space-y-5 mb-6"
+            style={{ borderColor: PANEL_BORDER, backgroundColor: 'rgba(251,248,244,0.9)' }}
+          >
+            <RadioGroup
+              value={deliveryMethod}
+              onValueChange={(v) => setDeliveryMethod(v as ProductDeliveryMethod)}
+              className="space-y-3"
+            >
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
+                  deliveryMethod === 'door' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
+                )}
+              >
+                <RadioGroupItem value="door" id="dm-door" className="mt-0.5" />
+                <span className="flex-1" style={{ color: BRAND.dark }}>
+                  <span className="font-medium">1. Deliver to Door</span>
+                  <span className="text-muted-foreground"> ($25/kg)</span>
+                </span>
+              </label>
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
+                  deliveryMethod === 'sf_locker' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
+                )}
+              >
+                <RadioGroupItem value="sf_locker" id="dm-sf" className="mt-0.5" />
+                <span className="flex-1" style={{ color: BRAND.dark }}>
+                  <span className="font-medium">2. Deliver to SF Locker</span>
+                  <span className="text-muted-foreground"> ($16/kg)</span>
+                </span>
+              </label>
+              <label
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
+                  deliveryMethod === 'event_pickup' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
+                )}
+              >
+                <RadioGroupItem value="event_pickup" id="dm-event" className="mt-0.5" />
+                <span className="flex-1" style={{ color: BRAND.dark }}>
+                  <span className="font-medium">3. Pick up in Event</span>
+                  <span className="text-muted-foreground"> ($0)</span>
+                  <span className="block text-xs mt-1 text-muted-foreground">
+                    Please DM IG to arrange pick up
+                  </span>
+                </span>
+              </label>
+            </RadioGroup>
+
+            {deliveryMethod === 'door' && (
+              <div className="space-y-3 pt-2 border-t" style={{ borderColor: PANEL_BORDER }}>
+                <div>
+                  <Label>Country *</Label>
+                  <Select value={doorCountry} onValueChange={setDoorCountry}>
+                    <SelectTrigger className="mt-1 rounded-xl">
+                      <SelectValue placeholder="Country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Hong Kong (SAR)">Hong Kong (SAR)</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Building name, number, floor *</Label>
+                  <Input
+                    value={doorBuilding}
+                    onChange={(e) => setDoorBuilding(e.target.value)}
+                    placeholder="Building Name, number, floor"
+                    className="mt-1 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label>Street address *</Label>
+                  <Input
+                    value={doorStreet}
+                    onChange={(e) => setDoorStreet(e.target.value)}
+                    placeholder="Street address"
+                    className="mt-1 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label>Region</Label>
+                  <Input value={doorRegion} onChange={(e) => setDoorRegion(e.target.value)} className="mt-1 rounded-xl" />
+                </div>
+                <div>
+                  <Label>District</Label>
+                  <Input
+                    value={doorDistrict}
+                    onChange={(e) => setDoorDistrict(e.target.value)}
+                    className="mt-1 rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+
+            {deliveryMethod === 'sf_locker' && (
+              <div className="space-y-3 pt-2 border-t" style={{ borderColor: PANEL_BORDER }}>
+                <div>
+                  <Label>SF locker address *</Label>
+                  <Input
+                    value={sfLockerAddress}
+                    onChange={(e) => setSfLockerAddress(e.target.value)}
+                    placeholder="Full locker location"
+                    className="mt-1 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label>SF Locker address code *</Label>
+                  <Input
+                    value={sfLockerCode}
+                    onChange={(e) => setSfLockerCode(e.target.value)}
+                    placeholder="Code"
+                    className="mt-1 rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
+            <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
               Contact info
             </h3>
           </div>
           <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            We'll use this for order updates and delivery
+            We&apos;ll use this for order updates and delivery
           </p>
           <ContactInfoCard
             contactInfo={contactInfo}
@@ -426,9 +756,48 @@ export default function PublicCheckoutPage() {
             title="Contact info"
             description="Required for order confirmation"
             showPhone={true}
-            requiredFields={{ firstName: true, lastName: true, email: false, phone: false }}
+            requiredFields={{ firstName: true, lastName: true, email: true, phone: true }}
             alwaysExpanded
           />
+        </div>
+
+        <div
+          className="rounded-2xl border bg-background p-5 md:p-6 mb-6"
+          style={{ borderColor: PANEL_BORDER }}
+        >
+          <h3
+            className="text-base font-semibold mb-4"
+            style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
+          >
+            Order summary
+          </h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between tabular-nums">
+              <span style={{ color: 'rgba(15,31,23,0.72)' }}>Subtotal</span>
+              <span style={{ color: BRAND.dark }}>{formatPrice(total)}</span>
+            </div>
+            {deliveryMethod !== 'event_pickup' && (
+              <div className="flex justify-between gap-4 tabular-nums">
+                <span style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  Shipping ({totalShippingKg > 0 ? `${totalShippingKg} kg` : '—'} × HK${shippingRatePerKg}/kg)
+                </span>
+                <span style={{ color: BRAND.dark }}>{formatPrice(shippingFee)}</span>
+              </div>
+            )}
+            {deliveryMethod === 'event_pickup' && (
+              <div className="flex justify-between tabular-nums">
+                <span style={{ color: 'rgba(15,31,23,0.72)' }}>Shipping</span>
+                <span style={{ color: BRAND.dark }}>{formatPrice(0)}</span>
+              </div>
+            )}
+            <div
+              className="flex justify-between text-base font-semibold pt-3 border-t mt-2 tabular-nums"
+              style={{ borderColor: PANEL_BORDER }}
+            >
+              <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>Total</span>
+              <span style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>{formatPrice(grandTotal)}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -449,7 +818,7 @@ export default function PublicCheckoutPage() {
                 Processing...
               </>
             ) : (
-              `Proceed to payment – ${formatPrice(total)}`
+              `Proceed to payment – ${formatPrice(grandTotal)}`
             )}
           </Button>
         </div>

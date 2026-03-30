@@ -357,6 +357,59 @@ export default function ProductPaymentPage() {
               ))}
             </div>
           </div>
+          {(() => {
+            const meta = order.metadata as Record<string, unknown> | undefined;
+            const dm = meta?.delivery_method;
+            if (!dm || typeof dm !== 'string') return null;
+            const shippingFee = Number(meta?.shipping_fee ?? 0);
+            const kg = meta?.shipping_weight_kg;
+            const kgLabel = kg != null && kg !== '' ? String(kg) : null;
+            const rate = meta?.shipping_rate_per_kg;
+            const det = meta?.delivery_details as Record<string, unknown> | undefined;
+            const methodLabel =
+              dm === 'door'
+                ? 'Deliver to door'
+                : dm === 'sf_locker'
+                  ? 'SF Locker'
+                  : dm === 'event_pickup'
+                    ? 'Pick up at event'
+                    : dm;
+            return (
+              <div className="border-t pt-4 mt-4" style={{ borderColor: PANEL_BORDER }}>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Delivery</p>
+                <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                  {methodLabel}
+                  {kgLabel != null && dm !== 'event_pickup' ? ` · ${kgLabel} kg` : ''}
+                  {rate != null && Number(rate) > 0 ? ` @ HK$${Number(rate)}/kg` : ''}
+                </p>
+                {shippingFee > 0 && (
+                  <p className="text-sm mt-1 tabular-nums" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    Shipping: {formatPrice(shippingFee, currency)}
+                  </p>
+                )}
+                {dm === 'door' && det && (
+                  <p className="text-sm mt-2 whitespace-pre-line" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    {[det.country, det.building, det.street, det.region, det.district]
+                      .filter((x) => typeof x === 'string' && x.trim())
+                      .join(', ')}
+                  </p>
+                )}
+                {dm === 'sf_locker' && det && (
+                  <p className="text-sm mt-2 whitespace-pre-line" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    {typeof det.sf_locker_address === 'string' ? det.sf_locker_address : ''}
+                    {typeof det.sf_locker_code === 'string' && det.sf_locker_code
+                      ? ` (Code: ${det.sf_locker_code})`
+                      : ''}
+                  </p>
+                )}
+                {dm === 'event_pickup' && (
+                  <p className="text-sm mt-2" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    Please DM IG to arrange pick up.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="mb-6">

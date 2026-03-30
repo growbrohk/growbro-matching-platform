@@ -122,6 +122,39 @@ serve(async (req) => {
       };
     });
 
+    const orderMeta = order.metadata as Record<string, unknown> | undefined;
+    if (order.order_type === "product") {
+      const shippingFee = Number(orderMeta?.shipping_fee ?? 0);
+      if (shippingFee > 0) {
+        const method = String(orderMeta?.delivery_method ?? "");
+        const shippingLabel =
+          method === "door"
+            ? "Shipping — Deliver to door"
+            : method === "sf_locker"
+              ? "Shipping — SF Locker"
+              : "Shipping";
+        lineItems.push({
+          price_data: {
+            currency,
+            product_data: { name: shippingLabel },
+            unit_amount: Math.round(shippingFee * 100),
+          },
+          quantity: 1,
+        });
+      }
+    }
+
+    const lineTotalCents = lineItems.reduce((sum, li) => {
+      return sum + li.price_data.unit_amount * li.quantity;
+    }, 0);
+    const orderTotalCents = Math.round(totalAmount * 100);
+    if (lineTotalCents !== orderTotalCents) {
+      logStep("Line items total mismatch order.total_amount", {
+        lineTotalCents,
+        orderTotalCents,
+      });
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,

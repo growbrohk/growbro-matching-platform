@@ -20,6 +20,14 @@ function formatPrice(amount: number, currency = 'HKD'): string {
   return `${symbol} ${amount.toFixed(2)}`;
 }
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 /* ============================================================================
    EDGE FUNCTION
 ============================================================================ */
@@ -77,7 +85,8 @@ Deno.serve(async (req) => {
         fulfillment_status,
         confirmation_email_sent_at,
         currency,
-        total_amount
+        total_amount,
+        metadata
       `)
       .eq('id', order_id)
       .single();
@@ -159,6 +168,50 @@ Deno.serve(async (req) => {
       ? `https://growbrohk.com/${orgSlug}/checkout/success/${order_id}`
       : `https://growbrohk.com/`;
 
+    const orderMeta = order.metadata as Record<string, unknown> | null | undefined;
+    const dm = orderMeta?.delivery_method;
+    let deliveryBlock = '';
+    if (typeof dm === 'string' && dm) {
+      const methodLabel =
+        dm === 'door'
+          ? 'Deliver to door'
+          : dm === 'sf_locker'
+            ? 'SF Locker'
+            : dm === 'event_pickup'
+              ? 'Pick up at event'
+              : dm;
+      const fee = orderMeta?.shipping_fee != null ? Number(orderMeta.shipping_fee) : 0;
+      const kg = orderMeta?.shipping_weight_kg != null ? String(orderMeta.shipping_weight_kg) : '';
+      const rate = orderMeta?.shipping_rate_per_kg != null ? String(orderMeta.shipping_rate_per_kg) : '';
+      const det = orderMeta?.delivery_details as Record<string, unknown> | undefined;
+      const lines: string[] = [`<p><strong>Method:</strong> ${escapeHtml(methodLabel)}</p>`];
+      if (kg && dm !== 'event_pickup') {
+        lines.push(`<p><strong>Total weight:</strong> ${escapeHtml(kg)} kg</p>`);
+      }
+      if (rate && Number(rate) > 0) {
+        lines.push(`<p><strong>Rate:</strong> HK$${escapeHtml(rate)}/kg</p>`);
+      }
+      if (fee > 0) {
+        lines.push(`<p><strong>Shipping fee:</strong> ${formatPrice(fee, currency)}</p>`);
+      }
+      if (dm === 'door' && det && typeof det === 'object') {
+        const parts = [det.country, det.building, det.street, det.region, det.district]
+          .filter((x): x is string => typeof x === 'string' && x.trim() !== '')
+          .map((x) => escapeHtml(x.trim()));
+        if (parts.length) lines.push(`<p><strong>Address:</strong> ${parts.join(', ')}</p>`);
+      }
+      if (dm === 'sf_locker' && det && typeof det === 'object') {
+        const addr = typeof det.sf_locker_address === 'string' ? det.sf_locker_address.trim() : '';
+        const code = typeof det.sf_locker_code === 'string' ? det.sf_locker_code.trim() : '';
+        if (addr) lines.push(`<p><strong>Locker address:</strong> ${escapeHtml(addr)}</p>`);
+        if (code) lines.push(`<p><strong>Locker code:</strong> ${escapeHtml(code)}</p>`);
+      }
+      if (dm === 'event_pickup') {
+        lines.push('<p>Please DM IG to arrange pick up.</p>');
+      }
+      deliveryBlock = `<h3>Delivery</h3>${lines.join('')}`;
+    }
+
     /* ------------------------------------------------------------------------
        EMAIL HTML
     ------------------------------------------------------------------------ */
@@ -173,6 +226,7 @@ Deno.serve(async (req) => {
 
   <h3>Order Details</h3>
   ${itemsHtml}
+  ${deliveryBlock}
   <p><strong>Total:</strong> ${formatPrice(amount, currency)}</p>
   <p><strong>Order No:</strong> ${orderNo}</p>
 

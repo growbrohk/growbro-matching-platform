@@ -273,6 +273,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [galleryUrlInput, setGalleryUrlInput] = useState('');
   const [metadataProductDetails, setMetadataProductDetails] = useState('');
   const [metadataSizeFit, setMetadataSizeFit] = useState('');
+  const [metadataShippingWeightKg, setMetadataShippingWeightKg] = useState('');
   const [draftId] = useState<string>(() => {
     // Generate draftId on first render for create mode
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -482,6 +483,14 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
           typeof rawMeta.product_details === 'string' ? rawMeta.product_details : '',
         );
         setMetadataSizeFit(typeof rawMeta.size_and_fit === 'string' ? rawMeta.size_and_fit : '');
+        const sw = rawMeta.shipping_weight_kg;
+        setMetadataShippingWeightKg(
+          typeof sw === 'number' && Number.isFinite(sw)
+            ? String(sw)
+            : typeof sw === 'string'
+              ? sw
+              : '',
+        );
 
         const { data: variantsData, error: variantsError } = await (supabase as any)
           .from('product_variants')
@@ -947,6 +956,24 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         productDetails: metadataProductDetails,
         sizeAndFit: metadataSizeFit,
       });
+      delete productMetadata.shipping_weight_kg;
+      const effectiveType = embedded ? (props?.productType ?? 'physical') : productType;
+      if (effectiveType === 'physical') {
+        const swTrim = metadataShippingWeightKg.trim();
+        if (swTrim !== '') {
+          const n = Number(swTrim);
+          if (!Number.isFinite(n) || n < 0) {
+            toast({
+              title: 'Validation',
+              description: 'Shipping weight must be a non-negative number',
+              variant: 'destructive',
+            });
+            setSaving(false);
+            return;
+          }
+          productMetadata.shipping_weight_kg = n;
+        }
+      }
 
       let productId = id;
       if (!isEditMode) {
@@ -1705,6 +1732,25 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                     className="min-h-20"
                   />
                 </div>
+
+                {(embedded ? props?.productType : productType) === 'physical' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="metadataShippingWeightKg">Shipping weight (kg per unit)</Label>
+                    <Input
+                      id="metadataShippingWeightKg"
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={metadataShippingWeightKg}
+                      onChange={(e) => setMetadataShippingWeightKg(e.target.value)}
+                      placeholder="e.g. 0.5"
+                      className="h-10"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Used to calculate delivery fees at checkout (door / SF Locker).
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
               <Label htmlFor="basePrice">Base Price (decimal)</Label>

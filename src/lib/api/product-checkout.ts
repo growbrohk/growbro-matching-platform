@@ -21,6 +21,23 @@ export interface CreateProductOrderContact {
   phone?: string | null;
 }
 
+export type ProductDeliveryMethod = 'door' | 'sf_locker' | 'event_pickup';
+
+export interface CreateProductOrderDeliveryDetails {
+  country?: string;
+  building?: string;
+  street?: string;
+  region?: string;
+  district?: string;
+  sf_locker_address?: string;
+  sf_locker_code?: string;
+}
+
+export interface CreateProductOrderDelivery {
+  delivery_method: ProductDeliveryMethod;
+  delivery_details: CreateProductOrderDeliveryDetails;
+}
+
 export interface OrderWithOrgAndProducts {
   order: {
     id: string;
@@ -42,6 +59,7 @@ export interface OrderWithOrgAndProducts {
     submitted_at: string | null;
     paid_at: string | null;
     created_at: string;
+    metadata?: Record<string, unknown>;
   };
   org: {
     id: string;
@@ -68,7 +86,8 @@ export async function createProductOrder(
   orgId: string,
   items: CreateProductOrderItem[],
   contact: CreateProductOrderContact,
-  buyerUserId?: string | null
+  buyerUserId?: string | null,
+  delivery?: CreateProductOrderDelivery
 ): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   const uid = buyerUserId ?? user?.id ?? null;
@@ -89,11 +108,19 @@ export async function createProductOrder(
     phone: contact.phone || null,
   };
 
+  const pDelivery = delivery
+    ? {
+        delivery_method: delivery.delivery_method,
+        delivery_details: delivery.delivery_details,
+      }
+    : {};
+
   const { data, error } = await supabase.rpc('create_product_order', {
     p_org_id: orgId,
     p_items: pItems,
     p_contact: pContact,
     p_buyer_user_id: uid,
+    p_delivery: pDelivery,
   });
 
   if (error) throw error;

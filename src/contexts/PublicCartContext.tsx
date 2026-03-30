@@ -14,6 +14,8 @@ export interface PublicCartItem {
   imageUrl?: string | null;
   qty: number;
   unitPrice: number;
+  /** Per-unit weight for shipping (from product metadata); optional for older persisted carts */
+  weightKgPerUnit?: number;
 }
 
 const STORAGE_KEY_PREFIX = 'growbro_public_cart_';
@@ -88,6 +90,7 @@ export function PublicCartProvider({ children }: { children: ReactNode }) {
             ...cur,
             qty: cur.qty + qty,
             imageUrl: item.imageUrl ?? cur.imageUrl,
+            weightKgPerUnit: item.weightKgPerUnit ?? cur.weightKgPerUnit,
           };
           return next;
         }

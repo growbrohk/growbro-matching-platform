@@ -126,6 +126,17 @@ export default function PublicProductForm({
     const variantPhoto = collectVariantPhotoUrl(variant);
     const lineImageUrl =
       mainSrc ?? variantPhoto ?? photos[0] ?? productRow.image_url?.trim() ?? null;
+    const pm = product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
+      ? (product.metadata as Record<string, unknown>)
+      : {};
+    const rawW = pm.shipping_weight_kg;
+    let weightKgPerUnit: number | undefined;
+    if (typeof rawW === 'number' && Number.isFinite(rawW) && rawW >= 0) {
+      weightKgPerUnit = rawW;
+    } else if (typeof rawW === 'string' && rawW.trim() !== '') {
+      const n = Number(rawW.trim());
+      if (Number.isFinite(n) && n >= 0) weightKgPerUnit = n;
+    }
     addItem({
       productId: product.id,
       variantId: variant.id,
@@ -134,6 +145,7 @@ export default function PublicProductForm({
       imageUrl: lineImageUrl,
       unitPrice: variant.price ?? product.base_price ?? 0,
       qty: quantityNum,
+      weightKgPerUnit,
     });
     toast({
       title: 'Added to cart',
