@@ -32,10 +32,10 @@ import {
 const isCheckedIn = (status: string) => status === 'scanned';
 
 type SortKey = 'status' | 'name' | 'ticketType';
-type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'remark' | 'addons';
+type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'access' | 'remark' | 'addons';
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
-const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'addons'];
+const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'];
+const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'access', 'addons'];
 
 const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   status: 90,
@@ -43,6 +43,7 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   phone: 120,
   email: 180,
   ticketType: 120,
+  access: 150,
   remark: 160,
   addons: 140,
 };
@@ -250,9 +251,11 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         const matchesTicketType = ticket.ticketType?.toLowerCase().includes(searchLower) || false;
         const matchesRemark = ticket.remark?.toLowerCase().includes(searchLower) || false;
         const matchesAddons = ticket.addons?.toLowerCase().includes(searchLower) || false;
+        const matchesAccess = ticket.accessLabel?.toLowerCase().includes(searchLower) || false;
+        const matchesAccessTooltip = ticket.accessTooltip?.toLowerCase().includes(searchLower) || false;
         const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
         const matchesStatus = statusLabel.includes(searchLower);
-        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesStatus;
+        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesAccess || matchesAccessTooltip || matchesStatus;
       });
     }
 
@@ -405,13 +408,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) return;
 
-    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'];
+    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'];
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
       name: 'Name',
       phone: 'Phone',
       email: 'Email',
       ticketType: 'Ticket Type',
+      access: 'Access',
       remark: 'Remark',
       addons: 'Add-ons',
     };
@@ -436,7 +440,10 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         if (col === 'addons') {
           return escapeCSV(ticket.addons || '');
         }
-        return escapeCSV(ticket[col] || '');
+        if (col === 'access') {
+          return escapeCSV(ticket.accessLabel || '');
+        }
+        return escapeCSV(ticket[col as keyof EventTicketRow] as string || '');
       });
     });
 
@@ -577,6 +584,33 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       size: DEFAULT_COLUMN_SIZES.ticketType,
       minSize: 80,
       maxSize: 300,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('accessLabel', {
+      id: 'access',
+      header: 'Access',
+      cell: ({ row }) => {
+        const t = row.original;
+        const title = t.accessTooltip ?? (t.accessLabel && t.accessLabel.length > 40 ? t.accessLabel : undefined);
+        return (
+          <span className="max-w-full truncate block" title={title}>
+            {t.accessLabel || '-'}
+          </span>
+        );
+      },
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const a = (rowA.original.accessLabel || '').toLowerCase();
+        const b = (rowB.original.accessLabel || '').toLowerCase();
+        const cmp = a.localeCompare(b);
+        if (cmp !== 0) return cmp;
+        const aName = (rowA.original.name || '').toLowerCase();
+        const bName = (rowB.original.name || '').toLowerCase();
+        return aName.localeCompare(bName);
+      },
+      size: DEFAULT_COLUMN_SIZES.access,
+      minSize: 80,
+      maxSize: 320,
       enableResizing: true,
     }),
     columnHelper.accessor('remark', {
@@ -813,13 +847,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2">
-                    {(['status', 'name', 'phone', 'email', 'ticketType', 'remark', 'addons'] as ColumnKey[]).map((column) => {
+                    {(['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'] as ColumnKey[]).map((column) => {
                       const columnLabels: Record<ColumnKey, string> = {
                         status: 'Status',
                         name: 'Name',
                         phone: 'Phone',
                         email: 'Email',
                         ticketType: 'Ticket Type',
+                        access: 'Access',
                         remark: 'Remark',
                         addons: 'Add-ons',
                       };
