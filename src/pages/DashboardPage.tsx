@@ -19,9 +19,9 @@ import { usePipelineRows } from '@/hooks/usePipelineRows';
 function formatHKD(amount: number): string {
   const rounded = Math.round(amount * 100) / 100;
   if (rounded % 1 === 0) {
-    return `HK$${rounded.toLocaleString()}`;
+    return `$${rounded.toLocaleString()}`;
   }
-  return `HK$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /**
@@ -201,10 +201,18 @@ export default function DashboardPage() {
       {/* Top Summary: Two Cards in One Row */}
       <div className="grid grid-cols-2 gap-3">
         {/* Revenue Card */}
-        <Card className="rounded-xl">
-          <CardContent className="p-6">
-            <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {formatMoney(revenueTotal)}
+        <Card className="rounded-xl @container min-w-0">
+          <CardContent className="min-w-0 p-6">
+            <div
+              className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
+              title={formatMoney(revenueTotal)}
+            >
+              <div
+                className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
+                style={{ color: '#0F1F17' }}
+              >
+                {formatMoney(revenueTotal)}
+              </div>
             </div>
             <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
               total revenue
@@ -215,13 +223,21 @@ export default function DashboardPage() {
         {/* Orders Card */}
         <Link
           to={`/app/orders?range=${selectedRange}&tab=all`}
-          className="block cursor-pointer rounded-xl no-underline text-inherit outline-none transition-opacity hover:opacity-90 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#0E7A3A] focus-visible:ring-offset-2"
+          className="block min-w-0 cursor-pointer rounded-xl no-underline text-inherit outline-none transition-opacity hover:opacity-90 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#0E7A3A] focus-visible:ring-offset-2"
           aria-label={`View orders, ${ordersCountSubmittedPaid} in selected period`}
         >
-          <Card className="rounded-xl h-full">
-            <CardContent className="p-6">
-              <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-                {ordersCountSubmittedPaid}
+          <Card className="h-full rounded-xl @container min-w-0">
+            <CardContent className="min-w-0 p-6">
+              <div
+                className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
+                title={String(ordersCountSubmittedPaid)}
+              >
+                <div
+                  className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
+                  style={{ color: '#0F1F17' }}
+                >
+                  {ordersCountSubmittedPaid}
+                </div>
               </div>
               <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
                 orders
