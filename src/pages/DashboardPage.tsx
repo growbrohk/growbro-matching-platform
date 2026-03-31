@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
 import { Card, CardContent } from '@/components/ui/card';
 import { OrderListRowCompact } from '@/components/OrderListRowCompact';
@@ -128,10 +128,6 @@ export default function DashboardPage() {
     { key: '90d', label: 'last 90 days' },
   ];
 
-  const handleOrdersClick = () => {
-    navigate(`/app/orders?range=${selectedRange}&tab=all`);
-  };
-
   const handleViewAllPending = () => {
     navigate(`/app/orders?range=${selectedRange}&tab=pending`);
   };
@@ -217,16 +213,22 @@ export default function DashboardPage() {
         </Card>
 
         {/* Orders Card */}
-        <Card className="rounded-xl">
-          <CardContent className="p-6">
-            <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {ordersCountSubmittedPaid}
-            </div>
-            <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-              orders
-            </div>
-          </CardContent>
-        </Card>
+        <Link
+          to={`/app/orders?range=${selectedRange}&tab=all`}
+          className="block cursor-pointer rounded-xl no-underline text-inherit outline-none transition-opacity hover:opacity-90 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#0E7A3A] focus-visible:ring-offset-2"
+          aria-label={`View orders, ${ordersCountSubmittedPaid} in selected period`}
+        >
+          <Card className="rounded-xl h-full">
+            <CardContent className="p-6">
+              <div className="text-4xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+                {ordersCountSubmittedPaid}
+              </div>
+              <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                orders
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Pipeline Section */}
