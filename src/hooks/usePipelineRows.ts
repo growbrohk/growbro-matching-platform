@@ -9,7 +9,7 @@ export interface PipelineRow {
   tracking_link_id: string;
   label: string;
   slug: string;
-  type: 'tracking' | 'affiliate';
+  type: 'tracking' | 'affiliate' | 'collab';
   clicks: number;
   orders: number;
   revenue: number;
@@ -63,7 +63,7 @@ export function usePipelineRows({ mode, orgId, rangeKey }: UsePipelineRowsOption
           host_org_id
         `)
         .eq('status', 'active')
-        .in('type', ['tracking', 'affiliate']);
+        .in('type', ['tracking', 'affiliate', 'collab']);
 
       // Apply filter based on mode
       if (mode === 'host') {

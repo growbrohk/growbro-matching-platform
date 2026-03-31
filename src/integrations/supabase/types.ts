@@ -1552,14 +1552,19 @@ export type Database = {
       tracking_links: {
         Row: {
           affiliate_org_id: string | null
+          collab_can_view_order_details: boolean | null
+          collab_partner_role: string | null
+          collab_sales_scope: string | null
           commission_rate: number | null
           created_at: string
           destination_type: string
           destination_url: string
           end_date: string | null
+          event_id: string | null
           host_org_id: string
           id: string
           label: string | null
+          product_id: string | null
           slug: string
           start_date: string | null
           status: string
@@ -1567,14 +1572,19 @@ export type Database = {
         }
         Insert: {
           affiliate_org_id?: string | null
+          collab_can_view_order_details?: boolean | null
+          collab_partner_role?: string | null
+          collab_sales_scope?: string | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
           destination_url: string
           end_date?: string | null
+          event_id?: string | null
           host_org_id: string
           id?: string
           label?: string | null
+          product_id?: string | null
           slug: string
           start_date?: string | null
           status?: string
@@ -1582,14 +1592,19 @@ export type Database = {
         }
         Update: {
           affiliate_org_id?: string | null
+          collab_can_view_order_details?: boolean | null
+          collab_partner_role?: string | null
+          collab_sales_scope?: string | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
           destination_url?: string
           end_date?: string | null
+          event_id?: string | null
           host_org_id?: string
           id?: string
           label?: string | null
+          product_id?: string | null
           slug?: string
           start_date?: string | null
           status?: string
@@ -1890,6 +1905,14 @@ export type Database = {
           other_org_name: string
           unread_count: number
         }[]
+      }
+      collab_can_access_order: {
+        Args: {
+          p_min_role: string
+          p_order_id: string
+          p_require_details: boolean
+        }
+        Returns: boolean
       }
       get_or_create_conversation: {
         Args: { p_org_a: string; p_org_b: string }

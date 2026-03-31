@@ -33,7 +33,7 @@ interface CreateTrackingLinkModalProps {
 }
 
 type DestinationType = 'event' | 'product' | 'custom';
-type PipelineType = 'tracking' | 'affiliate' | 'consignment';
+type PipelineType = 'tracking' | 'affiliate' | 'collab' | 'consignment';
 
 export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLinkModalProps) {
   const { currentOrg } = useAuth();
@@ -53,6 +53,9 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [collabSalesScope, setCollabSalesScope] = useState<'attributed' | 'all_for_resource'>('attributed');
+  const [collabPartnerRole, setCollabPartnerRole] = useState<'viewer' | 'editor'>('viewer');
+  const [collabCanViewDetails, setCollabCanViewDetails] = useState(false);
 
   // Fetch events for current org
   const { data: events = [], isLoading: isEventsLoading } = useQuery({
@@ -115,12 +118,16 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
   const handlePipelineTypeChange = (type: PipelineType) => {
     setPipelineType(type);
-    // Reset affiliate-specific fields when changing type
-    if (type !== 'affiliate') {
+    if (type !== 'affiliate' && type !== 'collab') {
       setAffiliateOrgId(undefined);
       setCommissionRate('');
       setStartDate('');
       setEndDate('');
+    }
+    if (type !== 'collab') {
+      setCollabSalesScope('attributed');
+      setCollabPartnerRole('viewer');
+      setCollabCanViewDetails(false);
     }
   };
 
@@ -196,11 +203,11 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     }
 
     // Validate affiliate-specific fields
-    if (pipelineType === 'affiliate') {
+    if (pipelineType === 'affiliate' || pipelineType === 'collab') {
       if (!affiliateOrgId) {
         toast({
           title: 'Error',
-          description: 'Please select an affiliate partner',
+          description: 'Please select a partner organization',
           variant: 'destructive',
         });
         return;
@@ -216,7 +223,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       if (!startDate || !endDate) {
         toast({
           title: 'Error',
-          description: 'Please select both start and end dates for the affiliate period',
+          description: 'Please select both start and end dates for the partner period',
           variant: 'destructive',
         });
         return;
@@ -225,6 +232,17 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         toast({
           title: 'Error',
           description: 'End date must be after start date',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    if (pipelineType === 'collab') {
+      if (collabSalesScope === 'all_for_resource' && destinationType === 'custom') {
+        toast({
+          title: 'Error',
+          description: 'All sales for this product/event requires an Event or Product destination.',
           variant: 'destructive',
         });
         return;
@@ -286,11 +304,17 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       // For 'custom', both event_id and product_id remain null
 
       // Add affiliate-specific fields
-      if (pipelineType === 'affiliate') {
+      if (pipelineType === 'affiliate' || pipelineType === 'collab') {
         insertData.affiliate_org_id = affiliateOrgId;
         insertData.commission_rate = parseFloat(commissionRate) / 100; // Convert percent to decimal
         insertData.start_date = startDate;
         insertData.end_date = endDate;
+      }
+
+      if (pipelineType === 'collab') {
+        insertData.collab_sales_scope = collabSalesScope;
+        insertData.collab_partner_role = collabPartnerRole;
+        insertData.collab_can_view_order_details = collabCanViewDetails;
       }
 
       const { data, error } = await (supabase.from('tracking_links' as any) as any)
@@ -301,7 +325,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       if (error) throw error;
 
       // If affiliate link, create affiliate request
-      if (pipelineType === 'affiliate') {
+      if (pipelineType === 'affiliate' || pipelineType === 'collab') {
         const { error: requestError } = await (supabase.from('affiliate_requests' as any) as any)
           .insert({
             tracking_link_id: data.id,
@@ -321,10 +345,11 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       setCreatedLink(trackingLinkUrl);
 
       toast({
-        title: pipelineType === 'affiliate' ? 'Request Sent' : 'Success',
-        description: pipelineType === 'affiliate' 
-          ? 'Affiliate request sent! The partner will be notified.' 
-          : 'Tracking link created successfully!',
+        title: pipelineType === 'affiliate' || pipelineType === 'collab' ? 'Request Sent' : 'Success',
+        description:
+          pipelineType === 'affiliate' || pipelineType === 'collab'
+            ? 'Partner request sent! The partner will be notified.'
+            : 'Tracking link created successfully!',
       });
 
       // Reset form after a delay
@@ -354,6 +379,9 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setCommissionRate('');
     setStartDate('');
     setEndDate('');
+    setCollabSalesScope('attributed');
+    setCollabPartnerRole('viewer');
+    setCollabCanViewDetails(false);
     setSlug('');
     setCreatedLink(null);
     setCopied(false);
@@ -428,6 +456,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 <SelectContent>
                   <SelectItem value="tracking">Tracking link</SelectItem>
                   <SelectItem value="affiliate">Affiliate link</SelectItem>
+                  <SelectItem value="collab">Collab Product/Event</SelectItem>
                   <SelectItem value="consignment" disabled>Consignment (Coming soon)</SelectItem>
                 </SelectContent>
               </Select>
@@ -443,7 +472,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 placeholder="e.g., Instagram Post"
                 required
               />
-              {slug && (pipelineType === 'tracking' || pipelineType === 'affiliate') && (
+              {slug && (pipelineType === 'tracking' || pipelineType === 'affiliate' || pipelineType === 'collab') && (
                 <div className="space-y-1 pt-1">
                   <p className="text-xs text-muted-foreground">
                     Slug: <code className="font-mono">{slug}</code>
@@ -564,9 +593,9 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
             )}
 
             {/* Affiliate-specific fields */}
-            {pipelineType === 'affiliate' && (
+            {(pipelineType === 'affiliate' || pipelineType === 'collab') && (
               <>
-                {/* Affiliate Partner */}
+                {/* Partner org */}
                 <div className="space-y-2">
                   <Label htmlFor="affiliate">Affiliate Partner</Label>
                   <OrgSearchCombobox
@@ -588,7 +617,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        required={pipelineType === 'affiliate'}
+                        required={pipelineType === 'affiliate' || pipelineType === 'collab'}
                         className="w-full min-w-0 text-sm"
                       />
                     </div>
@@ -599,7 +628,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        required={pipelineType === 'affiliate'}
+                        required={pipelineType === 'affiliate' || pipelineType === 'collab'}
                         className="w-full min-w-0 text-sm"
                       />
                     </div>
@@ -618,10 +647,50 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                     value={commissionRate}
                     onChange={(e) => setCommissionRate(e.target.value)}
                     placeholder="e.g., 15"
-                    required={pipelineType === 'affiliate'}
+                    required={pipelineType === 'affiliate' || pipelineType === 'collab'}
                   />
                 </div>
               </>
+            )}
+
+            {pipelineType === 'collab' && (
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Partner visibility</p>
+                <div className="space-y-2">
+                  <Label htmlFor="collab-scope">Sales visibility</Label>
+                  <Select value={collabSalesScope} onValueChange={(v) => setCollabSalesScope(v as 'attributed' | 'all_for_resource')}>
+                    <SelectTrigger id="collab-scope">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="attributed">Orders through this link only</SelectItem>
+                      <SelectItem value="all_for_resource">All sales for this product or event</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="collab-role">Partner role</Label>
+                  <Select value={collabPartnerRole} onValueChange={(v) => setCollabPartnerRole(v as 'viewer' | 'editor')}>
+                    <SelectTrigger id="collab-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
+                      <SelectItem value="editor">Editor (can confirm orders)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="collab-details" className="text-sm font-normal">Allow order detail page</Label>
+                  <input
+                    id="collab-details"
+                    type="checkbox"
+                    className="h-4 w-4 accent-gray-800"
+                    checked={collabCanViewDetails}
+                    onChange={(e) => setCollabCanViewDetails(e.target.checked)}
+                  />
+                </div>
+              </div>
             )}
 
             {/* Submit */}
@@ -636,7 +705,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                   !label.trim() ||
                   !slug || 
                   !destinationUrl || 
-                  (pipelineType === 'affiliate' && (!affiliateOrgId || !commissionRate || !startDate || !endDate)) ||
+                  ( (pipelineType === 'affiliate' || pipelineType === 'collab') && (!affiliateOrgId || !commissionRate || !startDate || !endDate)) ||
                   pipelineType === 'consignment'
                 } 
                 className="flex-1"
@@ -644,10 +713,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {pipelineType === 'affiliate' ? 'Sending...' : 'Creating...'}
+                    {pipelineType === 'affiliate' || pipelineType === 'collab' ? 'Sending...' : 'Creating...'}
                   </>
                 ) : (
-                  pipelineType === 'affiliate' ? 'Send affiliate request' : 'Create Link'
+                  pipelineType === 'affiliate' || pipelineType === 'collab' ? 'Send collab / partner request' : 'Create Link'
                 )}
               </Button>
             </div>

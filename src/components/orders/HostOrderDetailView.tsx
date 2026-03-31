@@ -17,6 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import type { OrderWithEvent, TicketTypeAccessVariantSnapshot } from '@/lib/api/bookings';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
+import { collabPartnerCanViewOrderDetails } from '@/lib/collab-order-access';
 
 const TEXT = '#0F1F17';
 const MUTED = 'rgba(15,31,23,0.6)';
@@ -387,15 +388,29 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
     enabled: !!orderId && !!currentOrg,
   });
 
+  const hostAllowed = useMemo(() => {
+    if (!data || !currentOrg) return false;
+    if (data.kind === 'product') return data.order.order.host_org_id === currentOrg.id;
+    return data.order.event.org_id === currentOrg.id;
+  }, [data, currentOrg]);
+
+  const { data: collabDetailsAllowed, isLoading: collabAccessLoading } = useQuery({
+    queryKey: ['collab-order-detail-access', orderId, currentOrg?.id],
+    queryFn: () => collabPartnerCanViewOrderDetails(orderId),
+    enabled: Boolean(orderId && currentOrg && data && !hostAllowed),
+  });
+
   const payload = useMemo(() => {
     if (!data || !currentOrg) return null;
     if (data.kind === 'product') {
-      if (data.order.order.host_org_id !== currentOrg.id) return null;
-      return data;
+      if (data.order.order.host_org_id === currentOrg.id) return data;
+      if (collabDetailsAllowed) return data;
+      return null;
     }
-    if (data.order.event.org_id !== currentOrg.id) return null;
-    return data;
-  }, [data, currentOrg]);
+    if (data.order.event.org_id === currentOrg.id) return data;
+    if (collabDetailsAllowed) return data;
+    return null;
+  }, [data, currentOrg, collabDetailsAllowed]);
 
   const proofRef = useMemo(() => {
     if (!payload) return null;
@@ -447,7 +462,9 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
     );
   }
 
-  if (isLoading) {
+  const waitingForCollabAccess = Boolean(data && !hostAllowed && collabAccessLoading);
+
+  if (isLoading || waitingForCollabAccess) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />

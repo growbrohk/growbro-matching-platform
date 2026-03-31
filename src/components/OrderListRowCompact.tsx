@@ -12,6 +12,8 @@ export interface OrderListRowCompactProps {
   onConfirm?: () => void;
   showConfirm: boolean;
   orderId: string;
+  /** When false, hide the details link (e.g. collab partner without detail access). Default true. */
+  showDetailsButton?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function OrderListRowCompact({
   onConfirm,
   showConfirm,
   orderId,
+  showDetailsButton = true,
 }: OrderListRowCompactProps) {
   const [imageError, setImageError] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -114,6 +117,7 @@ export function OrderListRowCompact({
 
       {/* RIGHT BLOCK: Details + Confirm */}
       <div className="flex items-center justify-end gap-4 flex-shrink-0 pl-4 whitespace-nowrap">
+        {showDetailsButton ? (
         <button
           onClick={onDetails}
           className="text-sm hover:underline lowercase"
@@ -121,6 +125,9 @@ export function OrderListRowCompact({
         >
           details
         </button>
+        ) : (
+          <span className="text-xs" style={{ color: 'rgba(15,31,23,0.45)' }}>details</span>
+        )}
         {showConfirm && (
           <button
             onClick={handleConfirm}

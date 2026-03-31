@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import type { PartnerOrderRowAccess } from '@/lib/collab-order-access';
+import { fetchPartnerVisibleOrdersInRange } from '@/lib/collab-order-access';
 
 export type RangeKey = 'today' | '7d' | '30d' | '90d';
 
@@ -17,6 +19,8 @@ export interface Order {
   metadata: Record<string, any> | null;
   displayName: string;
   previewImageUrl: string | null;
+  /** When set, current org sees this row as affiliate/collab partner (not host). */
+  partnerRowAccess?: PartnerOrderRowAccess;
 }
 
 export interface OrdersDashboardData {
@@ -176,6 +180,27 @@ export function useOrdersDashboard(
       });
       allOrdersData.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      let partnerAccessByOrderId: Map<string, PartnerOrderRowAccess> | null = null;
+      try {
+        const { orderRows: partnerRows, accessMap } = await fetchPartnerVisibleOrdersInRange(
+          currentOrg.id,
+          startISO,
+          endISO
+        );
+        partnerAccessByOrderId = accessMap;
+        const seenIds = new Set<string>(allOrdersData.map((o: any) => o.id as string));
+        for (const pr of partnerRows) {
+          const pid = pr.id as string;
+          if (pid && !seenIds.has(pid)) {
+            seenIds.add(pid);
+            allOrdersData.push(pr as any);
+          }
+        }
+        allOrdersData.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } catch (err) {
+        console.error('Partner pipeline orders merge failed:', err);
+      }
+
       const rawOrders = allOrdersData.map((order: any) => ({
           id: order.id,
           created_at: order.created_at,
@@ -324,10 +349,12 @@ export function useOrdersDashboard(
           displayName = `Order ${order.order_no || order.id.slice(0, 6)}`;
         }
 
+        const partnerRowAccess = partnerAccessByOrderId?.get(order.id);
         return {
           ...order,
           displayName,
           previewImageUrl,
+          ...(partnerRowAccess ? { partnerRowAccess } : {}),
         };
       });
 

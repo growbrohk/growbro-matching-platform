@@ -76,7 +76,7 @@ export default function DashboardPage() {
       const { count, error } = await (supabase.from('tracking_links' as any) as any)
         .select('*', { count: 'exact', head: true })
         .eq('host_org_id', currentOrg.id)
-        .in('type', ['tracking', 'affiliate'])
+        .in('type', ['tracking', 'affiliate', 'collab'])
         .eq('status', 'active');
       if (error) {
         console.error('Error fetching channels count:', error);

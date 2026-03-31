@@ -264,7 +264,7 @@ export default function PipelineRevenuePage() {
                         {pipeline.orders.toLocaleString()}
                       </TableCell>
                       <TableCell style={{ color: '#0F1F17' }}>
-                        {pipeline.type === 'affiliate' && pipeline.commission_rate !== null
+                        {(pipeline.type === 'affiliate' || pipeline.type === 'collab') && pipeline.commission_rate !== null
                           ? `${(pipeline.commission_rate * 100).toFixed(1)}%`
                           : '—'}
                       </TableCell>

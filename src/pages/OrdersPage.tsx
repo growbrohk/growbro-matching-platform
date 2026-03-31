@@ -132,9 +132,15 @@ export default function OrdersPage() {
               ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
               : '';
             // Show confirm only for pending orders: payment_status='submitted' OR fulfillment_status='pending_confirmation'
-            const showConfirm =
+            const hostShowConfirm =
               order.payment_status === 'submitted' ||
               order.fulfillment_status === 'pending_confirmation';
+            const showConfirm =
+              !!order.partnerRowAccess?.isPartnerRow
+                ? hostShowConfirm && order.partnerRowAccess.canConfirmOrder
+                : hostShowConfirm;
+            const showDetailsButton =
+              !order.partnerRowAccess?.isPartnerRow || order.partnerRowAccess.canViewOrderDetails;
 
             return (
               <OrderListRowCompact
@@ -145,10 +151,10 @@ export default function OrdersPage() {
                 priceLabel={formatMoney(order.total_amount)}
                 onDetails={() => navigate(`/app/orders/${order.id}${listSearch}`)}
                 onConfirm={() => {
-                  // Invalidate queries to refresh data
                   queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
                 }}
                 showConfirm={showConfirm}
+                showDetailsButton={showDetailsButton}
                 orderId={order.id}
               />
             );

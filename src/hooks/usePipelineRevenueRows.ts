@@ -44,7 +44,7 @@ export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePip
           commission_rate,
           host_org_id
         `)
-        .in('type', ['tracking', 'affiliate']);
+        .in('type', ['tracking', 'affiliate', 'collab']);
 
       // Apply filter based on mode
       if (mode === 'host') {
