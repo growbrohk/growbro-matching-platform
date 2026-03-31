@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Auth from "./pages/Auth";
 import OnboardingNew from "./pages/OnboardingNew";
@@ -30,7 +30,7 @@ import ProfilePage from "./pages/ProfilePage";
 import Collab from "./pages/Collab";
 import CollabSearch from "./pages/collab/CollabSearch";
 import CollabResults from "./pages/collab/CollabResults";
-import Enquiries from "./pages/Enquiries";
+const Enquiries = lazy(() => import("./pages/Enquiries"));
 import ConnectRequestsPage from "./pages/enquiries/ConnectRequestsPage";
 import OrgConnectionsPage from "./pages/org/OrgConnectionsPage";
 // Poster Space pages
@@ -458,7 +458,24 @@ function AppRoutes() {
       <Route path="/collab/results" element={<ProtectedRoute><AppLayout><CollabResults /></AppLayout></ProtectedRoute>} />
       
       {/* Enquiries page (canonical route) */}
-      <Route path="/app/enquiries" element={<ProtectedRoute><AppLayout><Enquiries /></AppLayout></ProtectedRoute>} />
+      <Route
+        path="/app/enquiries"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#0E7A3A" }} />
+                  </div>
+                }
+              >
+                <Enquiries />
+              </Suspense>
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route path="/app/enquiries/connect-requests" element={<ProtectedRoute><AppLayout><ConnectRequestsPage /></AppLayout></ProtectedRoute>} />
       
       {/* Org Connections page */}

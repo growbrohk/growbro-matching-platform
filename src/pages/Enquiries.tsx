@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Mail, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,8 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getBookingRequestsForSpace } from '@/lib/api/poster-spaces';
-import { format } from 'date-fns';
+import { getBookingRequestsForSpaces } from '@/lib/api/poster-spaces';
 import { useNavigate } from 'react-router-dom';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
 import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
@@ -19,6 +18,12 @@ import { usePendingConnectionsCount } from '@/hooks/use-pending-connections-coun
 import ConnectRequestsPreviewCard from '@/components/connections/ConnectRequestsPreviewCard';
 
 type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
+
+/** Columns required by HostEnquiryOrderCard / enquiry list (avoids select *) */
+const HOST_ORDER_CARD_COLUMNS =
+  'order_id,order_no,fulfillment_status,confirmed_at,updated_at,payment_method,receipt_url,metadata,buyer_first_name,buyer_last_name,buyer_phone,total_amount,currency,event_id,event_title,event_start_at,event_location_text,event_cover_image_url,org_id,tickets_count';
+
+const ENQUIRIES_HOST_ORDERS_LIMIT = 200;
 
 export interface EnquiryItem {
   id: string;
@@ -48,146 +53,151 @@ export default function Enquiries() {
   const [affiliateRequests, setAffiliateRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!currentOrg) return;
-    fetchEnquiries();
-  }, [currentOrg, filter]);
-
-  // Refetch on window focus to update message list
-  useEffect(() => {
-    const handleFocus = () => {
-      if (currentOrg) {
-        fetchEnquiries();
-      }
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [currentOrg]);
-
-  const fetchEnquiries = async () => {
+  const fetchEnquiries = useCallback(async () => {
     if (!currentOrg) return;
     setLoading(true);
     try {
       const allEnquiries: EnquiryItem[] = [];
 
-      // Fetch booking requests (Requests)
       const { data: spaces } = await supabase
         .from('poster_spaces')
         .select('id, title, photos, category')
         .eq('org_id', currentOrg.id);
 
-      if (spaces && spaces.length > 0) {
-        const allRequests: Array<{ request: any; space: any }> = [];
-        
-        for (const space of spaces) {
-          const requests = await getBookingRequestsForSpace(space.id);
-          for (const request of requests) {
-            allRequests.push({ request, space });
-          }
-        }
+      const spaceList = spaces ?? [];
+      const spaceIds = spaceList.map((s) => s.id);
+      const spaceById = new Map(spaceList.map((s) => [s.id, s] as const));
 
-        // Fetch requester orgs in batch
-        const requesterUserIds = allRequests
-          .map((r) => r.request.requester_user_id)
-          .filter(Boolean) as string[];
+      const [bookingRows, ordersResult, inboxResult, affiliateResult] = await Promise.all([
+        spaceIds.length === 0 ? Promise.resolve([]) : getBookingRequestsForSpaces(spaceIds),
+        supabase
+          .from('host_order_cards')
+          .select(HOST_ORDER_CARD_COLUMNS)
+          .eq('org_id', currentOrg.id)
+          .order('updated_at', { ascending: false })
+          .limit(ENQUIRIES_HOST_ORDERS_LIMIT),
+        supabase.rpc('get_conversation_inbox', { p_org_id: currentOrg.id }),
+        supabase
+          .from('affiliate_requests')
+          .select(`
+          id,
+          tracking_link_id,
+          host_org_id,
+          affiliate_org_id,
+          status,
+          created_at,
+          tracking_links!inner(
+            slug,
+            label,
+            destination_url,
+            commission_rate,
+            start_date,
+            end_date
+          ),
+          orgs!affiliate_requests_host_org_id_fkey(
+            name,
+            slug
+          )
+        `)
+          .eq('affiliate_org_id', currentOrg.id)
+          .order('created_at', { ascending: false }),
+      ]);
 
-        const requesterOrgMap = new Map<string, any>();
-        if (requesterUserIds.length > 0) {
-          const { data: orgMembers } = await supabase
-            .from('org_members')
-            .select('user_id, org_id, orgs(name, slug, org_profiles(logo_url, category, location))')
-            .in('user_id', requesterUserIds);
+      const allRequests: Array<{ request: any; space: any }> = [];
+      for (const request of bookingRows) {
+        const space = spaceById.get(request.poster_space_id);
+        if (!space) continue;
+        allRequests.push({ request, space });
+      }
 
-          if (orgMembers) {
-            for (const member of orgMembers) {
-              const orgData = member.orgs as any;
-              const profileData = Array.isArray(orgData?.org_profiles) 
-                ? orgData.org_profiles[0] 
-                : orgData?.org_profiles;
-              
-              if (!requesterOrgMap.has(member.user_id)) {
-                requesterOrgMap.set(member.user_id, {
-                  name: orgData?.name,
-                  slug: orgData?.slug,
-                  logoUrl: profileData?.logo_url,
-                  category: profileData?.category,
-                  location: profileData?.location,
-                });
-              }
+      const requesterUserIds = allRequests
+        .map((r) => r.request.requester_user_id)
+        .filter(Boolean) as string[];
+
+      const requesterOrgMap = new Map<string, any>();
+      if (requesterUserIds.length > 0) {
+        const { data: orgMembers } = await supabase
+          .from('org_members')
+          .select('user_id, org_id, orgs(name, slug, org_profiles(logo_url, category, location))')
+          .in('user_id', requesterUserIds);
+
+        if (orgMembers) {
+          for (const member of orgMembers) {
+            const orgData = member.orgs as any;
+            const profileData = Array.isArray(orgData?.org_profiles)
+              ? orgData.org_profiles[0]
+              : orgData?.org_profiles;
+
+            if (!requesterOrgMap.has(member.user_id)) {
+              requesterOrgMap.set(member.user_id, {
+                name: orgData?.name,
+                slug: orgData?.slug,
+                logoUrl: profileData?.logo_url,
+                category: profileData?.category,
+                location: profileData?.location,
+              });
             }
           }
         }
-
-        // Mark unread booking requests as seen
-        const unreadRequestIds = allRequests
-          .filter(({ request }) => !request.host_seen_at)
-          .map(({ request }) => request.id);
-
-        if (unreadRequestIds.length > 0) {
-          // Update host_seen_at for all unread requests in batch
-          await supabase
-            .from('poster_space_booking_requests')
-            .update({ host_seen_at: new Date().toISOString() })
-            .in('id', unreadRequestIds);
-          
-          // Refetch unread count to update badge
-          refetchUnreadCount();
-        }
-
-        for (const { request, space } of allRequests) {
-          const requesterOrg = request.requester_user_id 
-            ? requesterOrgMap.get(request.requester_user_id) 
-            : null;
-
-          // Don't filter during fetch - filter after fetching all data
-
-          allEnquiries.push({
-            id: request.id,
-            type: 'request',
-            status: request.status === 'pending' ? 'pending' : request.status === 'approved' ? 'confirmed' : 'archived',
-            brand: {
-              name: request.requester_name || requesterOrg?.name || 'Unknown',
-              slug: requesterOrg?.slug,
-              logoUrl: requesterOrg?.logoUrl,
-              category: requesterOrg?.category,
-              location: requesterOrg?.location,
-            },
-            item: {
-              name: space.title || 'Space',
-              thumbnailUrl: Array.isArray(space.photos) && space.photos.length > 0 ? space.photos[0] : undefined,
-              type: 'space',
-            },
-            period: {
-              start: request.requested_start_date,
-              end: request.computed_end_date,
-            },
-            previewText: request.message || undefined,
-            date: request.created_at,
-            unread: request.status === 'pending',
-          });
-        }
       }
 
-      // Fetch orders (Sales Orders) using host_order_cards view
-      const { data: hostOrderCards, error: ordersError } = await supabase
-        .from('host_order_cards')
-        .select('*')
-        .eq('org_id', currentOrg.id)
-        .order('updated_at', { ascending: false });
+      const unreadRequestIds = allRequests
+        .filter(({ request }) => !request.host_seen_at)
+        .map(({ request }) => request.id);
 
+      for (const { request, space } of allRequests) {
+        const requesterOrg = request.requester_user_id
+          ? requesterOrgMap.get(request.requester_user_id)
+          : null;
+
+        allEnquiries.push({
+          id: request.id,
+          type: 'request',
+          status:
+            request.status === 'pending'
+              ? 'pending'
+              : request.status === 'approved'
+                ? 'confirmed'
+                : 'archived',
+          brand: {
+            name: request.requester_name || requesterOrg?.name || 'Unknown',
+            slug: requesterOrg?.slug,
+            logoUrl: requesterOrg?.logoUrl,
+            category: requesterOrg?.category,
+            location: requesterOrg?.location,
+          },
+          item: {
+            name: space.title || 'Space',
+            thumbnailUrl: Array.isArray(space.photos) && space.photos.length > 0 ? space.photos[0] : undefined,
+            type: 'space',
+          },
+          period: {
+            start: request.requested_start_date,
+            end: request.computed_end_date,
+          },
+          previewText: request.message || undefined,
+          date: request.created_at,
+          unread: request.status === 'pending',
+        });
+      }
+
+      const { data: hostOrderCards, error: ordersError } = ordersResult;
       if (ordersError) {
         console.error('Error fetching host orders:', ordersError);
       } else if (hostOrderCards) {
-        // Store host orders separately for rendering with HostEnquiryOrderCard
         setHostOrders(hostOrderCards as HostOrderCardData[]);
-        
-        // Also add to allEnquiries for filtering/sorting compatibility
+
         for (const order of hostOrderCards) {
           const isProductOrder = !order.event_id;
           allEnquiries.push({
             id: order.order_id,
             type: 'sales_order',
-            status: order.fulfillment_status === 'confirmed' ? 'confirmed' : order.fulfillment_status === 'pending_confirmation' ? 'waiting_confirmation' : 'archived',
+            status:
+              order.fulfillment_status === 'confirmed'
+                ? 'confirmed'
+                : order.fulfillment_status === 'pending_confirmation'
+                  ? 'waiting_confirmation'
+                  : 'archived',
             brand: {
               name: isProductOrder ? 'Product Order' : 'Event Order',
             },
@@ -205,16 +215,10 @@ export default function Enquiries() {
         }
       }
 
-      // Fetch conversations (Messages) using RPC
-      const { data: inboxData, error: inboxError } = await supabase
-        .rpc('get_conversation_inbox', { p_org_id: currentOrg.id });
-
+      const { data: inboxData, error: inboxError } = inboxResult;
       if (!inboxError && inboxData) {
-        // Store message enquiries separately for WhatsApp-style rendering
         setMessageEnquiries(inboxData as MessageEnquiryRowData[]);
-        
-        // Also add to allEnquiries for filtering/sorting compatibility
-        // (but we'll render them separately with MessageEnquiryRow)
+
         for (const inboxRow of inboxData) {
           allEnquiries.push({
             id: inboxRow.conversation_id,
@@ -235,36 +239,10 @@ export default function Enquiries() {
         }
       }
 
-      // Fetch affiliate requests (where current org is affiliate)
-      const { data: affiliateRequestsData, error: affiliateError } = await supabase
-        .from('affiliate_requests')
-        .select(`
-          id,
-          tracking_link_id,
-          host_org_id,
-          affiliate_org_id,
-          status,
-          created_at,
-          tracking_links!inner(
-            slug,
-            label,
-            destination_url,
-            commission_rate,
-            start_date,
-            end_date
-          ),
-          orgs!affiliate_requests_host_org_id_fkey(
-            name,
-            slug
-          )
-        `)
-        .eq('affiliate_org_id', currentOrg.id)
-        .order('created_at', { ascending: false });
-
+      const { data: affiliateRequestsData, error: affiliateError } = affiliateResult;
       if (affiliateError) {
         console.error('Error fetching affiliate requests:', affiliateError);
       } else if (affiliateRequestsData) {
-        // Transform data to match expected structure
         const transformedRequests = affiliateRequestsData.map((req: any) => ({
           id: req.id,
           tracking_link_id: req.tracking_link_id,
@@ -277,7 +255,6 @@ export default function Enquiries() {
         }));
         setAffiliateRequests(transformedRequests);
 
-        // Also add to allEnquiries for filtering/sorting compatibility
         for (const req of transformedRequests) {
           if (req.status === 'pending') {
             allEnquiries.push({
@@ -290,7 +267,7 @@ export default function Enquiries() {
               },
               item: {
                 name: req.tracking_link.label || req.tracking_link.destination_url,
-                type: 'event', // Could be event/product/custom
+                type: 'event',
               },
               period: {
                 start: req.tracking_link.start_date,
@@ -304,7 +281,6 @@ export default function Enquiries() {
         }
       }
 
-      // Sort by date (newest first)
       allEnquiries.sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
@@ -312,12 +288,28 @@ export default function Enquiries() {
       });
 
       setEnquiries(allEnquiries);
+
+      if (unreadRequestIds.length > 0) {
+        void supabase
+          .from('poster_space_booking_requests')
+          .update({ host_seen_at: new Date().toISOString() })
+          .in('id', unreadRequestIds)
+          .then(({ error }) => {
+            if (error) console.error('Error marking booking requests seen:', error);
+            else void refetchUnreadCount();
+          });
+      }
     } catch (error) {
       console.error('Error fetching enquiries:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentOrg, refetchUnreadCount]);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    fetchEnquiries();
+  }, [currentOrg, fetchEnquiries]);
 
   const filteredEnquiries = enquiries.filter((enquiry) => {
     if (filter === 'all') {

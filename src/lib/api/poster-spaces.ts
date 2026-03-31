@@ -378,6 +378,28 @@ export async function getBookingRequestsForSpace(
 }
 
 /**
+ * Batch-load booking requests for many poster spaces (one round trip)
+ */
+export async function getBookingRequestsForSpaces(
+  spaceIds: string[]
+): Promise<PosterSpaceBookingRequest[]> {
+  if (spaceIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('poster_space_booking_requests')
+    .select('*')
+    .in('poster_space_id', spaceIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching booking requests for spaces:', error);
+    throw error;
+  }
+
+  return (data || []) as PosterSpaceBookingRequest[];
+}
+
+/**
  * Update booking request status
  */
 export async function updateBookingRequestStatus(
