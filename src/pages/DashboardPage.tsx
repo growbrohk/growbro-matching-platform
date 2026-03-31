@@ -67,27 +67,6 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  // Calculate date range for tracking clicks
-  const getDateRange = (rangeKey: RangeKey): { start: Date; end: Date } => {
-    const end = new Date();
-    const start = new Date();
-    switch (rangeKey) {
-      case 'today':
-        start.setHours(0, 0, 0, 0);
-        break;
-      case '7d':
-        start.setDate(start.getDate() - 7);
-        break;
-      case '30d':
-        start.setDate(start.getDate() - 30);
-        break;
-      case '90d':
-        start.setDate(start.getDate() - 90);
-        break;
-    }
-    return { start, end };
-  };
-
   // Fetch channels count (tracking_links where host_org_id=currentOrg.id, type IN ('tracking', 'affiliate'), and status='active')
   // Only counts links where currentOrg is the host, NOT where currentOrg is the affiliate partner
   const { data: channelsCount = 0 } = useQuery({
@@ -129,11 +108,13 @@ export default function DashboardPage() {
   // Fetch pipeline revenue totals (host + affiliate)
   const { data: hostPipelineRows = [] } = usePipelineRows({ 
     mode: 'host', 
-    orgId: currentOrg?.id || '' 
+    orgId: currentOrg?.id || '',
+    rangeKey: selectedRange,
   });
   const { data: collabPipelineRows = [] } = usePipelineRows({ 
     mode: 'collab', 
-    orgId: currentOrg?.id || '' 
+    orgId: currentOrg?.id || '',
+    rangeKey: selectedRange,
   });
 
   // Calculate total pipeline revenue: sum of host revenue + sum of affiliate revenue
@@ -267,9 +248,9 @@ export default function DashboardPage() {
           {/* Channels Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/pipelines?mode=host');
+              navigate(`/app/dashboard/pipelines?mode=host&range=${selectedRange}`);
             }}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {channelsCount}
@@ -286,9 +267,9 @@ export default function DashboardPage() {
           {/* Collab Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/pipelines?mode=collab');
+              navigate(`/app/dashboard/pipelines?mode=collab&range=${selectedRange}`);
             }}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
             <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
               {collabCount}
@@ -305,11 +286,15 @@ export default function DashboardPage() {
           {/* Revenue Card */}
           <button
             onClick={() => {
-              navigate('/app/dashboard/pipeline-revenue');
+              navigate(`/app/dashboard/pipeline-revenue?range=${selectedRange}`);
             }}
-            className="bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
           >
-            <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+            <div
+              className="text-2xl font-bold mb-1 tabular-nums truncate pr-7"
+              style={{ color: '#0F1F17' }}
+              title={formatHKD(pipelineRevenueTotal)}
+            >
               {formatHKD(pipelineRevenueTotal)}
             </div>
             <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>

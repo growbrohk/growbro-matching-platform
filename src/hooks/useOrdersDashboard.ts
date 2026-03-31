@@ -43,9 +43,9 @@ export function formatMoney(amount: number): string {
 }
 
 /**
- * Get date range for a given range key
+ * Get date range for a given range key (shared with dashboard pills and pipeline metrics).
  */
-function getDateRange(rangeKey: RangeKey): { start: Date; end: Date } {
+export function getDateRange(rangeKey: RangeKey): { start: Date; end: Date } {
   const end = new Date();
   const start = new Date();
 

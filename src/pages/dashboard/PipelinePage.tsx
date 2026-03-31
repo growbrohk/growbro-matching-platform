@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePipelineRows } from '@/hooks/usePipelineRows';
+import type { RangeKey } from '@/hooks/useOrdersDashboard';
+import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, ExternalLink, QrCode, Pencil, Search, ArrowUpDown, ChevronRight, ChevronDown, Copy, Check } from 'lucide-react';
 import {
@@ -52,6 +54,13 @@ function normalizeUrl(url: string): string {
 type SortKey = 'clicks' | 'orders' | 'revenue';
 type SortDirection = 'asc' | 'desc';
 
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: 'today', label: 'today' },
+  { key: '7d', label: 'last 7 days' },
+  { key: '30d', label: 'last 30 days' },
+  { key: '90d', label: 'last 90 days' },
+];
+
 // Grouped data structure
 interface DestinationKeyGroup {
   destinationKey: string; // event_id, product_id, or normalized URL
@@ -70,15 +79,27 @@ export default function PipelinePage() {
   const { currentOrg } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Get mode from URL query param, default to 'host'
   const modeParam = searchParams.get('mode');
   const mode: 'host' | 'collab' = (modeParam === 'collab' ? 'collab' : 'host');
-  
-  const { data: pipelines, isLoading, error } = usePipelineRows({ 
-    mode, 
-    orgId: currentOrg?.id || '' 
+
+  const rangeParam = searchParams.get('range') as RangeKey | null;
+  const initialRange: RangeKey =
+    rangeParam && ['today', '7d', '30d', '90d'].includes(rangeParam) ? rangeParam : '30d';
+  const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set('range', selectedRange);
+    setSearchParams(params, { replace: true });
+  }, [selectedRange, searchParams, setSearchParams]);
+
+  const { data: pipelines, isLoading, error } = usePipelineRows({
+    mode,
+    orgId: currentOrg?.id || '',
+    rangeKey: selectedRange,
   });
   
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -269,25 +290,80 @@ export default function PipelinePage() {
     });
   };
 
+  const pageHeader = (
+    <div>
+      <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+        {mode === 'collab' ? 'Collab Pipelines' : 'Pipelines'}
+      </h1>
+      <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+        {mode === 'collab' ? 'Affiliate pipelines overview' : 'Pipelines overview'}
+      </p>
+    </div>
+  );
+
+  const rangePillsBlock = (
+    <>
+      <style>{`
+        .pill-filter-container::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      <div
+        className="pill-filter-container flex gap-2.5 flex-nowrap overflow-x-auto"
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}
+      >
+        {RANGE_OPTIONS.map((option) => {
+          const isSelected = selectedRange === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setSelectedRange(option.key)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0',
+                'min-h-[36px]',
+                isSelected
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      <div className="w-full space-y-6">
+        {pageHeader}
+        {rangePillsBlock}
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-sm" style={{ color: '#EF4444' }}>
-            Error loading pipelines
-          </p>
-          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-            {error instanceof Error ? error.message : 'Unknown error'}
-          </p>
+      <div className="w-full space-y-6">
+        {pageHeader}
+        {rangePillsBlock}
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-sm" style={{ color: '#EF4444' }}>
+              Error loading pipelines
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -296,14 +372,8 @@ export default function PipelinePage() {
   if (!pipelines || pipelines.length === 0) {
     return (
       <div className="w-full space-y-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-            {mode === 'collab' ? 'Collab Pipelines' : 'Pipelines'}
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            {mode === 'collab' ? 'Affiliate pipelines overview' : 'Pipelines overview'}
-          </p>
-        </div>
+        {pageHeader}
+        {rangePillsBlock}
         <div className="py-12 text-center">
           <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
             {mode === 'collab' ? 'No collab pipelines found' : 'No pipelines found'}
@@ -315,15 +385,8 @@ export default function PipelinePage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-          {mode === 'collab' ? 'Collab Pipelines' : 'Pipelines'}
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          {mode === 'collab' ? 'Affiliate pipelines overview' : 'Pipelines overview'}
-        </p>
-      </div>
+      {pageHeader}
+      {rangePillsBlock}
 
       {/* Search Bar */}
       <div className="relative">

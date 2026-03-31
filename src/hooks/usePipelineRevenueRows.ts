@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { getEvent } from '@/lib/api/events';
 import { getProduct } from '@/lib/api/products';
+import { fetchRangedPipelineOrderAggregates } from '@/lib/pipelineRangedOrders';
+import type { RangeKey } from '@/hooks/useOrdersDashboard';
 import { PipelineRow } from './usePipelineRows';
 
 export interface UsePipelineRevenueRowsOptions {
   mode: 'host' | 'collab';
   orgId: string;
+  rangeKey: RangeKey;
   status?: 'active' | 'payment_pending' | 'paid' | 'inactive';
 }
 
@@ -18,9 +20,9 @@ export interface UsePipelineRevenueRowsOptions {
  * Filters by status if provided
  * Includes event and product titles
  */
-export function usePipelineRevenueRows({ mode, orgId, status }: UsePipelineRevenueRowsOptions) {
+export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePipelineRevenueRowsOptions) {
   return useQuery({
-    queryKey: ['pipeline-revenue-rows', orgId, mode, status],
+    queryKey: ['pipeline-revenue-rows', orgId, mode, rangeKey, status],
     queryFn: async (): Promise<PipelineRow[]> => {
       if (!orgId) {
         return [];
@@ -151,25 +153,20 @@ export function usePipelineRevenueRows({ mode, orgId, status }: UsePipelineReven
         clicksMap.set(click.tracking_link_id, (clicksMap.get(click.tracking_link_id) || 0) + 1);
       });
 
-      // Get orders and revenue from pipeline_order_metrics view
-      const { data: metricsData, error: metricsError } = await (supabase.from('pipeline_order_metrics' as any) as any)
-        .select('tracking_link_id, orders_count, host_revenue, affiliate_revenue')
-        .in('tracking_link_id', linkIds);
-
-      if (metricsError) {
-        console.error(`Error fetching pipeline metrics:`, metricsError);
-      }
+      const aggregates = await fetchRangedPipelineOrderAggregates(linkIds, rangeKey);
 
       const ordersMap = new Map<string, number>();
       const revenueMap = new Map<string, number>();
-      (metricsData || []).forEach((metric: any) => {
-        const linkId = metric.tracking_link_id;
-        ordersMap.set(linkId, metric.orders_count || 0);
-        // Use host_revenue for host mode, affiliate_revenue for collab mode
-        const revenue = mode === 'host' 
-          ? (metric.host_revenue || 0)
-          : (metric.affiliate_revenue || 0);
-        revenueMap.set(linkId, revenue);
+      links.forEach((link: any) => {
+        const agg = aggregates.get(link.id) || { ordersCount: 0, grossRevenue: 0 };
+        const rate = link.commission_rate != null ? Number(link.commission_rate) : 0;
+        const hostRevenue = agg.grossRevenue * (1 - rate);
+        const affiliateRevenue = agg.grossRevenue * rate;
+        ordersMap.set(link.id, agg.ordersCount);
+        revenueMap.set(
+          link.id,
+          mode === 'host' ? hostRevenue : affiliateRevenue
+        );
       });
 
       // Build pipeline rows and filter by revenue > 0

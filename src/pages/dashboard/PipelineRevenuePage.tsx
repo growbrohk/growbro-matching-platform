@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { usePipelineRevenueRows } from '@/hooks/usePipelineRevenueRows';
-import { useQueryClient } from '@tanstack/react-query';
+import type { RangeKey } from '@/hooks/useOrdersDashboard';
+import { cn } from '@/lib/utils';
 import { Loader2, ExternalLink, QrCode, Copy, Check } from 'lucide-react';
 import {
   Table,
@@ -38,19 +40,38 @@ function formatHKD(amount: number): string {
 type RoleTab = 'host' | 'collab';
 type StatusTab = 'active' | 'payment_pending' | 'paid' | 'inactive';
 
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: 'today', label: 'today' },
+  { key: '7d', label: 'last 7 days' },
+  { key: '30d', label: 'last 30 days' },
+  { key: '90d', label: 'last 90 days' },
+];
+
 export default function PipelineRevenuePage() {
   const { currentOrg } = useAuth();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const rangeParam = searchParams.get('range') as RangeKey | null;
+  const initialRange: RangeKey =
+    rangeParam && ['today', '7d', '30d', '90d'].includes(rangeParam) ? rangeParam : '30d';
+  const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set('range', selectedRange);
+    setSearchParams(params, { replace: true });
+  }, [selectedRange, searchParams, setSearchParams]);
+
   const [roleTab, setRoleTab] = useState<RoleTab>('host');
   const [statusTab, setStatusTab] = useState<StatusTab>('active');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   
-  const { data: pipelines, isLoading, error } = usePipelineRevenueRows({ 
-    mode: roleTab, 
+  const { data: pipelines, isLoading, error } = usePipelineRevenueRows({
+    mode: roleTab,
     orgId: currentOrg?.id || '',
+    rangeKey: selectedRange,
     status: statusTab,
   });
   
@@ -106,24 +127,80 @@ export default function PipelineRevenuePage() {
     }
   };
 
+  const pageHeader = (
+    <div>
+      <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
+        Pipeline Revenue
+      </h1>
+      <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
+        View revenue and payout lifecycle for pipelines with revenue
+      </p>
+    </div>
+  );
+
+  const rangePillsBlock = (
+    <>
+      <style>{`
+        .pill-filter-container::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      <div
+        className="pill-filter-container flex gap-2.5 flex-nowrap overflow-x-auto"
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}
+      >
+        {RANGE_OPTIONS.map((option) => {
+          const isSelected = selectedRange === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setSelectedRange(option.key)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0',
+                'min-h-[36px]',
+                isSelected
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+      <div className="w-full space-y-6">
+        {pageHeader}
+        {rangePillsBlock}
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-sm" style={{ color: '#EF4444' }}>
-            Error loading pipeline revenue
-          </p>
-          <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-            {error instanceof Error ? error.message : 'Unknown error'}
-          </p>
+      <div className="w-full space-y-6">
+        {pageHeader}
+        {rangePillsBlock}
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-sm" style={{ color: '#EF4444' }}>
+              Error loading pipeline revenue
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              {error instanceof Error ? error.message : 'Unknown error'}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -131,15 +208,8 @@ export default function PipelineRevenuePage() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-          Pipeline Revenue
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          View revenue and payout lifecycle for pipelines with revenue
-        </p>
-      </div>
+      {pageHeader}
+      {rangePillsBlock}
 
       {/* Role Tabs */}
       <Tabs value={roleTab} onValueChange={(value) => setRoleTab(value as RoleTab)}>
