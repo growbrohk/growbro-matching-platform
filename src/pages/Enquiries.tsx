@@ -484,6 +484,11 @@ export default function Enquiries() {
                     key={enquiry.id}
                     order={orderData}
                     onConfirmed={fetchEnquiries}
+                    onDetails={() =>
+                      navigate(`/app/orders/${orderData.order_id}`, {
+                        state: { ordersBackTo: '/app/enquiries' },
+                      })
+                    }
                   />
                 );
               }

@@ -38,6 +38,8 @@ export interface HostOrderCardData {
 interface HostEnquiryOrderCardProps {
   order: HostOrderCardData;
   onConfirmed?: () => void;
+  /** Navigate to full order detail (same as OrderListRowCompact “details”). */
+  onDetails: () => void;
 }
 
 /**
@@ -112,7 +114,7 @@ function getReceiptLinkText(paymentMethod: string | null): string {
   return 'Receipt';
 }
 
-export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiryOrderCardProps) {
+export default function HostEnquiryOrderCard({ order, onConfirmed, onDetails }: HostEnquiryOrderCardProps) {
   const { toast } = useToast();
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -304,7 +306,7 @@ export default function HostEnquiryOrderCard({ order, onConfirmed }: HostEnquiry
             </div>
 
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled className="text-gray-400">
+              <Button variant="outline" size="sm" onClick={onDetails}>
                 Details
               </Button>
 
