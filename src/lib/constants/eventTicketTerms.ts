@@ -14,9 +14,14 @@ All ticket sales are final unless otherwise stated. Tickets are non-refundable e
 
 The organizer reserves the right to modify the event details, including schedule, venue, route, activities, or program if necessary due to weather, safety concerns, or unforeseen circumstances.
 
-3. Event Cancellation
+3. Event Cancellation & Weather Policy
+Standard Policy: If the event is cancelled by the organizer for administrative reasons, participants will receive a full refund of the ticket price. Service or payment processing fees may not be refundable depending on the payment provider.
 
-If the event is cancelled by the organizer, participants will receive a full refund of the ticket price. Service or payment processing fees may not be refundable depending on the payment provider.
+Extreme Weather: The event will only be cancelled or rescheduled if the Hong Kong Observatory issues a Tropical Cyclone Warning Signal No. 8 (or above) or a Black Rainstorm Warning that is in force two (2) hours before the scheduled start time.
+
+Other Conditions: For all other weather signals (including Typhoon Signal No. 3, Amber, or Red Rainstorm warnings), the event will proceed as planned unless the organizer deems the conditions unsafe on-site.
+
+No Refunds for Weather: If the event is cancelled or rescheduled due to the extreme weather signals mentioned above (T8 or Black Rain), tickets remain non-refundable, but the organizer may, at its discretion, provide an alternative date or virtual participation option.
 
 4. Participant Responsibility
 
