@@ -31,10 +31,23 @@ export interface OrdersDashboardData {
   ordersCountSubmittedPaid: number; // Count orders where payment_status IN ('submitted','paid') within selected range
   pendingCountSubmitted: number; // Count orders where payment_status='submitted' within selected range
   pendingOrders: Order[];
+  /** Product orders, payment confirmed, not shipped; user can mark dispatched (host or collab with canMarkShipped). */
+  pendingShippingOrders: Order[];
+  pendingShippingCount: number;
   allOrders: Order[]; // All orders for OrdersPage filtering
   pendingCount: number; // Legacy - same as pendingCountSubmitted
   completedCount: number;
   allCount: number;
+}
+
+/** Product order paid/confirmed, not shipped, and current org may edit dispatch (mirrors HostOrderDetailView). */
+export function isPendingShippingActionable(order: Order): boolean {
+  if (order.order_type !== 'product') return false;
+  const paymentConfirmed =
+    order.payment_status === 'paid' || order.fulfillment_status === 'confirmed';
+  if (!paymentConfirmed || order.shipped_at) return false;
+  if (order.partnerRowAccess) return order.partnerRowAccess.canMarkShipped === true;
+  return true;
 }
 
 /**
@@ -104,6 +117,8 @@ export function useOrdersDashboard(
           ordersCountSubmittedPaid: 0,
           pendingCountSubmitted: 0,
           pendingOrders: [],
+          pendingShippingOrders: [],
+          pendingShippingCount: 0,
           allOrders: [],
           pendingCount: 0,
           completedCount: 0,
@@ -386,12 +401,18 @@ export function useOrdersDashboard(
         .filter((o) => o.payment_status === 'submitted')
         .slice(0, 3);
 
+      const pendingShippingFull = orders.filter(isPendingShippingActionable);
+      const pendingShippingCount = pendingShippingFull.length;
+      const pendingShippingOrders = pendingShippingFull.slice(0, 3);
+
       return {
         revenueTotal,
         ordersCount: ordersCountSubmittedPaid, // Legacy support
         ordersCountSubmittedPaid,
         pendingCountSubmitted,
         pendingOrders,
+        pendingShippingOrders,
+        pendingShippingCount,
         allOrders: orders.filter(isAllTabOrder), // Return only orders with payment_status IN ('submitted','paid') for OrdersPage "All" tab
         pendingCount: pendingCountSubmitted, // Legacy support
         completedCount,

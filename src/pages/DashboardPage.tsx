@@ -5,13 +5,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { OrderListRowCompact } from '@/components/OrderListRowCompact';
 import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
-import { useQueryClient } from '@tanstack/react-query';
 import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLinkModal';
 import { supabase } from '@/integrations/supabase/client';
 import { usePipelineRows } from '@/hooks/usePipelineRows';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
 
 /**
  * Format money as HKD currency
@@ -22,6 +28,71 @@ function formatHKD(amount: number): string {
     return `$${rounded.toLocaleString()}`;
   }
   return `$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function DashboardPendingShippingRow({
+  name,
+  createdAtLabel,
+  imageUrl,
+  priceLabel,
+  onDetails,
+  onOpenDispatch,
+}: {
+  name: string;
+  createdAtLabel: string;
+  imageUrl: string | null;
+  priceLabel: string;
+  onDetails: () => void;
+  onOpenDispatch: () => void;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const showImage = imageUrl && !imageError;
+
+  return (
+    <div className="flex items-center gap-4 py-3 border-b border-gray-200">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {showImage ? (
+          <img
+            src={imageUrl}
+            alt={name}
+            className="w-12 h-12 rounded bg-gray-200 flex-shrink-0 object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-12 h-12 rounded bg-gray-200 flex-shrink-0" />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-sm truncate" style={{ color: '#0F1F17' }}>
+            {name}
+          </div>
+          <div className="text-xs truncate" style={{ color: 'rgba(15,31,23,0.6)' }}>
+            {createdAtLabel}
+          </div>
+        </div>
+      </div>
+      <div className="flex-shrink-0 whitespace-nowrap font-medium text-sm" style={{ color: '#0F1F17' }}>
+        {priceLabel}
+      </div>
+      <div className="flex items-center justify-end gap-4 flex-shrink-0 pl-4 whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onDetails}
+          className="text-sm hover:underline lowercase"
+          style={{ color: '#0F1F17' }}
+        >
+          details
+        </button>
+        <button
+          type="button"
+          onClick={onOpenDispatch}
+          className="text-sm hover:underline lowercase"
+          style={{ color: '#0F1F17' }}
+        >
+          Dispatched
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -46,6 +117,7 @@ export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
   const { data: dashboardData, isLoading } = useOrdersDashboard(selectedRange);
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  const [dispatchModalOrderId, setDispatchModalOrderId] = useState<string | null>(null);
 
   // Update URL when range changes
   useEffect(() => {
@@ -154,8 +226,21 @@ export default function DashboardPage() {
     revenueTotal = 0, 
     ordersCountSubmittedPaid = 0, 
     pendingCountSubmitted = 0,
-    pendingOrders = [] 
+    pendingOrders = [],
+    pendingShippingOrders = [],
+    pendingShippingCount = 0,
   } = dashboardData || {};
+
+  const dispatchModalOrder = dispatchModalOrderId
+    ? pendingShippingOrders.find((o) => o.id === dispatchModalOrderId)
+    : undefined;
+
+  useEffect(() => {
+    if (!dispatchModalOrderId) return;
+    if (!pendingShippingOrders.some((o) => o.id === dispatchModalOrderId)) {
+      setDispatchModalOrderId(null);
+    }
+  }, [dispatchModalOrderId, pendingShippingOrders]);
 
   return (
     <>
@@ -388,10 +473,78 @@ export default function DashboardPage() {
           })
         )}
       </div>
+
+      {/* Pending shipping — paid product orders not yet dispatched */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold" style={{ color: '#0F1F17' }}>
+              pending shipping
+            </h2>
+            {pendingShippingCount > 0 && (
+              <span
+                className="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-medium text-white"
+                style={{ backgroundColor: '#EF4444' }}
+              >
+                {pendingShippingCount}
+              </span>
+            )}
+          </div>
+        </div>
+        {pendingShippingOrders.length === 0 ? (
+          <div className="py-8 text-center text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
+            No orders waiting to ship
+          </div>
+        ) : (
+          pendingShippingOrders.map((order) => {
+            const timestamp = order.created_at
+              ? format(new Date(order.created_at), 'MMM d, yyyy h:mm a')
+              : '';
+            return (
+              <DashboardPendingShippingRow
+                key={order.id}
+                name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
+                createdAtLabel={timestamp}
+                imageUrl={order.previewImageUrl}
+                priceLabel={formatMoney(order.total_amount)}
+                onDetails={() =>
+                  navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
+                }
+                onOpenDispatch={() => setDispatchModalOrderId(order.id)}
+              />
+            );
+          })
+        )}
+      </div>
       </div>
 
       {/* Tracking Link Modal */}
       <CreateTrackingLinkModal open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen} />
+
+      <Dialog
+        open={!!dispatchModalOrderId && !!dispatchModalOrder}
+        onOpenChange={(open) => {
+          if (!open) setDispatchModalOrderId(null);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle style={{ color: '#0F1F17' }}>
+              {dispatchModalOrder?.displayName || 'Dispatch'}
+            </DialogTitle>
+          </DialogHeader>
+          {dispatchModalOrder ? (
+            <ProductOrderDispatchPanel
+              orderId={dispatchModalOrder.id}
+              shippedAt={dispatchModalOrder.shipped_at ?? null}
+              carrierTrackingNumber={dispatchModalOrder.carrier_tracking_number ?? null}
+              paymentStatus={dispatchModalOrder.payment_status}
+              fulfillmentStatus={dispatchModalOrder.fulfillment_status}
+              canEdit
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
