@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { EventTicketRow } from '@/hooks/use-event-tickets';
+import { formatMoney } from '@/hooks/useOrdersDashboard';
 import {
   Table,
   TableBody,
@@ -31,11 +32,11 @@ import {
 
 const isCheckedIn = (status: string) => status === 'scanned';
 
-type SortKey = 'status' | 'name' | 'ticketType';
-type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'access' | 'remark' | 'addons';
+type SortKey = 'status' | 'name' | 'ticketType' | 'ticketPrice';
+type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'ticketPrice' | 'access' | 'remark' | 'addons';
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'];
-const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'access', 'addons'];
+const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
+const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'addons'];
 
 const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   status: 90,
@@ -43,10 +44,31 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   phone: 120,
   email: 180,
   ticketType: 120,
+  ticketPrice: 110,
   access: 150,
   remark: 160,
   addons: 140,
 };
+
+const KNOWN_COLUMN_KEYS: ColumnKey[] = [...DEFAULT_COLUMNS];
+
+function migrateLegacyColumnId(key: string): ColumnKey | null {
+  if (key === 'orderAmount') return 'ticketPrice';
+  return KNOWN_COLUMN_KEYS.includes(key as ColumnKey) ? (key as ColumnKey) : null;
+}
+
+function normalizeStoredVisibleColumns(raw: string[]): ColumnKey[] {
+  const out: ColumnKey[] = [];
+  for (const k of raw) {
+    const col = migrateLegacyColumnId(k);
+    if (col && !out.includes(col)) out.push(col);
+  }
+  return out;
+}
+
+function isSortKey(key: string): key is SortKey {
+  return key === 'status' || key === 'name' || key === 'ticketType' || key === 'ticketPrice';
+}
 
 type Draft = { status?: 'valid' | 'scanned'; name?: string; remark?: string };
 
@@ -101,9 +123,10 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       const storedColumns = localStorage.getItem(storageKeys.visibleColumns);
       if (storedColumns) {
         try {
-          const parsed = JSON.parse(storedColumns) as ColumnKey[];
-          if (parsed.length > 0) {
-            setVisibleColumns(parsed);
+          const parsed = JSON.parse(storedColumns) as string[];
+          const normalized = normalizeStoredVisibleColumns(parsed);
+          if (normalized.length > 0) {
+            setVisibleColumns(normalized);
           }
         } catch (e) {
           // Invalid JSON, use defaults
@@ -114,9 +137,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       const storedSizing = localStorage.getItem(storageKeys.columnSizing);
       if (storedSizing) {
         try {
-          const parsed = JSON.parse(storedSizing) as ColumnSizingState;
+          const parsed = JSON.parse(storedSizing) as ColumnSizingState & { orderAmount?: number };
           if (Object.keys(parsed).length > 0) {
-            setColumnSizing(parsed);
+            const migrated: ColumnSizingState = { ...parsed };
+            if (migrated.orderAmount !== undefined && migrated.ticketPrice === undefined) {
+              migrated.ticketPrice = migrated.orderAmount;
+            }
+            delete (migrated as Record<string, unknown>).orderAmount;
+            setColumnSizing(migrated);
           }
         } catch (e) {
           // Invalid JSON, use defaults
@@ -148,9 +176,12 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       const storedSort = localStorage.getItem(storageKeys.sort);
       if (storedSort) {
         try {
-          const parsed = JSON.parse(storedSort) as { key: SortKey; dir: 'asc' | 'desc' };
-          setSorting([{ id: parsed.key, desc: parsed.dir === 'desc' }]);
-          restoredSort = true;
+          const parsed = JSON.parse(storedSort) as { key: string; dir: 'asc' | 'desc' };
+          const sortKey = parsed.key === 'orderAmount' ? 'ticketPrice' : parsed.key;
+          if (isSortKey(sortKey)) {
+            setSorting([{ id: sortKey, desc: parsed.dir === 'desc' }]);
+            restoredSort = true;
+          }
         } catch (e) {
           // Invalid JSON
         }
@@ -255,7 +286,10 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         const matchesAccessTooltip = ticket.accessTooltip?.toLowerCase().includes(searchLower) || false;
         const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
         const matchesStatus = statusLabel.includes(searchLower);
-        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesAccess || matchesAccessTooltip || matchesStatus;
+        const matchesTicketPrice =
+          String(ticket.ticketUnitPrice).toLowerCase().includes(searchLower) ||
+          formatMoney(ticket.ticketUnitPrice).toLowerCase().includes(searchLower);
+        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesAccess || matchesAccessTooltip || matchesStatus || matchesTicketPrice;
       });
     }
 
@@ -408,13 +442,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) return;
 
-    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'];
+    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
       name: 'Name',
       phone: 'Phone',
       email: 'Email',
       ticketType: 'Ticket Type',
+      ticketPrice: 'Ticket price',
       access: 'Access',
       remark: 'Remark',
       addons: 'Add-ons',
@@ -442,6 +477,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         }
         if (col === 'access') {
           return escapeCSV(ticket.accessLabel || '');
+        }
+        if (col === 'ticketPrice') {
+          return escapeCSV(formatMoney(ticket.ticketUnitPrice));
         }
         return escapeCSV(ticket[col as keyof EventTicketRow] as string || '');
       });
@@ -584,6 +622,28 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       size: DEFAULT_COLUMN_SIZES.ticketType,
       minSize: 80,
       maxSize: 300,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('ticketUnitPrice', {
+      id: 'ticketPrice',
+      header: 'Ticket price',
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap tabular-nums" title={row.original.currency ? `${row.original.currency} ${row.original.ticketUnitPrice}` : undefined}>
+          {formatMoney(row.original.ticketUnitPrice)}
+        </span>
+      ),
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const a = rowA.original.ticketUnitPrice;
+        const b = rowB.original.ticketUnitPrice;
+        if (a !== b) return a - b;
+        const aName = (rowA.original.name || '').toLowerCase();
+        const bName = (rowB.original.name || '').toLowerCase();
+        return aName.localeCompare(bName);
+      },
+      size: DEFAULT_COLUMN_SIZES.ticketPrice,
+      minSize: 70,
+      maxSize: 200,
       enableResizing: true,
     }),
     columnHelper.accessor('accessLabel', {
@@ -847,13 +907,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2">
-                    {(['status', 'name', 'phone', 'email', 'ticketType', 'access', 'remark', 'addons'] as ColumnKey[]).map((column) => {
+                    {(['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'] as ColumnKey[]).map((column) => {
                       const columnLabels: Record<ColumnKey, string> = {
                         status: 'Status',
                         name: 'Name',
                         phone: 'Phone',
                         email: 'Email',
                         ticketType: 'Ticket Type',
+                        ticketPrice: 'Ticket price',
                         access: 'Access',
                         remark: 'Remark',
                         addons: 'Add-ons',

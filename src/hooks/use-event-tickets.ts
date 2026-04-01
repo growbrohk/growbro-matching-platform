@@ -12,6 +12,9 @@ export interface EventTicketRow {
   addons: string; // Formatted add-on products (per-ticket + order-level on first ticket of order)
   scanned_at: string | null;
   order_id: string;
+  /** Unit price from the ticket's order line (`order_items.unit_price`). */
+  ticketUnitPrice: number;
+  currency: string | null;
   /** Human-readable access path: Public, Code — ABC, Affiliate, Hidden */
   accessLabel: string;
   /** Optional detail for title attribute (e.g. allowed affiliates) */
@@ -93,9 +96,11 @@ export function useEventTickets(eventId: string | undefined) {
             buyer_last_name,
             buyer_email,
             buyer_phone,
-            metadata
+            metadata,
+            currency
           ),
           order_items(
+            unit_price,
             ticket_type_access_variant_id,
             ticket_type_access_variants(
               visibility_mode,
@@ -145,10 +150,12 @@ export function useEventTickets(eventId: string | undefined) {
 
         const rawOi = ticket.order_items as
           | {
+              unit_price?: unknown;
               ticket_type_access_variant_id?: string | null;
               ticket_type_access_variants?: AccessFields | AccessFields[] | null;
             }
           | Array<{
+              unit_price?: unknown;
               ticket_type_access_variant_id?: string | null;
               ticket_type_access_variants?: AccessFields | AccessFields[] | null;
             }>
@@ -197,6 +204,9 @@ export function useEventTickets(eventId: string | undefined) {
         const allAddons = [...perTicketAddons, ...orderLevelAddons];
         const addons = allAddons.length > 0 ? allAddons.map(formatAddon).join(', ') : '';
 
+        const ticketUnitPrice = Number((orderItemsRow as { unit_price?: unknown } | null)?.unit_price) || 0;
+        const currency = (order as { currency?: string | null } | null)?.currency ?? null;
+
         return {
           id: ticket.id,
           status: ticket.status || 'valid',
@@ -208,6 +218,8 @@ export function useEventTickets(eventId: string | undefined) {
           addons,
           scanned_at: ticket.scanned_at,
           order_id: ticket.order_id,
+          ticketUnitPrice,
+          currency,
           accessLabel,
           ...(accessTooltip ? { accessTooltip } : {}),
         };
