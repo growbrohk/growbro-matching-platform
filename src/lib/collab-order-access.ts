@@ -4,6 +4,7 @@ export interface PartnerOrderRowAccess {
   isPartnerRow: true;
   canViewOrderDetails: boolean;
   canConfirmOrder: boolean;
+  canMarkShipped: boolean;
 }
 
 export type PartnerAccessMap = Map<string, PartnerOrderRowAccess>;
@@ -17,10 +18,16 @@ export interface PartnerPipelineLinkRow {
   collab_sales_scope: string | null;
   collab_partner_role: string | null;
   collab_can_view_order_details: boolean | null;
+  collab_can_mark_shipped: boolean | null;
 }
 
 function emptyAccess(): PartnerOrderRowAccess {
-  return { isPartnerRow: true, canViewOrderDetails: false, canConfirmOrder: false };
+  return {
+    isPartnerRow: true,
+    canViewOrderDetails: false,
+    canConfirmOrder: false,
+    canMarkShipped: false,
+  };
 }
 
 function mergeAccess(map: PartnerAccessMap, orderId: string, link: PartnerPipelineLinkRow) {
@@ -31,6 +38,9 @@ function mergeAccess(map: PartnerAccessMap, orderId: string, link: PartnerPipeli
     }
     if (link.collab_partner_role === 'editor') {
       cur.canConfirmOrder = true;
+    }
+    if (link.collab_partner_role === 'editor' && link.collab_can_mark_shipped === true) {
+      cur.canMarkShipped = true;
     }
   }
   map.set(orderId, cur);
@@ -52,7 +62,9 @@ const ORDER_SELECT = `
   order_type,
   metadata,
   tracking_link_id,
-  host_org_id
+  host_org_id,
+  shipped_at,
+  carrier_tracking_number
 `;
 
 export async function fetchPartnerVisibleOrdersInRange(
@@ -65,7 +77,7 @@ export async function fetchPartnerVisibleOrdersInRange(
   const { data: links, error } = await supabase
     .from('tracking_links' as never)
     .select(
-      'id, type, host_org_id, event_id, product_id, collab_sales_scope, collab_partner_role, collab_can_view_order_details, status'
+      'id, type, host_org_id, event_id, product_id, collab_sales_scope, collab_partner_role, collab_can_view_order_details, collab_can_mark_shipped, status'
     )
     .eq('affiliate_org_id', orgId)
     .in('type', ['affiliate', 'collab'])
@@ -167,6 +179,17 @@ export async function collabPartnerCanViewOrderDetails(orderId: string): Promise
   } as never);
   if (error) {
     console.error('collabPartnerCanViewOrderDetails', error);
+    return false;
+  }
+  return data === true;
+}
+
+export async function collabPartnerCanMarkOrderShipped(orderId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('collab_can_mark_order_shipped' as never, {
+    p_order_id: orderId,
+  } as never);
+  if (error) {
+    console.error('collabPartnerCanMarkOrderShipped', error);
     return false;
   }
   return data === true;

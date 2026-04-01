@@ -707,6 +707,8 @@ export type Database = {
           currency: string | null
           event_id: string | null
           fulfillment_status: string | null
+          shipped_at: string | null
+          carrier_tracking_number: string | null
           id: string
           metadata: Json | null
           order_no: string | null
@@ -739,6 +741,8 @@ export type Database = {
           currency?: string | null
           event_id?: string | null
           fulfillment_status?: string | null
+          shipped_at?: string | null
+          carrier_tracking_number?: string | null
           id?: string
           metadata?: Json | null
           order_no?: string | null
@@ -771,6 +775,8 @@ export type Database = {
           currency?: string | null
           event_id?: string | null
           fulfillment_status?: string | null
+          shipped_at?: string | null
+          carrier_tracking_number?: string | null
           id?: string
           metadata?: Json | null
           order_no?: string | null
@@ -1609,6 +1615,7 @@ export type Database = {
         Row: {
           affiliate_org_id: string | null
           collab_can_view_order_details: boolean | null
+          collab_can_mark_shipped: boolean | null
           collab_partner_role: string | null
           collab_sales_scope: string | null
           commission_rate: number | null
@@ -1629,6 +1636,7 @@ export type Database = {
         Insert: {
           affiliate_org_id?: string | null
           collab_can_view_order_details?: boolean | null
+          collab_can_mark_shipped?: boolean | null
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
           commission_rate?: number | null
@@ -1649,6 +1657,7 @@ export type Database = {
         Update: {
           affiliate_org_id?: string | null
           collab_can_view_order_details?: boolean | null
+          collab_can_mark_shipped?: boolean | null
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
           commission_rate?: number | null
@@ -1962,6 +1971,7 @@ export type Database = {
           unread_count: number
         }[]
       }
+      collab_can_mark_order_shipped: { Args: { p_order_id: string }; Returns: boolean }
       collab_can_access_order: {
         Args: {
           p_min_role: string
@@ -2033,6 +2043,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_order_carrier_tracking: {
+        Args: { p_carrier_tracking_number?: string; p_order_id: string }
+        Returns: boolean
+      }
+      set_order_shipped: { Args: { p_order_id: string; p_shipped: boolean }; Returns: boolean }
       update_order_fulfillment: {
         Args: {
           p_confirmed_at?: string

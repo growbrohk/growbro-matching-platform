@@ -56,6 +56,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [collabSalesScope, setCollabSalesScope] = useState<'attributed' | 'all_for_resource'>('attributed');
   const [collabPartnerRole, setCollabPartnerRole] = useState<'viewer' | 'editor'>('viewer');
   const [collabCanViewDetails, setCollabCanViewDetails] = useState(false);
+  const [collabCanMarkShipped, setCollabCanMarkShipped] = useState(false);
 
   // Fetch events for current org
   const { data: events = [], isLoading: isEventsLoading } = useQuery({
@@ -128,6 +129,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       setCollabSalesScope('attributed');
       setCollabPartnerRole('viewer');
       setCollabCanViewDetails(false);
+      setCollabCanMarkShipped(false);
     }
   };
 
@@ -315,6 +317,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         insertData.collab_sales_scope = collabSalesScope;
         insertData.collab_partner_role = collabPartnerRole;
         insertData.collab_can_view_order_details = collabCanViewDetails;
+        insertData.collab_can_mark_shipped = collabCanMarkShipped;
       }
 
       const { data, error } = await (supabase.from('tracking_links' as any) as any)
@@ -382,6 +385,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setCollabSalesScope('attributed');
     setCollabPartnerRole('viewer');
     setCollabCanViewDetails(false);
+    setCollabCanMarkShipped(false);
     setSlug('');
     setCreatedLink(null);
     setCopied(false);
@@ -690,6 +694,22 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                     onChange={(e) => setCollabCanViewDetails(e.target.checked)}
                   />
                 </div>
+                <div className="flex items-start justify-between gap-2">
+                  <Label htmlFor="collab-shipped" className="text-sm font-normal leading-snug">
+                    Allow partner to mark sent and tracking (after payment is confirmed)
+                  </Label>
+                  <input
+                    id="collab-shipped"
+                    type="checkbox"
+                    className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
+                    checked={collabCanMarkShipped}
+                    onChange={(e) => setCollabCanMarkShipped(e.target.checked)}
+                    disabled={collabPartnerRole !== 'editor'}
+                  />
+                </div>
+                {collabPartnerRole !== 'editor' ? (
+                  <p className="text-xs text-muted-foreground">Editors only — set role to Editor to enable.</p>
+                ) : null}
               </div>
             )}
 

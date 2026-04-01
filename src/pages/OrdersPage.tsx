@@ -142,6 +142,9 @@ export default function OrdersPage() {
             const showDetailsButton =
               !order.partnerRowAccess?.isPartnerRow || order.partnerRowAccess.canViewOrderDetails;
 
+            const statusBadge =
+              order.order_type === 'product' && order.shipped_at ? 'Sent' : null;
+
             return (
               <OrderListRowCompact
                 key={order.id}
@@ -156,6 +159,7 @@ export default function OrdersPage() {
                 showConfirm={showConfirm}
                 showDetailsButton={showDetailsButton}
                 orderId={order.id}
+                statusBadge={statusBadge}
               />
             );
           })

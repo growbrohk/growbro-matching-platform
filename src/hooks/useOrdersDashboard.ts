@@ -17,6 +17,8 @@ export interface Order {
   event_id: string | null;
   order_type: 'event' | 'product' | null;
   metadata: Record<string, any> | null;
+  shipped_at?: string | null;
+  carrier_tracking_number?: string | null;
   displayName: string;
   previewImageUrl: string | null;
   /** When set, current org sees this row as affiliate/collab partner (not host). */
@@ -137,7 +139,9 @@ export function useOrdersDashboard(
           order_no,
           event_id,
           order_type,
-          metadata
+          metadata,
+          shipped_at,
+          carrier_tracking_number
         `)
         .eq('order_type', 'product')
         .eq('host_org_id', currentOrg.id)
@@ -162,7 +166,9 @@ export function useOrdersDashboard(
             order_no,
             event_id,
             order_type,
-            metadata
+            metadata,
+            shipped_at,
+            carrier_tracking_number
           `)
           .in('event_id', eventIds)
           .gte('created_at', startISO)
@@ -212,6 +218,8 @@ export function useOrdersDashboard(
           event_id: order.event_id || null,
           order_type: order.order_type || 'event',
           metadata: order.metadata || null,
+          shipped_at: order.shipped_at ?? null,
+          carrier_tracking_number: order.carrier_tracking_number ?? null,
         }));
 
       // Helper function to check if order is pending or confirmed

@@ -14,6 +14,8 @@ export interface OrderListRowCompactProps {
   orderId: string;
   /** When false, hide the details link (e.g. collab partner without detail access). Default true. */
   showDetailsButton?: boolean;
+  /** e.g. "Sent" for dispatched product orders */
+  statusBadge?: string | null;
 }
 
 /**
@@ -30,6 +32,7 @@ export function OrderListRowCompact({
   showConfirm,
   orderId,
   showDetailsButton = true,
+  statusBadge,
 }: OrderListRowCompactProps) {
   const [imageError, setImageError] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -106,6 +109,7 @@ export function OrderListRowCompact({
           </div>
           <div className="text-xs truncate" style={{ color: 'rgba(15,31,23,0.6)' }}>
             {createdAtLabel}
+            {statusBadge ? ` · ${statusBadge}` : ''}
           </div>
         </div>
       </div>

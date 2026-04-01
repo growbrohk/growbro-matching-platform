@@ -61,6 +61,8 @@ export interface OrderWithOrgAndProducts {
     submitted_at: string | null;
     paid_at: string | null;
     created_at: string;
+    shipped_at?: string | null;
+    carrier_tracking_number?: string | null;
     metadata?: Record<string, unknown>;
   };
   org: {

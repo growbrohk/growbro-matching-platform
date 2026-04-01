@@ -242,6 +242,8 @@ export function ProductsContent({
                 order.payment_status === 'submitted' ||
                 order.fulfillment_status === 'pending_confirmation';
 
+              const statusBadge = order.shipped_at ? 'Sent' : null;
+
               return (
                 <OrderListRowCompact
                   key={order.id}
@@ -255,6 +257,7 @@ export function ProductsContent({
                   }}
                   showConfirm={showConfirm}
                   orderId={order.id}
+                  statusBadge={statusBadge}
                 />
               );
             })
