@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
 import { Card, CardContent } from '@/components/ui/card';
@@ -189,6 +189,17 @@ export default function DashboardPage() {
     rangeKey: selectedRange,
   });
 
+  const pendingShippingOrdersSnapshot = useMemo(
+    () => dashboardData?.pendingShippingOrders ?? [],
+    [dashboardData?.pendingShippingOrders],
+  );
+  useEffect(() => {
+    if (!dispatchModalOrderId) return;
+    if (!pendingShippingOrdersSnapshot.some((o) => o.id === dispatchModalOrderId)) {
+      setDispatchModalOrderId(null);
+    }
+  }, [dispatchModalOrderId, pendingShippingOrdersSnapshot]);
+
   // Calculate total pipeline revenue: sum of host revenue + sum of affiliate revenue
   const pipelineRevenueTotal = (hostPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0) +
     (collabPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0);
@@ -234,13 +245,6 @@ export default function DashboardPage() {
   const dispatchModalOrder = dispatchModalOrderId
     ? pendingShippingOrders.find((o) => o.id === dispatchModalOrderId)
     : undefined;
-
-  useEffect(() => {
-    if (!dispatchModalOrderId) return;
-    if (!pendingShippingOrders.some((o) => o.id === dispatchModalOrderId)) {
-      setDispatchModalOrderId(null);
-    }
-  }, [dispatchModalOrderId, pendingShippingOrders]);
 
   return (
     <>

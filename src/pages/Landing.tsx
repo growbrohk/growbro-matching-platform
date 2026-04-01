@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { motion, AnimatePresence, useInView } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import { useMemo, useRef } from "react";
 import {
   ArrowRight,
@@ -76,20 +76,14 @@ function InViewPop({
   const inView = useInView(ref, { once: true, margin: "-120px" });
   return (
     <div ref={ref} className={className}>
-      <AnimatePresence>
-        {inView && (
-          <motion.div
-            key="inview"
-            variants={popIn}
-            initial="hidden"
-            animate="show"
-            exit="exit"
-            transition={{ delay }}
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div
+        variants={popIn}
+        initial="hidden"
+        animate={inView ? "show" : "hidden"}
+        transition={{ delay }}
+      >
+        {children}
+      </motion.div>
     </div>
   );
 }
