@@ -89,6 +89,18 @@ function AccessVariantSummary({ v }: { v: TicketTypeAccessVariantSnapshot }) {
   return <span className="text-sm">{parts.filter(Boolean).join(' · ')}</span>;
 }
 
+function ProductPromoVariantSummary({
+  v,
+}: {
+  v: NonNullable<OrderWithOrgAndProducts['order_items'][number]['product_access_variant']>;
+}) {
+  const parts = [v.visibility_mode];
+  if (v.access_code) parts.push(`code: ${v.access_code}`);
+  if (v.price_override != null) parts.push(`override ${v.price_override}`);
+  if (v.discount_percent != null) parts.push(`${v.discount_percent}% off`);
+  return <span className="text-sm">{parts.filter(Boolean).join(' · ')}</span>;
+}
+
 function JsonBlock({ value, label }: { value: unknown; label: string }) {
   const [open, setOpen] = useState(false);
   let text = '';
@@ -201,6 +213,14 @@ function ProductDetailBody({
             <div style={{ color: MUTED }}>
               Qty {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
             </div>
+            {item.product_access_variant && (
+              <div className="mt-1 pl-2 border-l-2 border-gray-200">
+                <span style={{ color: MUTED }} className="text-xs uppercase">
+                  Promo link
+                </span>
+                <ProductPromoVariantSummary v={item.product_access_variant} />
+              </div>
+            )}
             {item.metadata && Object.keys(item.metadata).length > 0 && (
               <div className="mt-2">
                 <JsonBlock value={item.metadata} label="Item metadata" />

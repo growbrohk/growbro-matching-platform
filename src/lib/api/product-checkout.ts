@@ -12,6 +12,8 @@ export interface CreateProductOrderItem {
   unit_price: number;
   product_name: string;
   variant_label?: string | null;
+  /** Server validates and applies promo pricing; must match URL ?code= variant when used */
+  product_access_variant_id?: string | null;
 }
 
 export interface CreateProductOrderContact {
@@ -79,6 +81,13 @@ export interface OrderWithOrgAndProducts {
     metadata: Record<string, unknown>;
     product_name: string;
     variant_label: string | null;
+    product_access_variant?: {
+      id: string;
+      visibility_mode: string;
+      access_code: string | null;
+      price_override: number | null;
+      discount_percent: number | null;
+    } | null;
   }>;
 }
 
@@ -99,6 +108,7 @@ export async function createProductOrder(
     unit_price: i.unit_price,
     product_name: i.product_name,
     variant_label: i.variant_label || null,
+    product_access_variant_id: i.product_access_variant_id ?? null,
   }));
 
   const pContact = {

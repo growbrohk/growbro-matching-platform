@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon, Package, Boxes } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon, Package, Boxes, Copy } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -26,6 +26,12 @@ import {
   MAX_PRODUCT_GALLERY_EXTRA,
   mergeProductDetailMetadata,
 } from '@/lib/utils/product-media';
+import {
+  getProductAccessVariants,
+  replaceProductAccessVariants,
+  type ProductAccessVariantInput,
+  type ProductAccessVariantVisibility,
+} from '@/lib/api/products';
 
 /** Catalog uploads: not the 50KB receipt target — product pages need clearer images. */
 const PRODUCT_PHOTO_TARGET_BYTES = 500 * 1024;
@@ -66,6 +72,39 @@ type Warehouse = {
   name: string;
   address: string | null;
 };
+
+type ProductAccessVariantForm = {
+  visibility_mode: ProductAccessVariantVisibility;
+  access_code: string | null;
+  allowed_affiliates: string | null;
+  price_override: string | null;
+  discount_percent: string | null;
+  quota: string | null;
+  is_active: boolean;
+};
+
+function defaultProductAccessVariants(): ProductAccessVariantForm[] {
+  return [
+    {
+      visibility_mode: 'public',
+      access_code: null,
+      allowed_affiliates: null,
+      price_override: null,
+      discount_percent: null,
+      quota: null,
+      is_active: true,
+    },
+  ];
+}
+
+function generateProductAccessCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 function toDecimalOrNull(input: string): number | null {
   const trimmed = input.trim();
@@ -242,7 +281,10 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [basePrice, setBasePrice] = useState('');
   const [isOnSale, setIsOnSale] = useState(true);
   const [simpleStock, setSimpleStock] = useState('0'); // Stock for simple products
-  
+  const [productAccessVariants, setProductAccessVariants] = useState<ProductAccessVariantForm[]>(
+    defaultProductAccessVariants,
+  );
+
   // Category (using database tables)
   const [categoryId, setCategoryId] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -527,7 +569,33 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         
         // Load warehouses
         await loadWarehouses(variantsList);
-        
+
+        if (p.type === 'physical') {
+          try {
+            const pavList = await getProductAccessVariants(p.id);
+            if (pavList.length > 0) {
+              setProductAccessVariants(
+                pavList.map((row) => ({
+                  visibility_mode: row.visibility_mode,
+                  access_code: row.access_code,
+                  allowed_affiliates: row.allowed_affiliates?.join(', ') ?? null,
+                  price_override: row.price_override != null ? String(row.price_override) : null,
+                  discount_percent: row.discount_percent != null ? String(row.discount_percent) : null,
+                  quota: row.quota != null ? String(row.quota) : null,
+                  is_active: row.is_active !== false,
+                })),
+              );
+            } else {
+              setProductAccessVariants(defaultProductAccessVariants());
+            }
+          } catch (pavErr) {
+            console.warn('Failed to load product access variants', pavErr);
+            setProductAccessVariants(defaultProductAccessVariants());
+          }
+        } else {
+          setProductAccessVariants(defaultProductAccessVariants());
+        }
+
         // Load stock for simple products
         if (productKind === 'simple' && variantsList.length > 0) {
           const defaultVariantId = variantsList[0]?.id;
@@ -937,6 +1005,43 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     toast({
       title: 'Variants regenerated',
       description: parts.length > 0 ? parts.join(', ') : 'No changes',
+    });
+  };
+
+  const handleUpdateProductAccessVariant = (
+    idx: number,
+    field: keyof ProductAccessVariantForm,
+    value: unknown,
+    extra?: Partial<ProductAccessVariantForm>,
+  ) => {
+    setProductAccessVariants((prev) => {
+      const next = [...prev];
+      const cur = next[idx];
+      if (!cur) return prev;
+      next[idx] = { ...cur, [field]: value, ...extra };
+      return next;
+    });
+  };
+
+  const handleAddProductAccessVariant = () => {
+    setProductAccessVariants((prev) => [
+      ...prev,
+      {
+        visibility_mode: 'code',
+        access_code: '',
+        allowed_affiliates: null,
+        price_override: null,
+        discount_percent: null,
+        quota: null,
+        is_active: true,
+      },
+    ]);
+  };
+
+  const handleRemoveProductAccessVariant = (idx: number) => {
+    setProductAccessVariants((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== idx);
     });
   };
 
@@ -1364,6 +1469,63 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         console.error('Error auto-creating inventory items:', invError);
       }
 
+      if (effectiveType === 'physical') {
+        for (const v of productAccessVariants) {
+          if (v.visibility_mode === 'code' && (!v.access_code || !String(v.access_code).trim())) {
+            toast({
+              title: 'Validation',
+              description: 'Each code access rule needs an access code.',
+              variant: 'destructive',
+            });
+            setSaving(false);
+            return;
+          }
+          if (v.quota?.trim()) {
+            const q = parseInt(v.quota, 10);
+            if (!Number.isFinite(q) || q < 1) {
+              toast({
+                title: 'Validation',
+                description: 'Promo quota must be a positive integer or empty.',
+                variant: 'destructive',
+              });
+              setSaving(false);
+              return;
+            }
+          }
+        }
+
+        const pavInputs: ProductAccessVariantInput[] = productAccessVariants.map((v) => {
+          const canPrice =
+            v.visibility_mode === 'code' || v.visibility_mode === 'affiliate';
+          const po =
+            canPrice && v.price_override?.trim() ? toDecimalOrNull(v.price_override) : null;
+          const dp =
+            canPrice && v.discount_percent?.trim()
+              ? (() => {
+                  const n = parseFloat(v.discount_percent);
+                  return Number.isFinite(n) ? n : null;
+                })()
+              : null;
+          return {
+            visibility_mode: v.visibility_mode,
+            access_code: v.visibility_mode === 'code' ? (v.access_code?.trim() || null) : null,
+            allowed_affiliates:
+              v.visibility_mode === 'affiliate' && v.allowed_affiliates
+                ? v.allowed_affiliates
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : null,
+            price_override: po,
+            discount_percent: dp,
+            quota: v.quota?.trim() ? parseInt(v.quota, 10) : null,
+            is_active: v.is_active,
+          };
+        });
+
+        await replaceProductAccessVariants(productId!, pavInputs);
+      }
+
       toast({ title: 'Success', description: isEditMode ? 'Product updated' : 'Product created' });
       if (props?.onSuccess && productId) {
         props.onSuccess(productId);
@@ -1734,21 +1896,224 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                 </div>
 
                 {(embedded ? props?.productType : productType) === 'physical' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="metadataShippingWeightKg">Shipping weight (kg per unit)</Label>
-                    <Input
-                      id="metadataShippingWeightKg"
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={metadataShippingWeightKg}
-                      onChange={(e) => setMetadataShippingWeightKg(e.target.value)}
-                      placeholder="e.g. 0.5"
-                      className="h-10"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Used to calculate delivery fees at checkout (door / SF Locker).
-                    </p>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="metadataShippingWeightKg">Shipping weight (kg per unit)</Label>
+                      <Input
+                        id="metadataShippingWeightKg"
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={metadataShippingWeightKg}
+                        onChange={(e) => setMetadataShippingWeightKg(e.target.value)}
+                        placeholder="e.g. 0.5"
+                        className="h-10"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Used to calculate delivery fees at checkout (door / SF Locker).
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                      <Label className="text-sm font-medium block">Access &amp; promo links</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Add rules like event tickets: a code link can show a special price or discount %. Save the
+                        product first to copy a shareable URL.
+                      </p>
+                      {productAccessVariants.map((variant, vIdx) => (
+                        <div
+                          key={vIdx}
+                          className="mb-4 p-4 rounded-lg border space-y-3"
+                          style={{ borderColor: 'rgba(14,122,58,0.2)', backgroundColor: 'rgba(251,248,244,0.3)' }}
+                        >
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <Select
+                              value={variant.visibility_mode}
+                              onValueChange={(value) =>
+                                handleUpdateProductAccessVariant(vIdx, 'visibility_mode', value as ProductAccessVariantVisibility)
+                              }
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="public">Public</SelectItem>
+                                <SelectItem value="code">Code</SelectItem>
+                                <SelectItem value="affiliate">Affiliate</SelectItem>
+                                <SelectItem value="hidden">Hidden</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <Label htmlFor={`pav-active-${vIdx}`} className="text-xs">
+                                  Active
+                                </Label>
+                                <Switch
+                                  id={`pav-active-${vIdx}`}
+                                  checked={variant.is_active !== false}
+                                  onCheckedChange={(checked) =>
+                                    handleUpdateProductAccessVariant(vIdx, 'is_active', checked)
+                                  }
+                                />
+                              </div>
+                              {productAccessVariants.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveProductAccessVariant(vIdx)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          {variant.visibility_mode === 'code' && (
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                value={variant.access_code || ''}
+                                onChange={(e) =>
+                                  handleUpdateProductAccessVariant(vIdx, 'access_code', e.target.value || null)
+                                }
+                                placeholder="Access code"
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleUpdateProductAccessVariant(
+                                    vIdx,
+                                    'access_code',
+                                    generateProductAccessCode(),
+                                  )
+                                }
+                              >
+                                Generate
+                              </Button>
+                            </div>
+                          )}
+                          {variant.visibility_mode === 'affiliate' && (
+                            <Textarea
+                              value={variant.allowed_affiliates || ''}
+                              onChange={(e) => {
+                                const affiliates = e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter((s) => s.length > 0);
+                                handleUpdateProductAccessVariant(
+                                  vIdx,
+                                  'allowed_affiliates',
+                                  affiliates.length > 0 ? affiliates.join(', ') : null,
+                                );
+                              }}
+                              placeholder="Allowed affiliate slugs (comma-separated)"
+                              rows={2}
+                              className="text-sm"
+                            />
+                          )}
+                          {(variant.visibility_mode === 'code' || variant.visibility_mode === 'affiliate') && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs font-medium">New price ($)</Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={variant.price_override ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value.trim();
+                                    handleUpdateProductAccessVariant(vIdx, 'price_override', val ? val : null, val ? { discount_percent: null } : undefined);
+                                  }}
+                                  placeholder="Override price"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs font-medium">Discount %</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="1"
+                                  value={variant.discount_percent ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value.trim();
+                                    handleUpdateProductAccessVariant(vIdx, 'discount_percent', val ? val : null, val ? { price_override: null } : undefined);
+                                  }}
+                                  placeholder="e.g. 20"
+                                  className="mt-1"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <Label className="text-xs font-medium">Quota (optional)</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={variant.quota ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value.trim();
+                                handleUpdateProductAccessVariant(vIdx, 'quota', val ? val : null);
+                              }}
+                              placeholder="Max units via this promo"
+                              className="mt-1 max-w-[180px]"
+                            />
+                          </div>
+                          {variant.visibility_mode === 'code' &&
+                            variant.access_code?.trim() &&
+                            isEditMode &&
+                            id &&
+                            currentOrg?.slug && (
+                              <div>
+                                <Label className="text-xs font-medium mb-1 block">Share product link</Label>
+                                <div className="flex gap-2">
+                                  <Input
+                                    readOnly
+                                    value={`https://growbrohk.com/${currentOrg.slug}/products/${id}?code=${encodeURIComponent(variant.access_code.trim())}`}
+                                    className="flex-1 font-mono text-xs"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await navigator.clipboard.writeText(
+                                          `https://growbrohk.com/${currentOrg.slug}/products/${id}?code=${encodeURIComponent(variant.access_code!.trim())}`,
+                                        );
+                                        toast({ title: 'Copied!', description: 'Product link copied' });
+                                      } catch {
+                                        toast({
+                                          title: 'Error',
+                                          description: 'Failed to copy',
+                                          variant: 'destructive',
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddProductAccessVariant}
+                        className="mt-1"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add access variant
+                      </Button>
+                    </div>
                   </div>
                 )}
 

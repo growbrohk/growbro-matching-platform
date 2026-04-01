@@ -14,6 +14,8 @@ export interface PublicCartItem {
   imageUrl?: string | null;
   qty: number;
   unitPrice: number;
+  /** When set, checkout applies server-side promo pricing for this line */
+  productAccessVariantId?: string | null;
   /** Per-unit weight for shipping (from product metadata); optional for older persisted carts */
   weightKgPerUnit?: number;
 }
@@ -81,7 +83,10 @@ export function PublicCartProvider({ children }: { children: ReactNode }) {
       const qty = item.qty ?? 1;
       setCart((prev) => {
         const existing = prev.findIndex(
-          (c) => c.productId === item.productId && c.variantId === item.variantId
+          (c) =>
+            c.productId === item.productId &&
+            c.variantId === item.variantId &&
+            (c.productAccessVariantId ?? null) === (item.productAccessVariantId ?? null),
         );
         if (existing >= 0) {
           const next = [...prev];
@@ -91,6 +96,7 @@ export function PublicCartProvider({ children }: { children: ReactNode }) {
             qty: cur.qty + qty,
             imageUrl: item.imageUrl ?? cur.imageUrl,
             weightKgPerUnit: item.weightKgPerUnit ?? cur.weightKgPerUnit,
+            unitPrice: item.unitPrice ?? cur.unitPrice,
           };
           return next;
         }

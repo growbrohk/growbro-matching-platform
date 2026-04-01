@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
   getProductWithVariants,
@@ -20,6 +20,8 @@ const RESERVED_ORG_SLUGS = [
 
 export default function PublicProductPage() {
   const { orgSlug, productId } = useParams<{ orgSlug: string; productId: string }>();
+  const [searchParams] = useSearchParams();
+  const codeParam = searchParams.get('code');
   const [loading, setLoading] = useState(true);
   const [productData, setProductData] = useState<{ product: any; variants: any[] } | null>(null);
   const [org, setOrg] = useState<any>(null);
@@ -110,6 +112,7 @@ export default function PublicProductPage() {
           org={org}
           orgSlug={orgSlug!}
           relatedProducts={relatedProducts ?? []}
+          codeParam={codeParam}
         />
       </div>
     </div>

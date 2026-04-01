@@ -37,6 +37,32 @@ export interface UpdateVariantData extends Partial<Omit<CreateVariantData, 'prod
   id: string;
 }
 
+export type ProductAccessVariantVisibility = 'public' | 'code' | 'affiliate' | 'hidden';
+
+export interface ProductAccessVariant {
+  id: string;
+  product_id: string;
+  visibility_mode: ProductAccessVariantVisibility;
+  access_code: string | null;
+  allowed_affiliates: string[] | null;
+  price_override: number | null;
+  discount_percent: number | null;
+  quota: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductAccessVariantInput {
+  visibility_mode: ProductAccessVariantVisibility;
+  access_code?: string | null;
+  allowed_affiliates?: string[] | null;
+  price_override?: number | null;
+  discount_percent?: number | null;
+  quota?: number | null;
+  is_active?: boolean;
+}
+
 // ============================================================================
 // PRODUCTS
 // ============================================================================
@@ -478,4 +504,58 @@ export async function duplicateProduct(
   }
 
   return { product: newProduct, variants: newVariants };
+}
+
+// ============================================================================
+// PRODUCT ACCESS VARIANTS (promo / code links)
+// ============================================================================
+
+export async function getProductAccessVariants(productId: string): Promise<ProductAccessVariant[]> {
+  const { data, error } = await supabase
+    .from('product_access_variants')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch product access variants');
+  }
+
+  return (data || []) as ProductAccessVariant[];
+}
+
+/**
+ * Replace all access variants for a product (full sync).
+ */
+export async function replaceProductAccessVariants(
+  productId: string,
+  variants: ProductAccessVariantInput[],
+): Promise<void> {
+  const { error: delErr } = await supabase
+    .from('product_access_variants')
+    .delete()
+    .eq('product_id', productId);
+
+  if (delErr) {
+    throw new Error(delErr.message || 'Failed to clear product access variants');
+  }
+
+  if (variants.length === 0) return;
+
+  const rows = variants.map((v) => ({
+    product_id: productId,
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ?? null,
+    discount_percent: v.discount_percent ?? null,
+    quota: v.quota ?? null,
+    is_active: v.is_active !== false,
+  }));
+
+  const { error: insErr } = await supabase.from('product_access_variants').insert(rows);
+
+  if (insErr) {
+    throw new Error(insErr.message || 'Failed to save product access variants');
+  }
 }

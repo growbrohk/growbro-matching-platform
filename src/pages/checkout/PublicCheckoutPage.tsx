@@ -433,6 +433,7 @@ export default function PublicCheckoutPage() {
         unit_price: item.unitPrice,
         product_name: item.name,
         variant_label: item.variantLabel || null,
+        product_access_variant_id: item.productAccessVariantId ?? null,
       }));
 
       const orderId = await createProductOrder(

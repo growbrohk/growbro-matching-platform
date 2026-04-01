@@ -18,7 +18,12 @@ import {
 import { ShoppingCart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
-import { relatedProductCardImageUrl, type RelatedProductSummary } from '@/lib/api/products';
+import {
+  relatedProductCardImageUrl,
+  type RelatedProductSummary,
+  getProductAccessVariants,
+  type ProductAccessVariant,
+} from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
@@ -40,6 +45,8 @@ interface PublicProductFormProps {
   org: Org;
   orgSlug: string;
   relatedProducts?: RelatedProductSummary[];
+  /** URL ?code= — matches product_access_variants for promo pricing */
+  codeParam?: string | null;
 }
 
 function formatPrice(amount: number): string {
@@ -57,6 +64,7 @@ export default function PublicProductForm({
   org,
   orgSlug,
   relatedProducts = [],
+  codeParam = null,
 }: PublicProductFormProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,6 +77,23 @@ export default function PublicProductForm({
 
   const [variantRankOrder, setVariantRankOrder] = useState<string[]>([]);
   const [variantValueOrders, setVariantValueOrders] = useState<Record<string, string[]>>({});
+  const [productAccessVariants, setProductAccessVariants] = useState<ProductAccessVariant[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getProductAccessVariants(product.id);
+        if (!cancelled) setProductAccessVariants(list);
+      } catch {
+        if (!cancelled) setProductAccessVariants([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [product.id]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -248,7 +273,35 @@ export default function PublicProductForm({
 
   const mainSrc = photos[selectedImageIndex] ?? photos[0] ?? null;
 
-  const displayPrice = effectiveSelectedVariant?.price ?? product.base_price ?? 0;
+  const matchedPromoVariant = useMemo((): ProductAccessVariant | null => {
+    if (!codeParam) return null;
+    const active = productAccessVariants.filter((v) => v.is_active !== false);
+    const found = active.find(
+      (v) => v.visibility_mode === 'code' && v.access_code === codeParam,
+    );
+    return found ?? null;
+  }, [codeParam, productAccessVariants]);
+
+  const baseUnitPrice = effectiveSelectedVariant?.price ?? product.base_price ?? 0;
+
+  const { displayPrice, discountPercentLabel } = useMemo(() => {
+    let effective = baseUnitPrice;
+    if (matchedPromoVariant) {
+      const po = matchedPromoVariant.price_override;
+      const dp = matchedPromoVariant.discount_percent;
+      if (po != null) {
+        effective = Number(po);
+      } else if (dp != null) {
+        effective = baseUnitPrice * (1 - Number(dp) / 100);
+      }
+    }
+    const discountPct =
+      matchedPromoVariant && effective < baseUnitPrice
+        ? Math.round((1 - effective / baseUnitPrice) * 100)
+        : null;
+    return { displayPrice: effective, discountPercentLabel: discountPct };
+  }, [baseUnitPrice, matchedPromoVariant]);
+
   const hasMultipleVariants = activeVariants.length > 1;
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
@@ -285,7 +338,8 @@ export default function PublicProductForm({
       name: product.title,
       variantLabel,
       imageUrl: lineImageUrl,
-      unitPrice: variant.price ?? product.base_price ?? 0,
+      unitPrice: displayPrice,
+      productAccessVariantId: matchedPromoVariant?.id ?? null,
       qty: quantityNum,
       weightKgPerUnit,
     });
@@ -358,9 +412,22 @@ export default function PublicProductForm({
             >
               {product.title}
             </h1>
-            <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
-              {displayPrice > 0 ? formatPrice(displayPrice) : 'Free'}
-            </p>
+            <div className="flex flex-wrap items-baseline gap-2">
+              {matchedPromoVariant && discountPercentLabel != null && discountPercentLabel > 0 && baseUnitPrice > displayPrice && (
+                <span className="text-lg line-through text-muted-foreground">
+                  {baseUnitPrice > 0 ? formatPrice(baseUnitPrice) : ''}
+                </span>
+              )}
+              <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
+                {displayPrice > 0 ? formatPrice(displayPrice) : 'Free'}
+              </p>
+              {matchedPromoVariant && discountPercentLabel != null && discountPercentLabel > 0 && (
+                <span className="text-sm font-medium text-emerald-700">{discountPercentLabel}% off</span>
+              )}
+            </div>
+            {codeParam && !matchedPromoVariant && product.type === 'physical' && (
+              <p className="text-sm text-muted-foreground mt-1">This code does not apply to this product.</p>
+            )}
           </div>
 
           {hasMultipleVariants &&

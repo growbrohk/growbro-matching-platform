@@ -636,18 +636,22 @@ export type Database = {
           created_at: string
           id: string
           order_id: string
+          product_access_variant_id: string | null
           quantity: number
           subtotal: number
-          ticket_type_id: string
+          ticket_type_access_variant_id: string | null
+          ticket_type_id: string | null
           unit_price: number
         }
         Insert: {
           created_at?: string
           id?: string
           order_id: string
+          product_access_variant_id?: string | null
           quantity: number
           subtotal: number
-          ticket_type_id: string
+          ticket_type_access_variant_id?: string | null
+          ticket_type_id?: string | null
           unit_price: number
         }
         Update: {
@@ -655,8 +659,10 @@ export type Database = {
           id?: string
           order_id?: string
           quantity?: number
+          product_access_variant_id?: string | null
           subtotal?: number
-          ticket_type_id?: string
+          ticket_type_access_variant_id?: string | null
+          ticket_type_id?: string | null
           unit_price?: number
         }
         Relationships: [
@@ -1073,6 +1079,56 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_access_variants: {
+        Row: {
+          access_code: string | null
+          allowed_affiliates: string[] | null
+          created_at: string
+          discount_percent: number | null
+          id: string
+          is_active: boolean
+          price_override: number | null
+          product_id: string
+          quota: number | null
+          updated_at: string
+          visibility_mode: string
+        }
+        Insert: {
+          access_code?: string | null
+          allowed_affiliates?: string[] | null
+          created_at?: string
+          discount_percent?: number | null
+          id?: string
+          is_active?: boolean
+          price_override?: number | null
+          product_id: string
+          quota?: number | null
+          updated_at?: string
+          visibility_mode: string
+        }
+        Update: {
+          access_code?: string | null
+          allowed_affiliates?: string[] | null
+          created_at?: string
+          discount_percent?: number | null
+          id?: string
+          is_active?: boolean
+          price_override?: number | null
+          product_id?: string
+          quota?: number | null
+          updated_at?: string
+          visibility_mode?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_access_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
