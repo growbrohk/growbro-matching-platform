@@ -579,26 +579,32 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
       )}
 
       <Dialog open={showProofDialog} onOpenChange={setShowProofDialog}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 pr-10">
             <DialogTitle>Payment proof</DialogTitle>
           </DialogHeader>
-          {proofLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : proofSignedUrl ? (
-            <div className="space-y-2">
-              <a href={proofSignedUrl} target="_blank" rel="noopener noreferrer" className="text-sm underline">
-                Open in new tab
-              </a>
-              {/\.(jpg|jpeg|png|gif|webp)$/i.test(proofSignedUrl.split('?')[0]) ? (
-                <img src={proofSignedUrl} alt="Payment proof" className="w-full rounded-md border" />
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Could not load proof file.</p>
-          )}
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+            {proofLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : proofSignedUrl ? (
+              <div className="space-y-2">
+                <a href={proofSignedUrl} target="_blank" rel="noopener noreferrer" className="text-sm underline">
+                  Open in new tab
+                </a>
+                {/\.(jpg|jpeg|png|gif|webp)$/i.test(proofSignedUrl.split('?')[0]) ? (
+                  <img
+                    src={proofSignedUrl}
+                    alt="Payment proof"
+                    className="h-auto w-full max-w-full rounded-md border object-contain"
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Could not load proof file.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

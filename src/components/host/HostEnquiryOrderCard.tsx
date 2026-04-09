@@ -329,22 +329,22 @@ export default function HostEnquiryOrderCard({ order, onConfirmed, onDetails }: 
 
       {/* Payment Proof Dialog */}
       <Dialog open={showProofDialog} onOpenChange={setShowProofDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 pr-10">
             <DialogTitle>{receiptLinkText}</DialogTitle>
             <DialogDescription className="sr-only">
               Shows the payment receipt image uploaded by the buyer.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4">
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
             {proofLoading ? (
               <div className="text-sm text-gray-500">Loading receipt…</div>
             ) : proofSignedUrl ? (
               <img
                 src={proofSignedUrl}
                 alt="Payment proof"
-                className="w-full h-auto rounded-lg border"
+                className="h-auto w-full max-w-full rounded-lg border object-contain"
                 style={{ borderColor: 'rgba(14,122,58,0.14)' }}
                 onError={() => {
                   console.error('Receipt image failed to load:', proofSignedUrl, {
