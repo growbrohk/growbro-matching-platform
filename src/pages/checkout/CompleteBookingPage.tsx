@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Sheet,
@@ -53,15 +54,42 @@ import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 
 function AddonProductPreview({ src, title }: { src?: string | null; title: string }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const url = typeof src === 'string' ? src.trim() : '';
   if (!url) return null;
   return (
-    <img
-      src={url}
-      alt={title}
-      className="h-12 w-12 shrink-0 rounded-md object-cover border"
-      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setLightboxOpen(true)}
+        className="h-12 w-12 shrink-0 rounded-md border overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0E7A3A] cursor-zoom-in transition-opacity hover:opacity-90 active:opacity-80"
+        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+        aria-label={`View full size: ${title}`}
+      >
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      </button>
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent
+          className="sm:max-w-[min(92vw,48rem)] max-h-[90vh] overflow-y-auto p-4 pt-12 gap-3 rounded-2xl"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>Full-size product photo</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <img
+              src={url}
+              alt={title}
+              className="max-h-[min(75vh,720px)] w-auto max-w-full rounded-lg object-contain"
+            />
+          </div>
+          <p className="text-center text-sm font-medium px-2" style={{ color: '#0F1F17' }}>
+            {title}
+          </p>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
