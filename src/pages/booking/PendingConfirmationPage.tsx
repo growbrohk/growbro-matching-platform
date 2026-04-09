@@ -183,13 +183,13 @@ export default function PendingConfirmationPage() {
         <div 
           className="rounded-2xl px-6 py-4 mb-6 flex items-center gap-3"
           style={{ 
-            backgroundColor: 'rgba(251,191,36,0.1)',
-            border: `1px solid rgba(251,191,36,0.2)`
+            backgroundColor: 'rgba(14,122,58,0.1)',
+            border: `1px solid rgba(14,122,58,0.2)`
           }}
         >
-          <Clock className="h-6 w-6" style={{ color: '#FBBF24' }} />
+          <Clock className="h-6 w-6" style={{ color: BRAND.green }} />
           <div>
-            <p className="font-semibold text-base" style={{ color: '#FBBF24', fontFamily: "'Inter Tight', sans-serif" }}>
+            <p className="font-semibold text-base" style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
               Waiting for host to verify your payment
             </p>
             <p className="text-sm mt-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
