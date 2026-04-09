@@ -52,6 +52,19 @@ import type { Event } from '@/lib/types';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 
+function AddonProductPreview({ src, title }: { src?: string | null; title: string }) {
+  const url = typeof src === 'string' ? src.trim() : '';
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt={title}
+      className="h-12 w-12 shrink-0 rounded-md object-cover border"
+      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+    />
+  );
+}
+
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -508,15 +521,18 @@ export default function CompleteBookingPage() {
                     className="p-4 rounded-2xl border"
                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium" style={{ color: '#0F1F17' }}>
-                        {addon.product_title}
-                      </span>
-                      {addon.is_required && (
-                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                          Required
+                    <div className="flex items-start gap-3 mb-2">
+                      <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
+                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                        <span className="font-medium" style={{ color: '#0F1F17' }}>
+                          {addon.product_title}
                         </span>
-                      )}
+                        {addon.is_required && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                            Required
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {hasVariants ? (
                       <div className="space-y-2">
@@ -750,13 +766,16 @@ export default function CompleteBookingPage() {
                                     className="p-3 rounded-xl border text-sm"
                                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                                   >
-                                    <div className="flex items-center justify-between mb-2">
-                                      <span className="font-medium">{addon.product_title}</span>
-                                      {addon.is_required && (
-                                        <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                                          Required
-                                        </span>
-                                      )}
+                                    <div className="flex items-start gap-3 mb-2">
+                                      <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
+                                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                                        <span className="font-medium">{addon.product_title}</span>
+                                        {addon.is_required && (
+                                          <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                                            Required
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                     {hasVariants ? (
                                       <div className="space-y-2">
@@ -1045,13 +1064,16 @@ export default function CompleteBookingPage() {
                                 className="p-3 rounded-xl border text-sm"
                                 style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                               >
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="font-medium">{addon.product_title}</span>
-                                  {addon.is_required && (
-                                    <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">
-                                      Required
-                                    </span>
-                                  )}
+                                <div className="flex items-start gap-3 mb-2">
+                                  <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
+                                  <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                                    <span className="font-medium">{addon.product_title}</span>
+                                    {addon.is_required && (
+                                      <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
+                                        Required
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 {hasVariants ? (
                                   <div className="space-y-2">

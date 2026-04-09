@@ -16,6 +16,8 @@ export interface EventAddonVariant {
 export interface EventAddonForCheckout {
   product_id: string;
   product_title: string;
+  /** Primary product image (products.image_url); optional for older RPC responses */
+  product_image_url?: string | null;
   base_price: number;
   is_required: boolean;
   sort_order: number;
