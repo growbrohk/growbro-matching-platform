@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,14 @@ import {
 import { formatEventDate } from '@/lib/utils/datetime';
 import { getEvent } from '@/lib/api/events';
 import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
+import {
+  addonEnforcesStock,
+  resolvedVariantId,
+  stockRemainingForVariant,
+  maxQtyPrimary,
+  maxQtyPerTicketAttendee,
+  computeAddonStockOrderError,
+} from '@/lib/utils/event-addon-stock';
 import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
@@ -284,6 +292,15 @@ export default function CompleteBookingPage() {
     const required = eventAddons.filter((a) => a.is_required);
     if (required.length === 0) return true;
 
+    for (const addon of required) {
+      if (
+        addon.show_remaining_stock &&
+        !addon.variants.some((v) => (v.stock_remaining ?? 0) > 0)
+      ) {
+        return false;
+      }
+    }
+
     if (event?.collect_attendee_info === 'per_ticket') {
       return attendees.every((_, idx) =>
         required.every((addon) => {
@@ -302,9 +319,21 @@ export default function CompleteBookingPage() {
     });
   };
 
+  const addonStockOrderError = useMemo(
+    () =>
+      computeAddonStockOrderError(
+        eventAddons,
+        event?.collect_attendee_info === 'per_ticket' ? 'per_ticket' : 'primary',
+        addonSelections,
+        addonSelectionsByAttendee
+      ),
+    [eventAddons, event?.collect_attendee_info, addonSelections, addonSelectionsByAttendee]
+  );
+
   // Check if form is valid (contact/attendees + T&C + required add-ons)
   const isFormValid = (): boolean => {
     if (!tcAccepted) return false;
+    if (addonStockOrderError) return false;
     if (!areRequiredAddonsValid()) return false;
     if (event?.collect_attendee_info === 'per_ticket') {
       return areAttendeesValid() && isContactValid();
@@ -539,10 +568,24 @@ export default function CompleteBookingPage() {
               {eventAddons.map((addon) => {
                 const sel = addonSelections[addon.product_id] ?? { qty: 0 };
                 const hasVariants = addon.variants.length > 1;
-                const unitPrice =
-                  hasVariants && sel.variantId
-                    ? addon.variants.find((v) => v.id === sel.variantId)?.price ?? addon.base_price ?? 0
-                    : addon.base_price ?? 0;
+                const enforced = addonEnforcesStock(addon);
+                const vid = resolvedVariantId(addon, sel);
+                const allVariantsOos =
+                  enforced && hasVariants && addon.variants.every((v) => (v.stock_remaining ?? 0) <= 0);
+                const stock =
+                  hasVariants && !sel.variantId
+                    ? null
+                    : stockRemainingForVariant(addon, sel.variantId ?? vid);
+                const outOfStock =
+                  allVariantsOos ||
+                  (enforced &&
+                    !hasVariants &&
+                    (stockRemainingForVariant(addon, vid) ?? 0) <= 0) ||
+                  (enforced && hasVariants && !!sel.variantId && (stock ?? 0) <= 0);
+                const maxQ = maxQtyPrimary(addon, sel);
+                const fixedQty = addon.fixed_quantity ?? 0;
+                const maxQForFixed = enforced ? maxQtyPrimary(addon, { variantId: vid, qty: fixedQty }) : 9999;
+                const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
                 return (
                   <div
                     key={addon.product_id}
@@ -562,21 +605,35 @@ export default function CompleteBookingPage() {
                         )}
                       </div>
                     </div>
+                    {enforced && stock != null && stock > 0 && (
+                      <p className="text-xs text-muted-foreground mb-2">{stock} remaining</p>
+                    )}
+                    {outOfStock && (
+                      <p className="text-sm font-medium text-destructive mb-2">Out of stock</p>
+                    )}
                     {hasVariants ? (
                       <div className="space-y-2">
                         <Label className="text-sm">Select option</Label>
                         <Select
                           value={sel.variantId ?? ''}
                           onValueChange={(v) =>
-                            setAddonSelections((prev) => ({
-                              ...prev,
-                              [addon.product_id]: {
-                                ...prev[addon.product_id],
+                            setAddonSelections((prev) => {
+                              const prevQty = prev[addon.product_id]?.qty ?? 1;
+                              const next = {
                                 variantId: v,
-                                qty: addon.fixed_quantity ?? 1,
-                              },
-                            }))
+                                qty: addon.fixed_quantity ?? prevQty,
+                              };
+                              const cap = maxQtyPrimary(addon, next);
+                              return {
+                                ...prev,
+                                [addon.product_id]: {
+                                  variantId: v,
+                                  qty: Math.min(next.qty, cap),
+                                },
+                              };
+                            })
                           }
+                          disabled={allVariantsOos}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Choose..." />
@@ -585,15 +642,30 @@ export default function CompleteBookingPage() {
                             className="max-h-60 max-w-[90vw] !overflow-auto"
                             viewportClassName="min-w-[min(20rem,90vw)] w-max"
                           >
-                            {addon.variants.map((v) => (
-                              <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
-                                {v.name} – HK$ {v.price.toFixed(0)}
-                              </SelectItem>
-                            ))}
+                            {addon.variants.map((v) => {
+                              const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
+                              return (
+                                <SelectItem
+                                  key={v.id}
+                                  value={v.id}
+                                  disabled={vOos}
+                                  className="whitespace-nowrap py-2"
+                                >
+                                  {v.name} – HK$ {v.price.toFixed(0)}
+                                  {addonEnforcesStock(addon) ? (
+                                    vOos ? (
+                                      <span className="text-destructive"> (Out of stock)</span>
+                                    ) : (
+                                      <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
+                                    )
+                                  ) : null}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                         {sel.variantId && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Label className="text-sm">Quantity</Label>
                             {addon.fixed_quantity != null ? (
                               <span className="text-sm font-medium">{addon.fixed_quantity}</span>
@@ -601,9 +673,12 @@ export default function CompleteBookingPage() {
                               <Input
                                 type="number"
                                 min={1}
+                                max={enforced ? maxQ : undefined}
                                 value={sel.qty}
+                                disabled={outOfStock}
                                 onChange={(e) => {
-                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                  const q = enforced ? Math.min(raw, maxQ) : raw;
                                   setAddonSelections((prev) => ({
                                     ...prev,
                                     [addon.product_id]: { ...prev[addon.product_id], qty: q },
@@ -616,18 +691,19 @@ export default function CompleteBookingPage() {
                         )}
                       </div>
                     ) : addon.fixed_quantity != null ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Label className="text-sm">Quantity</Label>
                         <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                         {!addon.is_required && (
                           <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
                             <Checkbox
                               checked={sel.qty > 0}
+                              disabled={!canIncludeFixed && sel.qty === 0}
                               onCheckedChange={(c) =>
                                 setAddonSelections((prev) => ({
                                   ...prev,
                                   [addon.product_id]: {
-                                    qty: c === true ? addon.fixed_quantity! : 0,
+                                    qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
                                   },
                                 }))
                               }
@@ -640,14 +716,17 @@ export default function CompleteBookingPage() {
                         </span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Label className="text-sm">Quantity</Label>
                         <Input
                           type="number"
                           min={0}
+                          max={enforced ? maxQ : undefined}
                           value={sel.qty}
+                          disabled={outOfStock}
                           onChange={(e) => {
-                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            const q = enforced ? Math.min(raw, maxQ) : raw;
                             setAddonSelections((prev) => ({
                               ...prev,
                               [addon.product_id]: { qty: q },
@@ -788,6 +867,31 @@ export default function CompleteBookingPage() {
                               {eventAddons.map((addon) => {
                                 const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
                                 const hasVariants = addon.variants.length > 1;
+                                const enforced = addonEnforcesStock(addon);
+                                const vid = resolvedVariantId(addon, sel);
+                                const allVariantsOos =
+                                  enforced && hasVariants && addon.variants.every((v) => (v.stock_remaining ?? 0) <= 0);
+                                const stock =
+                                  hasVariants && !sel.variantId
+                                    ? null
+                                    : stockRemainingForVariant(addon, sel.variantId ?? vid);
+                                const outOfStock =
+                                  allVariantsOos ||
+                                  (enforced &&
+                                    !hasVariants &&
+                                    (stockRemainingForVariant(addon, vid) ?? 0) <= 0) ||
+                                  (enforced && hasVariants && !!sel.variantId && (stock ?? 0) <= 0);
+                                const maxQ = maxQtyPerTicketAttendee(addon, sel, index, addonSelectionsByAttendee);
+                                const fixedQty = addon.fixed_quantity ?? 0;
+                                const maxQForFixed = enforced
+                                  ? maxQtyPerTicketAttendee(
+                                      addon,
+                                      { variantId: vid, qty: fixedQty },
+                                      index,
+                                      addonSelectionsByAttendee
+                                    )
+                                  : 9999;
+                                const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
                                 return (
                                   <div
                                     key={addon.product_id}
@@ -805,24 +909,43 @@ export default function CompleteBookingPage() {
                                         )}
                                       </div>
                                     </div>
+                                    {enforced &&
+                                      (sel.variantId || !hasVariants) &&
+                                      maxQ >= 0 &&
+                                      !outOfStock && (
+                                      <p className="text-xs text-muted-foreground mb-1">
+                                        Up to {maxQ} available here (shared inventory)
+                                      </p>
+                                    )}
+                                    {outOfStock && (
+                                      <p className="text-xs font-medium text-destructive mb-1">Out of stock</p>
+                                    )}
                                     {hasVariants ? (
                                       <div className="space-y-2">
                                         <Label className="text-xs">Select option</Label>
                                         <Select
                                           value={sel.variantId ?? ''}
                                           onValueChange={(v) =>
-                                            setAddonSelectionsByAttendee((prev) => ({
-                                              ...prev,
-                                              [index]: {
-                                                ...(prev[index] ?? {}),
-                                                [addon.product_id]: {
-                                                  ...(prev[index]?.[addon.product_id] ?? {}),
-                                                  variantId: v,
-                                                  qty: addon.fixed_quantity ?? 1,
+                                            setAddonSelectionsByAttendee((prev) => {
+                                              const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
+                                              const next = {
+                                                variantId: v,
+                                                qty: addon.fixed_quantity ?? prevQty,
+                                              };
+                                              const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
+                                              return {
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: {
+                                                    variantId: v,
+                                                    qty: Math.min(next.qty, cap),
+                                                  },
                                                 },
-                                              },
-                                            }))
+                                              };
+                                            })
                                           }
+                                          disabled={allVariantsOos}
                                         >
                                           <SelectTrigger className="h-9">
                                             <SelectValue placeholder="Choose..." />
@@ -831,15 +954,30 @@ export default function CompleteBookingPage() {
                                             className="max-h-60 max-w-[90vw] !overflow-auto"
                                             viewportClassName="min-w-[min(20rem,90vw)] w-max"
                                           >
-                                            {addon.variants.map((v) => (
-                                              <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
-                                                {v.name} – HK$ {v.price.toFixed(0)}
-                                              </SelectItem>
-                                            ))}
+                                            {addon.variants.map((v) => {
+                                              const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
+                                              return (
+                                                <SelectItem
+                                                  key={v.id}
+                                                  value={v.id}
+                                                  disabled={vOos}
+                                                  className="whitespace-nowrap py-2"
+                                                >
+                                                  {v.name} – HK$ {v.price.toFixed(0)}
+                                                  {addonEnforcesStock(addon) ? (
+                                                    vOos ? (
+                                                      <span className="text-destructive"> (Out of stock)</span>
+                                                    ) : (
+                                                      <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
+                                                    )
+                                                  ) : null}
+                                                </SelectItem>
+                                              );
+                                            })}
                                           </SelectContent>
                                         </Select>
                                         {sel.variantId && (
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <Label className="text-xs">Qty</Label>
                                             {addon.fixed_quantity != null ? (
                                               <span className="text-sm font-medium">{addon.fixed_quantity}</span>
@@ -847,9 +985,12 @@ export default function CompleteBookingPage() {
                                               <Input
                                                 type="number"
                                                 min={1}
+                                                max={enforced ? maxQ : undefined}
                                                 value={sel.qty}
+                                                disabled={outOfStock}
                                                 onChange={(e) => {
-                                                  const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                  const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                  const q = enforced ? Math.min(raw, maxQ) : raw;
                                                   setAddonSelectionsByAttendee((prev) => ({
                                                     ...prev,
                                                     [index]: {
@@ -865,20 +1006,21 @@ export default function CompleteBookingPage() {
                                         )}
                                       </div>
                                     ) : addon.fixed_quantity != null ? (
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
                                         <Label className="text-xs">Qty</Label>
                                         <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                                         {!addon.is_required && (
                                           <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
                                             <Checkbox
                                               checked={sel.qty > 0}
+                                              disabled={!canIncludeFixed && sel.qty === 0}
                                               onCheckedChange={(c) =>
                                                 setAddonSelectionsByAttendee((prev) => ({
                                                   ...prev,
                                                   [index]: {
                                                     ...(prev[index] ?? {}),
                                                     [addon.product_id]: {
-                                                      qty: c === true ? addon.fixed_quantity! : 0,
+                                                      qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
                                                     },
                                                   },
                                                 }))
@@ -892,14 +1034,17 @@ export default function CompleteBookingPage() {
                                         </span>
                                       </div>
                                     ) : (
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
                                         <Label className="text-xs">Qty</Label>
                                         <Input
                                           type="number"
                                           min={0}
+                                          max={enforced ? maxQ : undefined}
                                           value={sel.qty}
+                                          disabled={outOfStock}
                                           onChange={(e) => {
-                                            const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            const q = enforced ? Math.min(raw, maxQ) : raw;
                                             setAddonSelectionsByAttendee((prev) => ({
                                               ...prev,
                                               [index]: {
@@ -1086,6 +1231,31 @@ export default function CompleteBookingPage() {
                           {eventAddons.map((addon) => {
                             const sel = (addonSelectionsByAttendee[index] ?? {})[addon.product_id] ?? { qty: 0 };
                             const hasVariants = addon.variants.length > 1;
+                            const enforced = addonEnforcesStock(addon);
+                            const vid = resolvedVariantId(addon, sel);
+                            const allVariantsOos =
+                              enforced && hasVariants && addon.variants.every((v) => (v.stock_remaining ?? 0) <= 0);
+                            const stock =
+                              hasVariants && !sel.variantId
+                                ? null
+                                : stockRemainingForVariant(addon, sel.variantId ?? vid);
+                            const outOfStock =
+                              allVariantsOos ||
+                              (enforced &&
+                                !hasVariants &&
+                                (stockRemainingForVariant(addon, vid) ?? 0) <= 0) ||
+                              (enforced && hasVariants && !!sel.variantId && (stock ?? 0) <= 0);
+                            const maxQ = maxQtyPerTicketAttendee(addon, sel, index, addonSelectionsByAttendee);
+                            const fixedQty = addon.fixed_quantity ?? 0;
+                            const maxQForFixed = enforced
+                              ? maxQtyPerTicketAttendee(
+                                  addon,
+                                  { variantId: vid, qty: fixedQty },
+                                  index,
+                                  addonSelectionsByAttendee
+                                )
+                              : 9999;
+                            const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
                             return (
                               <div
                                 key={addon.product_id}
@@ -1103,24 +1273,43 @@ export default function CompleteBookingPage() {
                                     )}
                                   </div>
                                 </div>
+                                {enforced &&
+                                  (sel.variantId || !hasVariants) &&
+                                  maxQ >= 0 &&
+                                  !outOfStock && (
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Up to {maxQ} available here (shared inventory)
+                                  </p>
+                                )}
+                                {outOfStock && (
+                                  <p className="text-xs font-medium text-destructive mb-1">Out of stock</p>
+                                )}
                                 {hasVariants ? (
                                   <div className="space-y-2">
                                     <Label className="text-xs">Select option</Label>
                                     <Select
                                       value={sel.variantId ?? ''}
                                       onValueChange={(v) =>
-                                        setAddonSelectionsByAttendee((prev) => ({
-                                          ...prev,
-                                          [index]: {
-                                            ...(prev[index] ?? {}),
-                                            [addon.product_id]: {
-                                              ...(prev[index]?.[addon.product_id] ?? {}),
-                                              variantId: v,
-                                              qty: addon.fixed_quantity ?? 1,
+                                        setAddonSelectionsByAttendee((prev) => {
+                                          const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
+                                          const next = {
+                                            variantId: v,
+                                            qty: addon.fixed_quantity ?? prevQty,
+                                          };
+                                          const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
+                                          return {
+                                            ...prev,
+                                            [index]: {
+                                              ...(prev[index] ?? {}),
+                                              [addon.product_id]: {
+                                                variantId: v,
+                                                qty: Math.min(next.qty, cap),
+                                              },
                                             },
-                                          },
-                                        }))
+                                          };
+                                        })
                                       }
+                                      disabled={allVariantsOos}
                                     >
                                       <SelectTrigger className="h-9">
                                         <SelectValue placeholder="Choose..." />
@@ -1129,15 +1318,30 @@ export default function CompleteBookingPage() {
                                         className="max-h-60 max-w-[90vw] !overflow-auto"
                                         viewportClassName="min-w-[min(20rem,90vw)] w-max"
                                       >
-                                        {addon.variants.map((v) => (
-                                          <SelectItem key={v.id} value={v.id} className="whitespace-nowrap py-2">
-                                            {v.name} – HK$ {v.price.toFixed(0)}
-                                          </SelectItem>
-                                        ))}
+                                        {addon.variants.map((v) => {
+                                          const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
+                                          return (
+                                            <SelectItem
+                                              key={v.id}
+                                              value={v.id}
+                                              disabled={vOos}
+                                              className="whitespace-nowrap py-2"
+                                            >
+                                              {v.name} – HK$ {v.price.toFixed(0)}
+                                              {addonEnforcesStock(addon) ? (
+                                                vOos ? (
+                                                  <span className="text-destructive"> (Out of stock)</span>
+                                                ) : (
+                                                  <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
+                                                )
+                                              ) : null}
+                                            </SelectItem>
+                                          );
+                                        })}
                                       </SelectContent>
                                     </Select>
                                     {sel.variantId && (
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-wrap">
                                         <Label className="text-xs">Qty</Label>
                                         {addon.fixed_quantity != null ? (
                                           <span className="text-sm font-medium">{addon.fixed_quantity}</span>
@@ -1145,9 +1349,12 @@ export default function CompleteBookingPage() {
                                           <Input
                                             type="number"
                                             min={1}
+                                            max={enforced ? maxQ : undefined}
                                             value={sel.qty}
+                                            disabled={outOfStock}
                                             onChange={(e) => {
-                                              const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                              const q = enforced ? Math.min(raw, maxQ) : raw;
                                               setAddonSelectionsByAttendee((prev) => ({
                                                 ...prev,
                                                 [index]: {
@@ -1163,20 +1370,21 @@ export default function CompleteBookingPage() {
                                     )}
                                   </div>
                                 ) : addon.fixed_quantity != null ? (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <Label className="text-xs">Qty</Label>
                                     <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                                     {!addon.is_required && (
                                       <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
                                         <Checkbox
                                           checked={sel.qty > 0}
+                                          disabled={!canIncludeFixed && sel.qty === 0}
                                           onCheckedChange={(c) =>
                                             setAddonSelectionsByAttendee((prev) => ({
                                               ...prev,
                                               [index]: {
                                                 ...(prev[index] ?? {}),
                                                 [addon.product_id]: {
-                                                  qty: c === true ? addon.fixed_quantity! : 0,
+                                                  qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
                                                 },
                                               },
                                             }))
@@ -1190,14 +1398,17 @@ export default function CompleteBookingPage() {
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <Label className="text-xs">Qty</Label>
                                     <Input
                                       type="number"
                                       min={0}
+                                      max={enforced ? maxQ : undefined}
                                       value={sel.qty}
+                                      disabled={outOfStock}
                                       onChange={(e) => {
-                                        const q = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                        const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                        const q = enforced ? Math.min(raw, maxQ) : raw;
                                         setAddonSelectionsByAttendee((prev) => ({
                                           ...prev,
                                           [index]: {
@@ -1297,6 +1508,9 @@ export default function CompleteBookingPage() {
       {/* Bottom Sticky Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t z-20" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-2">
+          {addonStockOrderError && (
+            <p className="text-sm text-destructive">{addonStockOrderError}</p>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-lg font-bold" style={{ color: '#0F1F17' }}>

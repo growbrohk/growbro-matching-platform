@@ -42,6 +42,7 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
       is_required: boolean;
       sort_order: number;
       fixed_quantity: number | null;
+      show_remaining_stock: boolean;
       product: {
         id: string;
         title: string;
@@ -138,6 +139,15 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
     }
   };
 
+  const handleToggleShowRemainingStock = async (addonId: string, show: boolean) => {
+    try {
+      await updateEventAddon(addonId, { show_remaining_stock: show });
+      await loadAddons();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const alreadyAddedIds = new Set(addons.map((a) => a.product_id));
   const availableProducts = catalogProducts.filter((p) => !alreadyAddedIds.has(p.id));
 
@@ -199,6 +209,11 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
                             Fixed: {addon.fixed_quantity}
                           </span>
                         )}
+                        {addon.show_remaining_stock && (
+                          <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                            Stock shown
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {addon.product.variants.length > 1
@@ -225,7 +240,18 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
                       </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                  <div className="flex flex-col gap-2 pt-2 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={addon.show_remaining_stock}
+                        onCheckedChange={(c) => handleToggleShowRemainingStock(addon.id, c === true)}
+                      />
+                      <span className="text-sm">Limit sales to inventory and show remaining stock</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground pl-6">
+                      Uses your org default warehouse (same as payment stock deduction). Guests cannot exceed available quantity.
+                    </p>
+                    <div className="flex items-center gap-3 flex-wrap">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox
                         checked={addon.fixed_quantity != null}
@@ -257,6 +283,7 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
                         <span className="text-xs text-muted-foreground">per ticket</span>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               ))}

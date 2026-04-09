@@ -11,6 +11,8 @@ export interface EventAddonVariant {
   id: string;
   name: string;
   price: number;
+  /** When host enables stock display; null means not applicable */
+  stock_remaining?: number | null;
 }
 
 export interface EventAddonForCheckout {
@@ -22,6 +24,7 @@ export interface EventAddonForCheckout {
   is_required: boolean;
   sort_order: number;
   fixed_quantity?: number | null;
+  show_remaining_stock?: boolean;
   variants: EventAddonVariant[];
 }
 
@@ -73,7 +76,12 @@ export async function addEventAddon(
  */
 export async function updateEventAddon(
   eventAddonId: string,
-  updates: { is_required?: boolean; sort_order?: number; fixed_quantity?: number | null }
+  updates: {
+    is_required?: boolean;
+    sort_order?: number;
+    fixed_quantity?: number | null;
+    show_remaining_stock?: boolean;
+  }
 ): Promise<void> {
   const { error } = await supabase
     .from('event_addon_products')
@@ -179,12 +187,13 @@ export async function getProductsForAddonPicker(orgId: string): Promise<
  * Get event addons (for event form - includes id for edit/delete)
  */
 export async function getEventAddons(eventId: string): Promise<
-  Array<{
+    Array<{
     id: string;
     product_id: string;
     is_required: boolean;
     sort_order: number;
     fixed_quantity: number | null;
+    show_remaining_stock: boolean;
     product: {
       id: string;
       title: string;
@@ -203,6 +212,7 @@ export async function getEventAddons(eventId: string): Promise<
       is_required,
       sort_order,
       fixed_quantity,
+      show_remaining_stock,
       products (
         id,
         title,
@@ -230,6 +240,7 @@ export async function getEventAddons(eventId: string): Promise<
       is_required: row.is_required,
       sort_order: row.sort_order,
       fixed_quantity: row.fixed_quantity ?? null,
+      show_remaining_stock: row.show_remaining_stock ?? false,
       product: {
         id: p?.id,
         title: p?.title,
