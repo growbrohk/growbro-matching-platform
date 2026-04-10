@@ -242,7 +242,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
  * Update an existing event
  */
 export async function updateEvent(data: UpdateEventData): Promise<Event> {
-  const { id, ...updateData } = data;
+  const { id, ...rest } = data;
+  const updateData = { ...rest } as Record<string, unknown>;
+  delete updateData.org_id;
 
   const { data: event, error } = await supabase
     .from('events')

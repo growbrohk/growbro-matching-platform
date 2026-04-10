@@ -1616,8 +1616,12 @@ export type Database = {
           affiliate_org_id: string | null
           collab_can_view_order_details: boolean | null
           collab_can_mark_shipped: boolean | null
+          collab_partner_allow_edit_tab: boolean | null
+          collab_partner_allow_scan_tab: boolean | null
+          collab_partner_allow_tickets_tab: boolean | null
           collab_partner_role: string | null
           collab_sales_scope: string | null
+          collab_show_event_in_partner_events_tab: boolean | null
           commission_rate: number | null
           created_at: string
           destination_type: string
@@ -1637,8 +1641,12 @@ export type Database = {
           affiliate_org_id?: string | null
           collab_can_view_order_details?: boolean | null
           collab_can_mark_shipped?: boolean | null
+          collab_partner_allow_edit_tab?: boolean | null
+          collab_partner_allow_scan_tab?: boolean | null
+          collab_partner_allow_tickets_tab?: boolean | null
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
+          collab_show_event_in_partner_events_tab?: boolean | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
@@ -1658,8 +1666,12 @@ export type Database = {
           affiliate_org_id?: string | null
           collab_can_view_order_details?: boolean | null
           collab_can_mark_shipped?: boolean | null
+          collab_partner_allow_edit_tab?: boolean | null
+          collab_partner_allow_scan_tab?: boolean | null
+          collab_partner_allow_tickets_tab?: boolean | null
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
+          collab_show_event_in_partner_events_tab?: boolean | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
@@ -1979,6 +1991,10 @@ export type Database = {
           p_require_details: boolean
         }
         Returns: boolean
+      }
+      collab_event_partner_ui_flags: {
+        Args: { p_event_id: string }
+        Returns: Json
       }
       get_or_create_conversation: {
         Args: { p_org_a: string; p_org_b: string }

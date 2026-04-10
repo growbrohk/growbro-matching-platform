@@ -62,6 +62,16 @@ import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 
+export type EventFormCollabEditorContext = {
+  hostOrgId: string;
+  hostOrgSlug: string | null;
+  hostOrgName: string;
+};
+
+type EventFormProps = {
+  collabEditorContext?: EventFormCollabEditorContext | null;
+};
+
 interface AccessVariantForm {
   visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
@@ -92,11 +102,15 @@ interface TicketTypeForm {
   threshold_to_show?: number | null;
 }
 
-export default function EventForm() {
+export default function EventForm({ collabEditorContext = null }: EventFormProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { currentOrg, user } = useAuth();
   const { toast } = useToast();
+
+  const effectiveOrgId = collabEditorContext?.hostOrgId ?? currentOrg?.id;
+  const effectiveOrgSlug = collabEditorContext?.hostOrgSlug ?? currentOrg?.slug ?? null;
+  const effectiveOrgName = collabEditorContext?.hostOrgName ?? currentOrg?.name ?? '';
 
   // Helper to generate UUID v4
   const generateUUID = () => {
@@ -174,12 +188,21 @@ export default function EventForm() {
           return;
         }
 
-        // Check if user has access
-        if (event.org_id !== currentOrg.id) {
-          toast({ 
-            title: 'Error', 
-            description: 'You do not have access to this event', 
-            variant: 'destructive' 
+        if (collabEditorContext) {
+          if (event.org_id !== collabEditorContext.hostOrgId) {
+            toast({
+              title: 'Error',
+              description: 'You do not have access to this event',
+              variant: 'destructive',
+            });
+            navigate('/app/catalog?tab=events');
+            return;
+          }
+        } else if (event.org_id !== currentOrg.id) {
+          toast({
+            title: 'Error',
+            description: 'You do not have access to this event',
+            variant: 'destructive',
           });
           navigate('/app/catalog?tab=events');
           return;
@@ -267,7 +290,7 @@ export default function EventForm() {
     };
 
     loadEvent();
-  }, [id, isEditMode, currentOrg, navigate, toast]);
+  }, [id, isEditMode, currentOrg, collabEditorContext, navigate, toast]);
 
   // Progressive disclosure: show ticket types section when basic info is filled
   useEffect(() => {
@@ -435,8 +458,8 @@ export default function EventForm() {
       // Compressed output is always WebP
       const ext = 'webp';
       let uploadPath: string;
-      if (eventId && currentOrg?.id) {
-        uploadPath = `${currentOrg.id}/${eventId}/instagram-preview.${ext}`;
+      if (eventId && effectiveOrgId) {
+        uploadPath = `${effectiveOrgId}/${eventId}/instagram-preview.${ext}`;
       } else {
         const randomUUID = generateUUID();
         uploadPath = `temp/${user.id}/${randomUUID}.${ext}`;
@@ -519,11 +542,11 @@ export default function EventForm() {
   };
 
   const handleDelete = async () => {
-    if (!eventId || !currentOrg?.id) return;
+    if (!eventId || !effectiveOrgId || collabEditorContext) return;
 
     try {
       setDeleting(true);
-      await deleteEvent(eventId, currentOrg.id);
+      await deleteEvent(eventId, effectiveOrgId);
       toast({
         title: 'Success',
         description: 'Event deleted successfully',
@@ -544,7 +567,7 @@ export default function EventForm() {
   const validateForm = (): string[] => {
     const errors: string[] = [];
     
-    if (!currentOrg?.id) {
+    if (!effectiveOrgId) {
       errors.push('Organization is required');
     }
     if (!title.trim()) {
@@ -603,7 +626,7 @@ export default function EventForm() {
     try {
       // Prepare event data
       const eventData: CreateEventData = {
-        org_id: currentOrg.id,
+        org_id: effectiveOrgId!,
         title: title.trim(),
         description: description.trim() || undefined,
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
@@ -1632,14 +1655,14 @@ export default function EventForm() {
                             />
                             <p className="text-xs text-muted-foreground mt-0.5">Max tickets through this variant. Leave empty to use ticket type quota.</p>
                           </div>
-                          {variant.visibility_mode === 'code' && variant.access_code && eventId && eventSlug && currentOrg?.slug && (
+                          {variant.visibility_mode === 'code' && variant.access_code && eventId && eventSlug && effectiveOrgSlug && (
                             <div>
                               <Label className="text-xs font-medium mb-1 block">Share Ticket Link</Label>
                               <div className="flex gap-2">
-                                <Input readOnly value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${variant.access_code}`} className="flex-1 font-mono text-xs" />
+                                <Input readOnly value={`https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}?code=${variant.access_code}`} className="flex-1 font-mono text-xs" />
                                 <Button type="button" variant="outline" size="sm" onClick={async () => {
                                   try {
-                                    await navigator.clipboard.writeText(`https://growbrohk.com/${currentOrg.slug}/${eventSlug}?code=${variant.access_code}`);
+                                    await navigator.clipboard.writeText(`https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}?code=${variant.access_code}`);
                                     toast({ title: 'Copied!', description: 'Ticket link copied to clipboard' });
                                   } catch (err) {
                                     toast({ title: 'Error', description: 'Failed to copy', variant: 'destructive' });
@@ -1729,7 +1752,7 @@ export default function EventForm() {
         {showTicketTypesSection && <Separator />}
 
         {/* Section 3b: Add-ons (shown when event exists) */}
-        {eventId && currentOrg && (
+        {eventId && currentOrg && !collabEditorContext && (
           <>
             <EventAddonsSection eventId={eventId} orgId={currentOrg.id} />
             <Separator />
@@ -1737,7 +1760,7 @@ export default function EventForm() {
         )}
 
         {/* Section 4: Share Link (shown if event has ID and slug) */}
-        {eventId && eventSlug && currentOrg?.slug && (
+        {eventId && eventSlug && effectiveOrgSlug && (
           <>
             <div className="space-y-4">
               <div>
@@ -1747,7 +1770,7 @@ export default function EventForm() {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
                   <Input
                     readOnly
-                    value={`https://growbrohk.com/${currentOrg.slug}/${eventSlug}`}
+                    value={`https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}`}
                     className="flex-1 font-mono text-sm"
                   />
                   <div className="flex gap-2">
@@ -1756,7 +1779,7 @@ export default function EventForm() {
                       variant="outline"
                       size="sm"
                       onClick={async () => {
-                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                        const url = `https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}`;
                         try {
                           await navigator.clipboard.writeText(url);
                           toast({
@@ -1780,7 +1803,7 @@ export default function EventForm() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const url = `https://growbrohk.com/${currentOrg.slug}/${eventSlug}`;
+                        const url = `https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}`;
                         window.open(url, '_blank');
                       }}
                     >
@@ -1848,7 +1871,7 @@ export default function EventForm() {
         <div className="pt-6 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
           <div className="flex gap-4 justify-between">
             <div className="flex gap-2">
-              {isEditMode && eventId && (
+              {isEditMode && eventId && !collabEditorContext && (
                 <Button
                   type="button"
                   variant="destructive"
@@ -1902,11 +1925,11 @@ export default function EventForm() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 pt-4">
-            {currentOrg && title.trim() && startAt && endAt ? (
+            {effectiveOrgId && title.trim() && startAt && endAt ? (
               <PublicEventForm
                 event={{
                   id: eventId || generateUUID(),
-                  org_id: currentOrg.id,
+                  org_id: effectiveOrgId,
                   title: title.trim(),
                   description: description || '',
                   start_at: startAt ? startAt.toISOString() : '',
@@ -1921,9 +1944,9 @@ export default function EventForm() {
                   updated_at: new Date().toISOString(),
                 }}
                 org={{
-                  id: currentOrg.id,
-                  name: currentOrg.name,
-                  slug: currentOrg?.slug,
+                  id: effectiveOrgId,
+                  name: effectiveOrgName,
+                  slug: effectiveOrgSlug ?? undefined,
                 }}
                 ticketTypes={ticketTypes.map((tt, index) => ({
                   id: tt.id || `preview-${index}`,

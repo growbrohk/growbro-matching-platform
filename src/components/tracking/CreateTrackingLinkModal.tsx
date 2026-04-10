@@ -57,6 +57,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [collabPartnerRole, setCollabPartnerRole] = useState<'viewer' | 'editor'>('viewer');
   const [collabCanViewDetails, setCollabCanViewDetails] = useState(false);
   const [collabCanMarkShipped, setCollabCanMarkShipped] = useState(false);
+  const [collabShowInPartnerEventsTab, setCollabShowInPartnerEventsTab] = useState(true);
+  const [collabAllowEditTab, setCollabAllowEditTab] = useState(false);
+  const [collabAllowTicketsTab, setCollabAllowTicketsTab] = useState(true);
+  const [collabAllowScanTab, setCollabAllowScanTab] = useState(true);
 
   // Fetch events for current org
   const { data: events = [], isLoading: isEventsLoading } = useQuery({
@@ -130,6 +134,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       setCollabPartnerRole('viewer');
       setCollabCanViewDetails(false);
       setCollabCanMarkShipped(false);
+      setCollabShowInPartnerEventsTab(true);
+      setCollabAllowEditTab(false);
+      setCollabAllowTicketsTab(true);
+      setCollabAllowScanTab(true);
     }
   };
 
@@ -318,6 +326,13 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         insertData.collab_partner_role = collabPartnerRole;
         insertData.collab_can_view_order_details = collabCanViewDetails;
         insertData.collab_can_mark_shipped = collabCanMarkShipped;
+        const isEventCollab = finalDestinationType === 'event' && !!selectedEventId;
+        insertData.collab_show_event_in_partner_events_tab = isEventCollab
+          ? collabShowInPartnerEventsTab
+          : true;
+        insertData.collab_partner_allow_edit_tab = isEventCollab ? collabAllowEditTab : false;
+        insertData.collab_partner_allow_tickets_tab = isEventCollab ? collabAllowTicketsTab : true;
+        insertData.collab_partner_allow_scan_tab = isEventCollab ? collabAllowScanTab : true;
       }
 
       const { data, error } = await (supabase.from('tracking_links' as any) as any)
@@ -709,6 +724,73 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 </div>
                 {collabPartnerRole !== 'editor' ? (
                   <p className="text-xs text-muted-foreground">Editors only — set role to Editor to enable.</p>
+                ) : null}
+
+                {destinationType === 'event' && selectedEventId ? (
+                  <div className="space-y-3 pt-2 border-t border-border/60">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Partner dashboard (this event)
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Control what the partner org sees in Events and on the event detail page after the collab is active.
+                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="collab-show-events-tab" className="text-sm font-normal leading-snug">
+                        Show event in partner&apos;s Events tab
+                      </Label>
+                      <input
+                        id="collab-show-events-tab"
+                        type="checkbox"
+                        className="h-4 w-4 accent-gray-800 shrink-0"
+                        checked={collabShowInPartnerEventsTab}
+                        onChange={(e) => setCollabShowInPartnerEventsTab(e.target.checked)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="collab-allow-tickets" className="text-sm font-normal leading-snug">
+                        Allow Tickets tab (guest list)
+                      </Label>
+                      <input
+                        id="collab-allow-tickets"
+                        type="checkbox"
+                        className="h-4 w-4 accent-gray-800 shrink-0"
+                        checked={collabAllowTicketsTab}
+                        onChange={(e) => setCollabAllowTicketsTab(e.target.checked)}
+                      />
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <Label htmlFor="collab-allow-scan" className="text-sm font-normal leading-snug">
+                        Allow Scan tab (check-in). Requires partner role Editor.
+                      </Label>
+                      <input
+                        id="collab-allow-scan"
+                        type="checkbox"
+                        className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
+                        checked={collabAllowScanTab}
+                        onChange={(e) => setCollabAllowScanTab(e.target.checked)}
+                        disabled={collabPartnerRole !== 'editor'}
+                      />
+                    </div>
+                    {collabPartnerRole !== 'editor' ? (
+                      <p className="text-xs text-muted-foreground">Set role to Editor to allow door check-in.</p>
+                    ) : null}
+                    <div className="flex items-start justify-between gap-2">
+                      <Label htmlFor="collab-allow-edit" className="text-sm font-normal leading-snug">
+                        Allow Edit tab (event &amp; ticket setup). Requires partner role Editor.
+                      </Label>
+                      <input
+                        id="collab-allow-edit"
+                        type="checkbox"
+                        className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
+                        checked={collabAllowEditTab}
+                        onChange={(e) => setCollabAllowEditTab(e.target.checked)}
+                        disabled={collabPartnerRole !== 'editor'}
+                      />
+                    </div>
+                    {collabPartnerRole !== 'editor' ? (
+                      <p className="text-xs text-muted-foreground">Set role to Editor to allow editing event details.</p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             )}

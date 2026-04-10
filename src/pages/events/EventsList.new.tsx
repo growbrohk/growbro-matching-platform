@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Calendar, Edit, Search } from 'lucide-react';
-import { getTicketTypes } from '@/lib/api/events';
 import type { Event } from '@/lib/types';
+
+type ListedEvent = Event & { listSource?: 'host' | 'collab' };
 
 interface EventsListProps {
   isEmbeddedInCatalog?: boolean;
@@ -21,7 +22,7 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<ListedEvent[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const canCreate = !!currentOrg?.id;
@@ -37,14 +38,59 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data: ownedData, error } = await supabase
         .from('events')
         .select('*')
         .eq('org_id', currentOrg.id)
         .order('start_at', { ascending: false });
 
       if (error) throw error;
-      setEvents(data || []);
+      const owned = (ownedData || []) as Event[];
+      const ownedIds = new Set(owned.map((e) => e.id));
+
+      const { data: linkRows, error: linkError } = await supabase
+        .from('tracking_links')
+        .select('event_id')
+        .eq('affiliate_org_id', currentOrg.id)
+        .eq('type', 'collab')
+        .eq('status', 'active')
+        .not('event_id', 'is', null)
+        .eq('collab_show_event_in_partner_events_tab', true);
+
+      if (linkError) {
+        console.error('Error fetching collab event links:', linkError);
+      }
+
+      const collabIds = [
+        ...new Set(
+          (linkRows || [])
+            .map((r: { event_id: string | null }) => r.event_id)
+            .filter((id): id is string => Boolean(id) && !ownedIds.has(id)),
+        ),
+      ];
+
+      let collabEvents: Event[] = [];
+      if (collabIds.length > 0) {
+        const { data: collabData, error: collabEventsError } = await supabase
+          .from('events')
+          .select('*')
+          .in('id', collabIds);
+
+        if (collabEventsError) {
+          console.error('Error fetching collab events:', collabEventsError);
+        } else {
+          collabEvents = (collabData || []) as Event[];
+        }
+      }
+
+      const combined: ListedEvent[] = [
+        ...owned.map((e) => ({ ...e, listSource: 'host' as const })),
+        ...collabEvents.map((e) => ({ ...e, listSource: 'collab' as const })),
+      ].sort(
+        (a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime(),
+      );
+
+      setEvents(combined);
     } catch (error: any) {
       console.error('Error fetching events:', error);
       toast({
@@ -187,9 +233,16 @@ export default function EventsList({ isEmbeddedInCatalog = false }: EventsListPr
                       {event.description || 'No description'}
                     </CardDescription>
                   </div>
-                  <Badge className={getStatusColor(event.status)} variant="secondary">
-                    {event.status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {event.listSource === 'collab' && (
+                      <Badge variant="outline" className="text-xs">
+                        Collab
+                      </Badge>
+                    )}
+                    <Badge className={getStatusColor(event.status)} variant="secondary">
+                      {event.status}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
