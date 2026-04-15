@@ -39,8 +39,9 @@ export default function BrandPublicProducts({
   const accent = accentColor || DEFAULT_ACCENT;
 
   const handleProductClick = (p: ProductItem) => {
-    if (orgSlug) {
-      navigate(`/${orgSlug}/products/${p.id}`);
+    const s = p.orgSlug || orgSlug;
+    if (s) {
+      navigate(`/${s}/products/${p.id}`);
     }
   };
 

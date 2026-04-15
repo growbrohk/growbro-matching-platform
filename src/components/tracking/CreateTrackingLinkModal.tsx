@@ -61,6 +61,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [collabAllowEditTab, setCollabAllowEditTab] = useState(false);
   const [collabAllowTicketsTab, setCollabAllowTicketsTab] = useState(true);
   const [collabAllowScanTab, setCollabAllowScanTab] = useState(true);
+  const [collabShowOnPartnerPublicProfile, setCollabShowOnPartnerPublicProfile] = useState(true);
 
   // Fetch events for current org
   const { data: events = [], isLoading: isEventsLoading } = useQuery({
@@ -337,6 +338,12 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
         insertData.collab_partner_allow_edit_tab = isEventCollab ? collabAllowEditTab : false;
         insertData.collab_partner_allow_tickets_tab = isEventCollab ? collabAllowTicketsTab : true;
         insertData.collab_partner_allow_scan_tab = isEventCollab ? collabAllowScanTab : true;
+        const hasResource =
+          (finalDestinationType === 'event' && !!selectedEventId) ||
+          (finalDestinationType === 'product' && !!selectedProductId);
+        insertData.collab_show_on_partner_public_profile = hasResource
+          ? collabShowOnPartnerPublicProfile
+          : false;
       }
 
       const { data, error } = await (supabase.from('tracking_links' as any) as any)
@@ -729,6 +736,25 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 {collabPartnerRole !== 'editor' ? (
                   <p className="text-xs text-muted-foreground">Editors only — set role to Editor to enable.</p>
                 ) : null}
+
+                {((destinationType === 'event' && selectedEventId) ||
+                  (destinationType === 'product' && selectedProductId)) && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+                    <Label
+                      htmlFor="collab-show-partner-public"
+                      className="text-sm font-normal leading-snug"
+                    >
+                      Show on partner&apos;s public brand page
+                    </Label>
+                    <input
+                      id="collab-show-partner-public"
+                      type="checkbox"
+                      className="h-4 w-4 accent-gray-800 shrink-0"
+                      checked={collabShowOnPartnerPublicProfile}
+                      onChange={(e) => setCollabShowOnPartnerPublicProfile(e.target.checked)}
+                    />
+                  </div>
+                )}
 
                 {destinationType === 'event' && selectedEventId ? (
                   <div className="space-y-3 pt-2 border-t border-border/60">

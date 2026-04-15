@@ -42,8 +42,9 @@ export default function BrandPublicEvents({
   const accent = accentColor || DEFAULT_ACCENT;
 
   const handleEventClick = (e: EventItem) => {
-    if (e.slug && orgSlug) {
-      navigate(`/${orgSlug}/${e.slug}`);
+    const s = e.orgSlug || orgSlug;
+    if (e.slug && s) {
+      navigate(`/${s}/${e.slug}`);
     }
   };
 

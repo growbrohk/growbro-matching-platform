@@ -1622,6 +1622,7 @@ export type Database = {
           collab_partner_role: string | null
           collab_sales_scope: string | null
           collab_show_event_in_partner_events_tab: boolean | null
+          collab_show_on_partner_public_profile: boolean | null
           commission_rate: number | null
           created_at: string
           destination_type: string
@@ -1647,6 +1648,7 @@ export type Database = {
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
           collab_show_event_in_partner_events_tab?: boolean | null
+          collab_show_on_partner_public_profile?: boolean | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
@@ -1672,6 +1674,7 @@ export type Database = {
           collab_partner_role?: string | null
           collab_sales_scope?: string | null
           collab_show_event_in_partner_events_tab?: boolean | null
+          collab_show_on_partner_public_profile?: boolean | null
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
@@ -1935,6 +1938,15 @@ export type Database = {
       get_category_product_count: {
         Args: { category_id_param: string }
         Returns: number
+      }
+      get_collab_brand_page_items: {
+        Args: { p_affiliate_org_id: string }
+        Returns: {
+          kind: string
+          host_org_slug: string
+          item_id: string
+          tracking_link_id: string
+        }[]
       }
       get_connected_count: { Args: { p_org_id: string }; Returns: number }
       get_connected_count_public: {
