@@ -23,7 +23,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { QrCodeModal } from '@/components/channels/QrCodeModal';
-import { EditChannelModal } from '@/components/channels/EditChannelModal';
+import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLinkModal';
 import { PipelineRow } from '@/hooks/usePipelineRows';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -467,12 +467,15 @@ export default function PipelinePage() {
               <TableHead style={{ color: '#0F1F17' }}>Link</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>QR Code</TableHead>
               <TableHead style={{ color: '#0F1F17' }}>Status</TableHead>
+              <TableHead className="w-[72px] text-right" style={{ color: '#0F1F17' }}>
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {groupedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                <TableCell colSpan={11} className="text-center py-8" style={{ color: 'rgba(15,31,23,0.6)' }}>
                   No pipelines match your search
                 </TableCell>
               </TableRow>
@@ -487,7 +490,7 @@ export default function PipelinePage() {
                   <React.Fragment key={`type-${typeKey}`}>
                     {/* Level 1: Destination Type Header */}
                     <TableRow className="bg-gray-50">
-                      <TableCell colSpan={10} className="py-2">
+                      <TableCell colSpan={11} className="py-2">
                         <button
                           onClick={() => toggleTypeExpansion(typeKey)}
                           className="flex items-center gap-2 w-full text-left font-semibold"
@@ -510,7 +513,7 @@ export default function PipelinePage() {
                       <React.Fragment key={`dest-${destGroup.destinationKey}`}>
                         {/* Level 2: Destination Key Header */}
                         <TableRow className="bg-gray-100">
-                          <TableCell colSpan={10} className="py-2 pl-8">
+                          <TableCell colSpan={11} className="py-2 pl-8">
                             <button
                               onClick={() => toggleDestExpansion(destGroup.destinationKey)}
                               className="flex items-center gap-2 w-full text-left font-medium"
@@ -641,6 +644,22 @@ export default function PipelinePage() {
                                 {pipeline.status}
                               </Badge>
                             </TableCell>
+                            <TableCell className="text-right">
+                              {mode === 'host' ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                  aria-label="Edit pipeline"
+                                  onClick={() => handleEditClick(pipeline)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </React.Fragment>
@@ -667,20 +686,18 @@ export default function PipelinePage() {
         />
       )}
 
-      {/* Edit Pipeline Modal */}
-      {selectedPipeline && (
-        <EditChannelModal
-          open={editModalOpen}
-          onOpenChange={(open) => {
-            setEditModalOpen(open);
-            if (!open) {
-              setSelectedPipeline(null);
-            }
-          }}
-          channel={selectedPipeline as any}
-          onSuccess={handleEditSuccess}
-        />
-      )}
+      {/* Edit Pipeline — full form (same as create) */}
+      <CreateTrackingLinkModal
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open);
+          if (!open) {
+            setSelectedPipeline(null);
+          }
+        }}
+        editingTrackingLinkId={selectedPipeline?.tracking_link_id ?? null}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   );
 }

@@ -30,12 +30,35 @@ import { OrgSearchCombobox } from './OrgSearchCombobox';
 interface CreateTrackingLinkModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Load this link and save with UPDATE instead of INSERT (host pipeline edit). */
+  editingTrackingLinkId?: string | null;
+  onSuccess?: () => void;
 }
 
 type DestinationType = 'event' | 'product' | 'custom';
 type PipelineType = 'tracking' | 'affiliate' | 'collab' | 'consignment';
 
-export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLinkModalProps) {
+function nullCollabColumnsForNonCollab(): Record<string, null> {
+  return {
+    collab_sales_scope: null,
+    collab_partner_role: null,
+    collab_can_view_order_details: null,
+    collab_can_mark_shipped: null,
+    collab_show_event_in_partner_events_tab: null,
+    collab_partner_allow_edit_tab: null,
+    collab_partner_allow_tickets_tab: null,
+    collab_partner_allow_scan_tab: null,
+    collab_show_on_partner_public_profile: null,
+  };
+}
+
+export function CreateTrackingLinkModal({
+  open,
+  onOpenChange,
+  editingTrackingLinkId = null,
+  onSuccess,
+}: CreateTrackingLinkModalProps) {
+  const isEditMode = Boolean(editingTrackingLinkId);
   const { currentOrg } = useAuth();
   const { toast } = useToast();
   const [label, setLabel] = useState('');
@@ -62,6 +85,8 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
   const [collabAllowTicketsTab, setCollabAllowTicketsTab] = useState(true);
   const [collabAllowScanTab, setCollabAllowScanTab] = useState(true);
   const [collabShowOnPartnerPublicProfile, setCollabShowOnPartnerPublicProfile] = useState(true);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+  const [linkStatus, setLinkStatus] = useState<string>('active');
 
   // Fetch events for current org
   const { data: events = [], isLoading: isEventsLoading } = useQuery({
@@ -70,7 +95,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       if (!currentOrg) return [];
       return getEvents(currentOrg.id);
     },
-    enabled: !!currentOrg && open,
+    enabled: !!currentOrg && open && (destinationType === 'event' || isEditMode),
   });
 
   // Fetch products for current org (host org, not affiliate org)
@@ -80,20 +105,101 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       if (!currentOrg) return [];
       return getProducts(currentOrg.id);
     },
-    enabled: !!currentOrg && open && destinationType === 'product',
+    enabled: !!currentOrg && open && (destinationType === 'product' || isEditMode),
   });
 
   // Fetch connected orgs for affiliate selection
   const { data: connectedOrgs = [] } = useConnectedOrgs(currentOrg?.id);
 
-  // Generate slug from label when label changes
+  // Generate slug from label when label changes (create only; edit keeps fixed slug)
   useEffect(() => {
+    if (isEditMode) return;
     if (label && label.trim()) {
       generateSlugFromLabel(label);
     } else {
       setSlug('');
     }
-  }, [label]);
+  }, [label, isEditMode]);
+
+  // Load existing link for edit
+  useEffect(() => {
+    if (!open || !editingTrackingLinkId || !currentOrg?.id) {
+      if (!open) setLoadingEdit(false);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      setLoadingEdit(true);
+      try {
+        const { data: row, error } = await (supabase.from('tracking_links' as any) as any)
+          .select('*')
+          .eq('id', editingTrackingLinkId)
+          .eq('host_org_id', currentOrg.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+        if (error) throw error;
+        if (!row) {
+          toast({
+            title: 'Error',
+            description: 'Pipeline not found or access denied',
+            variant: 'destructive',
+          });
+          onOpenChange(false);
+          return;
+        }
+
+        const r = row as Record<string, unknown>;
+        setLabel((r.label as string) || '');
+        setSlug((r.slug as string) || '');
+        setPipelineType((r.type as PipelineType) || 'tracking');
+        const dt = r.destination_type as string;
+        setDestinationType(
+          dt === 'event' || dt === 'product' || dt === 'custom' ? (dt as DestinationType) : 'custom',
+        );
+        setSelectedEventId((r.event_id as string) || '');
+        setSelectedProductId((r.product_id as string) || '');
+        if (r.destination_type === 'custom') {
+          setCustomUrl((r.destination_url as string) || '');
+        } else {
+          setCustomUrl('');
+        }
+        setAffiliateOrgId((r.affiliate_org_id as string) || undefined);
+        const cr = r.commission_rate as number | null;
+        setCommissionRate(cr != null ? String(Number(cr) * 100) : '');
+        const sd = r.start_date as string | null;
+        const ed = r.end_date as string | null;
+        setStartDate(sd ? sd.slice(0, 10) : '');
+        setEndDate(ed ? ed.slice(0, 10) : '');
+        setCollabSalesScope((r.collab_sales_scope as 'attributed' | 'all_for_resource') || 'attributed');
+        setCollabPartnerRole((r.collab_partner_role as 'viewer' | 'editor') || 'viewer');
+        setCollabCanViewDetails(r.collab_can_view_order_details === true);
+        setCollabCanMarkShipped(r.collab_can_mark_shipped === true);
+        setCollabShowInPartnerEventsTab(r.collab_show_event_in_partner_events_tab !== false);
+        setCollabAllowEditTab(r.collab_partner_allow_edit_tab === true);
+        setCollabAllowTicketsTab(r.collab_partner_allow_tickets_tab !== false);
+        setCollabAllowScanTab(r.collab_partner_allow_scan_tab !== false);
+        setCollabShowOnPartnerPublicProfile(r.collab_show_on_partner_public_profile !== false);
+        setLinkStatus((r.status as string) || 'active');
+      } catch (e: unknown) {
+        console.error('Load pipeline for edit', e);
+        toast({
+          title: 'Error',
+          description: e instanceof Error ? e.message : 'Failed to load pipeline',
+          variant: 'destructive',
+        });
+        onOpenChange(false);
+      } finally {
+        if (!cancelled) setLoadingEdit(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, editingTrackingLinkId, currentOrg?.id, onOpenChange]);
 
   const generateSlugFromLabel = async (baseText: string) => {
     if (!baseText) return;
@@ -204,7 +310,7 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       return;
     }
 
-    if (!slug) {
+    if (!isEditMode && !slug) {
       toast({
         title: 'Error',
         description: 'Slug generation failed. Please try again.',
@@ -273,7 +379,76 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setIsSubmitting(true);
 
     try {
-      // Validate slug uniqueness (maybeSingle avoids 406 from PostgREST when no row exists)
+      const finalDestinationType: DestinationType = destinationType || 'custom';
+
+      // ----- Update existing pipeline (host edit) -----
+      if (editingTrackingLinkId) {
+        const updateData: Record<string, unknown> = {
+          label: label || null,
+          destination_url: destinationUrl,
+          destination_type: finalDestinationType,
+          type: pipelineType,
+          status: linkStatus,
+          event_id: null,
+          product_id: null,
+          ...nullCollabColumnsForNonCollab(),
+        };
+
+        if (finalDestinationType === 'event' && selectedEventId) {
+          updateData.event_id = selectedEventId;
+        } else if (finalDestinationType === 'product' && selectedProductId) {
+          updateData.product_id = selectedProductId;
+        }
+
+        if (pipelineType === 'affiliate' || pipelineType === 'collab') {
+          updateData.affiliate_org_id = affiliateOrgId;
+          updateData.commission_rate = parseFloat(commissionRate) / 100;
+          updateData.start_date = startDate;
+          updateData.end_date = endDate;
+        } else {
+          updateData.affiliate_org_id = null;
+          updateData.commission_rate = null;
+          updateData.start_date = null;
+          updateData.end_date = null;
+        }
+
+        if (pipelineType === 'collab') {
+          updateData.collab_sales_scope = collabSalesScope;
+          updateData.collab_partner_role = collabPartnerRole;
+          updateData.collab_can_view_order_details = collabCanViewDetails;
+          updateData.collab_can_mark_shipped = collabCanMarkShipped;
+          const isEventCollab = finalDestinationType === 'event' && !!selectedEventId;
+          updateData.collab_show_event_in_partner_events_tab = isEventCollab
+            ? collabShowInPartnerEventsTab
+            : true;
+          updateData.collab_partner_allow_edit_tab = isEventCollab ? collabAllowEditTab : false;
+          updateData.collab_partner_allow_tickets_tab = isEventCollab ? collabAllowTicketsTab : true;
+          updateData.collab_partner_allow_scan_tab = isEventCollab ? collabAllowScanTab : true;
+          const hasResource =
+            (finalDestinationType === 'event' && !!selectedEventId) ||
+            (finalDestinationType === 'product' && !!selectedProductId);
+          updateData.collab_show_on_partner_public_profile = hasResource
+            ? collabShowOnPartnerPublicProfile
+            : false;
+        }
+
+        const { error: upErr } = await (supabase.from('tracking_links' as any) as any)
+          .update(updateData)
+          .eq('id', editingTrackingLinkId)
+          .eq('host_org_id', currentOrg.id);
+
+        if (upErr) throw upErr;
+
+        toast({
+          title: 'Saved',
+          description: 'Pipeline updated successfully.',
+        });
+        onSuccess?.();
+        handleClose();
+        return;
+      }
+
+      // ----- Create (slug must be unique) -----
       const { data: existing, error: slugLookupError } = await (supabase.from('tracking_links' as any) as any)
         .select('id')
         .eq('slug', slug)
@@ -295,9 +470,6 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
 
       // Determine initial status based on type
       const initialStatus = pipelineType === 'tracking' ? 'active' : 'pending';
-
-      // Ensure destination_type is explicitly set (should never be undefined/null)
-      const finalDestinationType: DestinationType = destinationType || 'custom';
 
       // Create tracking link
       const insertData: any = {
@@ -412,9 +584,16 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setCollabPartnerRole('viewer');
     setCollabCanViewDetails(false);
     setCollabCanMarkShipped(false);
+    setCollabShowInPartnerEventsTab(true);
+    setCollabAllowEditTab(false);
+    setCollabAllowTicketsTab(true);
+    setCollabAllowScanTab(true);
+    setCollabShowOnPartnerPublicProfile(true);
     setSlug('');
     setCreatedLink(null);
     setCopied(false);
+    setLoadingEdit(false);
+    setLinkStatus('active');
     onOpenChange(false);
   };
 
@@ -442,14 +621,20 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
       <DialogContent className="max-w-md overflow-hidden max-h-[85vh]">
         <div className="flex flex-col max-h-[85vh]">
           <DialogHeader>
-            <DialogTitle>Create Pipeline</DialogTitle>
+            <DialogTitle>{isEditMode ? 'Edit Pipeline' : 'Create Pipeline'}</DialogTitle>
             <DialogDescription>
-              Create pipelines to increase exposure & income
+              {isEditMode
+                ? 'Update type, destination, partner terms, and collab visibility. Slug is fixed.'
+                : 'Create pipelines to increase exposure & income'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 py-4">
-            {createdLink ? (
+            {loadingEdit && isEditMode ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : createdLink ? (
               <div className="space-y-4">
                 <div className="rounded-lg border p-4 bg-muted/50">
                   <Label className="text-xs text-muted-foreground mb-2 block">Your tracking link</Label>
@@ -502,6 +687,23 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 placeholder="e.g., Instagram Post"
                 required
               />
+              {isEditMode && (
+                <div className="space-y-2 pt-1">
+                  <Label htmlFor="link-status">Status</Label>
+                  <Select value={linkStatus} onValueChange={setLinkStatus}>
+                    <SelectTrigger id="link-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="!z-[9999]" style={{ zIndex: 9999 }}>
+                      <SelectItem value="pending">pending</SelectItem>
+                      <SelectItem value="active">active</SelectItem>
+                      <SelectItem value="inactive">inactive</SelectItem>
+                      <SelectItem value="payment_pending">payment_pending</SelectItem>
+                      <SelectItem value="paid">paid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {slug && (pipelineType === 'tracking' || pipelineType === 'affiliate' || pipelineType === 'collab') && (
                 <div className="space-y-1 pt-1">
                   <p className="text-xs text-muted-foreground">
@@ -833,9 +1035,10 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
               <Button 
                 type="submit" 
                 disabled={
-                  isSubmitting || 
+                  isSubmitting ||
+                  (isEditMode && loadingEdit) ||
                   !label.trim() ||
-                  !slug || 
+                  (!isEditMode && !slug) ||
                   !destinationUrl || 
                   ( (pipelineType === 'affiliate' || pipelineType === 'collab') && (!affiliateOrgId || !commissionRate || !startDate || !endDate)) ||
                   pipelineType === 'consignment'
@@ -845,8 +1048,14 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {pipelineType === 'affiliate' || pipelineType === 'collab' ? 'Sending...' : 'Creating...'}
+                    {isEditMode
+                      ? 'Saving...'
+                      : pipelineType === 'affiliate' || pipelineType === 'collab'
+                        ? 'Sending...'
+                        : 'Creating...'}
                   </>
+                ) : isEditMode ? (
+                  'Save changes'
                 ) : (
                   pipelineType === 'affiliate' || pipelineType === 'collab' ? 'Send collab / partner request' : 'Create Link'
                 )}
