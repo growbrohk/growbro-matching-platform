@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload } from 'lucide-react';
+import { uploadOrgProfileLogo } from '@/lib/storage/uploadOrgProfileLogo';
 import { toast } from 'sonner';
 
 type Role = 'brand' | 'venue' | 'content_creator';
@@ -29,6 +30,19 @@ export default function OnboardingNew() {
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!logoFile) {
+      setLogoPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(logoFile);
+    setLogoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logoFile]);
 
   const handleRoleToggle = (role: Role) => {
     setRoles(prev => 
@@ -92,7 +106,13 @@ export default function OnboardingNew() {
 
       if (updateOrgError) throw updateOrgError;
 
-      // Step 5: Insert/upsert org_profiles
+      // Step 5: Logo — uploaded file wins over pasted URL
+      let resolvedLogoUrl: string | null = logoUrl.trim() || null;
+      if (logoFile) {
+        resolvedLogoUrl = await uploadOrgProfileLogo(logoFile, orgId);
+      }
+
+      // Step 6: Insert/upsert org_profiles
       // Note: org_profiles table may not be in generated types yet, using type assertion
       const { error: profileError } = await (supabase
         .from('org_profiles' as any)
@@ -104,14 +124,14 @@ export default function OnboardingNew() {
           address: address.trim(),
           bio: bio.trim() || null,
           website: website.trim() || null,
-          logo_url: logoUrl.trim() || null,
+          logo_url: resolvedLogoUrl,
         } as any, {
           onConflict: 'org_id'
         })) as { error: any };
 
       if (profileError) throw profileError;
 
-      // Step 6: Final refresh and redirect
+      // Step 7: Final refresh and redirect
       await refreshOrgMemberships();
       toast.success('Profile created successfully!');
       navigate('/app/dashboard');
@@ -323,10 +343,58 @@ export default function OnboardingNew() {
                   />
                 </div>
 
-                {/* Logo URL */}
+                {/* Logo upload + optional URL */}
                 <div className="space-y-2">
-                  <Label htmlFor="logoUrl" style={{ color: '#0F1F17' }}>
-                    Logo URL <span className="text-xs text-gray-500">(optional)</span>
+                  <Label style={{ color: '#0F1F17' }}>
+                    Logo <span className="text-xs text-gray-500">(optional)</span>
+                  </Label>
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="logo-upload-onboarding"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) setLogoFile(file);
+                    }}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10"
+                      style={{ borderColor: 'rgba(14,122,58,0.25)', color: '#0F1F17' }}
+                      disabled={loading}
+                      onClick={() => logoFileInputRef.current?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload photo
+                    </Button>
+                    {logoFile ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-10 px-2 text-xs"
+                        style={{ color: 'rgba(15,31,23,0.72)' }}
+                        disabled={loading}
+                        onClick={() => setLogoFile(null)}
+                      >
+                        Remove file
+                      </Button>
+                    ) : null}
+                    {(logoPreviewUrl || (!logoFile && logoUrl.trim())) ? (
+                      <img
+                        src={logoPreviewUrl || logoUrl}
+                        alt=""
+                        className="h-10 w-10 rounded-lg border object-cover"
+                        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                      />
+                    ) : null}
+                  </div>
+                  <Label htmlFor="logoUrl" className="text-xs font-normal" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                    Or paste image URL
                   </Label>
                   <Input
                     id="logoUrl"

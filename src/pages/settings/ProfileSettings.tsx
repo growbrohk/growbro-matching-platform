@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth, OrgProfile } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, Upload } from 'lucide-react';
+import { uploadOrgProfileLogo } from '@/lib/storage/uploadOrgProfileLogo';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,6 +32,9 @@ export default function ProfileSettings() {
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoRenderNonce, setLogoRenderNonce] = useState(0);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleRoleToggle = (role: Role) => {
     setRoles(prev => 
@@ -98,6 +102,24 @@ export default function ProfileSettings() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !currentOrg?.id) return;
+
+    setUploadingLogo(true);
+    try {
+      const publicUrl = await uploadOrgProfileLogo(file, currentOrg.id);
+      setLogoUrl(publicUrl);
+      setLogoRenderNonce((n) => n + 1);
+      toast.success('Logo uploaded');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const handleSave = async () => {
     // Validation
@@ -409,10 +431,47 @@ export default function ProfileSettings() {
             />
           </div>
 
-          {/* Logo URL */}
+          {/* Logo upload + optional URL */}
           <div className="space-y-2">
-            <Label htmlFor="logoUrl" style={{ color: '#0F1F17' }}>
-              Logo URL <span className="text-xs text-gray-500">(optional)</span>
+            <Label style={{ color: '#0F1F17' }}>
+              Logo <span className="text-xs text-gray-500">(optional)</span>
+            </Label>
+            <input
+              ref={logoFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              id="logo-upload"
+              onChange={handleLogoFileChange}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10"
+                style={{ borderColor: 'rgba(14,122,58,0.25)', color: '#0F1F17' }}
+                disabled={uploadingLogo || !currentOrg?.id}
+                onClick={() => logoFileInputRef.current?.click()}
+              >
+                {uploadingLogo ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Upload photo
+              </Button>
+              {logoUrl ? (
+                <img
+                  key={logoRenderNonce}
+                  src={logoUrl}
+                  alt=""
+                  className="h-10 w-10 rounded-lg border object-cover"
+                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                />
+              ) : null}
+            </div>
+            <Label htmlFor="logoUrl" className="text-xs font-normal" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Or paste image URL
             </Label>
             <Input
               id="logoUrl"
@@ -440,7 +499,12 @@ export default function ProfileSettings() {
           <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: '#FBF8F4' }}>
             {logoUrl && (
               <div className="flex justify-center mb-2">
-                <img src={logoUrl} alt="Logo" className="h-16 w-16 object-cover rounded-lg" />
+                <img
+                  key={logoRenderNonce}
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-16 w-16 object-cover rounded-lg"
+                />
               </div>
             )}
             <div>
