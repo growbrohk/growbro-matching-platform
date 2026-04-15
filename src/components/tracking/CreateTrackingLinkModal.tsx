@@ -272,11 +272,15 @@ export function CreateTrackingLinkModal({ open, onOpenChange }: CreateTrackingLi
     setIsSubmitting(true);
 
     try {
-      // Validate slug uniqueness
-      const { data: existing } = await (supabase.from('tracking_links' as any) as any)
+      // Validate slug uniqueness (maybeSingle avoids 406 from PostgREST when no row exists)
+      const { data: existing, error: slugLookupError } = await (supabase.from('tracking_links' as any) as any)
         .select('id')
         .eq('slug', slug)
-        .single();
+        .maybeSingle();
+
+      if (slugLookupError) {
+        throw slugLookupError;
+      }
 
       if (existing) {
         toast({
