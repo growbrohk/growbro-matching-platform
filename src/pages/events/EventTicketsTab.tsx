@@ -47,7 +47,7 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   ticketPrice: 110,
   access: 150,
   remark: 160,
-  addons: 140,
+  addons: 240,
 };
 
 const KNOWN_COLUMN_KEYS: ColumnKey[] = [...DEFAULT_COLUMNS];
@@ -711,7 +711,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       id: 'addons',
       header: 'Add-ons',
       cell: ({ row }) => (
-        <span className="max-w-full truncate block" title={row.original.addons ?? undefined}>
+        <span className="block max-w-full whitespace-normal break-words" title={row.original.addons ?? undefined}>
           {row.original.addons || '-'}
         </span>
       ),
@@ -1122,7 +1122,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <TableRow key={row.id} className="border-b border-border">
                   {row.getVisibleCells().map(cell => {
                     const isLast = row.getVisibleCells().indexOf(cell) === row.getVisibleCells().length - 1;
-                    const baseClasses = `border-r border-border px-2 py-1.5 text-sm ${isLast ? 'last:border-r-0' : ''}`;
+                    const baseClasses = `align-top border-r border-border px-2 py-1.5 text-sm ${isLast ? 'last:border-r-0' : ''}`;
                     const isEditCell = editMode && ['status', 'name', 'remark'].includes(cell.column.id);
                     return (
                       <TableCell
