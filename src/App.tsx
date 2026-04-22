@@ -63,7 +63,18 @@ import { Button } from "./components/ui/button";
 import { Loader2 } from "lucide-react";
 import { getShortCodeById, getPublicPosterSpaceByShortCode } from "@/lib/api/poster-spaces";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Prevent React Query from refiring every active query on browser
+      // tab refocus, which caused visible spinners and network churn.
+      // Hooks that genuinely need focus refetching opt in explicitly
+      // (e.g. use-connected-orgs, use-pending-connections-count).
+      refetchOnWindowFocus: false,
+      staleTime: 30_000,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, orgMemberships, orgMembershipsStatus, loading, refreshOrgMemberships } = useAuth();
@@ -80,8 +91,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
-  // Still loading org memberships - show loading to avoid redirecting before we know
-  if (orgMembershipsStatus === 'loading') {
+  // Only block rendering on the very first membership load. Background refreshes
+  // (e.g. after a Supabase TOKEN_REFRESHED on tab refocus) must not unmount
+  // `{children}`, otherwise unsaved form state would be lost.
+  if (orgMembershipsStatus === 'loading' && orgMemberships.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FBF8F4' }}>
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />

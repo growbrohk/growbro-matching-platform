@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -127,26 +127,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Track the user id we last loaded memberships for, without retriggering the
+  // auth subscription effect when it changes. This lets us make the listener
+  // idempotent (TOKEN_REFRESHED / same-user SIGNED_IN don't refetch).
+  const loadedUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('[auth]', event, session?.user?.id);
-        setSession(session);
-        setUser(session?.user ?? null);
+      (event, nextSession) => {
+        console.log('[auth]', event, nextSession?.user?.id);
+
         // INITIAL_SESSION is handled by getSession() below - skip to avoid duplicate fetch
         if (event === 'INITIAL_SESSION') {
-          setLoading(false);
           return;
         }
-        if (session?.user) {
-          setOrgMembershipsStatus('loading');
-          fetchOrgMemberships(session.user.id);
-        } else {
+
+        // Token refresh / user profile update: session value changes but the
+        // signed-in user did not. Update session only; do not touch the
+        // membership gate (which would unmount the page subtree).
+        if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          setSession(nextSession);
+          if (nextSession?.user) {
+            setUser(nextSession.user);
+          }
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          loadedUserIdRef.current = null;
+          setSession(null);
+          setUser(null);
           setOrgMemberships([]);
           setCurrentOrg(null);
           setOrgMembershipsStatus('loaded');
+          setLoading(false);
+          return;
         }
-        setLoading(false);
+
+        if (event === 'SIGNED_IN' && nextSession?.user) {
+          setSession(nextSession);
+          setUser(nextSession.user);
+          setLoading(false);
+          // Only refetch memberships if the signed-in user actually changed.
+          // Supabase may re-emit SIGNED_IN on tab refocus for the same user,
+          // and flipping the gate to 'loading' would unmount the page.
+          if (loadedUserIdRef.current !== nextSession.user.id) {
+            loadedUserIdRef.current = nextSession.user.id;
+            setOrgMembershipsStatus('loading');
+            fetchOrgMemberships(nextSession.user.id);
+          }
+          return;
+        }
+
+        // Fallback for any other events: keep session/user in sync only.
+        setSession(nextSession);
+        setUser(nextSession?.user ?? null);
       }
     );
 
@@ -155,9 +190,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        loadedUserIdRef.current = session.user.id;
         setOrgMembershipsStatus('loading');
         fetchOrgMemberships(session.user.id);
       } else {
+        loadedUserIdRef.current = null;
         setOrgMemberships([]);
         setCurrentOrg(null);
         setOrgMembershipsStatus('loaded');

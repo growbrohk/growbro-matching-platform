@@ -3,8 +3,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Hook to fetch and poll unread enquiries count
- * Polls every 30 seconds and refetches on window focus
+ * Hook to fetch and poll unread enquiries count.
+ * Polls every 30 seconds while mounted.
  */
 export function useUnreadEnquiriesCount() {
   const { currentOrg } = useAuth();
@@ -47,20 +47,15 @@ export function useUnreadEnquiriesCount() {
     // Initial fetch
     fetchCount();
 
-    // Poll every 30 seconds
+    // Poll every 30 seconds. The 30s cadence is enough to keep the badge
+    // fresh without refetching on every browser tab refocus (which used to
+    // contribute to the "page refreshes on tab switch" symptom).
     const interval = setInterval(() => {
       fetchCount();
     }, 30000);
 
-    // Refetch on window focus
-    const handleFocus = () => {
-      fetchCount();
-    };
-    window.addEventListener('focus', handleFocus);
-
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
     };
   }, [currentOrg?.id, fetchCount]);
 
