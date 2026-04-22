@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ShoppingCart } from 'lucide-react';
-import { ProductImageLightbox } from '@/components/products/ProductImageLightbox';
-import ProductInfoAccordion from '@/components/products/ProductInfoAccordion';
+import { ProductMerchandiseLayout } from '@/components/products/ProductMerchandiseLayout';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import {
@@ -149,7 +148,6 @@ export default function PublicProductForm({
   const descriptionText = (product.description || '').trim();
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [imageLightbox, setImageLightbox] = useState({ open: false, url: '' as string });
 
   useEffect(() => {
     if (photos.length === 0) {
@@ -239,41 +237,10 @@ export default function PublicProductForm({
 
   return (
     <div className="space-y-10 md:space-y-14">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-        {/* Gallery: main image only; thumbs live in the buy box above Size / variant */}
-        <div className="w-full">
-          <div
-            className="aspect-square w-full rounded-2xl overflow-hidden bg-muted flex items-center justify-center min-w-0"
-            style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
-          >
-            {mainSrc ? (
-              <button
-                type="button"
-                className="w-full h-full block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
-                onClick={() => setImageLightbox({ open: true, url: mainSrc })}
-                aria-label={`View full size: ${product.title}`}
-              >
-                <img
-                  src={mainSrc}
-                  alt={product.title}
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ) : (
-              <span className="text-sm text-muted-foreground">No image</span>
-            )}
-          </div>
-        </div>
-
-        {/* Buy box */}
-        <div className="space-y-6 lg:sticky lg:top-24">
-          <div>
-            <h1
-              className="text-2xl md:text-3xl font-bold mb-2"
-              style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
-            >
-              {product.title}
-            </h1>
+      <ProductMerchandiseLayout
+        title={product.title}
+        priceSlot={
+          <>
             <div className="flex flex-wrap items-baseline gap-2">
               {matchedPromoVariant && discountPercentLabel != null && discountPercentLabel > 0 && baseUnitPrice > displayPrice && (
                 <span className="text-lg line-through text-muted-foreground">
@@ -290,92 +257,59 @@ export default function PublicProductForm({
             {codeParam && !matchedPromoVariant && product.type === 'physical' && (
               <p className="text-sm text-muted-foreground mt-1">This code does not apply to this product.</p>
             )}
-          </div>
-
-          {photos.length > 1 && (
-            <div className="flex flex-row gap-2 overflow-x-auto pb-1 -mx-1 px-1 max-h-[5.5rem]">
-              {photos.map((p, i) => (
-                <button
-                  key={`${p}-${i}`}
-                  type="button"
-                  onClick={() => {
-                    setSelectedImageIndex(i);
-                    setImageLightbox({ open: true, url: p });
-                  }}
-                  className={`
-                    flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors cursor-zoom-in
-                    ${
-                      selectedImageIndex === i
-                        ? 'border-primary ring-2 ring-primary/20'
-                        : 'border-transparent hover:border-muted-foreground/30'
-                    }
-                  `}
-                  aria-label={`View image ${i + 1} of ${product.title}`}
-                >
-                  <img src={p} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {hasMultipleVariants && (
-            <HierarchicalVariantSelectGroup
-              instanceKey={product.id}
-              variants={hierarchicalVariantRows}
-              selectedVariantId={selectedVariantId}
-              onVariantChange={setSelectedVariantId}
-              variantRankOrder={variantRankOrder}
-              variantValueOrders={variantValueOrders}
-              autoSelectFirst
-              flatItemSuffix={(v) =>
-                v.price != null && v.price > 0 ? ` - ${formatPrice(Number(v.price))}` : null
-              }
-            />
-          )}
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-              Quantity
-            </label>
-            <Input
-              type="number"
-              min={1}
-              max={99}
-              value={quantityNum}
-              onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
-              className="w-24 rounded-2xl"
-            />
-          </div>
-
-          <div className="flex flex-col gap-3 pt-2">
-            <Button
-              onClick={handleAddToCart}
-              size="lg"
-              className="w-full h-12 rounded-2xl font-bold"
-              style={{ backgroundColor: '#0E7A3A', color: 'white' }}
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Add to Cart
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <ProductInfoAccordion
+          </>
+        }
+        photos={photos}
+        selectedImageIndex={selectedImageIndex}
+        onSelectImageIndex={setSelectedImageIndex}
         description={descriptionText}
         productDetails={productDetails}
         sizeAndFit={sizeFit}
         defaultAllOpen
-        className="border-t border-black/10 pt-2"
-        aria-label="Product information"
-      />
+        accordionClassName="border-t border-black/10 pt-2"
+        density="pdp"
+      >
+        {hasMultipleVariants && (
+          <HierarchicalVariantSelectGroup
+            instanceKey={product.id}
+            variants={hierarchicalVariantRows}
+            selectedVariantId={selectedVariantId}
+            onVariantChange={setSelectedVariantId}
+            variantRankOrder={variantRankOrder}
+            variantValueOrders={variantValueOrders}
+            autoSelectFirst
+            flatItemSuffix={(v) =>
+              v.price != null && v.price > 0 ? ` - ${formatPrice(Number(v.price))}` : null
+            }
+          />
+        )}
 
-      <ProductImageLightbox
-        open={imageLightbox.open}
-        onOpenChange={(o) => setImageLightbox((s) => ({ ...s, open: o }))}
-        url={imageLightbox.url}
-        title={product.title}
-      />
+        <div className="space-y-2">
+          <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+            Quantity
+          </label>
+          <Input
+            type="number"
+            min={1}
+            max={99}
+            value={quantityNum}
+            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+            className="w-24 rounded-2xl"
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 pt-2">
+          <Button
+            onClick={handleAddToCart}
+            size="lg"
+            className="w-full h-12 rounded-2xl font-bold"
+            style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Add to Cart
+          </Button>
+        </div>
+      </ProductMerchandiseLayout>
 
       {relatedProducts.length > 0 && (
         <section aria-label="You may also like">

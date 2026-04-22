@@ -43,8 +43,7 @@ import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
 import { getUniqueVariantOptionNames, getVariantOptionValue } from '@/lib/utils/variant-parser';
 import { collectProductPhotoUrls } from '@/lib/utils/product-media';
-import { ProductImageLightbox, ProductImageLightboxTrigger } from '@/components/products/ProductImageLightbox';
-import ProductInfoAccordion from '@/components/products/ProductInfoAccordion';
+import { ProductMerchandiseLayout } from '@/components/products/ProductMerchandiseLayout';
 import {
   addonEnforcesStock,
   resolvedVariantId,
@@ -71,44 +70,13 @@ function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
   });
 }
 
-function PrimaryAddonPhotoStrip({ photos, productTitle }: { photos: string[]; productTitle: string }) {
-  const [lightbox, setLightbox] = useState({ open: false, url: '' });
-  return (
-    <>
-      <div className="flex flex-row gap-2 overflow-x-auto pb-1 -mx-1 px-1 mb-2">
-        {photos.map((url, i) => (
-          <ProductImageLightboxTrigger
-            key={`${url}-${i}`}
-            src={url}
-            title={productTitle}
-            onOpen={() => setLightbox({ open: true, url })}
-            className="flex-shrink-0 w-16 h-16 rounded-xl"
-            size="sm"
-            imageSrcOverride={url}
-            aria-label={`View image ${i + 1} of ${productTitle}`}
-          />
-        ))}
-      </div>
-      <ProductImageLightbox
-        open={lightbox.open}
-        onOpenChange={(o) => setLightbox((s) => ({ ...s, open: o }))}
-        url={lightbox.url}
-        title={productTitle}
-      />
-    </>
-  );
-}
-
-function AddonProductPreview({ src, title }: { src?: string | null; title: string }) {
-  const [open, setOpen] = useState(false);
-  const url = typeof src === 'string' ? src.trim() : '';
-  if (!url) return null;
-  return (
-    <>
-      <ProductImageLightboxTrigger src={url} title={title} onOpen={() => setOpen(true)} />
-      <ProductImageLightbox open={open} onOpenChange={setOpen} url={url} title={title} />
-    </>
-  );
+function formatAddonHkd(amount: number): string {
+  return new Intl.NumberFormat('en-HK', {
+    style: 'currency',
+    currency: 'HKD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function EventAddonVariantSelect({
@@ -215,6 +183,10 @@ export default function CompleteBookingPage() {
   >({});
   const [addonVariantRankOrder, setAddonVariantRankOrder] = useState<string[]>([]);
   const [addonVariantValueOrders, setAddonVariantValueOrders] = useState<Record<string, string[]>>({});
+  /** Controlled main image index per add-on product (PDP-style gallery). */
+  const [addonPhotoIndexByProduct, setAddonPhotoIndexByProduct] = useState<Record<string, number>>({});
+  /** Per-ticket add-ons: key `${attendeeIndex}-${productId}` */
+  const [perTicketAddonPhotoIndex, setPerTicketAddonPhotoIndex] = useState<Record<string, number>>({});
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -355,6 +327,56 @@ export default function CompleteBookingPage() {
             next[addon.product_id] = { qty: fixedQty };
             changed = true;
           }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [eventAddons, event?.id, event?.collect_attendee_info, attendees.length]);
+
+  // PDP-style: pre-select first variant for multi-variant add-ons so price is shown (does not set qty)
+  useEffect(() => {
+    if (eventAddons.length === 0 || !event) return;
+
+    if (event.collect_attendee_info === 'per_ticket' && attendees.length > 0) {
+      setAddonSelectionsByAttendee((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        attendees.forEach((_, idx) => {
+          eventAddons.forEach((addon) => {
+            if (addon.variants.length <= 1) return;
+            const firstId = addon.variants[0]?.id;
+            if (!firstId) return;
+            const cur = next[idx]?.[addon.product_id];
+            if (cur?.variantId) return;
+            next[idx] = {
+              ...(next[idx] ?? {}),
+              [addon.product_id]: {
+                ...cur,
+                variantId: firstId,
+                qty: cur?.qty ?? 0,
+              },
+            };
+            changed = true;
+          });
+        });
+        return changed ? next : prev;
+      });
+    } else if (event.collect_attendee_info !== 'per_ticket') {
+      setAddonSelections((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        eventAddons.forEach((addon) => {
+          if (addon.variants.length <= 1) return;
+          const firstId = addon.variants[0]?.id;
+          if (!firstId) return;
+          const cur = next[addon.product_id];
+          if (cur?.variantId) return;
+          next[addon.product_id] = {
+            ...cur,
+            variantId: firstId,
+            qty: cur?.qty ?? 0,
+          };
+          changed = true;
         });
         return changed ? next : prev;
       });
@@ -695,158 +717,161 @@ export default function CompleteBookingPage() {
                 const maxQForFixed = enforced ? maxQtyPrimary(addon, { variantId: vid, qty: fixedQty }) : 9999;
                 const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
                 const addonPhotos = getAddonProductPhotos(addon);
+                const photoIdx = addonPhotoIndexByProduct[addon.product_id] ?? 0;
+                const priceVariantId = sel.variantId ?? vid;
+                const priceVariant = priceVariantId
+                  ? addon.variants.find((v) => v.id === priceVariantId)
+                  : addon.variants[0];
+                const displayUnitPrice =
+                  addon.variants.length === 0
+                    ? addon.base_price ?? 0
+                    : (priceVariant?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
                 return (
                   <div
                     key={addon.product_id}
                     className="p-4 rounded-2xl border"
                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
                   >
-                    <div className="flex items-start gap-3 mb-2">
-                      {addonPhotos.length <= 1 ? (
-                        <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
-                      ) : null}
-                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                        <span className="font-medium" style={{ color: '#0F1F17' }}>
-                          {addon.product_title}
-                        </span>
-                        {addon.is_required && (
+                    <ProductMerchandiseLayout
+                      title={addon.product_title}
+                      titleEndSlot={
+                        addon.is_required ? (
                           <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
                             Required
                           </span>
-                        )}
-                      </div>
-                    </div>
-                    {enforced && stock != null && stock > 0 && (
-                      <p className="text-xs text-muted-foreground mb-2">{stock} remaining</p>
-                    )}
-                    {outOfStock && (
-                      <p className="text-sm font-medium text-destructive mb-2">Out of stock</p>
-                    )}
-                    {addonPhotos.length > 1 && (
-                      <PrimaryAddonPhotoStrip photos={addonPhotos} productTitle={addon.product_title} />
-                    )}
-                    {hasVariants ? (
-                      <div className="space-y-2">
-                        <EventAddonVariantSelect
-                          addon={addon}
-                          selectedVariantId={sel.variantId}
-                          variantRankOrder={addonVariantRankOrder}
-                          variantValueOrders={addonVariantValueOrders}
-                          disabled={allVariantsOos}
-                          onVariantChange={(id) => {
-                            if (id == null) {
-                              setAddonSelections((prev) => {
-                                const prevEntry = prev[addon.product_id] ?? { qty: 0 };
-                                const { variantId: _omit, ...rest } = prevEntry;
-                                return {
-                                  ...prev,
-                                  [addon.product_id]: {
-                                    ...rest,
-                                    qty: rest.qty ?? 0,
-                                  },
-                                };
-                              });
-                              return;
-                            }
-                            setAddonSelections((prev) => {
-                              const prevQty = prev[addon.product_id]?.qty ?? 1;
-                              const next = {
-                                variantId: id,
-                                qty: addon.fixed_quantity ?? prevQty,
-                              };
-                              const cap = maxQtyPrimary(addon, next);
-                              return {
-                                ...prev,
-                                [addon.product_id]: {
-                                  variantId: id,
-                                  qty: Math.min(next.qty, cap),
-                                },
-                              };
-                            });
-                          }}
-                        />
-                        {sel.variantId && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Label className="text-sm">Quantity</Label>
-                            {addon.fixed_quantity != null ? (
-                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                            ) : (
-                              <Input
-                                type="number"
-                                min={1}
-                                max={enforced ? maxQ : undefined}
-                                value={sel.qty}
-                                disabled={outOfStock}
-                                onChange={(e) => {
-                                  const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                  const q = enforced ? Math.min(raw, maxQ) : raw;
-                                  setAddonSelections((prev) => ({
-                                    ...prev,
-                                    [addon.product_id]: { ...prev[addon.product_id], qty: q },
-                                  }));
-                                }}
-                                className="w-20"
-                              />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : addon.fixed_quantity != null ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Label className="text-sm">Quantity</Label>
-                        <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                        {!addon.is_required && (
-                          <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
-                            <Checkbox
-                              checked={sel.qty > 0}
-                              disabled={!canIncludeFixed && sel.qty === 0}
-                              onCheckedChange={(c) =>
-                                setAddonSelections((prev) => ({
-                                  ...prev,
-                                  [addon.product_id]: {
-                                    qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
-                                  },
-                                }))
-                              }
-                            />
-                            Include
-                          </label>
-                        )}
-                        <span className="text-sm text-muted-foreground">
-                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Label className="text-sm">Quantity</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={enforced ? maxQ : undefined}
-                          value={sel.qty}
-                          disabled={outOfStock}
-                          onChange={(e) => {
-                            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            const q = enforced ? Math.min(raw, maxQ) : raw;
-                            setAddonSelections((prev) => ({
-                              ...prev,
-                              [addon.product_id]: { qty: q },
-                            }));
-                          }}
-                          className="w-20"
-                        />
-                        <span className="text-sm text-muted-foreground">
-                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                        </span>
-                      </div>
-                    )}
-                    <ProductInfoAccordion
+                        ) : undefined
+                      }
+                      priceSlot={
+                        <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
+                          {displayUnitPrice > 0 ? formatAddonHkd(displayUnitPrice) : 'Free'}
+                        </p>
+                      }
+                      photos={addonPhotos}
+                      selectedImageIndex={Math.min(photoIdx, Math.max(0, addonPhotos.length - 1))}
+                      onSelectImageIndex={(i) =>
+                        setAddonPhotoIndexByProduct((p) => ({ ...p, [addon.product_id]: i }))
+                      }
                       description={addon.product_description ?? ''}
                       productDetails={addon.product_details ?? ''}
                       sizeAndFit={addon.size_and_fit ?? ''}
                       defaultAllOpen={false}
-                      className="mt-3 border-t border-black/10 pt-2"
-                    />
+                      accordionClassName="mt-3 border-t border-black/10 pt-2"
+                      density="pdp"
+                    >
+                      {enforced && stock != null && stock > 0 && (
+                        <p className="text-xs text-muted-foreground">{stock} remaining</p>
+                      )}
+                      {outOfStock && <p className="text-sm font-medium text-destructive">Out of stock</p>}
+                      {hasVariants ? (
+                        <div className="space-y-2">
+                          <EventAddonVariantSelect
+                            addon={addon}
+                            selectedVariantId={sel.variantId}
+                            variantRankOrder={addonVariantRankOrder}
+                            variantValueOrders={addonVariantValueOrders}
+                            disabled={allVariantsOos}
+                            onVariantChange={(id) => {
+                              if (id == null) {
+                                setAddonSelections((prev) => {
+                                  const prevEntry = prev[addon.product_id] ?? { qty: 0 };
+                                  const { variantId: _omit, ...rest } = prevEntry;
+                                  return {
+                                    ...prev,
+                                    [addon.product_id]: {
+                                      ...rest,
+                                      qty: rest.qty ?? 0,
+                                    },
+                                  };
+                                });
+                                return;
+                              }
+                              setAddonSelections((prev) => {
+                                const prevQty = prev[addon.product_id]?.qty ?? 1;
+                                const next = {
+                                  variantId: id,
+                                  qty: addon.fixed_quantity ?? prevQty,
+                                };
+                                const cap = maxQtyPrimary(addon, next);
+                                return {
+                                  ...prev,
+                                  [addon.product_id]: {
+                                    variantId: id,
+                                    qty: Math.min(next.qty, cap),
+                                  },
+                                };
+                              });
+                            }}
+                          />
+                          {sel.variantId && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Label className="text-sm">Quantity</Label>
+                              {addon.fixed_quantity != null ? (
+                                <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                              ) : (
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={enforced ? maxQ : undefined}
+                                  value={sel.qty}
+                                  disabled={outOfStock}
+                                  onChange={(e) => {
+                                    const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    const q = enforced ? Math.min(raw, maxQ) : raw;
+                                    setAddonSelections((prev) => ({
+                                      ...prev,
+                                      [addon.product_id]: { ...prev[addon.product_id], qty: q },
+                                    }));
+                                  }}
+                                  className="w-20 rounded-2xl"
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : addon.fixed_quantity != null ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Label className="text-sm">Quantity</Label>
+                          <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                          {!addon.is_required && (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer ml-2">
+                              <Checkbox
+                                checked={sel.qty > 0}
+                                disabled={!canIncludeFixed && sel.qty === 0}
+                                onCheckedChange={(c) =>
+                                  setAddonSelections((prev) => ({
+                                    ...prev,
+                                    [addon.product_id]: {
+                                      qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
+                                    },
+                                  }))
+                                }
+                              />
+                              Include
+                            </label>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Label className="text-sm">Quantity</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={enforced ? maxQ : undefined}
+                            value={sel.qty}
+                            disabled={outOfStock}
+                            onChange={(e) => {
+                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              const q = enforced ? Math.min(raw, maxQ) : raw;
+                              setAddonSelections((prev) => ({
+                                ...prev,
+                                [addon.product_id]: { qty: q },
+                              }));
+                            }}
+                            className="w-20 rounded-2xl"
+                          />
+                        </div>
+                      )}
+                    </ProductMerchandiseLayout>
                   </div>
                 );
               })}
@@ -1000,165 +1025,184 @@ export default function CompleteBookingPage() {
                                     )
                                   : 9999;
                                 const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
+                                const ptPhotoKey = `${index}-${addon.product_id}`;
+                                const addonPhotos = getAddonProductPhotos(addon);
+                                const photoIdx = perTicketAddonPhotoIndex[ptPhotoKey] ?? 0;
+                                const priceVariantId = sel.variantId ?? vid;
+                                const priceVariant = priceVariantId
+                                  ? addon.variants.find((v) => v.id === priceVariantId)
+                                  : addon.variants[0];
+                                const displayUnitPrice =
+                                  addon.variants.length === 0
+                                    ? addon.base_price ?? 0
+                                    : (priceVariant?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
                                 return (
                                   <div
                                     key={addon.product_id}
                                     className="p-3 rounded-xl border text-sm"
                                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                                   >
-                                    <div className="flex items-start gap-3 mb-2">
-                                      <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
-                                      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                                        <span className="font-medium">{addon.product_title}</span>
-                                        {addon.is_required && (
+                                    <ProductMerchandiseLayout
+                                      title={addon.product_title}
+                                      titleEndSlot={
+                                        addon.is_required ? (
                                           <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
                                             Required
                                           </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {enforced &&
-                                      (sel.variantId || !hasVariants) &&
-                                      maxQ >= 0 &&
-                                      !outOfStock && (
-                                      <p className="text-xs text-muted-foreground mb-1">
-                                        Up to {maxQ} available here (shared inventory)
-                                      </p>
-                                    )}
-                                    {outOfStock && (
-                                      <p className="text-xs font-medium text-destructive mb-1">Out of stock</p>
-                                    )}
-                                    {hasVariants ? (
-                                      <div className="space-y-2">
-                                        <EventAddonVariantSelect
-                                          addon={addon}
-                                          selectedVariantId={sel.variantId}
-                                          variantRankOrder={addonVariantRankOrder}
-                                          variantValueOrders={addonVariantValueOrders}
-                                          disabled={allVariantsOos}
-                                          compact
-                                          onVariantChange={(id) => {
-                                            if (id == null) {
+                                        ) : undefined
+                                      }
+                                      priceSlot={
+                                        <p className="text-lg font-semibold" style={{ color: '#0E7A3A' }}>
+                                          {displayUnitPrice > 0 ? formatAddonHkd(displayUnitPrice) : 'Free'}
+                                        </p>
+                                      }
+                                      photos={addonPhotos}
+                                      selectedImageIndex={Math.min(photoIdx, Math.max(0, addonPhotos.length - 1))}
+                                      onSelectImageIndex={(i) =>
+                                        setPerTicketAddonPhotoIndex((p) => ({ ...p, [ptPhotoKey]: i }))
+                                      }
+                                      description={addon.product_description ?? ''}
+                                      productDetails={addon.product_details ?? ''}
+                                      sizeAndFit={addon.size_and_fit ?? ''}
+                                      defaultAllOpen={false}
+                                      accordionClassName="mt-3 border-t border-black/10 pt-2"
+                                      density="compact"
+                                    >
+                                      {enforced &&
+                                        (sel.variantId || !hasVariants) &&
+                                        maxQ >= 0 &&
+                                        !outOfStock && (
+                                        <p className="text-xs text-muted-foreground">
+                                          Up to {maxQ} available here (shared inventory)
+                                        </p>
+                                      )}
+                                      {outOfStock && <p className="text-xs font-medium text-destructive">Out of stock</p>}
+                                      {hasVariants ? (
+                                        <div className="space-y-2">
+                                          <EventAddonVariantSelect
+                                            addon={addon}
+                                            selectedVariantId={sel.variantId}
+                                            variantRankOrder={addonVariantRankOrder}
+                                            variantValueOrders={addonVariantValueOrders}
+                                            disabled={allVariantsOos}
+                                            compact
+                                            onVariantChange={(id) => {
+                                              if (id == null) {
+                                                setAddonSelectionsByAttendee((prev) => {
+                                                  const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
+                                                  const { variantId: _omit, ...rest } = prevEntry;
+                                                  return {
+                                                    ...prev,
+                                                    [index]: {
+                                                      ...(prev[index] ?? {}),
+                                                      [addon.product_id]: {
+                                                        ...rest,
+                                                        qty: rest.qty ?? 0,
+                                                      },
+                                                    },
+                                                  };
+                                                });
+                                                return;
+                                              }
                                               setAddonSelectionsByAttendee((prev) => {
-                                                const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
-                                                const { variantId: _omit, ...rest } = prevEntry;
+                                                const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
+                                                const next = {
+                                                  variantId: id,
+                                                  qty: addon.fixed_quantity ?? prevQty,
+                                                };
+                                                const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
                                                 return {
                                                   ...prev,
                                                   [index]: {
                                                     ...(prev[index] ?? {}),
                                                     [addon.product_id]: {
-                                                      ...rest,
-                                                      qty: rest.qty ?? 0,
+                                                      variantId: id,
+                                                      qty: Math.min(next.qty, cap),
                                                     },
                                                   },
                                                 };
                                               });
-                                              return;
-                                            }
-                                            setAddonSelectionsByAttendee((prev) => {
-                                              const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
-                                              const next = {
-                                                variantId: id,
-                                                qty: addon.fixed_quantity ?? prevQty,
-                                              };
-                                              const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
-                                              return {
-                                                ...prev,
-                                                [index]: {
-                                                  ...(prev[index] ?? {}),
-                                                  [addon.product_id]: {
-                                                    variantId: id,
-                                                    qty: Math.min(next.qty, cap),
-                                                  },
-                                                },
-                                              };
-                                            });
-                                          }}
-                                        />
-                                        {sel.variantId && (
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <Label className="text-xs">Qty</Label>
-                                            {addon.fixed_quantity != null ? (
-                                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                            ) : (
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                max={enforced ? maxQ : undefined}
-                                                value={sel.qty}
-                                                disabled={outOfStock}
-                                                onChange={(e) => {
-                                                  const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                                  const q = enforced ? Math.min(raw, maxQ) : raw;
+                                            }}
+                                          />
+                                          {sel.variantId && (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <Label className="text-xs">Qty</Label>
+                                              {addon.fixed_quantity != null ? (
+                                                <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                              ) : (
+                                                <Input
+                                                  type="number"
+                                                  min={1}
+                                                  max={enforced ? maxQ : undefined}
+                                                  value={sel.qty}
+                                                  disabled={outOfStock}
+                                                  onChange={(e) => {
+                                                    const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                    const q = enforced ? Math.min(raw, maxQ) : raw;
+                                                    setAddonSelectionsByAttendee((prev) => ({
+                                                      ...prev,
+                                                      [index]: {
+                                                        ...(prev[index] ?? {}),
+                                                        [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                      },
+                                                    }));
+                                                  }}
+                                                  className="w-16 h-9 rounded-xl"
+                                                />
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : addon.fixed_quantity != null ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <Label className="text-xs">Qty</Label>
+                                          <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                          {!addon.is_required && (
+                                            <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
+                                              <Checkbox
+                                                checked={sel.qty > 0}
+                                                disabled={!canIncludeFixed && sel.qty === 0}
+                                                onCheckedChange={(c) =>
                                                   setAddonSelectionsByAttendee((prev) => ({
                                                     ...prev,
                                                     [index]: {
                                                       ...(prev[index] ?? {}),
-                                                      [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                      [addon.product_id]: {
+                                                        qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
+                                                      },
                                                     },
-                                                  }));
-                                                }}
-                                                className="w-16 h-9"
+                                                  }))
+                                                }
                                               />
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : addon.fixed_quantity != null ? (
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <Label className="text-xs">Qty</Label>
-                                        <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                        {!addon.is_required && (
-                                          <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
-                                            <Checkbox
-                                              checked={sel.qty > 0}
-                                              disabled={!canIncludeFixed && sel.qty === 0}
-                                              onCheckedChange={(c) =>
-                                                setAddonSelectionsByAttendee((prev) => ({
-                                                  ...prev,
-                                                  [index]: {
-                                                    ...(prev[index] ?? {}),
-                                                    [addon.product_id]: {
-                                                      qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
-                                                    },
-                                                  },
-                                                }))
-                                              }
-                                            />
-                                            Include
-                                          </label>
-                                        )}
-                                        <span className="text-xs text-muted-foreground">
-                                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <Label className="text-xs">Qty</Label>
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          max={enforced ? maxQ : undefined}
-                                          value={sel.qty}
-                                          disabled={outOfStock}
-                                          onChange={(e) => {
-                                            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                            const q = enforced ? Math.min(raw, maxQ) : raw;
-                                            setAddonSelectionsByAttendee((prev) => ({
-                                              ...prev,
-                                              [index]: {
-                                                ...(prev[index] ?? {}),
-                                                [addon.product_id]: { qty: q },
-                                              },
-                                            }));
-                                          }}
-                                          className="w-16 h-9"
-                                        />
-                                        <span className="text-xs text-muted-foreground">
-                                          HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                                        </span>
-                                      </div>
-                                    )}
+                                              Include
+                                            </label>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <Label className="text-xs">Qty</Label>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            max={enforced ? maxQ : undefined}
+                                            value={sel.qty}
+                                            disabled={outOfStock}
+                                            onChange={(e) => {
+                                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                              const q = enforced ? Math.min(raw, maxQ) : raw;
+                                              setAddonSelectionsByAttendee((prev) => ({
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: { qty: q },
+                                                },
+                                              }));
+                                            }}
+                                            className="w-16 h-9 rounded-xl"
+                                          />
+                                        </div>
+                                      )}
+                                    </ProductMerchandiseLayout>
                                   </div>
                                 );
                               })}
@@ -1355,165 +1399,184 @@ export default function CompleteBookingPage() {
                                 )
                               : 9999;
                             const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
+                            const ptPhotoKeyB = `${index}-${addon.product_id}`;
+                            const addonPhotosB = getAddonProductPhotos(addon);
+                            const photoIdxB = perTicketAddonPhotoIndex[ptPhotoKeyB] ?? 0;
+                            const priceVariantIdB = sel.variantId ?? vid;
+                            const priceVariantB = priceVariantIdB
+                              ? addon.variants.find((v) => v.id === priceVariantIdB)
+                              : addon.variants[0];
+                            const displayUnitPriceB =
+                              addon.variants.length === 0
+                                ? addon.base_price ?? 0
+                                : (priceVariantB?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
                             return (
                               <div
                                 key={addon.product_id}
                                 className="p-3 rounded-xl border text-sm"
                                 style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                               >
-                                <div className="flex items-start gap-3 mb-2">
-                                  <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
-                                  <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                                    <span className="font-medium">{addon.product_title}</span>
-                                    {addon.is_required && (
+                                <ProductMerchandiseLayout
+                                  title={addon.product_title}
+                                  titleEndSlot={
+                                    addon.is_required ? (
                                       <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 shrink-0">
                                         Required
                                       </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {enforced &&
-                                  (sel.variantId || !hasVariants) &&
-                                  maxQ >= 0 &&
-                                  !outOfStock && (
-                                  <p className="text-xs text-muted-foreground mb-1">
-                                    Up to {maxQ} available here (shared inventory)
-                                  </p>
-                                )}
-                                {outOfStock && (
-                                  <p className="text-xs font-medium text-destructive mb-1">Out of stock</p>
-                                )}
-                                {hasVariants ? (
-                                  <div className="space-y-2">
-                                    <EventAddonVariantSelect
-                                      addon={addon}
-                                      selectedVariantId={sel.variantId}
-                                      variantRankOrder={addonVariantRankOrder}
-                                      variantValueOrders={addonVariantValueOrders}
-                                      disabled={allVariantsOos}
-                                      compact
-                                      onVariantChange={(id) => {
-                                        if (id == null) {
+                                    ) : undefined
+                                  }
+                                  priceSlot={
+                                    <p className="text-lg font-semibold" style={{ color: '#0E7A3A' }}>
+                                      {displayUnitPriceB > 0 ? formatAddonHkd(displayUnitPriceB) : 'Free'}
+                                    </p>
+                                  }
+                                  photos={addonPhotosB}
+                                  selectedImageIndex={Math.min(photoIdxB, Math.max(0, addonPhotosB.length - 1))}
+                                  onSelectImageIndex={(i) =>
+                                    setPerTicketAddonPhotoIndex((p) => ({ ...p, [ptPhotoKeyB]: i }))
+                                  }
+                                  description={addon.product_description ?? ''}
+                                  productDetails={addon.product_details ?? ''}
+                                  sizeAndFit={addon.size_and_fit ?? ''}
+                                  defaultAllOpen={false}
+                                  accordionClassName="mt-3 border-t border-black/10 pt-2"
+                                  density="compact"
+                                >
+                                  {enforced &&
+                                    (sel.variantId || !hasVariants) &&
+                                    maxQ >= 0 &&
+                                    !outOfStock && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Up to {maxQ} available here (shared inventory)
+                                    </p>
+                                  )}
+                                  {outOfStock && <p className="text-xs font-medium text-destructive">Out of stock</p>}
+                                  {hasVariants ? (
+                                    <div className="space-y-2">
+                                      <EventAddonVariantSelect
+                                        addon={addon}
+                                        selectedVariantId={sel.variantId}
+                                        variantRankOrder={addonVariantRankOrder}
+                                        variantValueOrders={addonVariantValueOrders}
+                                        disabled={allVariantsOos}
+                                        compact
+                                        onVariantChange={(id) => {
+                                          if (id == null) {
+                                            setAddonSelectionsByAttendee((prev) => {
+                                              const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
+                                              const { variantId: _omit, ...rest } = prevEntry;
+                                              return {
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: {
+                                                    ...rest,
+                                                    qty: rest.qty ?? 0,
+                                                  },
+                                                },
+                                              };
+                                            });
+                                            return;
+                                          }
                                           setAddonSelectionsByAttendee((prev) => {
-                                            const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
-                                            const { variantId: _omit, ...rest } = prevEntry;
+                                            const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
+                                            const next = {
+                                              variantId: id,
+                                              qty: addon.fixed_quantity ?? prevQty,
+                                            };
+                                            const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
                                             return {
                                               ...prev,
                                               [index]: {
                                                 ...(prev[index] ?? {}),
                                                 [addon.product_id]: {
-                                                  ...rest,
-                                                  qty: rest.qty ?? 0,
+                                                  variantId: id,
+                                                  qty: Math.min(next.qty, cap),
                                                 },
                                               },
                                             };
                                           });
-                                          return;
-                                        }
-                                        setAddonSelectionsByAttendee((prev) => {
-                                          const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
-                                          const next = {
-                                            variantId: id,
-                                            qty: addon.fixed_quantity ?? prevQty,
-                                          };
-                                          const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
-                                          return {
-                                            ...prev,
-                                            [index]: {
-                                              ...(prev[index] ?? {}),
-                                              [addon.product_id]: {
-                                                variantId: id,
-                                                qty: Math.min(next.qty, cap),
-                                              },
-                                            },
-                                          };
-                                        });
-                                      }}
-                                    />
-                                    {sel.variantId && (
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <Label className="text-xs">Qty</Label>
-                                        {addon.fixed_quantity != null ? (
-                                          <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                        ) : (
-                                          <Input
-                                            type="number"
-                                            min={1}
-                                            max={enforced ? maxQ : undefined}
-                                            value={sel.qty}
-                                            disabled={outOfStock}
-                                            onChange={(e) => {
-                                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                              const q = enforced ? Math.min(raw, maxQ) : raw;
+                                        }}
+                                      />
+                                      {sel.variantId && (
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <Label className="text-xs">Qty</Label>
+                                          {addon.fixed_quantity != null ? (
+                                            <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                          ) : (
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              max={enforced ? maxQ : undefined}
+                                              value={sel.qty}
+                                              disabled={outOfStock}
+                                              onChange={(e) => {
+                                                const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                const q = enforced ? Math.min(raw, maxQ) : raw;
+                                                setAddonSelectionsByAttendee((prev) => ({
+                                                  ...prev,
+                                                  [index]: {
+                                                    ...(prev[index] ?? {}),
+                                                    [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                  },
+                                                }));
+                                              }}
+                                              className="w-16 h-9 rounded-xl"
+                                            />
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : addon.fixed_quantity != null ? (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Label className="text-xs">Qty</Label>
+                                      <span className="text-sm font-medium">{addon.fixed_quantity}</span>
+                                      {!addon.is_required && (
+                                        <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
+                                          <Checkbox
+                                            checked={sel.qty > 0}
+                                            disabled={!canIncludeFixed && sel.qty === 0}
+                                            onCheckedChange={(c) =>
                                               setAddonSelectionsByAttendee((prev) => ({
                                                 ...prev,
                                                 [index]: {
                                                   ...(prev[index] ?? {}),
-                                                  [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
+                                                  [addon.product_id]: {
+                                                    qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
+                                                  },
                                                 },
-                                              }));
-                                            }}
-                                            className="w-16 h-9"
+                                              }))
+                                            }
                                           />
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : addon.fixed_quantity != null ? (
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Label className="text-xs">Qty</Label>
-                                    <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                    {!addon.is_required && (
-                                      <label className="flex items-center gap-2 text-xs cursor-pointer ml-2">
-                                        <Checkbox
-                                          checked={sel.qty > 0}
-                                          disabled={!canIncludeFixed && sel.qty === 0}
-                                          onCheckedChange={(c) =>
-                                            setAddonSelectionsByAttendee((prev) => ({
-                                              ...prev,
-                                              [index]: {
-                                                ...(prev[index] ?? {}),
-                                                [addon.product_id]: {
-                                                  qty: c === true && canIncludeFixed ? addon.fixed_quantity! : 0,
-                                                },
-                                              },
-                                            }))
-                                          }
-                                        />
-                                        Include
-                                      </label>
-                                    )}
-                                    <span className="text-xs text-muted-foreground">
-                                      HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Label className="text-xs">Qty</Label>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      max={enforced ? maxQ : undefined}
-                                      value={sel.qty}
-                                      disabled={outOfStock}
-                                      onChange={(e) => {
-                                        const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                        const q = enforced ? Math.min(raw, maxQ) : raw;
-                                        setAddonSelectionsByAttendee((prev) => ({
-                                          ...prev,
-                                          [index]: {
-                                            ...(prev[index] ?? {}),
-                                            [addon.product_id]: { qty: q },
-                                          },
-                                        }));
-                                      }}
-                                      className="w-16 h-9"
-                                    />
-                                    <span className="text-xs text-muted-foreground">
-                                      HK$ {(addon.base_price ?? 0).toFixed(0)} each
-                                    </span>
-                                  </div>
-                                )}
+                                          Include
+                                        </label>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <Label className="text-xs">Qty</Label>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        max={enforced ? maxQ : undefined}
+                                        value={sel.qty}
+                                        disabled={outOfStock}
+                                        onChange={(e) => {
+                                          const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                          const q = enforced ? Math.min(raw, maxQ) : raw;
+                                          setAddonSelectionsByAttendee((prev) => ({
+                                            ...prev,
+                                            [index]: {
+                                              ...(prev[index] ?? {}),
+                                              [addon.product_id]: { qty: q },
+                                            },
+                                          }));
+                                        }}
+                                        className="w-16 h-9 rounded-xl"
+                                      />
+                                    </div>
+                                  )}
+                                </ProductMerchandiseLayout>
                               </div>
                             );
                           })}
