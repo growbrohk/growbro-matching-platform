@@ -1,14 +1,7 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Accordion,
   AccordionContent,
@@ -27,11 +20,7 @@ import {
 import { getVariantConfig } from '@/lib/api/variant-config';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
-import {
-  getVariantHierarchy,
-  getVariantOptionValue,
-  orderVariantValuesForDisplay,
-} from '@/lib/utils/variant-parser';
+import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
 
 interface Org {
   id: string;
@@ -115,18 +104,10 @@ export default function PublicProductForm({
     };
   }, [org.id]);
 
-  const hierarchy = useMemo(
-    () => getVariantHierarchy(activeVariants.map((v) => v.name), variantRankOrder),
-    [activeVariants, variantRankOrder],
-  );
-  const useHierarchicalPicker = hierarchy.length >= 1;
-
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
     const first = activeVariants[0];
     return first?.id ?? null;
   });
-  const [optionSelections, setOptionSelections] = useState<Record<string, string>>({});
-  const pickerInitKeyRef = useRef('');
 
   useEffect(() => {
     const first = activeVariants[0];
@@ -139,92 +120,20 @@ export default function PublicProductForm({
     });
   }, [product.id, activeVariants]);
 
-  useEffect(() => {
-    pickerInitKeyRef.current = '';
-  }, [product.id]);
-
-  useEffect(() => {
-    if (!useHierarchicalPicker || activeVariants.length === 0) return;
-    const key = `${product.id}|${hierarchy.join('\0')}|${activeVariants.map((v) => v.id).join(',')}|${JSON.stringify(variantValueOrders)}`;
-    if (pickerInitKeyRef.current === key) return;
-    pickerInitKeyRef.current = key;
-
-    const base = activeVariants[0];
-    const next: Record<string, string> = {};
-    for (const h of hierarchy) {
-      const val = getVariantOptionValue(base.name, h);
-      if (val) next[h] = val;
-    }
-    for (let i = 1; i < hierarchy.length; i++) {
-      const pool = activeVariants.filter((v) => {
-        for (let j = 0; j < i; j++) {
-          const keyOpt = hierarchy[j];
-          const want = next[keyOpt];
-          if (!want) return false;
-          if (getVariantOptionValue(v.name, keyOpt) !== want) return false;
-        }
-        return true;
-      });
-      const optKey = hierarchy[i];
-      const rawVals = [
-        ...new Set(
-          pool
-            .map((v) => getVariantOptionValue(v.name, optKey))
-            .filter((x): x is string => Boolean(x)),
-        ),
-      ];
-      const vals = orderVariantValuesForDisplay(rawVals, optKey, variantValueOrders[optKey]);
-      if (!next[optKey] || !vals.includes(next[optKey])) {
-        next[optKey] = vals[0] ?? '';
-      }
-    }
-    setOptionSelections(next);
-  }, [product.id, useHierarchicalPicker, activeVariants, hierarchy, variantValueOrders]);
-
-  const handleOptionChange = useCallback(
-    (depth: number, value: string) => {
-      setOptionSelections((prev) => {
-        const next = { ...prev, [hierarchy[depth]]: value };
-        for (let i = depth + 1; i < hierarchy.length; i++) {
-          const pool = activeVariants.filter((v) => {
-            for (let j = 0; j < i; j++) {
-              const key = hierarchy[j];
-              const want = next[key];
-              if (!want) return false;
-              if (getVariantOptionValue(v.name, key) !== want) return false;
-            }
-            return true;
-          });
-          const optKey = hierarchy[i];
-          const rawVals = [
-            ...new Set(
-              pool
-                .map((v) => getVariantOptionValue(v.name, optKey))
-                .filter((x): x is string => Boolean(x)),
-            ),
-          ];
-          const vals = orderVariantValuesForDisplay(rawVals, optKey, variantValueOrders[optKey]);
-          next[optKey] = vals[0] ?? '';
-        }
-        return next;
-      });
-    },
-    [hierarchy, activeVariants, variantValueOrders],
-  );
-
   const effectiveSelectedVariant = useMemo(() => {
     if (activeVariants.length === 0) return undefined;
-    if (useHierarchicalPicker) {
-      const matches = activeVariants.filter((v) =>
-        hierarchy.every((h) => {
-          const sel = optionSelections[h];
-          return sel && getVariantOptionValue(v.name, h) === sel;
-        }),
-      );
-      return matches[0];
-    }
     return activeVariants.find((v) => v.id === selectedVariantId) ?? activeVariants[0];
-  }, [activeVariants, useHierarchicalPicker, hierarchy, optionSelections, selectedVariantId]);
+  }, [activeVariants, selectedVariantId]);
+
+  const hierarchicalVariantRows = useMemo(
+    () =>
+      activeVariants.map((v) => ({
+        id: v.id,
+        name: v.name,
+        price: v.price,
+      })),
+    [activeVariants],
+  );
 
   const [quantity, setQuantity] = useState(1);
 
@@ -430,87 +339,20 @@ export default function PublicProductForm({
             )}
           </div>
 
-          {hasMultipleVariants &&
-            (useHierarchicalPicker ? (
-              <div className="space-y-4">
-                {hierarchy.map((optionName, depth) => {
-                  const filtered = activeVariants.filter((v) => {
-                    for (let j = 0; j < depth; j++) {
-                      const key = hierarchy[j];
-                      const sel = optionSelections[key];
-                      if (!sel) return false;
-                      if (getVariantOptionValue(v.name, key) !== sel) return false;
-                    }
-                    return true;
-                  });
-                  const rawChoices = [
-                    ...new Set(
-                      filtered
-                        .map((v) => getVariantOptionValue(v.name, optionName))
-                        .filter((x): x is string => Boolean(x)),
-                    ),
-                  ];
-                  const choices = orderVariantValuesForDisplay(
-                    rawChoices,
-                    optionName,
-                    variantValueOrders[optionName],
-                  );
-                  const current = optionSelections[optionName] ?? choices[0] ?? '';
-
-                  return (
-                    <div key={optionName} className="space-y-2">
-                      <label
-                        className="text-sm font-medium"
-                        style={{ color: '#0F1F17' }}
-                      >
-                        {optionName}
-                      </label>
-                      {choices.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No options</p>
-                      ) : (
-                        <Select
-                          value={current}
-                          onValueChange={(v) => handleOptionChange(depth, v)}
-                        >
-                          <SelectTrigger className="w-full rounded-2xl">
-                            <SelectValue placeholder={`Select ${optionName}`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {choices.map((c) => (
-                              <SelectItem key={c} value={c}>
-                                {c}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                  Variant
-                </label>
-                <Select
-                  value={selectedVariantId || ''}
-                  onValueChange={(v) => setSelectedVariantId(v)}
-                >
-                  <SelectTrigger className="w-full rounded-2xl">
-                    <SelectValue placeholder="Select variant" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeVariants.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.name}
-                        {v.price != null && v.price > 0 ? ` - ${formatPrice(v.price)}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
+          {hasMultipleVariants && (
+            <HierarchicalVariantSelectGroup
+              instanceKey={product.id}
+              variants={hierarchicalVariantRows}
+              selectedVariantId={selectedVariantId}
+              onVariantChange={setSelectedVariantId}
+              variantRankOrder={variantRankOrder}
+              variantValueOrders={variantValueOrders}
+              autoSelectFirst
+              flatItemSuffix={(v) =>
+                v.price != null && v.price > 0 ? ` - ${formatPrice(Number(v.price))}` : null
+              }
+            />
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium" style={{ color: '#0F1F17' }}>

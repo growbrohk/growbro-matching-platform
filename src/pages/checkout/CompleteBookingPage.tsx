@@ -21,13 +21,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -45,7 +38,10 @@ import {
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
 import { getEvent } from '@/lib/api/events';
+import { getVariantConfig } from '@/lib/api/variant-config';
 import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
+import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
+import { getVariantOptionValue } from '@/lib/utils/variant-parser';
 import {
   addonEnforcesStock,
   resolvedVariantId,
@@ -101,6 +97,72 @@ function AddonProductPreview({ src, title }: { src?: string | null; title: strin
   );
 }
 
+function EventAddonVariantSelect({
+  addon,
+  selectedVariantId,
+  onVariantChange,
+  variantRankOrder,
+  variantValueOrders,
+  disabled,
+  compact,
+}: {
+  addon: EventAddonForCheckout;
+  selectedVariantId: string | undefined;
+  onVariantChange: (id: string | null) => void;
+  variantRankOrder: string[];
+  variantValueOrders: Record<string, string[]>;
+  disabled: boolean;
+  compact?: boolean;
+}) {
+  const variantRows = useMemo(
+    () => addon.variants.map((v) => ({ id: v.id, name: v.name, price: v.price })),
+    [addon.variants],
+  );
+
+  const isValueDisabled = (optionName: string, value: string, prefix: Record<string, string>) => {
+    if (!addonEnforcesStock(addon)) return false;
+    const candidates = addon.variants.filter(
+      (v) =>
+        getVariantOptionValue(v.name, optionName) === value &&
+        Object.entries(prefix).every(([k, pv]) => getVariantOptionValue(v.name, k) === pv),
+    );
+    return candidates.length > 0 && candidates.every((v) => (v.stock_remaining ?? 0) <= 0);
+  };
+
+  return (
+    <HierarchicalVariantSelectGroup
+      instanceKey={addon.product_id}
+      variants={variantRows}
+      selectedVariantId={selectedVariantId ?? null}
+      onVariantChange={onVariantChange}
+      variantRankOrder={variantRankOrder}
+      variantValueOrders={variantValueOrders}
+      autoSelectFirst={false}
+      disabled={disabled}
+      triggerClassName={compact ? 'h-9 rounded-xl w-full' : 'w-full rounded-2xl'}
+      labelClassName={compact ? 'text-xs' : 'text-sm font-medium'}
+      hierarchicalContentClassName="max-h-60 max-w-[90vw] !overflow-auto"
+      flatContentClassName="max-h-60 max-w-[90vw] !overflow-auto"
+      flatViewportClassName="min-w-[min(20rem,90vw)] w-max"
+      isValueDisabled={isValueDisabled}
+      flatItemDisabled={(v) => addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0}
+      flatItemSuffix={(v) => (
+        <>
+          {' '}
+          – HK$ {v.price.toFixed(0)}
+          {addonEnforcesStock(addon) ? (
+            (v.stock_remaining ?? 0) <= 0 ? (
+              <span className="text-destructive"> (Out of stock)</span>
+            ) : (
+              <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
+            )
+          ) : null}
+        </>
+      )}
+    />
+  );
+}
+
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -129,6 +191,8 @@ export default function CompleteBookingPage() {
   const [addonSelectionsByAttendee, setAddonSelectionsByAttendee] = useState<
     Record<number, Record<string, { variantId?: string; qty: number }>>
   >({});
+  const [addonVariantRankOrder, setAddonVariantRankOrder] = useState<string[]>([]);
+  const [addonVariantValueOrders, setAddonVariantValueOrders] = useState<Record<string, string[]>>({});
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -211,6 +275,28 @@ export default function CompleteBookingPage() {
     fetchEvent();
     fetchAddons();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!event?.org_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await getVariantConfig(event.org_id);
+        if (!cancelled) {
+          setAddonVariantRankOrder([c.rank1, c.rank2].filter(Boolean));
+          setAddonVariantValueOrders(c.value_orders || {});
+        }
+      } catch {
+        if (!cancelled) {
+          setAddonVariantRankOrder([]);
+          setAddonVariantValueOrders({});
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.org_id]);
 
   // Initialize required addons with fixed_quantity when they have no variants
   useEffect(() => {
@@ -613,57 +699,44 @@ export default function CompleteBookingPage() {
                     )}
                     {hasVariants ? (
                       <div className="space-y-2">
-                        <Label className="text-sm">Select option</Label>
-                        <Select
-                          value={sel.variantId ?? ''}
-                          onValueChange={(v) =>
+                        <EventAddonVariantSelect
+                          addon={addon}
+                          selectedVariantId={sel.variantId}
+                          variantRankOrder={addonVariantRankOrder}
+                          variantValueOrders={addonVariantValueOrders}
+                          disabled={allVariantsOos}
+                          onVariantChange={(id) => {
+                            if (id == null) {
+                              setAddonSelections((prev) => {
+                                const prevEntry = prev[addon.product_id] ?? { qty: 0 };
+                                const { variantId: _omit, ...rest } = prevEntry;
+                                return {
+                                  ...prev,
+                                  [addon.product_id]: {
+                                    ...rest,
+                                    qty: rest.qty ?? 0,
+                                  },
+                                };
+                              });
+                              return;
+                            }
                             setAddonSelections((prev) => {
                               const prevQty = prev[addon.product_id]?.qty ?? 1;
                               const next = {
-                                variantId: v,
+                                variantId: id,
                                 qty: addon.fixed_quantity ?? prevQty,
                               };
                               const cap = maxQtyPrimary(addon, next);
                               return {
                                 ...prev,
                                 [addon.product_id]: {
-                                  variantId: v,
+                                  variantId: id,
                                   qty: Math.min(next.qty, cap),
                                 },
                               };
-                            })
-                          }
-                          disabled={allVariantsOos}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose..." />
-                          </SelectTrigger>
-                          <SelectContent
-                            className="max-h-60 max-w-[90vw] !overflow-auto"
-                            viewportClassName="min-w-[min(20rem,90vw)] w-max"
-                          >
-                            {addon.variants.map((v) => {
-                              const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
-                              return (
-                                <SelectItem
-                                  key={v.id}
-                                  value={v.id}
-                                  disabled={vOos}
-                                  className="whitespace-nowrap py-2"
-                                >
-                                  {v.name} – HK$ {v.price.toFixed(0)}
-                                  {addonEnforcesStock(addon) ? (
-                                    vOos ? (
-                                      <span className="text-destructive"> (Out of stock)</span>
-                                    ) : (
-                                      <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
-                                    )
-                                  ) : null}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
+                            });
+                          }}
+                        />
                         {sel.variantId && (
                           <div className="flex items-center gap-2 flex-wrap">
                             <Label className="text-sm">Quantity</Label>
@@ -922,14 +995,35 @@ export default function CompleteBookingPage() {
                                     )}
                                     {hasVariants ? (
                                       <div className="space-y-2">
-                                        <Label className="text-xs">Select option</Label>
-                                        <Select
-                                          value={sel.variantId ?? ''}
-                                          onValueChange={(v) =>
+                                        <EventAddonVariantSelect
+                                          addon={addon}
+                                          selectedVariantId={sel.variantId}
+                                          variantRankOrder={addonVariantRankOrder}
+                                          variantValueOrders={addonVariantValueOrders}
+                                          disabled={allVariantsOos}
+                                          compact
+                                          onVariantChange={(id) => {
+                                            if (id == null) {
+                                              setAddonSelectionsByAttendee((prev) => {
+                                                const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
+                                                const { variantId: _omit, ...rest } = prevEntry;
+                                                return {
+                                                  ...prev,
+                                                  [index]: {
+                                                    ...(prev[index] ?? {}),
+                                                    [addon.product_id]: {
+                                                      ...rest,
+                                                      qty: rest.qty ?? 0,
+                                                    },
+                                                  },
+                                                };
+                                              });
+                                              return;
+                                            }
                                             setAddonSelectionsByAttendee((prev) => {
                                               const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
                                               const next = {
-                                                variantId: v,
+                                                variantId: id,
                                                 qty: addon.fixed_quantity ?? prevQty,
                                               };
                                               const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
@@ -938,44 +1032,14 @@ export default function CompleteBookingPage() {
                                                 [index]: {
                                                   ...(prev[index] ?? {}),
                                                   [addon.product_id]: {
-                                                    variantId: v,
+                                                    variantId: id,
                                                     qty: Math.min(next.qty, cap),
                                                   },
                                                 },
                                               };
-                                            })
-                                          }
-                                          disabled={allVariantsOos}
-                                        >
-                                          <SelectTrigger className="h-9">
-                                            <SelectValue placeholder="Choose..." />
-                                          </SelectTrigger>
-                                          <SelectContent
-                                            className="max-h-60 max-w-[90vw] !overflow-auto"
-                                            viewportClassName="min-w-[min(20rem,90vw)] w-max"
-                                          >
-                                            {addon.variants.map((v) => {
-                                              const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
-                                              return (
-                                                <SelectItem
-                                                  key={v.id}
-                                                  value={v.id}
-                                                  disabled={vOos}
-                                                  className="whitespace-nowrap py-2"
-                                                >
-                                                  {v.name} – HK$ {v.price.toFixed(0)}
-                                                  {addonEnforcesStock(addon) ? (
-                                                    vOos ? (
-                                                      <span className="text-destructive"> (Out of stock)</span>
-                                                    ) : (
-                                                      <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
-                                                    )
-                                                  ) : null}
-                                                </SelectItem>
-                                              );
-                                            })}
-                                          </SelectContent>
-                                        </Select>
+                                            });
+                                          }}
+                                        />
                                         {sel.variantId && (
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <Label className="text-xs">Qty</Label>
@@ -1286,14 +1350,35 @@ export default function CompleteBookingPage() {
                                 )}
                                 {hasVariants ? (
                                   <div className="space-y-2">
-                                    <Label className="text-xs">Select option</Label>
-                                    <Select
-                                      value={sel.variantId ?? ''}
-                                      onValueChange={(v) =>
+                                    <EventAddonVariantSelect
+                                      addon={addon}
+                                      selectedVariantId={sel.variantId}
+                                      variantRankOrder={addonVariantRankOrder}
+                                      variantValueOrders={addonVariantValueOrders}
+                                      disabled={allVariantsOos}
+                                      compact
+                                      onVariantChange={(id) => {
+                                        if (id == null) {
+                                          setAddonSelectionsByAttendee((prev) => {
+                                            const prevEntry = prev[index]?.[addon.product_id] ?? { qty: 0 };
+                                            const { variantId: _omit, ...rest } = prevEntry;
+                                            return {
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]: {
+                                                  ...rest,
+                                                  qty: rest.qty ?? 0,
+                                                },
+                                              },
+                                            };
+                                          });
+                                          return;
+                                        }
                                         setAddonSelectionsByAttendee((prev) => {
                                           const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
                                           const next = {
-                                            variantId: v,
+                                            variantId: id,
                                             qty: addon.fixed_quantity ?? prevQty,
                                           };
                                           const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
@@ -1302,44 +1387,14 @@ export default function CompleteBookingPage() {
                                             [index]: {
                                               ...(prev[index] ?? {}),
                                               [addon.product_id]: {
-                                                variantId: v,
+                                                variantId: id,
                                                 qty: Math.min(next.qty, cap),
                                               },
                                             },
                                           };
-                                        })
-                                      }
-                                      disabled={allVariantsOos}
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="Choose..." />
-                                      </SelectTrigger>
-                                      <SelectContent
-                                        className="max-h-60 max-w-[90vw] !overflow-auto"
-                                        viewportClassName="min-w-[min(20rem,90vw)] w-max"
-                                      >
-                                        {addon.variants.map((v) => {
-                                          const vOos = addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0;
-                                          return (
-                                            <SelectItem
-                                              key={v.id}
-                                              value={v.id}
-                                              disabled={vOos}
-                                              className="whitespace-nowrap py-2"
-                                            >
-                                              {v.name} – HK$ {v.price.toFixed(0)}
-                                              {addonEnforcesStock(addon) ? (
-                                                vOos ? (
-                                                  <span className="text-destructive"> (Out of stock)</span>
-                                                ) : (
-                                                  <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
-                                                )
-                                              ) : null}
-                                            </SelectItem>
-                                          );
-                                        })}
-                                      </SelectContent>
-                                    </Select>
+                                        });
+                                      }}
+                                    />
                                     {sel.variantId && (
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <Label className="text-xs">Qty</Label>
