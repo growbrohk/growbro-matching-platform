@@ -10,7 +10,10 @@ import type { ProductType } from '@/lib/types';
 export interface EventAddonVariant {
   id: string;
   name: string;
+  /** Effective unit price for this event (after optional promo) */
   price: number;
+  /** Catalog list price (before event promo), for strikethrough; mirrors price when no promo */
+  list_price?: number;
   /** When host enables stock display; null means not applicable */
   stock_remaining?: number | null;
 }
@@ -20,7 +23,10 @@ export interface EventAddonForCheckout {
   product_title: string;
   /** Primary product image (products.image_url); optional for older RPC responses */
   product_image_url?: string | null;
+  /** Effective base unit price (after optional event promo) — use for no-variant add-ons */
   base_price: number;
+  /** Catalog product.base_price (before event promo) */
+  base_list_price?: number | null;
   is_required: boolean;
   sort_order: number;
   fixed_quantity?: number | null;
@@ -89,6 +95,9 @@ export async function updateEventAddon(
     sort_order?: number;
     fixed_quantity?: number | null;
     show_remaining_stock?: boolean;
+    /** Set together with discount_percent: null the sibling when setting one. */
+    price_override?: number | null;
+    discount_percent?: number | null;
   }
 ): Promise<void> {
   const { error } = await supabase
@@ -195,13 +204,15 @@ export async function getProductsForAddonPicker(orgId: string): Promise<
  * Get event addons (for event form - includes id for edit/delete)
  */
 export async function getEventAddons(eventId: string): Promise<
-    Array<{
+  Array<{
     id: string;
     product_id: string;
     is_required: boolean;
     sort_order: number;
     fixed_quantity: number | null;
     show_remaining_stock: boolean;
+    price_override: number | null;
+    discount_percent: number | null;
     product: {
       id: string;
       title: string;
@@ -221,6 +232,8 @@ export async function getEventAddons(eventId: string): Promise<
       sort_order,
       fixed_quantity,
       show_remaining_stock,
+      price_override,
+      discount_percent,
       products (
         id,
         title,
@@ -249,6 +262,8 @@ export async function getEventAddons(eventId: string): Promise<
       sort_order: row.sort_order,
       fixed_quantity: row.fixed_quantity ?? null,
       show_remaining_stock: row.show_remaining_stock ?? false,
+      price_override: row.price_override ?? null,
+      discount_percent: row.discount_percent ?? null,
       product: {
         id: p?.id,
         title: p?.title,

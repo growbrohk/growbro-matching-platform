@@ -493,6 +493,60 @@ export type Database = {
           },
         ]
       }
+      event_addon_products: {
+        Row: {
+          created_at: string
+          discount_percent: number | null
+          event_id: string
+          fixed_quantity: number | null
+          id: string
+          is_required: boolean
+          price_override: number | null
+          product_id: string
+          show_remaining_stock: boolean
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          discount_percent?: number | null
+          event_id: string
+          fixed_quantity?: number | null
+          id?: string
+          is_required?: boolean
+          price_override?: number | null
+          product_id: string
+          show_remaining_stock?: boolean
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number | null
+          event_id?: string
+          fixed_quantity?: number | null
+          id?: string
+          is_required?: boolean
+          price_override?: number | null
+          product_id?: string
+          show_remaining_stock?: boolean
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_addon_products_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_addon_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           created_at: string

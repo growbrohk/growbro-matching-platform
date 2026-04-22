@@ -51,6 +51,7 @@ import {
   maxQtyPrimary,
   maxQtyPerTicketAttendee,
   computeAddonStockOrderError,
+  getAddonDisplayPrices,
 } from '@/lib/utils/event-addon-stock';
 import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
@@ -77,6 +78,44 @@ function formatAddonHkd(amount: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function AddonPriceDisplay({
+  list,
+  effective,
+  isDiscounted,
+  size = 'pdp',
+}: {
+  list: number;
+  effective: number;
+  isDiscounted: boolean;
+  size?: 'pdp' | 'compact';
+}) {
+  const cls = size === 'pdp' ? 'text-xl md:text-2xl font-semibold' : 'text-lg font-semibold';
+  if (effective <= 0) {
+    return (
+      <p className={cls} style={{ color: '#0E7A3A' }}>
+        Free
+      </p>
+    );
+  }
+  if (isDiscounted) {
+    return (
+      <div className="flex flex-col items-end sm:items-start gap-0.5 text-right sm:text-left">
+        <span className="text-sm text-muted-foreground line-through" aria-label={`List price ${formatAddonHkd(list)}`}>
+          {formatAddonHkd(list)}
+        </span>
+        <p className={cls} style={{ color: '#0E7A3A' }}>
+          {formatAddonHkd(effective)}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <p className={cls} style={{ color: '#0E7A3A' }}>
+      {formatAddonHkd(effective)}
+    </p>
+  );
 }
 
 function EventAddonVariantSelect({
@@ -719,13 +758,10 @@ export default function CompleteBookingPage() {
                 const addonPhotos = getAddonProductPhotos(addon);
                 const photoIdx = addonPhotoIndexByProduct[addon.product_id] ?? 0;
                 const priceVariantId = sel.variantId ?? vid;
-                const priceVariant = priceVariantId
-                  ? addon.variants.find((v) => v.id === priceVariantId)
-                  : addon.variants[0];
-                const displayUnitPrice =
-                  addon.variants.length === 0
-                    ? addon.base_price ?? 0
-                    : (priceVariant?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
+                const { list: apList, effective: apEff, isDiscounted: apDisc } = getAddonDisplayPrices(
+                  addon,
+                  addon.variants.length === 0 ? undefined : priceVariantId
+                );
                 return (
                   <div
                     key={addon.product_id}
@@ -742,9 +778,12 @@ export default function CompleteBookingPage() {
                         ) : undefined
                       }
                       priceSlot={
-                        <p className="text-xl md:text-2xl font-semibold" style={{ color: '#0E7A3A' }}>
-                          {displayUnitPrice > 0 ? formatAddonHkd(displayUnitPrice) : 'Free'}
-                        </p>
+                        <AddonPriceDisplay
+                          list={apList}
+                          effective={apEff}
+                          isDiscounted={apDisc}
+                          size="pdp"
+                        />
                       }
                       photos={addonPhotos}
                       selectedImageIndex={Math.min(photoIdx, Math.max(0, addonPhotos.length - 1))}
@@ -1029,13 +1068,14 @@ export default function CompleteBookingPage() {
                                 const addonPhotos = getAddonProductPhotos(addon);
                                 const photoIdx = perTicketAddonPhotoIndex[ptPhotoKey] ?? 0;
                                 const priceVariantId = sel.variantId ?? vid;
-                                const priceVariant = priceVariantId
-                                  ? addon.variants.find((v) => v.id === priceVariantId)
-                                  : addon.variants[0];
-                                const displayUnitPrice =
-                                  addon.variants.length === 0
-                                    ? addon.base_price ?? 0
-                                    : (priceVariant?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
+                                const {
+                                  list: apList,
+                                  effective: apEff,
+                                  isDiscounted: apDisc,
+                                } = getAddonDisplayPrices(
+                                  addon,
+                                  addon.variants.length === 0 ? undefined : priceVariantId
+                                );
                                 return (
                                   <div
                                     key={addon.product_id}
@@ -1052,9 +1092,12 @@ export default function CompleteBookingPage() {
                                         ) : undefined
                                       }
                                       priceSlot={
-                                        <p className="text-lg font-semibold" style={{ color: '#0E7A3A' }}>
-                                          {displayUnitPrice > 0 ? formatAddonHkd(displayUnitPrice) : 'Free'}
-                                        </p>
+                                        <AddonPriceDisplay
+                                          list={apList}
+                                          effective={apEff}
+                                          isDiscounted={apDisc}
+                                          size="compact"
+                                        />
                                       }
                                       photos={addonPhotos}
                                       selectedImageIndex={Math.min(photoIdx, Math.max(0, addonPhotos.length - 1))}
@@ -1403,13 +1446,14 @@ export default function CompleteBookingPage() {
                             const addonPhotosB = getAddonProductPhotos(addon);
                             const photoIdxB = perTicketAddonPhotoIndex[ptPhotoKeyB] ?? 0;
                             const priceVariantIdB = sel.variantId ?? vid;
-                            const priceVariantB = priceVariantIdB
-                              ? addon.variants.find((v) => v.id === priceVariantIdB)
-                              : addon.variants[0];
-                            const displayUnitPriceB =
-                              addon.variants.length === 0
-                                ? addon.base_price ?? 0
-                                : (priceVariantB?.price ?? addon.base_price ?? addon.variants[0]?.price ?? 0);
+                            const {
+                              list: apListB,
+                              effective: apEffB,
+                              isDiscounted: apDiscB,
+                            } = getAddonDisplayPrices(
+                              addon,
+                              addon.variants.length === 0 ? undefined : priceVariantIdB
+                            );
                             return (
                               <div
                                 key={addon.product_id}
@@ -1426,9 +1470,12 @@ export default function CompleteBookingPage() {
                                     ) : undefined
                                   }
                                   priceSlot={
-                                    <p className="text-lg font-semibold" style={{ color: '#0E7A3A' }}>
-                                      {displayUnitPriceB > 0 ? formatAddonHkd(displayUnitPriceB) : 'Free'}
-                                    </p>
+                                    <AddonPriceDisplay
+                                      list={apListB}
+                                      effective={apEffB}
+                                      isDiscounted={apDiscB}
+                                      size="compact"
+                                    />
                                   }
                                   photos={addonPhotosB}
                                   selectedImageIndex={Math.min(photoIdxB, Math.max(0, addonPhotosB.length - 1))}

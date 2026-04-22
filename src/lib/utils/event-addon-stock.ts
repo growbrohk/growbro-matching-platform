@@ -1,5 +1,28 @@
 import type { EventAddonForCheckout } from '@/lib/api/event-addons';
 
+/** List (catalog) vs effective price; isDiscounted true when sale is below list (not markup). */
+export function getAddonDisplayPrices(
+  addon: EventAddonForCheckout,
+  variantId: string | undefined
+): { list: number; effective: number; isDiscounted: boolean } {
+  if (addon.variants.length === 0) {
+    const list = addon.base_list_price ?? addon.base_price ?? 0;
+    const effective = addon.base_price ?? 0;
+    const l = Number(list) || 0;
+    const e = Number(effective) || 0;
+    return { list: l, effective: e, isDiscounted: l > e };
+  }
+  const v = variantId
+    ? addon.variants.find((x) => x.id === variantId)
+    : addon.variants[0];
+  if (!v) {
+    return { list: 0, effective: 0, isDiscounted: false };
+  }
+  const list = v.list_price ?? v.price;
+  const effective = v.price;
+  return { list, effective, isDiscounted: list > effective };
+}
+
 export function addonEnforcesStock(addon: EventAddonForCheckout): boolean {
   return addon.show_remaining_stock === true;
 }

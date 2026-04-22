@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,6 +33,120 @@ interface EventAddonsSectionProps {
   orgId: string;
 }
 
+const EVENT_ADDON_PRICING_DEBOUNCE_MS = 400;
+
+function EventAddonEventPricing({
+  addonId,
+  priceOverride,
+  discountPercent,
+  onSaved,
+}: {
+  addonId: string;
+  priceOverride: number | null;
+  discountPercent: number | null;
+  onSaved: () => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [priceStr, setPriceStr] = useState(
+    () => (priceOverride != null ? String(priceOverride) : '')
+  );
+  const [discStr, setDiscStr] = useState(
+    () => (discountPercent != null ? String(discountPercent) : '')
+  );
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setPriceStr(priceOverride != null ? String(priceOverride) : '');
+    setDiscStr(discountPercent != null ? String(discountPercent) : '');
+  }, [addonId, priceOverride, discountPercent]);
+
+  const save = async (po: number | null, dp: number | null) => {
+    try {
+      await updateEventAddon(addonId, { price_override: po, discount_percent: dp });
+      await onSaved();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const schedule = (po: number | null, dp: number | null) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      void save(po, dp);
+      timerRef.current = null;
+    }, EVENT_ADDON_PRICING_DEBOUNCE_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="pt-2 border-t space-y-2" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+      <Label className="text-xs font-medium" style={{ color: '#0F1F17' }}>
+        Event price (optional)
+      </Label>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <span className="text-xs text-muted-foreground">New price (HK$)</span>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={priceStr}
+            onChange={(e) => {
+              const v = e.target.value;
+              setPriceStr(v);
+              setDiscStr('');
+              if (v.trim() === '') {
+                schedule(null, null);
+                return;
+              }
+              const n = parseFloat(v);
+              if (!Number.isNaN(n) && n >= 0) {
+                schedule(n, null);
+              }
+            }}
+            placeholder="Catalog default"
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <span className="text-xs text-muted-foreground">Discount %</span>
+          <Input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            value={discStr}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDiscStr(v);
+              setPriceStr('');
+              if (v.trim() === '') {
+                schedule(null, null);
+                return;
+              }
+              const n = parseFloat(v);
+              if (!Number.isNaN(n) && n >= 0 && n <= 100) {
+                schedule(null, n);
+              }
+            }}
+            placeholder="e.g. 20"
+            className="mt-1"
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground pl-0.5">
+        Fixed price is the same for every variant. % off applies per variant&apos;s catalog price — prefer % for
+        many sizes. Leave both empty to use catalog. Use 0 in New price for a free add-on.
+      </p>
+    </div>
+  );
+}
+
 export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) {
   const { toast } = useToast();
   const [addons, setAddons] = useState<
@@ -43,6 +157,8 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
       sort_order: number;
       fixed_quantity: number | null;
       show_remaining_stock: boolean;
+      price_override: number | null;
+      discount_percent: number | null;
       product: {
         id: string;
         title: string;
@@ -284,6 +400,12 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
                       </div>
                     )}
                     </div>
+                    <EventAddonEventPricing
+                      addonId={addon.id}
+                      priceOverride={addon.price_override}
+                      discountPercent={addon.discount_percent}
+                      onSaved={loadAddons}
+                    />
                   </div>
                 </div>
               ))}
