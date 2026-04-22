@@ -41,7 +41,10 @@ import { getEvent } from '@/lib/api/events';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
-import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { getUniqueVariantOptionNames, getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { collectProductPhotoUrls } from '@/lib/utils/product-media';
+import { ProductImageLightbox, ProductImageLightboxTrigger } from '@/components/products/ProductImageLightbox';
+import ProductInfoAccordion from '@/components/products/ProductInfoAccordion';
 import {
   addonEnforcesStock,
   resolvedVariantId,
@@ -57,42 +60,53 @@ import type { Event } from '@/lib/types';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 
+function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
+  const raw = addon.gallery_urls;
+  const gUrls = Array.isArray(raw)
+    ? raw.filter((u): u is string => typeof u === 'string' && u.trim() !== '')
+    : [];
+  return collectProductPhotoUrls({
+    image_url: addon.product_image_url,
+    metadata: gUrls.length > 0 ? { gallery_urls: gUrls } : undefined,
+  });
+}
+
+function PrimaryAddonPhotoStrip({ photos, productTitle }: { photos: string[]; productTitle: string }) {
+  const [lightbox, setLightbox] = useState({ open: false, url: '' });
+  return (
+    <>
+      <div className="flex flex-row gap-2 overflow-x-auto pb-1 -mx-1 px-1 mb-2">
+        {photos.map((url, i) => (
+          <ProductImageLightboxTrigger
+            key={`${url}-${i}`}
+            src={url}
+            title={productTitle}
+            onOpen={() => setLightbox({ open: true, url })}
+            className="flex-shrink-0 w-16 h-16 rounded-xl"
+            size="sm"
+            imageSrcOverride={url}
+            aria-label={`View image ${i + 1} of ${productTitle}`}
+          />
+        ))}
+      </div>
+      <ProductImageLightbox
+        open={lightbox.open}
+        onOpenChange={(o) => setLightbox((s) => ({ ...s, open: o }))}
+        url={lightbox.url}
+        title={productTitle}
+      />
+    </>
+  );
+}
+
 function AddonProductPreview({ src, title }: { src?: string | null; title: string }) {
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const url = typeof src === 'string' ? src.trim() : '';
   if (!url) return null;
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setLightboxOpen(true)}
-        className="h-12 w-12 shrink-0 rounded-md border overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0E7A3A] cursor-zoom-in transition-opacity hover:opacity-90 active:opacity-80"
-        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-        aria-label={`View full size: ${title}`}
-      >
-        <img src={url} alt="" className="h-full w-full object-cover" />
-      </button>
-      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-        <DialogContent
-          className="sm:max-w-[min(92vw,48rem)] max-h-[90vh] overflow-y-auto p-4 pt-12 gap-3 rounded-2xl"
-          onOpenAutoFocus={(e) => e.preventDefault()}
-        >
-          <DialogHeader className="sr-only">
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>Full-size product photo</DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-center">
-            <img
-              src={url}
-              alt={title}
-              className="max-h-[min(75vh,720px)] w-auto max-w-full rounded-lg object-contain"
-            />
-          </div>
-          <p className="text-center text-sm font-medium px-2" style={{ color: '#0F1F17' }}>
-            {title}
-          </p>
-        </DialogContent>
-      </Dialog>
+      <ProductImageLightboxTrigger src={url} title={title} onOpen={() => setOpen(true)} />
+      <ProductImageLightbox open={open} onOpenChange={setOpen} url={url} title={title} />
     </>
   );
 }
@@ -129,13 +143,21 @@ function EventAddonVariantSelect({
     return candidates.length > 0 && candidates.every((v) => (v.stock_remaining ?? 0) <= 0);
   };
 
+  /** Promote Version before Size when both exist (org rank may list Size first). */
+  const effectiveRankOrder = useMemo(() => {
+    const unique = getUniqueVariantOptionNames(variantRows.map((v) => v.name));
+    const versionName = unique.find((n) => n.toLowerCase() === 'version');
+    if (!versionName) return variantRankOrder;
+    return [versionName, ...variantRankOrder.filter((n) => n !== versionName)];
+  }, [variantRows, variantRankOrder]);
+
   return (
     <HierarchicalVariantSelectGroup
       instanceKey={addon.product_id}
       variants={variantRows}
       selectedVariantId={selectedVariantId ?? null}
       onVariantChange={onVariantChange}
-      variantRankOrder={variantRankOrder}
+      variantRankOrder={effectiveRankOrder}
       variantValueOrders={variantValueOrders}
       autoSelectFirst={false}
       disabled={disabled}
@@ -672,6 +694,7 @@ export default function CompleteBookingPage() {
                 const fixedQty = addon.fixed_quantity ?? 0;
                 const maxQForFixed = enforced ? maxQtyPrimary(addon, { variantId: vid, qty: fixedQty }) : 9999;
                 const canIncludeFixed = !enforced || fixedQty <= maxQForFixed;
+                const addonPhotos = getAddonProductPhotos(addon);
                 return (
                   <div
                     key={addon.product_id}
@@ -679,7 +702,9 @@ export default function CompleteBookingPage() {
                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
                   >
                     <div className="flex items-start gap-3 mb-2">
-                      <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
+                      {addonPhotos.length <= 1 ? (
+                        <AddonProductPreview src={addon.product_image_url} title={addon.product_title} />
+                      ) : null}
                       <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
                         <span className="font-medium" style={{ color: '#0F1F17' }}>
                           {addon.product_title}
@@ -696,6 +721,9 @@ export default function CompleteBookingPage() {
                     )}
                     {outOfStock && (
                       <p className="text-sm font-medium text-destructive mb-2">Out of stock</p>
+                    )}
+                    {addonPhotos.length > 1 && (
+                      <PrimaryAddonPhotoStrip photos={addonPhotos} productTitle={addon.product_title} />
                     )}
                     {hasVariants ? (
                       <div className="space-y-2">
@@ -812,6 +840,13 @@ export default function CompleteBookingPage() {
                         </span>
                       </div>
                     )}
+                    <ProductInfoAccordion
+                      description={addon.product_description ?? ''}
+                      productDetails={addon.product_details ?? ''}
+                      sizeAndFit={addon.size_and_fit ?? ''}
+                      defaultAllOpen={false}
+                      className="mt-3 border-t border-black/10 pt-2"
+                    />
                   </div>
                 );
               })}

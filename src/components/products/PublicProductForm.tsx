@@ -2,13 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { ShoppingCart } from 'lucide-react';
+import { ProductImageLightbox } from '@/components/products/ProductImageLightbox';
+import ProductInfoAccordion from '@/components/products/ProductInfoAccordion';
 import { useToast } from '@/hooks/use-toast';
 import { usePublicCart } from '@/contexts/PublicCartContext';
 import {
@@ -152,25 +148,8 @@ export default function PublicProductForm({
   const sizeFit = typeof meta.size_and_fit === 'string' ? meta.size_and_fit.trim() : '';
   const descriptionText = (product.description || '').trim();
 
-  const accordionSections = useMemo(() => {
-    const sections: { id: string; title: string; body: string }[] = [];
-    if (descriptionText) {
-      sections.push({ id: 'description', title: 'Description', body: descriptionText });
-    }
-    if (productDetails) {
-      sections.push({
-        id: 'product-details',
-        title: 'Product Details',
-        body: productDetails,
-      });
-    }
-    if (sizeFit) {
-      sections.push({ id: 'size-fit', title: 'Size & Fit', body: sizeFit });
-    }
-    return sections;
-  }, [descriptionText, productDetails, sizeFit]);
-
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [imageLightbox, setImageLightbox] = useState({ open: false, url: '' as string });
 
   useEffect(() => {
     if (photos.length === 0) {
@@ -258,57 +237,31 @@ export default function PublicProductForm({
     });
   };
 
-  const openAccordionDefaults = accordionSections.map((s) => s.id);
-
   return (
     <div className="space-y-10 md:space-y-14">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-        {/* Gallery */}
+        {/* Gallery: main image only; thumbs live in the buy box above Size / variant */}
         <div className="w-full">
-          <div className="flex flex-col-reverse lg:flex-row gap-4 lg:gap-5">
-            {photos.length > 1 && (
-              <div
-                className="
-                  flex flex-row lg:flex-col gap-2 lg:gap-3
-                  overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto lg:max-h-[min(85vh,640px)]
-                  w-full lg:w-[76px] shrink-0 lg:shrink-0
-                  pb-1 lg:pb-0
-                  -mx-1 px-1 lg:mx-0 lg:px-0
-                "
+          <div
+            className="aspect-square w-full rounded-2xl overflow-hidden bg-muted flex items-center justify-center min-w-0"
+            style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
+          >
+            {mainSrc ? (
+              <button
+                type="button"
+                className="w-full h-full block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
+                onClick={() => setImageLightbox({ open: true, url: mainSrc })}
+                aria-label={`View full size: ${product.title}`}
               >
-                {photos.map((p, i) => (
-                  <button
-                    key={`${p}-${i}`}
-                    type="button"
-                    onClick={() => setSelectedImageIndex(i)}
-                    className={`
-                      flex-shrink-0 w-16 h-16 lg:w-[76px] lg:h-[76px] rounded-xl overflow-hidden border-2 transition-colors
-                      ${
-                        selectedImageIndex === i
-                          ? 'border-primary ring-2 ring-primary/20'
-                          : 'border-transparent hover:border-muted-foreground/30'
-                      }
-                    `}
-                  >
-                    <img src={p} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div
-              className="aspect-square w-full rounded-2xl overflow-hidden bg-muted flex items-center justify-center min-w-0 flex-1"
-              style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
-            >
-              {mainSrc ? (
                 <img
                   src={mainSrc}
                   alt={product.title}
                   className="w-full h-full object-cover"
                 />
-              ) : (
-                <span className="text-sm text-muted-foreground">No image</span>
-              )}
-            </div>
+              </button>
+            ) : (
+              <span className="text-sm text-muted-foreground">No image</span>
+            )}
           </div>
         </div>
 
@@ -338,6 +291,32 @@ export default function PublicProductForm({
               <p className="text-sm text-muted-foreground mt-1">This code does not apply to this product.</p>
             )}
           </div>
+
+          {photos.length > 1 && (
+            <div className="flex flex-row gap-2 overflow-x-auto pb-1 -mx-1 px-1 max-h-[5.5rem]">
+              {photos.map((p, i) => (
+                <button
+                  key={`${p}-${i}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedImageIndex(i);
+                    setImageLightbox({ open: true, url: p });
+                  }}
+                  className={`
+                    flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors cursor-zoom-in
+                    ${
+                      selectedImageIndex === i
+                        ? 'border-primary ring-2 ring-primary/20'
+                        : 'border-transparent hover:border-muted-foreground/30'
+                    }
+                  `}
+                  aria-label={`View image ${i + 1} of ${product.title}`}
+                >
+                  <img src={p} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
 
           {hasMultipleVariants && (
             <HierarchicalVariantSelectGroup
@@ -382,38 +361,21 @@ export default function PublicProductForm({
         </div>
       </div>
 
-      {accordionSections.length > 0 && (
-        <section
-          className="border-t pt-2"
-          style={{ borderColor: 'rgba(0,0,0,0.1)' }}
-          aria-label="Product information"
-        >
-          <Accordion
-            type="multiple"
-            defaultValue={openAccordionDefaults}
-            className="w-full"
-          >
-            {accordionSections.map((s) => (
-              <AccordionItem key={s.id} value={s.id} className="border-muted">
-                <AccordionTrigger
-                  className="text-base hover:no-underline py-4"
-                  style={{ color: '#0F1F17', fontFamily: "'Inter Tight', sans-serif" }}
-                >
-                  {s.title}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div
-                    className="prose prose-sm max-w-none whitespace-pre-wrap pb-2"
-                    style={{ color: 'rgba(15,31,23,0.85)' }}
-                  >
-                    {s.body}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </section>
-      )}
+      <ProductInfoAccordion
+        description={descriptionText}
+        productDetails={productDetails}
+        sizeAndFit={sizeFit}
+        defaultAllOpen
+        className="border-t border-black/10 pt-2"
+        aria-label="Product information"
+      />
+
+      <ProductImageLightbox
+        open={imageLightbox.open}
+        onOpenChange={(o) => setImageLightbox((s) => ({ ...s, open: o }))}
+        url={imageLightbox.url}
+        title={product.title}
+      />
 
       {relatedProducts.length > 0 && (
         <section aria-label="You may also like">

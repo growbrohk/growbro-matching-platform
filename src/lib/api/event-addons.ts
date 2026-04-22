@@ -25,6 +25,14 @@ export interface EventAddonForCheckout {
   sort_order: number;
   fixed_quantity?: number | null;
   show_remaining_stock?: boolean;
+  /** products.description; optional for older RPC responses */
+  product_description?: string | null;
+  /** products.metadata.gallery_urls; optional; older RPCs omit */
+  gallery_urls?: string[] | null;
+  /** products.metadata.product_details */
+  product_details?: string | null;
+  /** products.metadata.size_and_fit */
+  size_and_fit?: string | null;
   variants: EventAddonVariant[];
 }
 
