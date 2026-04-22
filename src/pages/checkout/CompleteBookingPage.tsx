@@ -25,7 +25,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, ChevronUp, ChevronDown, X, ShoppingCart } from 'lucide-react';
 import {
   BookingDraft,
   BookingDraftAddonLine,
@@ -192,6 +192,95 @@ function EventAddonVariantSelect({
   );
 }
 
+function AddonQuantityAndCta({
+  density,
+  productTitle,
+  variantLabel,
+  draftQty,
+  onDraftChange,
+  committedQty,
+  onCommit,
+  onRemove,
+  outOfStock,
+  maxQ,
+  enforced,
+  canCommit,
+  quantityLabel = 'Quantity',
+  inputClassName,
+}: {
+  density: 'pdp' | 'compact';
+  productTitle: string;
+  variantLabel?: string | null;
+  draftQty: number;
+  onDraftChange: (n: number) => void;
+  onCommit: () => void;
+  onRemove: () => void;
+  outOfStock: boolean;
+  maxQ: number;
+  enforced: boolean;
+  canCommit: boolean;
+  quantityLabel?: string;
+  inputClassName: string;
+}) {
+  const labelCls = density === 'pdp' ? 'text-sm font-medium' : 'text-xs';
+  const commitDisabled =
+    outOfStock || !canCommit || draftQty < 1 || (committedQty > 0 && draftQty === committedQty);
+  const ctaLabel = committedQty > 0 ? 'Update' : 'Add to cart';
+  const h = density === 'pdp' ? 'h-12' : 'h-10';
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className={labelCls} style={density === 'pdp' ? { color: '#0F1F17' } : undefined}>
+          {quantityLabel}
+        </label>
+        <Input
+          type="number"
+          min={1}
+          max={enforced ? maxQ : undefined}
+          value={draftQty}
+          disabled={outOfStock}
+          onChange={(e) => {
+            const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
+            const q = enforced ? Math.min(raw, maxQ) : raw;
+            onDraftChange(q);
+          }}
+          className={inputClassName}
+        />
+      </div>
+      {committedQty > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: 'rgba(15,31,23,0.85)' }}>
+          <span>
+            In order: <span className="font-semibold">{committedQty}</span>
+          </span>
+          <button
+            type="button"
+            className="text-sm font-medium hover:underline"
+            style={{ color: '#0E7A3A' }}
+            onClick={onRemove}
+          >
+            Remove
+          </button>
+        </div>
+      )}
+      <div className="flex flex-col gap-2 pt-1">
+        <Button
+          type="button"
+          onClick={onCommit}
+          disabled={commitDisabled}
+          size="lg"
+          className={`w-full ${h} rounded-2xl font-bold ${
+            !commitDisabled ? 'text-white hover:opacity-95' : ''
+          }`}
+          style={!commitDisabled ? { backgroundColor: '#0E7A3A' } : undefined}
+        >
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          {ctaLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -226,6 +315,12 @@ export default function CompleteBookingPage() {
   const [addonPhotoIndexByProduct, setAddonPhotoIndexByProduct] = useState<Record<string, number>>({});
   /** Per-ticket add-ons: key `${attendeeIndex}-${productId}` */
   const [perTicketAddonPhotoIndex, setPerTicketAddonPhotoIndex] = useState<Record<string, number>>({});
+  /** Draft qty for add-on number inputs; committed qty lives in `addonSelections` (primary). */
+  const [addonDraftQty, setAddonDraftQty] = useState<Record<string, number>>({});
+  /** Per-ticket draft qty: attendeeIndex -> productId -> draft */
+  const [addonDraftQtyByAttendee, setAddonDraftQtyByAttendee] = useState<
+    Record<number, Record<string, number>>
+  >({});
 
   // Load booking draft and event on mount
   useEffect(() => {
@@ -372,7 +467,7 @@ export default function CompleteBookingPage() {
     }
   }, [eventAddons, event?.id, event?.collect_attendee_info, attendees.length]);
 
-  // PDP-style: pre-select first variant for multi-variant add-ons so price is shown (does not set qty)
+  // PDP-style: pre-select the first variant so price/gallery show; committed qty stays 0 until the user adds to order.
   useEffect(() => {
     if (eventAddons.length === 0 || !event) return;
 
@@ -825,46 +920,98 @@ export default function CompleteBookingPage() {
                                 return;
                               }
                               setAddonSelections((prev) => {
-                                const prevQty = prev[addon.product_id]?.qty ?? 1;
-                                const next = {
-                                  variantId: id,
-                                  qty: addon.fixed_quantity ?? prevQty,
-                                };
-                                const cap = maxQtyPrimary(addon, next);
+                                const committed = prev[addon.product_id]?.qty ?? 0;
+                                if (addon.fixed_quantity != null) {
+                                  const cap = maxQtyPrimary(addon, { variantId: id, qty: addon.fixed_quantity });
+                                  return {
+                                    ...prev,
+                                    [addon.product_id]: {
+                                      variantId: id,
+                                      qty: Math.min(addon.fixed_quantity, cap),
+                                    },
+                                  };
+                                }
+                                const cap = maxQtyPrimary(addon, { variantId: id, qty: committed });
                                 return {
                                   ...prev,
                                   [addon.product_id]: {
                                     variantId: id,
-                                    qty: Math.min(next.qty, cap),
+                                    qty: Math.min(committed, cap),
                                   },
                                 };
                               });
+                              setAddonDraftQty((prev) => ({
+                                ...prev,
+                                [addon.product_id]:
+                                  addon.fixed_quantity != null
+                                    ? addon.fixed_quantity
+                                    : Math.max(1, prev[addon.product_id] ?? 1),
+                              }));
                             }}
                           />
-                          {sel.variantId && (
+                          {sel.variantId && addon.fixed_quantity != null && (
                             <div className="flex items-center gap-2 flex-wrap">
                               <Label className="text-sm">Quantity</Label>
-                              {addon.fixed_quantity != null ? (
-                                <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                              ) : (
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  max={enforced ? maxQ : undefined}
-                                  value={sel.qty}
-                                  disabled={outOfStock}
-                                  onChange={(e) => {
-                                    const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                    const q = enforced ? Math.min(raw, maxQ) : raw;
-                                    setAddonSelections((prev) => ({
-                                      ...prev,
-                                      [addon.product_id]: { ...prev[addon.product_id], qty: q },
-                                    }));
-                                  }}
-                                  className="w-20 rounded-2xl"
-                                />
-                              )}
+                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                             </div>
+                          )}
+                          {sel.variantId && addon.fixed_quantity == null && (
+                            <AddonQuantityAndCta
+                              density="pdp"
+                              productTitle={addon.product_title}
+                              variantLabel={
+                                (sel.variantId
+                                  ? addon.variants.find((x) => x.id === sel.variantId)
+                                  : undefined
+                                )?.name
+                              }
+                              draftQty={addonDraftQty[addon.product_id] ?? 1}
+                              onDraftChange={(n) =>
+                                setAddonDraftQty((prev) => ({ ...prev, [addon.product_id]: n }))
+                              }
+                              committedQty={sel.qty}
+                              onCommit={() => {
+                                const variantId = sel.variantId ?? resolvedVariantId(addon, sel);
+                                if (!variantId) return;
+                                const cap = maxQtyPrimary(addon, { variantId, qty: 1 });
+                                const d = addonDraftQty[addon.product_id] ?? 1;
+                                const qty = Math.max(1, Math.min(d, cap));
+                                const vRow = addon.variants.find((x) => x.id === variantId);
+                                setAddonSelections((prev) => ({
+                                  ...prev,
+                                  [addon.product_id]: { variantId, qty },
+                                }));
+                                setAddonDraftQty((prev) => ({ ...prev, [addon.product_id]: qty }));
+                                const wasUpdate = sel.qty > 0;
+                                toast({
+                                  title: wasUpdate ? 'Order updated' : 'Added to order',
+                                  description: `${addon.product_title}${
+                                    vRow?.name ? ` (${vRow.name})` : ''
+                                  } × ${qty}`,
+                                });
+                              }}
+                              onRemove={() => {
+                                setAddonSelections((prev) => {
+                                  const cur = prev[addon.product_id];
+                                  return {
+                                    ...prev,
+                                    [addon.product_id]: {
+                                      variantId: cur?.variantId ?? sel.variantId,
+                                      qty: 0,
+                                    },
+                                  };
+                                });
+                              }}
+                              outOfStock={outOfStock}
+                              maxQ={maxQ}
+                              enforced={enforced}
+                              canCommit={
+                                !outOfStock &&
+                                (enforced ? maxQ > 0 : true) &&
+                                Boolean(sel.variantId ?? resolvedVariantId(addon, sel))
+                              }
+                              inputClassName="w-20 rounded-2xl"
+                            />
                           )}
                         </div>
                       ) : addon.fixed_quantity != null ? (
@@ -890,25 +1037,49 @@ export default function CompleteBookingPage() {
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Label className="text-sm">Quantity</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={enforced ? maxQ : undefined}
-                            value={sel.qty}
-                            disabled={outOfStock}
-                            onChange={(e) => {
-                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              const q = enforced ? Math.min(raw, maxQ) : raw;
-                              setAddonSelections((prev) => ({
-                                ...prev,
-                                [addon.product_id]: { qty: q },
-                              }));
-                            }}
-                            className="w-20 rounded-2xl"
-                          />
-                        </div>
+                        <AddonQuantityAndCta
+                          density="pdp"
+                          productTitle={addon.product_title}
+                          draftQty={addonDraftQty[addon.product_id] ?? 1}
+                          onDraftChange={(n) =>
+                            setAddonDraftQty((prev) => ({ ...prev, [addon.product_id]: n }))
+                          }
+                          committedQty={sel.qty}
+                          onCommit={() => {
+                            const singleVid =
+                              addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                            const cap = maxQtyPrimary(addon, { variantId: singleVid, qty: 1 });
+                            const d = addonDraftQty[addon.product_id] ?? 1;
+                            const qty = Math.max(1, Math.min(d, cap));
+                            setAddonSelections((prev) => ({
+                              ...prev,
+                              [addon.product_id]:
+                                singleVid != null
+                                  ? { variantId: singleVid, qty }
+                                  : { qty },
+                            }));
+                            setAddonDraftQty((prev) => ({ ...prev, [addon.product_id]: qty }));
+                            const wasUpdate = sel.qty > 0;
+                            toast({
+                              title: wasUpdate ? 'Order updated' : 'Added to order',
+                              description: `${addon.product_title} × ${qty}`,
+                            });
+                          }}
+                          onRemove={() => {
+                            const singleVid =
+                              addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                            setAddonSelections((prev) => ({
+                              ...prev,
+                              [addon.product_id]:
+                                singleVid != null ? { variantId: singleVid, qty: 0 } : { qty: 0 },
+                            }));
+                          }}
+                          outOfStock={outOfStock}
+                          maxQ={maxQ}
+                          enforced={enforced}
+                          canCommit={!outOfStock && (enforced ? maxQ > 0 : true)}
+                          inputClassName="w-20 rounded-2xl"
+                        />
                       )}
                     </ProductMerchandiseLayout>
                   </div>
@@ -1148,52 +1319,135 @@ export default function CompleteBookingPage() {
                                                 return;
                                               }
                                               setAddonSelectionsByAttendee((prev) => {
-                                                const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
-                                                const next = {
-                                                  variantId: id,
-                                                  qty: addon.fixed_quantity ?? prevQty,
-                                                };
-                                                const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
+                                                const committed = prev[index]?.[addon.product_id]?.qty ?? 0;
+                                                if (addon.fixed_quantity != null) {
+                                                  const cap = maxQtyPerTicketAttendee(
+                                                    addon,
+                                                    { variantId: id, qty: addon.fixed_quantity },
+                                                    index,
+                                                    prev
+                                                  );
+                                                  return {
+                                                    ...prev,
+                                                    [index]: {
+                                                      ...(prev[index] ?? {}),
+                                                      [addon.product_id]: {
+                                                        variantId: id,
+                                                        qty: Math.min(addon.fixed_quantity, cap),
+                                                      },
+                                                    },
+                                                  };
+                                                }
+                                                const cap = maxQtyPerTicketAttendee(
+                                                  addon,
+                                                  { variantId: id, qty: committed },
+                                                  index,
+                                                  prev
+                                                );
                                                 return {
                                                   ...prev,
                                                   [index]: {
                                                     ...(prev[index] ?? {}),
                                                     [addon.product_id]: {
                                                       variantId: id,
-                                                      qty: Math.min(next.qty, cap),
+                                                      qty: Math.min(committed, cap),
                                                     },
                                                   },
                                                 };
                                               });
+                                              setAddonDraftQtyByAttendee((prev) => ({
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]:
+                                                    addon.fixed_quantity != null
+                                                      ? addon.fixed_quantity
+                                                      : Math.max(1, prev[index]?.[addon.product_id] ?? 1),
+                                                },
+                                              }));
                                             }}
                                           />
-                                          {sel.variantId && (
+                                          {sel.variantId && addon.fixed_quantity != null && (
                                             <div className="flex items-center gap-2 flex-wrap">
                                               <Label className="text-xs">Qty</Label>
-                                              {addon.fixed_quantity != null ? (
-                                                <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                              ) : (
-                                                <Input
-                                                  type="number"
-                                                  min={1}
-                                                  max={enforced ? maxQ : undefined}
-                                                  value={sel.qty}
-                                                  disabled={outOfStock}
-                                                  onChange={(e) => {
-                                                    const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                                    const q = enforced ? Math.min(raw, maxQ) : raw;
-                                                    setAddonSelectionsByAttendee((prev) => ({
-                                                      ...prev,
-                                                      [index]: {
-                                                        ...(prev[index] ?? {}),
-                                                        [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
-                                                      },
-                                                    }));
-                                                  }}
-                                                  className="w-16 h-9 rounded-xl"
-                                                />
-                                              )}
+                                              <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                                             </div>
+                                          )}
+                                          {sel.variantId && addon.fixed_quantity == null && (
+                                            <AddonQuantityAndCta
+                                              density="compact"
+                                              productTitle={addon.product_title}
+                                              variantLabel={
+                                                (sel.variantId
+                                                  ? addon.variants.find((x) => x.id === sel.variantId)
+                                                  : undefined
+                                                )?.name
+                                              }
+                                              draftQty={addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1}
+                                              onDraftChange={(n) =>
+                                                setAddonDraftQtyByAttendee((prev) => ({
+                                                  ...prev,
+                                                  [index]: { ...(prev[index] ?? {}), [addon.product_id]: n },
+                                                }))
+                                              }
+                                              committedQty={sel.qty}
+                                              onCommit={() => {
+                                                const variantId = sel.variantId ?? resolvedVariantId(addon, sel);
+                                                if (variantId == null) return;
+                                                const cap = maxQtyPerTicketAttendee(
+                                                  addon,
+                                                  { variantId, qty: 1 },
+                                                  index,
+                                                  addonSelectionsByAttendee
+                                                );
+                                                const d = addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1;
+                                                const qty = Math.max(1, Math.min(d, cap));
+                                                const vRow = addon.variants.find((x) => x.id === variantId);
+                                                setAddonSelectionsByAttendee((prev) => ({
+                                                  ...prev,
+                                                  [index]: {
+                                                    ...(prev[index] ?? {}),
+                                                    [addon.product_id]: { variantId, qty },
+                                                  },
+                                                }));
+                                                setAddonDraftQtyByAttendee((prev) => ({
+                                                  ...prev,
+                                                  [index]: { ...(prev[index] ?? {}), [addon.product_id]: qty },
+                                                }));
+                                                const wasUpdate = sel.qty > 0;
+                                                toast({
+                                                  title: wasUpdate ? 'Order updated' : 'Added to order',
+                                                  description: `Attendee ${index + 1}: ${addon.product_title}${
+                                                    vRow?.name ? ` (${vRow.name})` : ''
+                                                  } × ${qty}`,
+                                                });
+                                              }}
+                                              onRemove={() => {
+                                                setAddonSelectionsByAttendee((prev) => {
+                                                  const cur = prev[index]?.[addon.product_id];
+                                                  return {
+                                                    ...prev,
+                                                    [index]: {
+                                                      ...(prev[index] ?? {}),
+                                                      [addon.product_id]: {
+                                                        variantId: cur?.variantId ?? sel.variantId,
+                                                        qty: 0,
+                                                      },
+                                                    },
+                                                  };
+                                                });
+                                              }}
+                                              outOfStock={outOfStock}
+                                              maxQ={maxQ}
+                                              enforced={enforced}
+                                              canCommit={
+                                                !outOfStock &&
+                                                (enforced ? maxQ > 0 : true) &&
+                                                Boolean(sel.variantId ?? resolvedVariantId(addon, sel))
+                                              }
+                                              quantityLabel="Qty"
+                                              inputClassName="w-16 h-9 rounded-xl"
+                                            />
                                           )}
                                         </div>
                                       ) : addon.fixed_quantity != null ? (
@@ -1222,28 +1476,67 @@ export default function CompleteBookingPage() {
                                           )}
                                         </div>
                                       ) : (
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <Label className="text-xs">Qty</Label>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            max={enforced ? maxQ : undefined}
-                                            value={sel.qty}
-                                            disabled={outOfStock}
-                                            onChange={(e) => {
-                                              const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                              const q = enforced ? Math.min(raw, maxQ) : raw;
-                                              setAddonSelectionsByAttendee((prev) => ({
-                                                ...prev,
-                                                [index]: {
-                                                  ...(prev[index] ?? {}),
-                                                  [addon.product_id]: { qty: q },
-                                                },
-                                              }));
-                                            }}
-                                            className="w-16 h-9 rounded-xl"
-                                          />
-                                        </div>
+                                        <AddonQuantityAndCta
+                                          density="compact"
+                                          productTitle={addon.product_title}
+                                          draftQty={addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1}
+                                          onDraftChange={(n) =>
+                                            setAddonDraftQtyByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: { ...(prev[index] ?? {}), [addon.product_id]: n },
+                                            }))
+                                          }
+                                          committedQty={sel.qty}
+                                          onCommit={() => {
+                                            const singleVid =
+                                              addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                                            const cap = maxQtyPerTicketAttendee(
+                                              addon,
+                                              { variantId: singleVid, qty: 1 },
+                                              index,
+                                              addonSelectionsByAttendee
+                                            );
+                                            const d = addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1;
+                                            const qty = Math.max(1, Math.min(d, cap));
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]:
+                                                  singleVid != null ? { variantId: singleVid, qty } : { qty },
+                                              },
+                                            }));
+                                            setAddonDraftQtyByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: { ...(prev[index] ?? {}), [addon.product_id]: qty },
+                                            }));
+                                            const wasUpdate = sel.qty > 0;
+                                            toast({
+                                              title: wasUpdate ? 'Order updated' : 'Added to order',
+                                              description: `Attendee ${index + 1}: ${addon.product_title} × ${qty}`,
+                                            });
+                                          }}
+                                          onRemove={() => {
+                                            const singleVid =
+                                              addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]:
+                                                  singleVid != null
+                                                    ? { variantId: singleVid, qty: 0 }
+                                                    : { qty: 0 },
+                                              },
+                                            }));
+                                          }}
+                                          outOfStock={outOfStock}
+                                          maxQ={maxQ}
+                                          enforced={enforced}
+                                          canCommit={!outOfStock && (enforced ? maxQ > 0 : true)}
+                                          quantityLabel="Qty"
+                                          inputClassName="w-16 h-9 rounded-xl"
+                                        />
                                       )}
                                     </ProductMerchandiseLayout>
                                   </div>
@@ -1526,52 +1819,135 @@ export default function CompleteBookingPage() {
                                             return;
                                           }
                                           setAddonSelectionsByAttendee((prev) => {
-                                            const prevQty = prev[index]?.[addon.product_id]?.qty ?? 1;
-                                            const next = {
-                                              variantId: id,
-                                              qty: addon.fixed_quantity ?? prevQty,
-                                            };
-                                            const cap = maxQtyPerTicketAttendee(addon, next, index, prev);
+                                            const committed = prev[index]?.[addon.product_id]?.qty ?? 0;
+                                            if (addon.fixed_quantity != null) {
+                                              const cap = maxQtyPerTicketAttendee(
+                                                addon,
+                                                { variantId: id, qty: addon.fixed_quantity },
+                                                index,
+                                                prev
+                                              );
+                                              return {
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: {
+                                                    variantId: id,
+                                                    qty: Math.min(addon.fixed_quantity, cap),
+                                                  },
+                                                },
+                                              };
+                                            }
+                                            const cap = maxQtyPerTicketAttendee(
+                                              addon,
+                                              { variantId: id, qty: committed },
+                                              index,
+                                              prev
+                                            );
                                             return {
                                               ...prev,
                                               [index]: {
                                                 ...(prev[index] ?? {}),
                                                 [addon.product_id]: {
                                                   variantId: id,
-                                                  qty: Math.min(next.qty, cap),
+                                                  qty: Math.min(committed, cap),
                                                 },
                                               },
                                             };
                                           });
+                                          setAddonDraftQtyByAttendee((prev) => ({
+                                            ...prev,
+                                            [index]: {
+                                              ...(prev[index] ?? {}),
+                                              [addon.product_id]:
+                                                addon.fixed_quantity != null
+                                                  ? addon.fixed_quantity
+                                                  : Math.max(1, prev[index]?.[addon.product_id] ?? 1),
+                                            },
+                                          }));
                                         }}
                                       />
-                                      {sel.variantId && (
+                                      {sel.variantId && addon.fixed_quantity != null && (
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <Label className="text-xs">Qty</Label>
-                                          {addon.fixed_quantity != null ? (
-                                            <span className="text-sm font-medium">{addon.fixed_quantity}</span>
-                                          ) : (
-                                            <Input
-                                              type="number"
-                                              min={1}
-                                              max={enforced ? maxQ : undefined}
-                                              value={sel.qty}
-                                              disabled={outOfStock}
-                                              onChange={(e) => {
-                                                const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                                const q = enforced ? Math.min(raw, maxQ) : raw;
-                                                setAddonSelectionsByAttendee((prev) => ({
-                                                  ...prev,
-                                                  [index]: {
-                                                    ...(prev[index] ?? {}),
-                                                    [addon.product_id]: { ...(prev[index]?.[addon.product_id] ?? {}), qty: q },
-                                                  },
-                                                }));
-                                              }}
-                                              className="w-16 h-9 rounded-xl"
-                                            />
-                                          )}
+                                          <span className="text-sm font-medium">{addon.fixed_quantity}</span>
                                         </div>
+                                      )}
+                                      {sel.variantId && addon.fixed_quantity == null && (
+                                        <AddonQuantityAndCta
+                                          density="compact"
+                                          productTitle={addon.product_title}
+                                          variantLabel={
+                                            (sel.variantId
+                                              ? addon.variants.find((x) => x.id === sel.variantId)
+                                              : undefined
+                                            )?.name
+                                          }
+                                          draftQty={addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1}
+                                          onDraftChange={(n) =>
+                                            setAddonDraftQtyByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: { ...(prev[index] ?? {}), [addon.product_id]: n },
+                                            }))
+                                          }
+                                          committedQty={sel.qty}
+                                          onCommit={() => {
+                                            const variantId = sel.variantId ?? resolvedVariantId(addon, sel);
+                                            if (variantId == null) return;
+                                            const cap = maxQtyPerTicketAttendee(
+                                              addon,
+                                              { variantId, qty: 1 },
+                                              index,
+                                              addonSelectionsByAttendee
+                                            );
+                                            const d = addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1;
+                                            const qty = Math.max(1, Math.min(d, cap));
+                                            const vRow = addon.variants.find((x) => x.id === variantId);
+                                            setAddonSelectionsByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: {
+                                                ...(prev[index] ?? {}),
+                                                [addon.product_id]: { variantId, qty },
+                                              },
+                                            }));
+                                            setAddonDraftQtyByAttendee((prev) => ({
+                                              ...prev,
+                                              [index]: { ...(prev[index] ?? {}), [addon.product_id]: qty },
+                                            }));
+                                            const wasUpdate = sel.qty > 0;
+                                            toast({
+                                              title: wasUpdate ? 'Order updated' : 'Added to order',
+                                              description: `Attendee ${index + 1}: ${addon.product_title}${
+                                                vRow?.name ? ` (${vRow.name})` : ''
+                                              } × ${qty}`,
+                                            });
+                                          }}
+                                          onRemove={() => {
+                                            setAddonSelectionsByAttendee((prev) => {
+                                              const cur = prev[index]?.[addon.product_id];
+                                              return {
+                                                ...prev,
+                                                [index]: {
+                                                  ...(prev[index] ?? {}),
+                                                  [addon.product_id]: {
+                                                    variantId: cur?.variantId ?? sel.variantId,
+                                                    qty: 0,
+                                                  },
+                                                },
+                                              };
+                                            });
+                                          }}
+                                          outOfStock={outOfStock}
+                                          maxQ={maxQ}
+                                          enforced={enforced}
+                                          canCommit={
+                                            !outOfStock &&
+                                            (enforced ? maxQ > 0 : true) &&
+                                            Boolean(sel.variantId ?? resolvedVariantId(addon, sel))
+                                          }
+                                          quantityLabel="Qty"
+                                          inputClassName="w-16 h-9 rounded-xl"
+                                        />
                                       )}
                                     </div>
                                   ) : addon.fixed_quantity != null ? (
@@ -1600,28 +1976,67 @@ export default function CompleteBookingPage() {
                                       )}
                                     </div>
                                   ) : (
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <Label className="text-xs">Qty</Label>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        max={enforced ? maxQ : undefined}
-                                        value={sel.qty}
-                                        disabled={outOfStock}
-                                        onChange={(e) => {
-                                          const raw = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                          const q = enforced ? Math.min(raw, maxQ) : raw;
-                                          setAddonSelectionsByAttendee((prev) => ({
-                                            ...prev,
-                                            [index]: {
-                                              ...(prev[index] ?? {}),
-                                              [addon.product_id]: { qty: q },
-                                            },
-                                          }));
-                                        }}
-                                        className="w-16 h-9 rounded-xl"
-                                      />
-                                    </div>
+                                    <AddonQuantityAndCta
+                                      density="compact"
+                                      productTitle={addon.product_title}
+                                      draftQty={addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1}
+                                      onDraftChange={(n) =>
+                                        setAddonDraftQtyByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: { ...(prev[index] ?? {}), [addon.product_id]: n },
+                                        }))
+                                      }
+                                      committedQty={sel.qty}
+                                      onCommit={() => {
+                                        const singleVid =
+                                          addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                                        const cap = maxQtyPerTicketAttendee(
+                                          addon,
+                                          { variantId: singleVid, qty: 1 },
+                                          index,
+                                          addonSelectionsByAttendee
+                                        );
+                                        const d = addonDraftQtyByAttendee[index]?.[addon.product_id] ?? 1;
+                                        const qty = Math.max(1, Math.min(d, cap));
+                                        setAddonSelectionsByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: {
+                                            ...(prev[index] ?? {}),
+                                            [addon.product_id]:
+                                              singleVid != null ? { variantId: singleVid, qty } : { qty },
+                                          },
+                                        }));
+                                        setAddonDraftQtyByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: { ...(prev[index] ?? {}), [addon.product_id]: qty },
+                                        }));
+                                        const wasUpdate = sel.qty > 0;
+                                        toast({
+                                          title: wasUpdate ? 'Order updated' : 'Added to order',
+                                          description: `Attendee ${index + 1}: ${addon.product_title} × ${qty}`,
+                                        });
+                                      }}
+                                      onRemove={() => {
+                                        const singleVid =
+                                          addon.variants.length === 1 ? addon.variants[0].id : undefined;
+                                        setAddonSelectionsByAttendee((prev) => ({
+                                          ...prev,
+                                          [index]: {
+                                            ...(prev[index] ?? {}),
+                                            [addon.product_id]:
+                                              singleVid != null
+                                                ? { variantId: singleVid, qty: 0 }
+                                                : { qty: 0 },
+                                          },
+                                        }));
+                                      }}
+                                      outOfStock={outOfStock}
+                                      maxQ={maxQ}
+                                      enforced={enforced}
+                                      canCommit={!outOfStock && (enforced ? maxQ > 0 : true)}
+                                      quantityLabel="Qty"
+                                      inputClassName="w-16 h-9 rounded-xl"
+                                    />
                                   )}
                                 </ProductMerchandiseLayout>
                               </div>
