@@ -1,6 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { ProductImageLightbox } from '@/components/products/ProductImageLightbox';
 import ProductInfoAccordion from '@/components/products/ProductInfoAccordion';
 
 export type ProductMerchandiseLayoutDensity = 'pdp' | 'compact';
@@ -29,7 +28,7 @@ export interface ProductMerchandiseLayoutProps {
 
 /**
  * Shared PDP-style merchandise shell: 2-col grid, main image, thumbs, title + price slot,
- * children (variants / qty), then ProductInfoAccordion + lightbox. No cart, no data fetching.
+ * children (variants / qty), then ProductInfoAccordion. No cart, no data fetching.
  */
 export function ProductMerchandiseLayout({
   title,
@@ -47,8 +46,6 @@ export function ProductMerchandiseLayout({
   'aria-label': ariaLabel = 'Product information',
   density = 'pdp',
 }: ProductMerchandiseLayoutProps) {
-  const [imageLightbox, setImageLightbox] = useState({ open: false, url: '' as string });
-
   const mainSrc = photos[selectedImageIndex] ?? photos[0] ?? null;
   const isCompact = density === 'compact';
 
@@ -61,14 +58,7 @@ export function ProductMerchandiseLayout({
             style={{ borderColor: 'rgba(14,122,58,0.14)', borderWidth: 1 }}
           >
             {mainSrc ? (
-              <button
-                type="button"
-                className="w-full h-full block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
-                onClick={() => setImageLightbox({ open: true, url: mainSrc })}
-                aria-label={`View full size: ${title}`}
-              >
-                <img src={mainSrc} alt={title} className="w-full h-full object-cover" />
-              </button>
+              <img src={mainSrc} alt={title} className="w-full h-full object-cover" />
             ) : (
               <span className="text-sm text-muted-foreground">No image</span>
             )}
@@ -105,17 +95,15 @@ export function ProductMerchandiseLayout({
                 <button
                   key={`${p}-${i}`}
                   type="button"
-                  onClick={() => {
-                    onSelectImageIndex(i);
-                    setImageLightbox({ open: true, url: p });
-                  }}
+                  onClick={() => onSelectImageIndex(i)}
                   className={cn(
-                    'flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors cursor-zoom-in',
+                    'flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary',
                     selectedImageIndex === i
                       ? 'border-primary ring-2 ring-primary/20'
                       : 'border-transparent hover:border-muted-foreground/30',
                   )}
-                  aria-label={`View image ${i + 1} of ${title}`}
+                  aria-label={`Select image ${i + 1} of ${title}`}
+                  aria-pressed={selectedImageIndex === i}
                 >
                   <img src={p} alt="" className="w-full h-full object-cover" />
                 </button>
@@ -134,13 +122,6 @@ export function ProductMerchandiseLayout({
         defaultAllOpen={defaultAllOpen}
         className={accordionClassName}
         aria-label={ariaLabel}
-      />
-
-      <ProductImageLightbox
-        open={imageLightbox.open}
-        onOpenChange={(o) => setImageLightbox((s) => ({ ...s, open: o }))}
-        url={imageLightbox.url}
-        title={title}
       />
     </div>
   );
