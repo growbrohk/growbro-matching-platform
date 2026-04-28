@@ -75,10 +75,12 @@ Deno.serve(async (req) => {
       return new Response('Organization not found', { status: 404 });
     }
 
-    // Fetch event
+    // Fetch event (metadata used for OG image dimensions)
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, description, slug, instagram_preview_image_url, status')
+      .select(
+        'id, title, description, slug, instagram_preview_image_url, og_preview_image_url, metadata, status'
+      )
       .eq('org_id', org.id)
       .eq('slug', eventSlug)
       .single();
@@ -120,17 +122,50 @@ Deno.serve(async (req) => {
       ? ogDescription.substring(0, 197) + '...' 
       : ogDescription;
 
-    // Determine image: ticket preview image > event preview image > org logo/fallback
+    const eventMeta =
+      event.metadata && typeof event.metadata === 'object'
+        ? (event.metadata as Record<string, any>)
+        : {};
+
+    // Dimensions for og:image (from upload metadata); optional — improves Facebook/WhatsApp parsers
+    let ogImageWidth: number | null = null;
+    let ogImageHeight: number | null = null;
+
+    // Determine image: ticket preview > og_preview_image_url (landscape) > instagram preview > org logo > default
     let ogImage = '';
     if (ticketType?.metadata && typeof ticketType.metadata === 'object') {
       const ticketMeta = ticketType.metadata as Record<string, any>;
       ogImage = ticketMeta.preview_image_url || ticketMeta.image_url || '';
+      if (
+        ogImage &&
+        typeof ticketMeta.preview_image_width === 'number' &&
+        typeof ticketMeta.preview_image_height === 'number'
+      ) {
+        ogImageWidth = ticketMeta.preview_image_width;
+        ogImageHeight = ticketMeta.preview_image_height;
+      }
     }
-    
+
+    if (!ogImage && event.og_preview_image_url) {
+      ogImage = event.og_preview_image_url;
+      if (typeof eventMeta.og_preview_image_width === 'number') {
+        ogImageWidth = eventMeta.og_preview_image_width;
+      }
+      if (typeof eventMeta.og_preview_image_height === 'number') {
+        ogImageHeight = eventMeta.og_preview_image_height;
+      }
+    }
+
     if (!ogImage && event.instagram_preview_image_url) {
       ogImage = event.instagram_preview_image_url;
+      if (typeof eventMeta.instagram_preview_image_width === 'number') {
+        ogImageWidth = eventMeta.instagram_preview_image_width;
+      }
+      if (typeof eventMeta.instagram_preview_image_height === 'number') {
+        ogImageHeight = eventMeta.instagram_preview_image_height;
+      }
     }
-    
+
     if (!ogImage && org.metadata && typeof org.metadata === 'object') {
       const orgMeta = org.metadata as Record<string, any>;
       ogImage = orgMeta.logo_url || orgMeta.image_url || '';
@@ -161,7 +196,21 @@ Deno.serve(async (req) => {
     // Fallback image if still empty
     if (!ogImage) {
       ogImage = 'https://growbrohk.com/og-default.png'; // You may want to add a default OG image
+      ogImageWidth = 1200;
+      ogImageHeight = 630;
     }
+
+    const ogImageSecureTag = ogImage.startsWith('https://')
+      ? `\n  <meta property="og:image:secure_url" content="${escapeHtml(ogImage)}">`
+      : '';
+
+    const ogImageDimensionTags =
+      ogImageWidth != null &&
+      ogImageHeight != null &&
+      ogImageWidth > 0 &&
+      ogImageHeight > 0
+        ? `\n  <meta property="og:image:width" content="${ogImageWidth}">\n  <meta property="og:image:height" content="${ogImageHeight}">`
+        : '';
 
     // Build redirect URL
     const redirectUrl = ticketId 
@@ -216,12 +265,14 @@ Deno.serve(async (req) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <!-- Open Graph / Facebook -->
+  <meta property="og:locale" content="zh_HK">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${shareUrl}">
   <meta property="og:title" content="${escapeHtml(ogTitle)}">
   <meta property="og:description" content="${escapeHtml(ogDescriptionShort)}">
-  <meta property="og:image" content="${ogImage}">
+  <meta property="og:image" content="${escapeHtml(ogImage)}">
   ${ogImage.includes('event-previews') || ogImage.endsWith('.webp') ? '<meta property="og:image:type" content="image/webp">' : ''}
+  ${ogImageSecureTag}${ogImageDimensionTags}
   <meta property="og:image:alt" content="${escapeHtml(ogTitle)}">
   
   <!-- Twitter -->
@@ -229,7 +280,7 @@ Deno.serve(async (req) => {
   <meta name="twitter:url" content="${shareUrl}">
   <meta name="twitter:title" content="${escapeHtml(ogTitle)}">
   <meta name="twitter:description" content="${escapeHtml(ogDescriptionShort)}">
-  <meta name="twitter:image" content="${ogImage}">
+  <meta name="twitter:image" content="${escapeHtml(ogImage)}">
   
   <!-- Standard meta tags -->
   <title>${escapeHtml(ogTitle)}</title>

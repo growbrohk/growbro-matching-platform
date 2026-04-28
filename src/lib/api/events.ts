@@ -61,6 +61,8 @@ export interface CreateEventData {
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
   location_text?: string | null;
   instagram_preview_image_url?: string | null;
+  /** Landscape image for Facebook/WhatsApp OG (preferred over instagram preview) */
+  og_preview_image_url?: string | null;
   collect_attendee_info?: 'primary' | 'per_ticket';
   enable_stripe?: boolean | null;
   enable_payme?: boolean | null;
@@ -158,6 +160,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.instagram_preview_image_url !== undefined) {
     updateFields.instagram_preview_image_url = data.instagram_preview_image_url;
+  }
+  if (data.og_preview_image_url !== undefined) {
+    updateFields.og_preview_image_url = data.og_preview_image_url;
   }
   if (data.collect_attendee_info !== undefined) {
     updateFields.collect_attendee_info = data.collect_attendee_info;

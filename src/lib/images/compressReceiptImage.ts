@@ -54,34 +54,35 @@ export interface CompressImageOptions {
   maxDimension?: number;
 }
 
+export interface CompressedWebpResult {
+  file: File;
+  /** Output pixel width after resize (for og:image:width) */
+  width: number;
+  /** Output pixel height after resize (for og:image:height) */
+  height: number;
+}
+
 /**
- * Compress image to WebP format targeting a given size
- * 
- * @param file - The image file to compress
- * @param options - Optional: targetSizeBytes (default 50KB), maxDimension (default 1400px)
- * @returns Compressed File (WebP format) or original file if not an image
+ * Compress image to WebP and return output dimensions (for Open Graph meta tags).
  */
-export async function compressReceiptImage(
+export async function compressImageToWebp(
   file: File,
   options?: CompressImageOptions
-): Promise<File> {
-  // If not an image, return as-is
+): Promise<CompressedWebpResult> {
   if (!file.type.startsWith('image/')) {
-    return file;
+    return { file, width: 0, height: 0 };
   }
 
   const targetSize = options?.targetSizeBytes ?? 50 * 1024;
   const maxDimension = options?.maxDimension ?? 1400;
 
   try {
-    // Load image
     const img = await loadImage(file);
     const originalUrl = img.src;
-    
-    // Calculate dimensions: resize long edge to <= maxDimension, maintain aspect ratio
+
     let width = img.width;
     let height = img.height;
-    
+
     if (width > maxDimension || height > maxDimension) {
       if (width > height) {
         height = (height / width) * maxDimension;
@@ -91,8 +92,10 @@ export async function compressReceiptImage(
         height = maxDimension;
       }
     }
-    
-    // Create canvas
+
+    width = Math.max(1, Math.round(width));
+    height = Math.max(1, Math.round(height));
+
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -137,11 +140,26 @@ export async function compressReceiptImage(
       type: 'image/webp',
       lastModified: Date.now(),
     });
-    
-    return compressedFile;
+
+    return { file: compressedFile, width, height };
   } catch (error) {
-    console.error('[compressReceiptImage] Compression failed:', error);
+    console.error('[compressImageToWebp] Compression failed:', error);
     throw error;
   }
+}
+
+/**
+ * Compress image to WebP format targeting a given size
+ *
+ * @param file - The image file to compress
+ * @param options - Optional: targetSizeBytes (default 50KB), maxDimension (default 1400px)
+ * @returns Compressed File (WebP format) or original file if not an image
+ */
+export async function compressReceiptImage(
+  file: File,
+  options?: CompressImageOptions
+): Promise<File> {
+  const r = await compressImageToWebp(file, options);
+  return r.file;
 }
 

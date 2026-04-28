@@ -58,9 +58,10 @@ import PublicEventForm from '@/components/events/PublicEventForm';
 import { EventAddonsSection } from '@/components/events/EventAddonsSection';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
-import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
+import { compressImageToWebp } from '@/lib/images/compressReceiptImage';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
+import { getEventPreviewStoragePathFromPublicUrl } from '@/lib/storage/eventPreviewPaths';
 
 export type EventFormCollabEditorContext = {
   hostOrgId: string;
@@ -131,6 +132,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [instagramPreviewImageUrl, setInstagramPreviewImageUrl] = useState('');
   const [previewImageCacheKey, setPreviewImageCacheKey] = useState(0);
   const [uploadingPreview, setUploadingPreview] = useState(false);
+  const [ogPreviewImageUrl, setOgPreviewImageUrl] = useState('');
+  const [ogPreviewImageCacheKey, setOgPreviewImageCacheKey] = useState(0);
+  const [uploadingOgPreview, setUploadingOgPreview] = useState(false);
   const [startAt, setStartAt] = useState<Date | null>(null);
   const [endAt, setEndAt] = useState<Date | null>(null);
   const [day2StartAt, setDay2StartAt] = useState<Date | null>(null);
@@ -211,6 +215,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setTitle(event.title || '');
         setDescription(event.description || '');
         setInstagramPreviewImageUrl(event.instagram_preview_image_url || '');
+        setOgPreviewImageUrl(((event as any).og_preview_image_url as string) || '');
         setStartAt(event.start_at ? new Date(event.start_at) : null);
         setEndAt(event.end_at ? new Date(event.end_at) : null);
         setDay2StartAt((event as any).day_2_start_at ? new Date((event as any).day_2_start_at) : null);
@@ -398,6 +403,28 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     handleUpdateAccessVariant(ticketIndex, variantIndex, 'access_code', code);
   };
 
+  /** Copy temp/... upload to permanent path after first save (fixes orphaned temp objects). */
+  const migrateEventPreviewFromTemp = async (
+    publicUrl: string,
+    permanentRelativePath: string
+  ): Promise<string> => {
+    const oldPath = getEventPreviewStoragePathFromPublicUrl(publicUrl);
+    if (!oldPath || !oldPath.startsWith('temp/')) {
+      return publicUrl;
+    }
+    const { error: copyError } = await supabase.storage
+      .from('event-previews')
+      .copy(oldPath, permanentRelativePath);
+    if (copyError) {
+      throw copyError;
+    }
+    await supabase.storage.from('event-previews').remove([oldPath]);
+    const { data: urlData } = supabase.storage
+      .from('event-previews')
+      .getPublicUrl(permanentRelativePath);
+    return urlData.publicUrl;
+  };
+
   const handlePreviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -440,7 +467,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     setUploadingPreview(true);
     try {
       // Compress to ~100KB before upload (maxDimension 800 helps complex posters compress)
-      const compressedFile = await compressReceiptImage(file, {
+      const { file: compressedFile, width: iw, height: ih } = await compressImageToWebp(file, {
         targetSizeBytes: 100 * 1024,
         maxDimension: 800,
       });
@@ -484,6 +511,14 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       const publicUrl = urlData.publicUrl;
 
+      const mergedMeta = {
+        ...eventMetadata,
+        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+        instagram_preview_image_width: iw,
+        instagram_preview_image_height: ih,
+      };
+      setEventMetadata(mergedMeta);
+
       // Update state immediately
       setInstagramPreviewImageUrl(publicUrl);
       setPreviewImageCacheKey(k => k + 1);
@@ -493,6 +528,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         await updateEvent({
           id: eventId,
           instagram_preview_image_url: publicUrl,
+          metadata: mergedMeta,
         });
       }
 
@@ -515,17 +551,35 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const handleRemovePreviewImage = async () => {
     if (!eventId) {
       setInstagramPreviewImageUrl('');
+      setEventMetadata((prev) => {
+        const n = { ...prev };
+        delete n.instagram_preview_image_width;
+        delete n.instagram_preview_image_height;
+        return n;
+      });
       return;
     }
 
     try {
+      const nextMeta = { ...eventMetadata };
+      delete nextMeta.instagram_preview_image_width;
+      delete nextMeta.instagram_preview_image_height;
+
       // Update database
       await updateEvent({
         id: eventId,
         instagram_preview_image_url: null,
+        metadata: {
+          ...nextMeta,
+          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+        },
       });
 
       // Clear state
+      setEventMetadata({
+        ...nextMeta,
+        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+      });
       setInstagramPreviewImageUrl('');
 
       toast({
@@ -536,6 +590,165 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       toast({
         title: 'Error',
         description: error.message || 'Failed to remove preview photo',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleOgPreviewImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!user?.id || !currentOrg?.id) {
+      toast({
+        title: 'Error',
+        description: 'Please sign in to upload preview photos',
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: 'Error',
+        description: 'File size must be less than 10MB',
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Error',
+        description: 'Only JPEG, PNG, and WebP images are allowed',
+        variant: 'destructive',
+      });
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingOgPreview(true);
+    try {
+      const { file: compressedFile, width: ow, height: oh } = await compressImageToWebp(file, {
+        targetSizeBytes: 300 * 1024,
+        maxDimension: 1200,
+      });
+
+      if (compressedFile.size >= 300 * 1024) {
+        toast({
+          title: 'Error',
+          description: 'Image is too large even after compression. Please try another image.',
+          variant: 'destructive',
+        });
+        e.target.value = '';
+        return;
+      }
+
+      const ext = 'webp';
+      let uploadPath: string;
+      if (eventId && effectiveOrgId) {
+        uploadPath = `${effectiveOrgId}/${eventId}/og-preview.${ext}`;
+      } else {
+        const randomUUID = generateUUID();
+        uploadPath = `temp/${user.id}/${randomUUID}-og.${ext}`;
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('event-previews')
+        .upload(uploadPath, compressedFile, {
+          upsert: true,
+          contentType: 'image/webp',
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('event-previews')
+        .getPublicUrl(uploadPath);
+
+      const publicUrl = urlData.publicUrl;
+
+      const mergedMeta = {
+        ...eventMetadata,
+        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+        og_preview_image_width: ow,
+        og_preview_image_height: oh,
+      };
+      setEventMetadata(mergedMeta);
+
+      setOgPreviewImageUrl(publicUrl);
+      setOgPreviewImageCacheKey((k) => k + 1);
+
+      if (eventId) {
+        await updateEvent({
+          id: eventId,
+          og_preview_image_url: publicUrl,
+          metadata: mergedMeta,
+        });
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Facebook/WhatsApp preview uploaded successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to upload Facebook/WhatsApp preview',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingOgPreview(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveOgPreviewImage = async () => {
+    if (!eventId) {
+      setOgPreviewImageUrl('');
+      setEventMetadata((prev) => {
+        const n = { ...prev };
+        delete n.og_preview_image_width;
+        delete n.og_preview_image_height;
+        return n;
+      });
+      return;
+    }
+
+    try {
+      const nextMeta = { ...eventMetadata };
+      delete nextMeta.og_preview_image_width;
+      delete nextMeta.og_preview_image_height;
+
+      await updateEvent({
+        id: eventId,
+        og_preview_image_url: null,
+        metadata: {
+          ...nextMeta,
+          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+        },
+      });
+
+      setEventMetadata({
+        ...nextMeta,
+        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+      });
+      setOgPreviewImageUrl('');
+
+      toast({
+        title: 'Success',
+        description: 'Facebook/WhatsApp preview removed',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to remove Facebook/WhatsApp preview',
         variant: 'destructive',
       });
     }
@@ -630,6 +843,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         title: title.trim(),
         description: description.trim() || undefined,
         instagram_preview_image_url: instagramPreviewImageUrl.trim() || null,
+        og_preview_image_url: ogPreviewImageUrl.trim() || null,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
         day_2_start_at: day2StartAt?.toISOString() ?? null,
@@ -782,6 +996,49 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         
         // Get slug from created event
         setEventSlug((newEvent as any).slug || '');
+
+        // Move temp uploads to permanent paths now that event id exists
+        if (effectiveOrgId && user?.id) {
+          try {
+            const igTrim = instagramPreviewImageUrl.trim();
+            const ogTrim = ogPreviewImageUrl.trim();
+            const patch: {
+              instagram_preview_image_url?: string | null;
+              og_preview_image_url?: string | null;
+            } = {};
+
+            if (igTrim && igTrim.includes('/temp/')) {
+              const nextIg = await migrateEventPreviewFromTemp(
+                igTrim,
+                `${effectiveOrgId}/${savedEventId}/instagram-preview.webp`
+              );
+              setInstagramPreviewImageUrl(nextIg);
+              patch.instagram_preview_image_url = nextIg || null;
+            }
+
+            if (ogTrim && ogTrim.includes('/temp/')) {
+              const nextOg = await migrateEventPreviewFromTemp(
+                ogTrim,
+                `${effectiveOrgId}/${savedEventId}/og-preview.webp`
+              );
+              setOgPreviewImageUrl(nextOg);
+              patch.og_preview_image_url = nextOg || null;
+            }
+
+            if (Object.keys(patch).length > 0) {
+              await updateEvent({ id: savedEventId, ...patch });
+            }
+          } catch (migrateErr: any) {
+            console.error('[EventForm] migrate temp preview storage', migrateErr);
+            toast({
+              title: 'Warning',
+              description:
+                migrateErr?.message ||
+                'Could not move preview images to permanent storage',
+              variant: 'destructive',
+            });
+          }
+        }
 
         // Create ticket types
         const effectiveEventEnd = day2EndAt ? new Date(day2EndAt) : new Date(endAt);
@@ -963,7 +1220,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               <Input
                 type="url"
                 value={instagramPreviewImageUrl}
-                onChange={(e) => setInstagramPreviewImageUrl(e.target.value)}
+                onChange={(e) => {
+                  setInstagramPreviewImageUrl(e.target.value);
+                  setEventMetadata((prev) => {
+                    const n = { ...prev };
+                    delete n.instagram_preview_image_width;
+                    delete n.instagram_preview_image_height;
+                    return n;
+                  });
+                }}
                 placeholder="https://example.com/image.jpg"
                 className="w-full text-ellipsis"
               />
@@ -999,6 +1264,73 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     <img
                       src={`${instagramPreviewImageUrl}${instagramPreviewImageUrl.includes('?') ? '&' : '?'}v=${previewImageCacheKey}`}
                       alt="Instagram preview"
+                      className="w-full h-full object-cover object-center"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
+              Facebook / WhatsApp Preview
+              <span className="text-muted-foreground text-sm font-normal ml-2">(optional)</span>
+            </h2>
+            <p className="text-sm text-muted-foreground mb-2">
+              Landscape ratio ~1.91:1 (e.g. 1200×600). Used for Facebook and WhatsApp link previews when people share your event URL. If omitted, the Preview Photo above may be cropped on those platforms.
+            </p>
+            <div className="space-y-4 mt-3">
+              <Input
+                type="url"
+                value={ogPreviewImageUrl}
+                onChange={(e) => {
+                  setOgPreviewImageUrl(e.target.value);
+                  setEventMetadata((prev) => {
+                    const n = { ...prev };
+                    delete n.og_preview_image_width;
+                    delete n.og_preview_image_height;
+                    return n;
+                  });
+                }}
+                placeholder="https://example.com/og-banner.jpg"
+                className="w-full text-ellipsis"
+              />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingOgPreview}
+                    onChange={handleOgPreviewImageUpload}
+                    className="flex-1"
+                  />
+                  {ogPreviewImageUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemoveOgPreviewImage}
+                      disabled={uploadingOgPreview}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {ogPreviewImageUrl && (
+                <div className="w-full max-w-[320px]">
+                  <div
+                    className="aspect-[191/100] w-full overflow-hidden rounded-lg border"
+                    style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                  >
+                    <img
+                      src={`${ogPreviewImageUrl}${ogPreviewImageUrl.includes('?') ? '&' : '?'}v=${ogPreviewImageCacheKey}`}
+                      alt="Facebook and WhatsApp link preview"
                       className="w-full h-full object-cover object-center"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -1939,7 +2271,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   status: 'published',
                   location_text: locationText || null,
                   instagram_preview_image_url: instagramPreviewImageUrl || null,
-                  metadata: {},
+                  og_preview_image_url: ogPreviewImageUrl || null,
+                  metadata: { ...eventMetadata },
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 }}

@@ -417,6 +417,7 @@ export type Database = {
           fps_link: string | null
           id: string
           instagram_preview_image_url: string | null
+          og_preview_image_url: string | null
           location_text: string | null
           metadata: Json | null
           org_id: string
@@ -441,6 +442,7 @@ export type Database = {
           fps_link?: string | null
           id?: string
           instagram_preview_image_url?: string | null
+          og_preview_image_url?: string | null
           location_text?: string | null
           metadata?: Json | null
           org_id: string
@@ -465,6 +467,7 @@ export type Database = {
           fps_link?: string | null
           id?: string
           instagram_preview_image_url?: string | null
+          og_preview_image_url?: string | null
           location_text?: string | null
           metadata?: Json | null
           org_id?: string

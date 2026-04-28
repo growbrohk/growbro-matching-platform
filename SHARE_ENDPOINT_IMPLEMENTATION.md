@@ -16,7 +16,7 @@ WhatsApp/Instagram link previews for event tickets have been implemented using a
   - Generates OG tags with proper fallback hierarchy:
     - **Title**: Ticket name (if ticket param) → Event title
     - **Description**: Event description → "Book now on Growbro"
-    - **Image**: Ticket preview image → Event preview image → Org logo → Default
+    - **Image**: Ticket preview image → Event `og_preview_image_url` → Event preview image (`instagram_preview_image_url`) → Org logo → Default
   - Redirects real users to SPA event page
   - Includes cache headers (`s-maxage=300`)
 
@@ -72,11 +72,14 @@ Configure your hosting platform to proxy `/s/*` requests to the Supabase Edge Fu
 
 1. **Title**: Ticket name (if `?ticket=` exists) → Event title
 2. **Description**: Event description → "Book now on Growbro"
-3. **Image**: 
-   - Ticket `metadata.preview_image_url` or `metadata.image_url`
-   - Event `instagram_preview_image_url`
+3. **Image**:
+   - Ticket `metadata.preview_image_url` or `metadata.image_url` (optional dimensions: `preview_image_width` / `preview_image_height`)
+   - Event `og_preview_image_url` (preferred for Facebook/WhatsApp; dimensions in event `metadata`: `og_preview_image_width` / `og_preview_image_height`)
+   - Event `instagram_preview_image_url` (optional dimensions in `metadata`: `instagram_preview_image_width` / `instagram_preview_image_height`)
    - Org `metadata.logo_url` or `metadata.image_url`
-   - Default: `https://growbrohk.com/og-default.png`
+   - Default: `https://growbrohk.com/og-default.png` (dimensions assumed 1200×630)
+
+Extras: `og:image:secure_url`, `og:image:width`, `og:image:height`, `og:locale`, and `og:image:type` when WebP where applicable.
 
 ## Notes
 
