@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     const { data: event, error: eventError } = await supabase
       .from('events')
       .select(
-        'id, title, description, slug, instagram_preview_image_url, og_preview_image_url, metadata, status'
+        'id, title, description, slug, instagram_preview_image_url, og_preview_image_url, metadata, status, updated_at'
       )
       .eq('org_id', org.id)
       .eq('slug', eventSlug)
@@ -198,6 +198,15 @@ Deno.serve(async (req) => {
       ogImage = 'https://growbrohk.com/og-default.png'; // You may want to add a default OG image
       ogImageWidth = 1200;
       ogImageHeight = 630;
+    }
+
+    // Append cache-buster so WhatsApp re-fetches when the event updates (same storage path overwrite)
+    if (ogImage.startsWith('https://')) {
+      const sep = ogImage.includes('?') ? '&' : '?';
+      const evt = event as { updated_at?: string };
+      const updatedTs =
+        typeof evt.updated_at === 'string' ? new Date(evt.updated_at).getTime() : Date.now();
+      ogImage = `${ogImage}${sep}cb=${updatedTs}`;
     }
 
     const ogImageSecureTag = ogImage.startsWith('https://')

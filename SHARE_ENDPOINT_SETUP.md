@@ -13,6 +13,10 @@ Social media crawlers (WhatsApp, Instagram, Facebook) cannot send Authorization 
 supabase functions deploy share-event --no-verify-jwt
 ```
 
+### Database: `og_preview_image_url` column
+
+The Edge Function reads optional `events.og_preview_image_url` for landscape Facebook/WhatsApp previews. If production was rolled out before [`20260428000000_add_og_preview_image_url.sql`](supabase/migrations/20260428000000_add_og_preview_image_url.sql) was applied, run the SQL in **[`docs/operations/APPLY_OG_PREVIEW_MIGRATION.md`](docs/operations/APPLY_OG_PREVIEW_MIGRATION.md)** in the Supabase SQL Editor (especially when CLI migration history is out of sync with production).
+
 ## Overview
 
 The share endpoint (`/s/:orgSlug/:eventSlug`) serves server-rendered HTML with Open Graph tags for social media crawlers. It then redirects real users to the SPA event page.
