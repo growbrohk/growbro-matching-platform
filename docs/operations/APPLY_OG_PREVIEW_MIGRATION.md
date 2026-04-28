@@ -22,4 +22,14 @@ Finally:
 
 ## WhatsApp previews
 
-The `share-event` function appends `?cb=<updated_at_ms>` to every `og:image` URL so WhatsApp sees a new image URL when `events.updated_at` changes (WhatsApp caches by exact `og:image` string). After changing images or descriptions, **save the event once** in Event Form so `updated_at` bumps, then retry sharing in WhatsApp.
+The `share-event` function:
+
+1. Outputs **single-line** `og:title` / `og:description` (newlines collapsed) — WhatsApp’s parser rejects multiline HTML attribute values more often than Facebook/Instagram.
+2. Uses **`https://www.growbrohk.com/...`** for redirects and default `og:url` so bots avoid an extra apex (non-www → www) redirect.
+3. Appends **`?cb=<updated_at_ms>`** to each `og:image` URL when `events.updated_at` changes (WhatsApp also caches by exact `og:image` string).
+
+After changing images or descriptions, **save the event once** in Event Form so `updated_at` bumps, then retry sharing.
+
+**URL-level WhatsApp cache** (different from OG image URL): previews are keyed partly on the **page URL**. If an old bubble still looks wrong after deploy, paste a variant with a dummy query:
+
+`https://www.growbrohk.com/orgSlug/eventSlug?v=2`

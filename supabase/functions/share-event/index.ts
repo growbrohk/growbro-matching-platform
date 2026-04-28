@@ -122,6 +122,10 @@ Deno.serve(async (req) => {
       ? ogDescription.substring(0, 197) + '...' 
       : ogDescription;
 
+    // Single-line meta values for strict parsers (e.g. WhatsApp); FB/IG tolerate literal newlines in attributes
+    const ogTitleMeta = escapeHtml(normalizeMetaContent(ogTitle));
+    const ogDescriptionMeta = escapeHtml(normalizeMetaContent(ogDescriptionShort));
+
     const eventMeta =
       event.metadata && typeof event.metadata === 'object'
         ? (event.metadata as Record<string, any>)
@@ -195,7 +199,7 @@ Deno.serve(async (req) => {
 
     // Fallback image if still empty
     if (!ogImage) {
-      ogImage = 'https://growbrohk.com/og-default.png'; // You may want to add a default OG image
+      ogImage = 'https://www.growbrohk.com/og-default.png'; // You may want to add a default OG image
       ogImageWidth = 1200;
       ogImageHeight = 630;
     }
@@ -221,18 +225,18 @@ Deno.serve(async (req) => {
         ? `\n  <meta property="og:image:width" content="${ogImageWidth}">\n  <meta property="og:image:height" content="${ogImageHeight}">`
         : '';
 
-    // Build redirect URL
+    // Build redirect URL (prefer www — avoids apex redirect before SPA)
     const redirectUrl = ticketId 
-      ? `https://growbrohk.com/${orgSlug}/${eventSlug}?ticket=${ticketId}`
-      : `https://growbrohk.com/${orgSlug}/${eventSlug}`;
+      ? `https://www.growbrohk.com/${orgSlug}/${eventSlug}?ticket=${ticketId}`
+      : `https://www.growbrohk.com/${orgSlug}/${eventSlug}`;
 
     // Build share URL (og:url) - use canonicalUrl if provided (e.g. from middleware for direct URLs)
     const canonicalUrlParam = url.searchParams.get('canonicalUrl');
     const shareUrl = (canonicalUrlParam && /^https:\/\/(www\.)?growbrohk\.com\//.test(canonicalUrlParam))
       ? canonicalUrlParam
       : (ticketId
-        ? `https://growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
-        : `https://growbrohk.com/s/${orgSlug}/${eventSlug}`);
+        ? `https://www.growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
+        : `https://www.growbrohk.com/s/${orgSlug}/${eventSlug}`);
 
     // Detect link preview bots via User-Agent
     const ua = (req.headers.get('user-agent') || '').toLowerCase();
@@ -277,23 +281,23 @@ Deno.serve(async (req) => {
   <meta property="og:locale" content="zh_HK">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${shareUrl}">
-  <meta property="og:title" content="${escapeHtml(ogTitle)}">
-  <meta property="og:description" content="${escapeHtml(ogDescriptionShort)}">
+  <meta property="og:title" content="${ogTitleMeta}">
+  <meta property="og:description" content="${ogDescriptionMeta}">
   <meta property="og:image" content="${escapeHtml(ogImage)}">
   ${ogImage.includes('event-previews') || ogImage.endsWith('.webp') ? '<meta property="og:image:type" content="image/webp">' : ''}
   ${ogImageSecureTag}${ogImageDimensionTags}
-  <meta property="og:image:alt" content="${escapeHtml(ogTitle)}">
+  <meta property="og:image:alt" content="${ogTitleMeta}">
   
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="${shareUrl}">
-  <meta name="twitter:title" content="${escapeHtml(ogTitle)}">
-  <meta name="twitter:description" content="${escapeHtml(ogDescriptionShort)}">
+  <meta name="twitter:title" content="${ogTitleMeta}">
+  <meta name="twitter:description" content="${ogDescriptionMeta}">
   <meta name="twitter:image" content="${escapeHtml(ogImage)}">
   
   <!-- Standard meta tags -->
-  <title>${escapeHtml(ogTitle)}</title>
-  <meta name="description" content="${escapeHtml(ogDescriptionShort)}">
+  <title>${ogTitleMeta}</title>
+  <meta name="description" content="${ogDescriptionMeta}">
 </head>
 <body>
   <h1>${escapeHtml(ogTitle)}</h1>
@@ -313,6 +317,14 @@ Deno.serve(async (req) => {
     return new Response('Internal server error', { status: 500 });
   }
 });
+
+/**
+ * Collapse multiline/plaintext into a single line for meta content="" attributes.
+ * Strict OG consumers (especially WhatsApp) often fail on literal newlines inside attributes.
+ */
+function normalizeMetaContent(text: string): string {
+  return text.replace(/[\s\u00A0]+/g, ' ').trim();
+}
 
 function escapeHtml(text: string): string {
   const map: Record<string, string> = {
