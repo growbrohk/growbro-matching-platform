@@ -152,6 +152,7 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
         .from('orders')
         .insert({
           order_type: 'product',
+          host_org_id: currentOrg.id,
           buyer_user_id: user.id,
           total_amount: total,
           currency: 'HKD',
