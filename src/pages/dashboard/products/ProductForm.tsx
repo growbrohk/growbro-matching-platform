@@ -32,6 +32,12 @@ import {
   type ProductAccessVariantInput,
   type ProductAccessVariantVisibility,
 } from '@/lib/api/products';
+import { ProductCollabSection } from '@/components/catalog/ProductCollabSection';
+import {
+  validateProductPartners,
+  syncProductPartners,
+  type ProductPartnerDraft,
+} from '@/lib/api/product-partners';
 
 /** Catalog uploads: not the 50KB receipt target — product pages need clearer images. */
 const PRODUCT_PHOTO_TARGET_BYTES = 500 * 1024;
@@ -279,7 +285,10 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('');
+  const [cost, setCost] = useState('');
   const [isOnSale, setIsOnSale] = useState(true);
+  const [collabEnabled, setCollabEnabled] = useState(false);
+  const [productPartners, setProductPartners] = useState<ProductPartnerDraft[]>([]);
   const [simpleStock, setSimpleStock] = useState('0'); // Stock for simple products
   const [productAccessVariants, setProductAccessVariants] = useState<ProductAccessVariantForm[]>(
     defaultProductAccessVariants,
@@ -479,7 +488,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     try {
         const { data: product, error: productError } = await (supabase as any)
           .from('products')
-          .select('id, org_id, type, title, description, base_price, metadata, image_url, is_on_sale')
+          .select('id, org_id, type, title, description, base_price, cost, metadata, image_url, is_on_sale')
           .eq('id', id)
           .eq('org_id', currentOrg.id)
           .single();
@@ -490,6 +499,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
+        setCost((p as { cost?: number | null }).cost == null ? '' : String((p as { cost?: number | null }).cost));
         setIsOnSale((p as { is_on_sale?: boolean }).is_on_sale !== false);
         
         // Load product type (physical | addon)
@@ -1056,6 +1066,17 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     setSaving(true);
     try {
       const base_price = toDecimalOrNull(basePrice);
+      const product_cost = toDecimalOrNull(cost);
+
+      if (!embedded && collabEnabled) {
+        const partnerErr = validateProductPartners(collabEnabled, productPartners);
+        if (partnerErr) {
+          toast({ title: 'Validation', description: partnerErr, variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+      }
+
       const productMetadata = mergeProductDetailMetadata(metadataBase, {
         galleryUrls,
         productDetails: metadataProductDetails,
@@ -1090,6 +1111,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
+            cost: product_cost,
             category_id: categoryId || null,
             image_url: imageUrl || null,
             is_on_sale: isOnSale,
@@ -1108,6 +1130,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             title: title.trim(),
             description: description.trim() || null,
             base_price,
+            cost: product_cost,
             category_id: categoryId || null,
             image_url: imageUrl || null,
             is_on_sale: isOnSale,
@@ -1524,6 +1547,17 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         });
 
         await replaceProductAccessVariants(productId!, pavInputs);
+      }
+
+      if (!embedded && productId) {
+        await syncProductPartners({
+          productId,
+          productTitle: title.trim(),
+          hostOrgId: currentOrg.id,
+          hostOrgSlug: currentOrg.slug ?? null,
+          enabled: collabEnabled,
+          partners: productPartners,
+        });
       }
 
       toast({ title: 'Success', description: isEditMode ? 'Product updated' : 'Product created' });
@@ -2121,6 +2155,25 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
               <Label htmlFor="basePrice">Base Price (decimal)</Label>
               <Input id="basePrice" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="e.g. 199.00" className="h-10" />
                       </div>
+
+                <div className="space-y-2">
+              <Label htmlFor="cost">Cost (optional)</Label>
+              <Input id="cost" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. 80.00" className="h-10" />
+              <p className="text-sm text-muted-foreground">
+                Unit cost for profit-based partner commission (shipping is also deducted).
+              </p>
+                      </div>
+
+                {!embedded && (
+                  <ProductCollabSection
+                    productId={id ?? undefined}
+                    hostOrgId={currentOrg?.id}
+                    enabled={collabEnabled}
+                    onEnabledChange={setCollabEnabled}
+                    partners={productPartners}
+                    onPartnersChange={setProductPartners}
+                  />
+                )}
 
                 {/* Stock input for Simple Products */}
                 {productKind === 'simple' && (

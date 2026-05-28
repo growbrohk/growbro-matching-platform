@@ -42,6 +42,7 @@ export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePip
           product_id,
           affiliate_org_id,
           commission_rate,
+          commission_basis,
           host_org_id
         `)
         .in('type', ['tracking', 'affiliate', 'collab']);
@@ -153,15 +154,28 @@ export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePip
         clicksMap.set(click.tracking_link_id, (clicksMap.get(click.tracking_link_id) || 0) + 1);
       });
 
-      const aggregates = await fetchRangedPipelineOrderAggregates(linkIds, rangeKey);
+      const linkBasisMap = new Map<string, 'revenue' | 'profit'>();
+      links.forEach((link: { id: string; commission_basis?: string | null }) => {
+        linkBasisMap.set(
+          link.id,
+          link.commission_basis === 'profit' ? 'profit' : 'revenue'
+        );
+      });
+
+      const aggregates = await fetchRangedPipelineOrderAggregates(linkIds, rangeKey, linkBasisMap);
 
       const ordersMap = new Map<string, number>();
       const revenueMap = new Map<string, number>();
       links.forEach((link: any) => {
-        const agg = aggregates.get(link.id) || { ordersCount: 0, grossRevenue: 0 };
+        const agg = aggregates.get(link.id) || {
+          ordersCount: 0,
+          grossRevenue: 0,
+          commissionableRevenue: 0,
+        };
         const rate = link.commission_rate != null ? Number(link.commission_rate) : 0;
-        const hostRevenue = agg.grossRevenue * (1 - rate);
-        const affiliateRevenue = agg.grossRevenue * rate;
+        const base = agg.commissionableRevenue;
+        const hostRevenue = base * (1 - rate);
+        const affiliateRevenue = base * rate;
         ordersMap.set(link.id, agg.ordersCount);
         revenueMap.set(
           link.id,

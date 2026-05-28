@@ -1400,6 +1400,7 @@ export type Database = {
         Row: {
           base_price: number | null
           category_id: string | null
+          cost: number | null
           created_at: string
           description: string | null
           id: string
@@ -1412,6 +1413,7 @@ export type Database = {
         Insert: {
           base_price?: number | null
           category_id?: string | null
+          cost?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1424,6 +1426,7 @@ export type Database = {
         Update: {
           base_price?: number | null
           category_id?: string | null
+          cost?: number | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1680,6 +1683,7 @@ export type Database = {
           collab_sales_scope: string | null
           collab_show_event_in_partner_events_tab: boolean | null
           collab_show_on_partner_public_profile: boolean | null
+          commission_basis: string
           commission_rate: number | null
           created_at: string
           destination_type: string
@@ -1706,6 +1710,7 @@ export type Database = {
           collab_sales_scope?: string | null
           collab_show_event_in_partner_events_tab?: boolean | null
           collab_show_on_partner_public_profile?: boolean | null
+          commission_basis?: string
           commission_rate?: number | null
           created_at?: string
           destination_type?: string
@@ -1732,6 +1737,7 @@ export type Database = {
           collab_sales_scope?: string | null
           collab_show_event_in_partner_events_tab?: boolean | null
           collab_show_on_partner_public_profile?: boolean | null
+          commission_basis?: string
           commission_rate?: number | null
           created_at?: string
           destination_type?: string

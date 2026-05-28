@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,7 +25,12 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { OrgSearchCombobox } from './OrgSearchCombobox';
+import {
+  PartnerPipelineFields,
+  buildCollabColumnsForTrackingLink,
+  type PartnerPipelineValues,
+  type CommissionBasis,
+} from './PartnerPipelineFields';
 
 interface CreateTrackingLinkModalProps {
   open: boolean;
@@ -69,6 +74,7 @@ export function CreateTrackingLinkModal({
   const [customUrl, setCustomUrl] = useState('');
   const [affiliateOrgId, setAffiliateOrgId] = useState<string | undefined>(undefined);
   const [commissionRate, setCommissionRate] = useState<string>('');
+  const [commissionBasis, setCommissionBasis] = useState<CommissionBasis>('revenue');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [slug, setSlug] = useState('');
@@ -168,6 +174,7 @@ export function CreateTrackingLinkModal({
         setAffiliateOrgId((r.affiliate_org_id as string) || undefined);
         const cr = r.commission_rate as number | null;
         setCommissionRate(cr != null ? String(Number(cr) * 100) : '');
+        setCommissionBasis((r.commission_basis as CommissionBasis) === 'profit' ? 'profit' : 'revenue');
         const sd = r.start_date as string | null;
         const ed = r.end_date as string | null;
         setStartDate(sd ? sd.slice(0, 10) : '');
@@ -278,6 +285,65 @@ export function CreateTrackingLinkModal({
     }
     return null;
   };
+
+  const partnerFieldValues = useMemo(
+    (): PartnerPipelineValues => ({
+      pipelineType: pipelineType === 'affiliate' ? 'affiliate' : 'collab',
+      affiliateOrgId,
+      startDate,
+      endDate,
+      commissionRate,
+      commissionBasis,
+      collabSalesScope,
+      collabPartnerRole,
+      collabCanViewDetails,
+      collabCanMarkShipped,
+      collabShowOnPartnerPublicProfile,
+      collabShowInPartnerEventsTab,
+      collabAllowEditTab,
+      collabAllowTicketsTab,
+      collabAllowScanTab,
+    }),
+    [
+      pipelineType,
+      affiliateOrgId,
+      startDate,
+      endDate,
+      commissionRate,
+      commissionBasis,
+      collabSalesScope,
+      collabPartnerRole,
+      collabCanViewDetails,
+      collabCanMarkShipped,
+      collabShowOnPartnerPublicProfile,
+      collabShowInPartnerEventsTab,
+      collabAllowEditTab,
+      collabAllowTicketsTab,
+      collabAllowScanTab,
+    ]
+  );
+
+  const patchPartnerFields = useCallback((patch: Partial<PartnerPipelineValues>) => {
+    if (patch.pipelineType !== undefined) setPipelineType(patch.pipelineType);
+    if (patch.affiliateOrgId !== undefined) setAffiliateOrgId(patch.affiliateOrgId);
+    if (patch.startDate !== undefined) setStartDate(patch.startDate);
+    if (patch.endDate !== undefined) setEndDate(patch.endDate);
+    if (patch.commissionRate !== undefined) setCommissionRate(patch.commissionRate);
+    if (patch.commissionBasis !== undefined) setCommissionBasis(patch.commissionBasis);
+    if (patch.collabSalesScope !== undefined) setCollabSalesScope(patch.collabSalesScope);
+    if (patch.collabPartnerRole !== undefined) setCollabPartnerRole(patch.collabPartnerRole);
+    if (patch.collabCanViewDetails !== undefined) setCollabCanViewDetails(patch.collabCanViewDetails);
+    if (patch.collabCanMarkShipped !== undefined) setCollabCanMarkShipped(patch.collabCanMarkShipped);
+    if (patch.collabShowOnPartnerPublicProfile !== undefined) {
+      setCollabShowOnPartnerPublicProfile(patch.collabShowOnPartnerPublicProfile);
+    }
+    if (patch.collabShowInPartnerEventsTab !== undefined) {
+      setCollabShowInPartnerEventsTab(patch.collabShowInPartnerEventsTab);
+    }
+    if (patch.collabAllowEditTab !== undefined) setCollabAllowEditTab(patch.collabAllowEditTab);
+    if (patch.collabAllowTicketsTab !== undefined) setCollabAllowTicketsTab(patch.collabAllowTicketsTab);
+    if (patch.collabAllowScanTab !== undefined) setCollabAllowScanTab(patch.collabAllowScanTab);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -403,33 +469,23 @@ export function CreateTrackingLinkModal({
         if (pipelineType === 'affiliate' || pipelineType === 'collab') {
           updateData.affiliate_org_id = affiliateOrgId;
           updateData.commission_rate = parseFloat(commissionRate) / 100;
+          updateData.commission_basis = commissionBasis;
           updateData.start_date = startDate;
           updateData.end_date = endDate;
+          Object.assign(
+            updateData,
+            buildCollabColumnsForTrackingLink(partnerFieldValues, {
+              destinationType: finalDestinationType,
+              hasEvent: finalDestinationType === 'event' && !!selectedEventId,
+              hasProduct: finalDestinationType === 'product' && !!selectedProductId,
+            })
+          );
         } else {
           updateData.affiliate_org_id = null;
           updateData.commission_rate = null;
+          updateData.commission_basis = 'revenue';
           updateData.start_date = null;
           updateData.end_date = null;
-        }
-
-        if (pipelineType === 'collab') {
-          updateData.collab_sales_scope = collabSalesScope;
-          updateData.collab_partner_role = collabPartnerRole;
-          updateData.collab_can_view_order_details = collabCanViewDetails;
-          updateData.collab_can_mark_shipped = collabCanMarkShipped;
-          const isEventCollab = finalDestinationType === 'event' && !!selectedEventId;
-          updateData.collab_show_event_in_partner_events_tab = isEventCollab
-            ? collabShowInPartnerEventsTab
-            : true;
-          updateData.collab_partner_allow_edit_tab = isEventCollab ? collabAllowEditTab : false;
-          updateData.collab_partner_allow_tickets_tab = isEventCollab ? collabAllowTicketsTab : true;
-          updateData.collab_partner_allow_scan_tab = isEventCollab ? collabAllowScanTab : true;
-          const hasResource =
-            (finalDestinationType === 'event' && !!selectedEventId) ||
-            (finalDestinationType === 'product' && !!selectedProductId);
-          updateData.collab_show_on_partner_public_profile = hasResource
-            ? collabShowOnPartnerPublicProfile
-            : false;
         }
 
         const { error: upErr } = await (supabase.from('tracking_links' as any) as any)
@@ -493,29 +549,18 @@ export function CreateTrackingLinkModal({
       // Add affiliate-specific fields
       if (pipelineType === 'affiliate' || pipelineType === 'collab') {
         insertData.affiliate_org_id = affiliateOrgId;
-        insertData.commission_rate = parseFloat(commissionRate) / 100; // Convert percent to decimal
+        insertData.commission_rate = parseFloat(commissionRate) / 100;
+        insertData.commission_basis = commissionBasis;
         insertData.start_date = startDate;
         insertData.end_date = endDate;
-      }
-
-      if (pipelineType === 'collab') {
-        insertData.collab_sales_scope = collabSalesScope;
-        insertData.collab_partner_role = collabPartnerRole;
-        insertData.collab_can_view_order_details = collabCanViewDetails;
-        insertData.collab_can_mark_shipped = collabCanMarkShipped;
-        const isEventCollab = finalDestinationType === 'event' && !!selectedEventId;
-        insertData.collab_show_event_in_partner_events_tab = isEventCollab
-          ? collabShowInPartnerEventsTab
-          : true;
-        insertData.collab_partner_allow_edit_tab = isEventCollab ? collabAllowEditTab : false;
-        insertData.collab_partner_allow_tickets_tab = isEventCollab ? collabAllowTicketsTab : true;
-        insertData.collab_partner_allow_scan_tab = isEventCollab ? collabAllowScanTab : true;
-        const hasResource =
-          (finalDestinationType === 'event' && !!selectedEventId) ||
-          (finalDestinationType === 'product' && !!selectedProductId);
-        insertData.collab_show_on_partner_public_profile = hasResource
-          ? collabShowOnPartnerPublicProfile
-          : false;
+        Object.assign(
+          insertData,
+          buildCollabColumnsForTrackingLink(partnerFieldValues, {
+            destinationType: finalDestinationType,
+            hasEvent: finalDestinationType === 'event' && !!selectedEventId,
+            hasProduct: finalDestinationType === 'product' && !!selectedProductId,
+          })
+        );
       }
 
       const { data, error } = await (supabase.from('tracking_links' as any) as any)
@@ -824,207 +869,16 @@ export function CreateTrackingLinkModal({
               </div>
             )}
 
-            {/* Affiliate-specific fields */}
             {(pipelineType === 'affiliate' || pipelineType === 'collab') && (
-              <>
-                {/* Partner org */}
-                <div className="space-y-2">
-                  <Label htmlFor="affiliate">Affiliate Partner</Label>
-                  <OrgSearchCombobox
-                    value={affiliateOrgId}
-                    onValueChange={setAffiliateOrgId}
-                    placeholder="Search organizations..."
-                    excludeOrgId={currentOrg?.id}
-                  />
-                </div>
-
-                {/* Affiliate Period */}
-                <div className="space-y-2">
-                  <Label>Affiliate Period</Label>
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div className="space-y-1 min-w-0">
-                      <Label htmlFor="start-date" className="text-xs text-muted-foreground">Start Date</Label>
-                      <Input
-                        id="start-date"
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        required={pipelineType === 'affiliate' || pipelineType === 'collab'}
-                        className="w-full min-w-0 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1 min-w-0">
-                      <Label htmlFor="end-date" className="text-xs text-muted-foreground">End Date</Label>
-                      <Input
-                        id="end-date"
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        required={pipelineType === 'affiliate' || pipelineType === 'collab'}
-                        className="w-full min-w-0 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Commission Rate */}
-                <div className="space-y-2">
-                  <Label htmlFor="commission-rate">Commission Rate (%)</Label>
-                  <Input
-                    id="commission-rate"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={commissionRate}
-                    onChange={(e) => setCommissionRate(e.target.value)}
-                    placeholder="e.g., 15"
-                    required={pipelineType === 'affiliate' || pipelineType === 'collab'}
-                  />
-                </div>
-              </>
-            )}
-
-            {pipelineType === 'collab' && (
-              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Partner visibility</p>
-                <div className="space-y-2">
-                  <Label htmlFor="collab-scope">Sales visibility</Label>
-                  <Select value={collabSalesScope} onValueChange={(v) => setCollabSalesScope(v as 'attributed' | 'all_for_resource')}>
-                    <SelectTrigger id="collab-scope">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="attributed">Orders through this link only</SelectItem>
-                      <SelectItem value="all_for_resource">All sales for this product or event</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="collab-role">Partner role</Label>
-                  <Select value={collabPartnerRole} onValueChange={(v) => setCollabPartnerRole(v as 'viewer' | 'editor')}>
-                    <SelectTrigger id="collab-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="viewer">Viewer (read-only)</SelectItem>
-                      <SelectItem value="editor">Editor (can confirm orders)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="collab-details" className="text-sm font-normal">Allow order detail page</Label>
-                  <input
-                    id="collab-details"
-                    type="checkbox"
-                    className="h-4 w-4 accent-gray-800"
-                    checked={collabCanViewDetails}
-                    onChange={(e) => setCollabCanViewDetails(e.target.checked)}
-                  />
-                </div>
-                <div className="flex items-start justify-between gap-2">
-                  <Label htmlFor="collab-shipped" className="text-sm font-normal leading-snug">
-                    Allow partner to mark sent and tracking (after payment is confirmed)
-                  </Label>
-                  <input
-                    id="collab-shipped"
-                    type="checkbox"
-                    className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
-                    checked={collabCanMarkShipped}
-                    onChange={(e) => setCollabCanMarkShipped(e.target.checked)}
-                    disabled={collabPartnerRole !== 'editor'}
-                  />
-                </div>
-                {collabPartnerRole !== 'editor' ? (
-                  <p className="text-xs text-muted-foreground">Editors only — set role to Editor to enable.</p>
-                ) : null}
-
-                {((destinationType === 'event' && selectedEventId) ||
-                  (destinationType === 'product' && selectedProductId)) && (
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
-                    <Label
-                      htmlFor="collab-show-partner-public"
-                      className="text-sm font-normal leading-snug"
-                    >
-                      Show on partner&apos;s public brand page
-                    </Label>
-                    <input
-                      id="collab-show-partner-public"
-                      type="checkbox"
-                      className="h-4 w-4 accent-gray-800 shrink-0"
-                      checked={collabShowOnPartnerPublicProfile}
-                      onChange={(e) => setCollabShowOnPartnerPublicProfile(e.target.checked)}
-                    />
-                  </div>
-                )}
-
-                {destinationType === 'event' && selectedEventId ? (
-                  <div className="space-y-3 pt-2 border-t border-border/60">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Partner dashboard (this event)
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Control what the partner org sees in Events and on the event detail page after the collab is active.
-                    </p>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="collab-show-events-tab" className="text-sm font-normal leading-snug">
-                        Show event in partner&apos;s Events tab
-                      </Label>
-                      <input
-                        id="collab-show-events-tab"
-                        type="checkbox"
-                        className="h-4 w-4 accent-gray-800 shrink-0"
-                        checked={collabShowInPartnerEventsTab}
-                        onChange={(e) => setCollabShowInPartnerEventsTab(e.target.checked)}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="collab-allow-tickets" className="text-sm font-normal leading-snug">
-                        Allow Tickets tab (guest list)
-                      </Label>
-                      <input
-                        id="collab-allow-tickets"
-                        type="checkbox"
-                        className="h-4 w-4 accent-gray-800 shrink-0"
-                        checked={collabAllowTicketsTab}
-                        onChange={(e) => setCollabAllowTicketsTab(e.target.checked)}
-                      />
-                    </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <Label htmlFor="collab-allow-scan" className="text-sm font-normal leading-snug">
-                        Allow Scan tab (check-in). Requires partner role Editor.
-                      </Label>
-                      <input
-                        id="collab-allow-scan"
-                        type="checkbox"
-                        className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
-                        checked={collabAllowScanTab}
-                        onChange={(e) => setCollabAllowScanTab(e.target.checked)}
-                        disabled={collabPartnerRole !== 'editor'}
-                      />
-                    </div>
-                    {collabPartnerRole !== 'editor' ? (
-                      <p className="text-xs text-muted-foreground">Set role to Editor to allow door check-in.</p>
-                    ) : null}
-                    <div className="flex items-start justify-between gap-2">
-                      <Label htmlFor="collab-allow-edit" className="text-sm font-normal leading-snug">
-                        Allow Edit tab (event &amp; ticket setup). Requires partner role Editor.
-                      </Label>
-                      <input
-                        id="collab-allow-edit"
-                        type="checkbox"
-                        className="h-4 w-4 accent-gray-800 mt-0.5 shrink-0"
-                        checked={collabAllowEditTab}
-                        onChange={(e) => setCollabAllowEditTab(e.target.checked)}
-                        disabled={collabPartnerRole !== 'editor'}
-                      />
-                    </div>
-                    {collabPartnerRole !== 'editor' ? (
-                      <p className="text-xs text-muted-foreground">Set role to Editor to allow editing event details.</p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              <PartnerPipelineFields
+                values={partnerFieldValues}
+                onChange={patchPartnerFields}
+                excludeOrgId={currentOrg?.id}
+                showPipelineTypeSelect={false}
+                destinationType={destinationType}
+                selectedEventId={selectedEventId}
+                selectedProductId={selectedProductId}
+              />
             )}
 
             {/* Submit */}
