@@ -38,7 +38,6 @@ import {
 type ColumnKey =
   | 'status'
   | 'date'
-  | 'orderNo'
   | 'name'
   | 'phone'
   | 'email'
@@ -52,7 +51,6 @@ type ColumnKey =
 const DEFAULT_COLUMNS: ColumnKey[] = [
   'status',
   'date',
-  'orderNo',
   'name',
   'phone',
   'email',
@@ -67,7 +65,6 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
 const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   status: 90,
   date: 140,
-  orderNo: 110,
   name: 130,
   phone: 120,
   email: 180,
@@ -95,16 +92,22 @@ const PRODUCT_ORDERS_RANGE_KEYS: ProductOrdersRangeKey[] = [
   'all',
 ];
 
-function normalizeColumnOrder(stored: ColumnKey[]): ColumnKey[] {
-  const out = stored.filter((c) => DEFAULT_COLUMNS.includes(c));
+const LEGACY_COLUMN_KEYS = ['orderNo'] as const;
+
+function isColumnKey(value: string): value is ColumnKey {
+  return (DEFAULT_COLUMNS as string[]).includes(value);
+}
+
+function normalizeColumnOrder(stored: string[]): ColumnKey[] {
+  const out = stored.filter(isColumnKey);
   for (const col of DEFAULT_COLUMNS) {
     if (!out.includes(col)) out.push(col);
   }
   return out;
 }
 
-function normalizeVisibleColumns(stored: ColumnKey[]): ColumnKey[] {
-  const valid = stored.filter((c) => DEFAULT_COLUMNS.includes(c));
+function normalizeVisibleColumns(stored: string[]): ColumnKey[] {
+  const valid = stored.filter(isColumnKey);
   return valid.length > 0 ? valid : [...DEFAULT_COLUMNS];
 }
 
@@ -373,11 +376,12 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
   const moveColumn = (column: ColumnKey, direction: 'up' | 'down') => {
     setColumnOrder((prev) => {
-      const idx = prev.indexOf(column);
-      if (idx === -1) return prev;
+      const ordered = normalizeColumnOrder(prev);
+      const idx = ordered.indexOf(column);
+      if (idx === -1) return ordered;
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
-      const next = [...prev];
+      if (swapIdx < 0 || swapIdx >= ordered.length) return ordered;
+      const next = [...ordered];
       [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
       return next;
     });
@@ -400,7 +404,6 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
       date: 'Date',
-      orderNo: 'Order No',
       name: 'Name',
       phone: 'Phone',
       email: 'Email',
@@ -431,8 +434,6 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
             return escapeCSV(
               row.createdAt ? format(new Date(row.createdAt), 'dd/MM/yyyy') : ''
             );
-          case 'orderNo':
-            return escapeCSV(row.orderNo || '');
           case 'name':
             return escapeCSV(row.buyerName);
           case 'phone':
@@ -497,15 +498,6 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         size: DEFAULT_COLUMN_SIZES.date,
         minSize: 100,
         maxSize: 220,
-        enableResizing: true,
-      }),
-      columnHelper.accessor('orderNo', {
-        id: 'orderNo',
-        header: 'Order No',
-        cell: ({ row }) => row.original.orderNo || '—',
-        size: DEFAULT_COLUMN_SIZES.orderNo,
-        minSize: 80,
-        maxSize: 160,
         enableResizing: true,
       }),
       columnHelper.accessor('buyerName', {
@@ -627,6 +619,25 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     return normalizeColumnOrder(columnOrder);
   }, [columnOrder]);
 
+  // Drop removed/legacy columns (e.g. orderNo) from state and persisted prefs
+  useEffect(() => {
+    const hasLegacy =
+      columnOrder.some((c) => !isColumnKey(c) || LEGACY_COLUMN_KEYS.includes(c as (typeof LEGACY_COLUMN_KEYS)[number])) ||
+      visibleColumns.some((c) => !isColumnKey(c) || LEGACY_COLUMN_KEYS.includes(c as (typeof LEGACY_COLUMN_KEYS)[number]));
+
+    if (!hasLegacy) return;
+
+    const nextOrder = normalizeColumnOrder(columnOrder);
+    const nextVisible = normalizeVisibleColumns(visibleColumns);
+    setColumnOrder(nextOrder);
+    setVisibleColumns(nextVisible);
+
+    if (rememberPrefs) {
+      localStorage.setItem(storageKeys.columnOrder, JSON.stringify(nextOrder));
+      localStorage.setItem(storageKeys.visibleColumns, JSON.stringify(nextVisible));
+    }
+  }, [columnOrder, visibleColumns, rememberPrefs, storageKeys]);
+
   const columnVisibility = useMemo((): VisibilityState => {
     return Object.fromEntries(
       DEFAULT_COLUMNS.map((c) => [c, safeVisibleColumns.includes(c)])
@@ -667,7 +678,6 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   const columnLabels: Record<ColumnKey, string> = {
     status: 'Status',
     date: 'Date',
-    orderNo: 'Order No',
     name: 'Name',
     phone: 'Phone',
     email: 'Email',
@@ -822,9 +832,11 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2 max-h-[280px] overflow-y-auto">
-                    {columnOrder.map((column, index) => {
+                    {safeColumnOrder.map((column, index) => {
                       const isVisible = visibleColumns.includes(column);
                       const isLastVisible = visibleColumns.length === 1 && isVisible;
+                      const label = columnLabels[column];
+                      if (!label) return null;
                       return (
                         <div
                           key={column}
@@ -838,7 +850,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                             <label
                               className={`text-sm cursor-pointer truncate ${isLastVisible ? 'text-muted-foreground' : ''}`}
                             >
-                              {columnLabels[column]}
+                              {label}
                             </label>
                           </div>
                           <div className="flex shrink-0 gap-0.5">
@@ -848,7 +860,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                               size="icon"
                               className="h-7 w-7"
                               disabled={index === 0}
-                              aria-label={`Move ${columnLabels[column]} up`}
+                              aria-label={`Move ${label} up`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 moveColumn(column, 'up');
@@ -861,8 +873,8 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7"
-                              disabled={index === columnOrder.length - 1}
-                              aria-label={`Move ${columnLabels[column]} down`}
+                              disabled={index === safeColumnOrder.length - 1}
+                              aria-label={`Move ${label} down`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 moveColumn(column, 'down');
