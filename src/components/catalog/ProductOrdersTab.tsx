@@ -37,6 +37,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -495,6 +496,19 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
     return result;
   }, [rows, query, selectedPaymentStatuses, selectedSources, shippedFilter]);
+
+  const footerTotals = useMemo(() => {
+    let amountTotal = 0;
+    const partnerTotals = new Map<string, number>();
+    for (const row of filteredRows) {
+      amountTotal += row.amount;
+      for (const line of row.partnerCommissions) {
+        const key = partnerColumnKey(line.linkId);
+        partnerTotals.set(key, (partnerTotals.get(key) ?? 0) + line.commissionAmount);
+      }
+    }
+    return { amountTotal, partnerTotals };
+  }, [filteredRows]);
 
   const hasActiveFilters =
     selectedPaymentStatuses.length > 0 ||
@@ -1248,6 +1262,48 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                 </TableRow>
               ))}
             </TableBody>
+            <TableFooter>
+              <TableRow className="border-t border-border bg-muted/40 hover:bg-muted/40">
+                {table.getHeaderGroups()[0]?.headers.map((header, index) => {
+                  const colId = header.column.id;
+                  const headers = table.getHeaderGroups()[0]?.headers ?? [];
+                  const isLast = index === headers.length - 1;
+                  let content: React.ReactNode = null;
+                  if (index === 0) {
+                    content = <span className="font-medium text-foreground">Total</span>;
+                  } else if (colId === 'amount') {
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {formatMoney(footerTotals.amountTotal)}
+                      </span>
+                    );
+                  } else if (isPartnerColumnKey(colId)) {
+                    const sum = footerTotals.partnerTotals.get(colId) ?? 0;
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {formatMoney(sum)}
+                      </span>
+                    );
+                  }
+                  return (
+                    <TableCell
+                      key={header.id}
+                      className={cn(
+                        'border-r border-border px-2 py-2 text-sm',
+                        isLast && 'last:border-r-0'
+                      )}
+                      style={{
+                        width: header.getSize(),
+                        minWidth: header.getSize(),
+                        maxWidth: header.getSize(),
+                      }}
+                    >
+                      {content}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableFooter>
           </Table>
         </div>
       )}
