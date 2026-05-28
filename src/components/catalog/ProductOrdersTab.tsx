@@ -27,6 +27,13 @@ import {
 } from '@/hooks/useProductOrdersTable';
 import { formatMoney } from '@/hooks/useOrdersDashboard';
 import {
+  formatCommissionRateLabel,
+  isPartnerColumnKey,
+  linkIdFromPartnerColumnKey,
+  partnerColumnHeaderLabel,
+  partnerColumnKey,
+} from '@/lib/productOrderPartnerCommission';
+import {
   Table,
   TableBody,
   TableCell,
@@ -35,7 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-type ColumnKey =
+type StaticColumnKey =
   | 'status'
   | 'date'
   | 'name'
@@ -48,7 +55,7 @@ type ColumnKey =
   | 'amount'
   | 'payment';
 
-const DEFAULT_COLUMNS: ColumnKey[] = [
+const DEFAULT_STATIC_COLUMNS: StaticColumnKey[] = [
   'status',
   'date',
   'name',
@@ -62,7 +69,7 @@ const DEFAULT_COLUMNS: ColumnKey[] = [
   'payment',
 ];
 
-const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
+const DEFAULT_COLUMN_SIZES: Record<StaticColumnKey, number> = {
   status: 90,
   date: 140,
   name: 130,
@@ -74,6 +81,30 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   qty: 60,
   amount: 100,
   payment: 100,
+};
+
+const DEFAULT_PARTNER_COLUMN_SIZE = 120;
+
+const staticColumnLabels: Record<StaticColumnKey, string> = {
+  status: 'Status',
+  date: 'Date',
+  name: 'Name',
+  phone: 'Phone',
+  email: 'Email',
+  product: 'Product',
+  source: 'Source',
+  event: 'Event',
+  qty: 'Qty',
+  amount: 'Amount',
+  payment: 'Payment',
+};
+
+type PartnerColumnMeta = {
+  linkId: string;
+  key: string;
+  partnerOrgName: string;
+  commissionRate: number | null;
+  headerLabel: string;
 };
 
 const RANGE_OPTIONS: { key: ProductOrdersRangeKey; label: string }[] = [
@@ -92,23 +123,112 @@ const PRODUCT_ORDERS_RANGE_KEYS: ProductOrdersRangeKey[] = [
   'all',
 ];
 
-const LEGACY_COLUMN_KEYS = ['orderNo'] as const;
+const LEGACY_COLUMN_KEYS = ['orderNo', 'partner', 'commission'] as const;
 
-function isColumnKey(value: string): value is ColumnKey {
-  return (DEFAULT_COLUMNS as string[]).includes(value);
+function isStaticColumnKey(value: string): value is StaticColumnKey {
+  return (DEFAULT_STATIC_COLUMNS as string[]).includes(value);
 }
 
-function normalizeColumnOrder(stored: string[]): ColumnKey[] {
-  const out = stored.filter(isColumnKey);
-  for (const col of DEFAULT_COLUMNS) {
+function isLegacyColumnKey(value: string): boolean {
+  return (LEGACY_COLUMN_KEYS as readonly string[]).includes(value);
+}
+
+function buildPartnerColumnsFromRows(rows: ProductOrderTableRow[]): PartnerColumnMeta[] {
+  const map = new Map<string, PartnerColumnMeta>();
+  for (const row of rows) {
+    for (const line of row.partnerCommissions) {
+      if (map.has(line.linkId)) continue;
+      map.set(line.linkId, {
+        linkId: line.linkId,
+        key: partnerColumnKey(line.linkId),
+        partnerOrgName: line.partnerOrgName,
+        commissionRate: line.commissionRate,
+        headerLabel: partnerColumnHeaderLabel({
+          partnerOrgName: line.partnerOrgName,
+          commissionRate: line.commissionRate,
+        }),
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    a.partnerOrgName.localeCompare(b.partnerOrgName)
+  );
+}
+
+function normalizeColumnOrder(stored: string[], partnerKeys: string[]): string[] {
+  const legacy = new Set<string>(LEGACY_COLUMN_KEYS);
+  const validPartner = new Set(partnerKeys);
+  const out: string[] = [];
+
+  for (const col of stored) {
+    if (legacy.has(col)) continue;
+    if (isStaticColumnKey(col) && !out.includes(col)) out.push(col);
+    else if (isPartnerColumnKey(col) && validPartner.has(col) && !out.includes(col)) {
+      out.push(col);
+    }
+  }
+
+  for (const col of DEFAULT_STATIC_COLUMNS) {
     if (!out.includes(col)) out.push(col);
   }
+
+  const amountIdx = out.indexOf('amount');
+  const insertAt = amountIdx >= 0 ? amountIdx + 1 : out.length;
+  const toInsert = partnerKeys.filter((k) => !out.includes(k));
+  if (toInsert.length > 0) {
+    out.splice(insertAt, 0, ...toInsert);
+  }
+
   return out;
 }
 
-function normalizeVisibleColumns(stored: string[]): ColumnKey[] {
-  const valid = stored.filter(isColumnKey);
-  return valid.length > 0 ? valid : [...DEFAULT_COLUMNS];
+function normalizeVisibleColumns(stored: string[], partnerKeys: string[]): string[] {
+  const legacy = new Set<string>(LEGACY_COLUMN_KEYS);
+  const hadLegacyPartnerCols = stored.some((c) => c === 'partner' || c === 'commission');
+
+  const valid = stored.filter((c) => {
+    if (legacy.has(c)) return false;
+    if (isStaticColumnKey(c)) return true;
+    return partnerKeys.includes(c);
+  });
+
+  const staticVisible = valid.filter(isStaticColumnKey);
+  const partnerVisible = valid.filter((c) => partnerKeys.includes(c));
+
+  if (valid.length === 0) {
+    return [...DEFAULT_STATIC_COLUMNS, ...partnerKeys];
+  }
+
+  const result: string[] = [...staticVisible];
+
+  if (hadLegacyPartnerCols) {
+    for (const pk of partnerKeys) {
+      if (!result.includes(pk)) result.push(pk);
+    }
+  } else {
+    for (const pk of partnerVisible) {
+      if (!result.includes(pk)) result.push(pk);
+    }
+    for (const pk of partnerKeys) {
+      if (!stored.includes(pk) && !result.includes(pk)) result.push(pk);
+    }
+  }
+
+  for (const sk of DEFAULT_STATIC_COLUMNS) {
+    if (!result.includes(sk)) result.push(sk);
+  }
+
+  return result.length > 0 ? result : [...DEFAULT_STATIC_COLUMNS, ...partnerKeys];
+}
+
+function commissionAmountForPartnerColumn(
+  row: ProductOrderTableRow,
+  columnKey: string
+): number | null {
+  const linkId = linkIdFromPartnerColumnKey(columnKey);
+  if (!linkId) return null;
+  const line = row.partnerCommissions.find((l) => l.linkId === linkId);
+  return line ? line.commissionAmount : null;
 }
 
 type SortKey = 'status' | 'date' | 'name' | 'product' | 'amount';
@@ -158,13 +278,19 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   const [range, setRange] = useState<ProductOrdersRangeKey>('30d');
   const { data: rows = [], isLoading } = useProductOrdersTable(range, { enabled });
 
+  const partnerColumns = useMemo(() => buildPartnerColumnsFromRows(rows), [rows]);
+  const partnerColumnKeys = useMemo(
+    () => partnerColumns.map((p) => p.key),
+    [partnerColumns]
+  );
+
   const [query, setQuery] = useState('');
   const [selectedPaymentStatuses, setSelectedPaymentStatuses] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<ProductOrderSource[]>([]);
   const [shippedFilter, setShippedFilter] = useState<'all' | 'shipped' | 'not_shipped'>('all');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
-  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>([...DEFAULT_COLUMNS]);
-  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>([...DEFAULT_COLUMNS]);
+  const [columnOrder, setColumnOrder] = useState<string[]>([...DEFAULT_STATIC_COLUMNS]);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([...DEFAULT_STATIC_COLUMNS]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [defaultSort, setDefaultSort] = useState('date-desc');
   const [rememberPrefs, setRememberPrefs] = useState(false);
@@ -194,8 +320,8 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       const storedColumns = localStorage.getItem(storageKeys.visibleColumns);
       if (storedColumns) {
         try {
-          const parsed = JSON.parse(storedColumns) as ColumnKey[];
-          setVisibleColumns(normalizeVisibleColumns(parsed));
+          const parsed = JSON.parse(storedColumns) as string[];
+          setVisibleColumns(parsed);
         } catch {
           /* use defaults */
         }
@@ -204,8 +330,8 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       const storedColumnOrder = localStorage.getItem(storageKeys.columnOrder);
       if (storedColumnOrder) {
         try {
-          const parsed = JSON.parse(storedColumnOrder) as ColumnKey[];
-          if (parsed.length > 0) setColumnOrder(normalizeColumnOrder(parsed));
+          const parsed = JSON.parse(storedColumnOrder) as string[];
+          if (parsed.length > 0) setColumnOrder(parsed);
         } catch {
           /* use defaults */
         }
@@ -275,6 +401,11 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   }, [storageKeys]);
 
   useEffect(() => {
+    setColumnOrder((prev) => normalizeColumnOrder(prev, partnerColumnKeys));
+    setVisibleColumns((prev) => normalizeVisibleColumns(prev, partnerColumnKeys));
+  }, [partnerColumnKeys]);
+
+  useEffect(() => {
     if (!rememberPrefs) return;
     localStorage.setItem(storageKeys.remember, 'true');
     localStorage.setItem(storageKeys.visibleColumns, JSON.stringify(visibleColumns));
@@ -322,6 +453,16 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         const matchesAmount =
           String(row.amount).includes(searchLower) ||
           formatMoney(row.amount).toLowerCase().includes(searchLower);
+        const matchesPartner = row.partnerCommissions.some((line) =>
+          line.partnerOrgName.toLowerCase().includes(searchLower)
+        );
+        const matchesCommission = row.partnerCommissions.some((line) => {
+          const rateLabel = formatCommissionRateLabel(line.commissionRate);
+          return (
+            formatMoney(line.commissionAmount).toLowerCase().includes(searchLower) ||
+            rateLabel.toLowerCase().includes(searchLower)
+          );
+        });
         return (
           matchesName ||
           matchesPhone ||
@@ -331,7 +472,9 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           matchesEvent ||
           matchesSource ||
           matchesStatus ||
-          matchesAmount
+          matchesAmount ||
+          matchesPartner ||
+          matchesCommission
         );
       });
     }
@@ -364,7 +507,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     setShippedFilter('all');
   };
 
-  const handleToggleColumn = (column: ColumnKey) => {
+  const handleToggleColumn = (column: string) => {
     setVisibleColumns((prev) => {
       if (prev.includes(column)) {
         if (prev.length === 1) return prev;
@@ -374,7 +517,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     });
   };
 
-  const moveColumn = (column: ColumnKey, direction: 'up' | 'down') => {
+  const moveColumn = (column: string, direction: 'up' | 'down') => {
     setColumnOrder((prev) => {
       const ordered = normalizeColumnOrder(prev);
       const idx = ordered.indexOf(column);
@@ -398,22 +541,17 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     if (option) setSorting([option.sort]);
   };
 
+  const getColumnLabel = useCallback(
+    (col: string): string => {
+      if (isStaticColumnKey(col)) return staticColumnLabels[col];
+      const meta = partnerColumns.find((p) => p.key === col);
+      return meta?.headerLabel ?? col;
+    },
+    [partnerColumns]
+  );
+
   const handleExportCSV = useCallback(() => {
     if (filteredRows.length === 0) return;
-
-    const columnLabels: Record<ColumnKey, string> = {
-      status: 'Status',
-      date: 'Date',
-      name: 'Name',
-      phone: 'Phone',
-      email: 'Email',
-      product: 'Product',
-      source: 'Source',
-      event: 'Event',
-      qty: 'Qty',
-      amount: 'Amount',
-      payment: 'Payment',
-    };
 
     const escapeCSV = (value: string | null | undefined): string => {
       if (value === null || value === undefined) return '';
@@ -424,9 +562,13 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       return str;
     };
 
-    const headers = visibleOrderedColumns.map((col) => columnLabels[col]);
+    const headers = visibleOrderedColumns.map((col) => getColumnLabel(col));
     const csvRows = filteredRows.map((row) =>
       visibleOrderedColumns.map((col) => {
+        if (isPartnerColumnKey(col)) {
+          const amount = commissionAmountForPartnerColumn(row, col);
+          return escapeCSV(amount != null ? formatMoney(amount) : '');
+        }
         switch (col) {
           case 'status':
             return escapeCSV(row.displayStatus);
@@ -469,7 +611,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [filteredRows, visibleOrderedColumns]);
+  }, [filteredRows, visibleOrderedColumns, getColumnLabel]);
 
   const columns = useMemo(
     () => [
@@ -609,26 +751,77 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     []
   );
 
+  const partnerTableColumns = useMemo(
+    () =>
+      partnerColumns.map((meta) =>
+        columnHelper.display({
+          id: meta.key,
+          header: meta.headerLabel,
+          cell: ({ row }) => {
+            const amount = commissionAmountForPartnerColumn(row.original, meta.key);
+            if (amount == null) return '—';
+            return (
+              <span className="whitespace-nowrap tabular-nums">{formatMoney(amount)}</span>
+            );
+          },
+          size: DEFAULT_PARTNER_COLUMN_SIZE,
+          minSize: 80,
+          maxSize: 220,
+          enableResizing: true,
+        })
+      ),
+    [partnerColumns]
+  );
+
+  const allColumnDefs = useMemo(() => {
+    const byId = new Map<string, (typeof columns)[number]>();
+    for (const col of columns) {
+      const id = col.id as string;
+      if (id) byId.set(id, col);
+    }
+    for (const col of partnerTableColumns) {
+      const id = col.id as string;
+      if (id) byId.set(id, col);
+    }
+    return byId;
+  }, [columns, partnerTableColumns]);
+
   const safeVisibleColumns = useMemo(() => {
-    if (!visibleColumns || visibleColumns.length === 0) return [...DEFAULT_COLUMNS];
-    return visibleColumns;
-  }, [visibleColumns]);
+    if (!visibleColumns || visibleColumns.length === 0) {
+      return [...DEFAULT_STATIC_COLUMNS, ...partnerColumnKeys];
+    }
+    return normalizeVisibleColumns(visibleColumns, partnerColumnKeys);
+  }, [visibleColumns, partnerColumnKeys]);
 
   const safeColumnOrder = useMemo(() => {
-    if (!columnOrder || columnOrder.length === 0) return [...DEFAULT_COLUMNS];
-    return normalizeColumnOrder(columnOrder);
-  }, [columnOrder]);
+    if (!columnOrder || columnOrder.length === 0) {
+      return normalizeColumnOrder([...DEFAULT_STATIC_COLUMNS], partnerColumnKeys);
+    }
+    return normalizeColumnOrder(columnOrder, partnerColumnKeys);
+  }, [columnOrder, partnerColumnKeys]);
 
-  // Drop removed/legacy columns (e.g. orderNo) from state and persisted prefs
+  const orderedTableColumns = useMemo(
+    () =>
+      safeColumnOrder
+        .map((id) => allColumnDefs.get(id))
+        .filter((col): col is NonNullable<typeof col> => col != null),
+    [safeColumnOrder, allColumnDefs]
+  );
+
+  // Drop removed/legacy columns (e.g. orderNo, partner, commission) from persisted prefs
   useEffect(() => {
     const hasLegacy =
-      columnOrder.some((c) => !isColumnKey(c) || LEGACY_COLUMN_KEYS.includes(c as (typeof LEGACY_COLUMN_KEYS)[number])) ||
-      visibleColumns.some((c) => !isColumnKey(c) || LEGACY_COLUMN_KEYS.includes(c as (typeof LEGACY_COLUMN_KEYS)[number]));
+      columnOrder.some((c) => isLegacyColumnKey(c)) ||
+      visibleColumns.some((c) => isLegacyColumnKey(c)) ||
+      columnOrder.some((c) => isPartnerColumnKey(c) && !partnerColumnKeys.includes(c));
 
-    if (!hasLegacy) return;
+    if (!hasLegacy && !columnOrder.some((c) => c === 'partner' || c === 'commission')) {
+      const needsPartnerSync = partnerColumnKeys.some((k) => !columnOrder.includes(k));
+      if (!needsPartnerSync) return;
+    }
 
-    const nextOrder = normalizeColumnOrder(columnOrder);
-    const nextVisible = normalizeVisibleColumns(visibleColumns);
+    const nextOrder = normalizeColumnOrder(columnOrder, partnerColumnKeys);
+    const nextVisible = normalizeVisibleColumns(visibleColumns, partnerColumnKeys);
     setColumnOrder(nextOrder);
     setVisibleColumns(nextVisible);
 
@@ -636,17 +829,19 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       localStorage.setItem(storageKeys.columnOrder, JSON.stringify(nextOrder));
       localStorage.setItem(storageKeys.visibleColumns, JSON.stringify(nextVisible));
     }
-  }, [columnOrder, visibleColumns, rememberPrefs, storageKeys]);
+  }, [columnOrder, visibleColumns, rememberPrefs, storageKeys, partnerColumnKeys]);
 
   const columnVisibility = useMemo((): VisibilityState => {
-    return Object.fromEntries(
-      DEFAULT_COLUMNS.map((c) => [c, safeVisibleColumns.includes(c)])
-    );
-  }, [safeVisibleColumns]);
+    const keys = [
+      ...DEFAULT_STATIC_COLUMNS,
+      ...partnerColumnKeys.filter((k) => safeColumnOrder.includes(k)),
+    ];
+    return Object.fromEntries(keys.map((c) => [c, safeVisibleColumns.includes(c)]));
+  }, [safeVisibleColumns, safeColumnOrder, partnerColumnKeys]);
 
   const table = useReactTable({
     data: filteredRows,
-    columns,
+    columns: orderedTableColumns,
     state: {
       sorting,
       columnVisibility,
@@ -674,20 +869,6 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       };
     }
   }, [isResizing]);
-
-  const columnLabels: Record<ColumnKey, string> = {
-    status: 'Status',
-    date: 'Date',
-    name: 'Name',
-    phone: 'Phone',
-    email: 'Email',
-    product: 'Product',
-    source: 'Source',
-    event: 'Event',
-    qty: 'Qty',
-    amount: 'Amount',
-    payment: 'Payment',
-  };
 
   if (isLoading) {
     return (
@@ -835,7 +1016,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                     {safeColumnOrder.map((column, index) => {
                       const isVisible = visibleColumns.includes(column);
                       const isLastVisible = visibleColumns.length === 1 && isVisible;
-                      const label = columnLabels[column];
+                      const label = getColumnLabel(column);
                       if (!label) return null;
                       return (
                         <div

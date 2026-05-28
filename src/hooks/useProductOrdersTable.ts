@@ -2,6 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
+import {
+  buildHostProductPartnerLinkIndex,
+  buildLinksById,
+  computeAddonLinePartnerCommissions,
+  computeProductOrderPartnerCommissions,
+  type HostPartnerLink,
+  type PartnerCommissionLine,
+} from '@/lib/productOrderPartnerCommission';
+
+export type { PartnerCommissionLine };
 
 export type ProductOrdersRangeKey = RangeKey | 'all';
 
@@ -24,6 +34,7 @@ export interface ProductOrderTableRow {
   fulfillmentStatus: string | null;
   shippedAt: string | null;
   displayStatus: string;
+  partnerCommissions: PartnerCommissionLine[];
 }
 
 function buildBuyerName(first: string | null, last: string | null): string {
@@ -81,7 +92,9 @@ const ORDER_SELECT = `
   total_amount,
   payment_status,
   fulfillment_status,
-  shipped_at
+  shipped_at,
+  tracking_link_id,
+  metadata
 `;
 
 export function useProductOrdersTable(
@@ -120,6 +133,35 @@ export function useProductOrdersTable(
 
       if (productError) throw productError;
 
+      const { data: hostLinks, error: linksError } = await supabase
+        .from('tracking_links')
+        .select(
+          'id, affiliate_org_id, commission_rate, commission_basis, type, collab_sales_scope, product_id, status'
+        )
+        .eq('host_org_id', currentOrg.id)
+        .eq('status', 'active')
+        .in('type', ['affiliate', 'collab']);
+
+      if (linksError) throw linksError;
+
+      const linkList = (hostLinks || []) as HostPartnerLink[];
+      const linksById = buildLinksById(linkList);
+      const allForResourceByProduct = buildHostProductPartnerLinkIndex(linkList);
+
+      const affiliateOrgIds = [
+        ...new Set(linkList.map((l) => l.affiliate_org_id).filter(Boolean)),
+      ];
+      const orgNameMap = new Map<string, string>();
+      if (affiliateOrgIds.length > 0) {
+        const { data: orgsData } = await supabase
+          .from('orgs')
+          .select('id, name')
+          .in('id', affiliateOrgIds);
+        (orgsData || []).forEach((o: { id: string; name: string }) => {
+          orgNameMap.set(o.id, o.name);
+        });
+      }
+
       const { data: orgEvents } = await supabase
         .from('events')
         .select('id, title')
@@ -137,6 +179,7 @@ export function useProductOrdersTable(
         subtotal: number;
         label: string | null;
         variant_label: string | null;
+        product_id: string | null;
         orders: Record<string, unknown>;
       }> = [];
 
@@ -170,6 +213,7 @@ export function useProductOrdersTable(
               subtotal,
               label,
               variant_label,
+              product_id,
               orders!inner(
                 id,
                 created_at,
@@ -181,7 +225,9 @@ export function useProductOrdersTable(
                 payment_status,
                 fulfillment_status,
                 shipped_at,
-                event_id
+                event_id,
+                tracking_link_id,
+                metadata
               )
             `
             )
@@ -222,18 +268,33 @@ export function useProductOrdersTable(
           if (pid) productIds.add(pid);
         });
       });
+      addonItemsRaw.forEach((item) => {
+        if (item.product_id) productIds.add(item.product_id);
+      });
+      linkList.forEach((link) => {
+        if (link.product_id) productIds.add(link.product_id);
+      });
 
       const productsMap = new Map<string, { title: string }>();
+      const productCostMap = new Map<string, number>();
       if (productIds.size > 0) {
         const { data: productsData } = await supabase
           .from('products')
-          .select('id, title')
+          .select('id, title, cost')
           .in('id', Array.from(productIds));
 
-        (productsData || []).forEach((p: { id: string; title: string }) => {
+        (productsData || []).forEach((p: { id: string; title: string; cost: number | null }) => {
           productsMap.set(p.id, { title: p.title });
+          if (p.cost != null) productCostMap.set(p.id, Number(p.cost));
         });
       }
+
+      const commissionContext = {
+        linksById,
+        allForResourceByProduct,
+        productCostMap,
+        orgNameMap,
+      };
 
       const productRows: ProductOrderTableRow[] = (productOrdersData || []).map(
         (order: Record<string, unknown>) => {
@@ -243,6 +304,14 @@ export function useProductOrdersTable(
           const shippedAt = (order.shipped_at as string | null) ?? null;
           const orderItems = orderItemsMap.get(id) || [];
           const { label, quantity } = buildProductLabel(orderItems, productsMap);
+
+          const partnerCommissions = computeProductOrderPartnerCommissions({
+            trackingLinkId: (order.tracking_link_id as string | null) ?? null,
+            totalAmount: Number(order.total_amount) || 0,
+            metadata: order.metadata,
+            orderItems,
+            ...commissionContext,
+          });
 
           return {
             rowId: `product-${id}`,
@@ -264,6 +333,7 @@ export function useProductOrdersTable(
             fulfillmentStatus,
             shippedAt,
             displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+            partnerCommissions,
           };
         }
       );
@@ -275,6 +345,14 @@ export function useProductOrdersTable(
         const paymentStatus = (order.payment_status as string) || 'unpaid';
         const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
         const shippedAt = (order.shipped_at as string | null) ?? null;
+
+        const partnerCommissions = computeAddonLinePartnerCommissions({
+          parentTrackingLinkId: (order.tracking_link_id as string | null) ?? null,
+          addonProductId: item.product_id,
+          subtotal: Number(item.subtotal) || 0,
+          quantity: item.quantity,
+          ...commissionContext,
+        });
 
         return {
           rowId: `addon-${item.id}`,
@@ -296,6 +374,7 @@ export function useProductOrdersTable(
           fulfillmentStatus,
           shippedAt,
           displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+          partnerCommissions,
         };
       });
 

@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
+import { orderCommissionableAmount } from '@/lib/orderCommission';
 
 const LINK_ID_CHUNK = 80;
 const PAGE_SIZE = 1000;
@@ -12,35 +13,6 @@ export type PipelineOrderAggregate = {
 
 function emptyAggregate(): PipelineOrderAggregate {
   return { ordersCount: 0, grossRevenue: 0, commissionableRevenue: 0 };
-}
-
-function shippingFeeFromMetadata(metadata: unknown): number {
-  if (!metadata || typeof metadata !== 'object') return 0;
-  const fee = (metadata as Record<string, unknown>).shipping_fee;
-  const n = Number(fee);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function orderCommissionableAmount(
-  totalAmount: number,
-  metadata: unknown,
-  orderItems: Array<{ quantity: number; metadata: unknown }>,
-  productCostMap: Map<string, number>,
-  basis: 'revenue' | 'profit'
-): number {
-  const total = Number(totalAmount) || 0;
-  if (basis !== 'profit') return total;
-
-  const shipping = shippingFeeFromMetadata(metadata);
-  let lineCost = 0;
-  for (const item of orderItems) {
-    const meta = item.metadata as Record<string, unknown> | null;
-    const pid = meta?.product_id as string | undefined;
-    if (pid && productCostMap.has(pid)) {
-      lineCost += (productCostMap.get(pid) || 0) * (Number(item.quantity) || 0);
-    }
-  }
-  return Math.max(0, total - shipping - lineCost);
 }
 
 /**
