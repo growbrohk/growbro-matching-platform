@@ -54,6 +54,8 @@ type StaticColumnKey =
   | 'event'
   | 'qty'
   | 'amount'
+  | 'cost'
+  | 'shipping'
   | 'payment';
 
 const DEFAULT_STATIC_COLUMNS: StaticColumnKey[] = [
@@ -67,6 +69,8 @@ const DEFAULT_STATIC_COLUMNS: StaticColumnKey[] = [
   'event',
   'qty',
   'amount',
+  'cost',
+  'shipping',
   'payment',
 ];
 
@@ -81,6 +85,8 @@ const DEFAULT_COLUMN_SIZES: Record<StaticColumnKey, number> = {
   event: 160,
   qty: 60,
   amount: 100,
+  cost: 90,
+  shipping: 90,
   payment: 100,
 };
 
@@ -97,6 +103,8 @@ const staticColumnLabels: Record<StaticColumnKey, string> = {
   event: 'Event',
   qty: 'Qty',
   amount: 'Amount',
+  cost: 'Cost',
+  shipping: 'Shipping',
   payment: 'Payment',
 };
 
@@ -156,6 +164,13 @@ function buildPartnerColumnsFromRows(rows: ProductOrderTableRow[]): PartnerColum
   );
 }
 
+function placeColumnAfter(out: string[], column: string, afterColumn: string): void {
+  const idx = out.indexOf(column);
+  if (idx !== -1) out.splice(idx, 1);
+  const afterIdx = out.indexOf(afterColumn);
+  out.splice(afterIdx >= 0 ? afterIdx + 1 : out.length, 0, column);
+}
+
 function normalizeColumnOrder(stored: string[], partnerKeys: string[]): string[] {
   const legacy = new Set<string>(LEGACY_COLUMN_KEYS);
   const validPartner = new Set(partnerKeys);
@@ -173,8 +188,18 @@ function normalizeColumnOrder(stored: string[], partnerKeys: string[]): string[]
     if (!out.includes(col)) out.push(col);
   }
 
-  const amountIdx = out.indexOf('amount');
-  const insertAt = amountIdx >= 0 ? amountIdx + 1 : out.length;
+  placeColumnAfter(out, 'cost', 'amount');
+  placeColumnAfter(out, 'shipping', 'cost');
+
+  const anchorIdx = out.indexOf('shipping');
+  const insertAt =
+    anchorIdx >= 0
+      ? anchorIdx + 1
+      : out.indexOf('cost') >= 0
+        ? out.indexOf('cost') + 1
+        : out.indexOf('amount') >= 0
+          ? out.indexOf('amount') + 1
+          : out.length;
   const toInsert = partnerKeys.filter((k) => !out.includes(k));
   if (toInsert.length > 0) {
     out.splice(insertAt, 0, ...toInsert);
@@ -230,6 +255,10 @@ function commissionAmountForPartnerColumn(
   if (!linkId) return null;
   const line = row.partnerCommissions.find((l) => l.linkId === linkId);
   return line ? line.commissionAmount : null;
+}
+
+function formatOptionalMoneyCell(value: number | null): string {
+  return value != null ? formatMoney(value) : '—';
 }
 
 type SortKey = 'status' | 'date' | 'name' | 'product' | 'amount';
@@ -454,6 +483,14 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         const matchesAmount =
           String(row.amount).includes(searchLower) ||
           formatMoney(row.amount).toLowerCase().includes(searchLower);
+        const matchesCost =
+          row.cost != null &&
+          (String(row.cost).includes(searchLower) ||
+            formatMoney(row.cost).toLowerCase().includes(searchLower));
+        const matchesShipping =
+          row.shipping != null &&
+          (String(row.shipping).includes(searchLower) ||
+            formatMoney(row.shipping).toLowerCase().includes(searchLower));
         const matchesPartner = row.partnerCommissions.some((line) =>
           line.partnerOrgName.toLowerCase().includes(searchLower)
         );
@@ -474,6 +511,8 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           matchesSource ||
           matchesStatus ||
           matchesAmount ||
+          matchesCost ||
+          matchesShipping ||
           matchesPartner ||
           matchesCommission
         );
@@ -499,15 +538,19 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
   const footerTotals = useMemo(() => {
     let amountTotal = 0;
+    let costTotal = 0;
+    let shippingTotal = 0;
     const partnerTotals = new Map<string, number>();
     for (const row of filteredRows) {
       amountTotal += row.amount;
+      if (row.cost != null) costTotal += row.cost;
+      if (row.shipping != null) shippingTotal += row.shipping;
       for (const line of row.partnerCommissions) {
         const key = partnerColumnKey(line.linkId);
         partnerTotals.set(key, (partnerTotals.get(key) ?? 0) + line.commissionAmount);
       }
     }
-    return { amountTotal, partnerTotals };
+    return { amountTotal, costTotal, shippingTotal, partnerTotals };
   }, [filteredRows]);
 
   const hasActiveFilters =
@@ -606,6 +649,10 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
             return escapeCSV(String(row.quantity));
           case 'amount':
             return escapeCSV(formatMoney(row.amount));
+          case 'cost':
+            return escapeCSV(row.cost != null ? formatMoney(row.cost) : '');
+          case 'shipping':
+            return escapeCSV(row.shipping != null ? formatMoney(row.shipping) : '');
           case 'payment':
             return escapeCSV(row.paymentStatus);
           default:
@@ -614,7 +661,22 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       })
     );
 
-    const csvContent = [headers.join(','), ...csvRows.map((r) => r.join(','))].join('\n');
+    const totalRow = visibleOrderedColumns.map((col, index) => {
+      if (index === 0) return escapeCSV('Total');
+      if (col === 'amount') return escapeCSV(formatMoney(footerTotals.amountTotal));
+      if (col === 'cost') return escapeCSV(formatMoney(footerTotals.costTotal));
+      if (col === 'shipping') return escapeCSV(formatMoney(footerTotals.shippingTotal));
+      if (isPartnerColumnKey(col)) {
+        return escapeCSV(formatMoney(footerTotals.partnerTotals.get(col) ?? 0));
+      }
+      return escapeCSV('');
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...csvRows.map((r) => r.join(',')),
+      totalRow.join(','),
+    ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -625,7 +687,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [filteredRows, visibleOrderedColumns, getColumnLabel]);
+  }, [filteredRows, visibleOrderedColumns, getColumnLabel, footerTotals]);
 
   const columns = useMemo(
     () => [
@@ -748,6 +810,36 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         enableSorting: true,
         sortingFn: (rowA, rowB) => rowA.original.amount - rowB.original.amount,
         size: DEFAULT_COLUMN_SIZES.amount,
+        minSize: 70,
+        maxSize: 140,
+        enableResizing: true,
+      }),
+      columnHelper.accessor('cost', {
+        id: 'cost',
+        header: 'Cost',
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap tabular-nums">
+            {formatOptionalMoneyCell(row.original.cost)}
+          </span>
+        ),
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => (rowA.original.cost ?? -1) - (rowB.original.cost ?? -1),
+        size: DEFAULT_COLUMN_SIZES.cost,
+        minSize: 70,
+        maxSize: 140,
+        enableResizing: true,
+      }),
+      columnHelper.accessor('shipping', {
+        id: 'shipping',
+        header: 'Shipping',
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap tabular-nums">
+            {formatOptionalMoneyCell(row.original.shipping)}
+          </span>
+        ),
+        enableSorting: true,
+        sortingFn: (rowA, rowB) => (rowA.original.shipping ?? -1) - (rowB.original.shipping ?? -1),
+        size: DEFAULT_COLUMN_SIZES.shipping,
         minSize: 70,
         maxSize: 140,
         enableResizing: true,
@@ -1275,6 +1367,18 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                     content = (
                       <span className="whitespace-nowrap tabular-nums font-medium">
                         {formatMoney(footerTotals.amountTotal)}
+                      </span>
+                    );
+                  } else if (colId === 'cost') {
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {formatMoney(footerTotals.costTotal)}
+                      </span>
+                    );
+                  } else if (colId === 'shipping') {
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {formatMoney(footerTotals.shippingTotal)}
                       </span>
                     );
                   } else if (isPartnerColumnKey(colId)) {

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
+import { addonLineCost, orderItemsLineCost, shippingFeeFromMetadata } from '@/lib/orderCommission';
 import {
   buildHostProductPartnerLinkIndex,
   buildLinksById,
@@ -30,6 +31,10 @@ export interface ProductOrderTableRow {
   eventTitle: string | null;
   quantity: number;
   amount: number;
+  /** Unit product cost × qty; null when cost is not set on product(s). */
+  cost: number | null;
+  /** Order shipping fee from metadata; null when none or not applicable (e.g. add-on line). */
+  shipping: number | null;
   paymentStatus: string;
   fulfillmentStatus: string | null;
   shippedAt: string | null;
@@ -79,6 +84,11 @@ function formatAddonLabel(label: string | null, variantLabel: string | null): st
   const base = label || 'Add-on';
   if (variantLabel) return `${variantLabel} — ${base}`;
   return base;
+}
+
+function shippingFromOrderMetadata(metadata: unknown): number | null {
+  const fee = shippingFeeFromMetadata(metadata);
+  return fee > 0 ? fee : null;
 }
 
 const ORDER_SELECT = `
@@ -329,6 +339,8 @@ export function useProductOrdersTable(
             eventTitle: null,
             quantity,
             amount: Number(order.total_amount) || 0,
+            cost: orderItemsLineCost(orderItems, productCostMap),
+            shipping: shippingFromOrderMetadata(order.metadata),
             paymentStatus,
             fulfillmentStatus,
             shippedAt,
@@ -370,6 +382,8 @@ export function useProductOrdersTable(
           eventTitle: eventId ? eventTitleMap.get(eventId) ?? null : null,
           quantity: item.quantity,
           amount: Number(item.subtotal) || 0,
+          cost: addonLineCost(item.product_id, item.quantity, productCostMap),
+          shipping: null,
           paymentStatus,
           fulfillmentStatus,
           shippedAt,
