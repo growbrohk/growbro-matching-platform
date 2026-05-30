@@ -142,6 +142,7 @@ function isLegacyColumnKey(value: string): boolean {
   return (LEGACY_COLUMN_KEYS as readonly string[]).includes(value);
 }
 
+/** One column per distinct partner link in row data. Partner-context rows only include the current org's cut. */
 function buildPartnerColumnsFromRows(rows: ProductOrderTableRow[]): PartnerColumnMeta[] {
   const map = new Map<string, PartnerColumnMeta>();
   for (const row of rows) {

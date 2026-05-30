@@ -2,12 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
+import { fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
 import { addonLineCost, orderItemsLineCost, shippingFeeFromMetadata } from '@/lib/orderCommission';
 import {
   buildHostProductPartnerLinkIndex,
   buildLinksById,
   computeAddonLinePartnerCommissions,
   computeProductOrderPartnerCommissions,
+  filterCommissionLinesForLinkIds,
   type HostPartnerLink,
   type PartnerCommissionLine,
 } from '@/lib/productOrderPartnerCommission';
@@ -18,10 +20,15 @@ export type ProductOrdersRangeKey = RangeKey | 'all';
 
 export type ProductOrderSource = 'product' | 'event_addon';
 
+export type ProductOrderViewContext = 'host' | 'partner';
+
 export interface ProductOrderTableRow {
   rowId: string;
   orderId: string;
   source: ProductOrderSource;
+  viewContext: ProductOrderViewContext;
+  /** When false (partner row), buyer PII and cost are hidden in the table. */
+  canViewOrderDetails: boolean;
   createdAt: string;
   orderNo: string | null;
   buyerName: string;
@@ -91,6 +98,10 @@ function shippingFromOrderMetadata(metadata: unknown): number | null {
   return fee > 0 ? fee : null;
 }
 
+function maskPartnerPii<T extends string | null>(value: T): T {
+  return (value ? '—' : value) as T;
+}
+
 const ORDER_SELECT = `
   id,
   created_at,
@@ -136,31 +147,44 @@ export function useProductOrdersTable(
           .lte('created_at', endISO);
       }
 
-      const { data: productOrdersData, error: productError } = await productOrdersQuery.order(
-        'created_at',
-        { ascending: false }
-      );
+      const [
+        { data: productOrdersData, error: productError },
+        { data: hostLinks, error: linksError },
+        partnerFetch,
+      ] = await Promise.all([
+        productOrdersQuery.order('created_at', { ascending: false }),
+        supabase
+          .from('tracking_links')
+          .select(
+            'id, affiliate_org_id, commission_rate, commission_basis, type, collab_sales_scope, product_id, status'
+          )
+          .eq('host_org_id', currentOrg.id)
+          .eq('status', 'active')
+          .in('type', ['affiliate', 'collab']),
+        fetchPartnerVisibleProductOrdersForTable(currentOrg.id, {
+          startISO,
+          endISO,
+        }),
+      ]);
 
       if (productError) throw productError;
-
-      const { data: hostLinks, error: linksError } = await supabase
-        .from('tracking_links')
-        .select(
-          'id, affiliate_org_id, commission_rate, commission_basis, type, collab_sales_scope, product_id, status'
-        )
-        .eq('host_org_id', currentOrg.id)
-        .eq('status', 'active')
-        .in('type', ['affiliate', 'collab']);
-
       if (linksError) throw linksError;
 
       const linkList = (hostLinks || []) as HostPartnerLink[];
       const linksById = buildLinksById(linkList);
       const allForResourceByProduct = buildHostProductPartnerLinkIndex(linkList);
 
+      const partnerLinkList = partnerFetch.partnerLinks as HostPartnerLink[];
+      const partnerLinksById = buildLinksById(partnerLinkList);
+      const partnerAllForResourceByProduct = buildHostProductPartnerLinkIndex(partnerLinkList);
+      const ownPartnerLinkIds = partnerFetch.partnerLinkIds;
+
       const affiliateOrgIds = [
-        ...new Set(linkList.map((l) => l.affiliate_org_id).filter(Boolean)),
-      ];
+        ...new Set([
+          ...linkList.map((l) => l.affiliate_org_id).filter(Boolean),
+          ...partnerLinkList.map((l) => l.affiliate_org_id).filter(Boolean),
+        ]),
+      ] as string[];
       const orgNameMap = new Map<string, string>();
       if (affiliateOrgIds.length > 0) {
         const { data: orgsData } = await supabase
@@ -171,6 +195,7 @@ export function useProductOrdersTable(
           orgNameMap.set(o.id, o.name);
         });
       }
+      orgNameMap.set(currentOrg.id, currentOrg.name);
 
       const { data: orgEvents } = await supabase
         .from('events')
@@ -248,27 +273,34 @@ export function useProductOrdersTable(
         }
       }
 
-      const productOrderIds = (productOrdersData || []).map((o: { id: string }) => o.id);
+      const hostProductOrderIds = (productOrdersData || []).map((o: { id: string }) => o.id);
+      const partnerProductOrderIds = partnerFetch.orderRows.map((o) => o.id as string);
+      const allProductOrderIds = [
+        ...new Set([...hostProductOrderIds, ...partnerProductOrderIds]),
+      ];
+
       const orderItemsMap = new Map<
         string,
         Array<{ quantity: number; metadata?: Record<string, unknown> }>
       >();
 
-      if (productOrderIds.length > 0) {
+      if (allProductOrderIds.length > 0) {
         const { data: orderItemsData } = await supabase
           .from('order_items')
           .select('order_id, quantity, metadata')
-          .in('order_id', productOrderIds);
+          .in('order_id', allProductOrderIds);
 
-        (orderItemsData || []).forEach((item: { order_id: string; quantity: number; metadata?: Record<string, unknown> }) => {
-          if (!orderItemsMap.has(item.order_id)) {
-            orderItemsMap.set(item.order_id, []);
+        (orderItemsData || []).forEach(
+          (item: { order_id: string; quantity: number; metadata?: Record<string, unknown> }) => {
+            if (!orderItemsMap.has(item.order_id)) {
+              orderItemsMap.set(item.order_id, []);
+            }
+            orderItemsMap.get(item.order_id)!.push({
+              quantity: item.quantity,
+              metadata: item.metadata,
+            });
           }
-          orderItemsMap.get(item.order_id)!.push({
-            quantity: item.quantity,
-            metadata: item.metadata,
-          });
-        });
+        );
       }
 
       const productIds = new Set<string>();
@@ -282,6 +314,9 @@ export function useProductOrdersTable(
         if (item.product_id) productIds.add(item.product_id);
       });
       linkList.forEach((link) => {
+        if (link.product_id) productIds.add(link.product_id);
+      });
+      partnerLinkList.forEach((link) => {
         if (link.product_id) productIds.add(link.product_id);
       });
 
@@ -299,12 +334,21 @@ export function useProductOrdersTable(
         });
       }
 
-      const commissionContext = {
+      const hostCommissionContext = {
         linksById,
         allForResourceByProduct,
         productCostMap,
         orgNameMap,
       };
+
+      const partnerCommissionContext = {
+        linksById: partnerLinksById,
+        allForResourceByProduct: partnerAllForResourceByProduct,
+        productCostMap,
+        orgNameMap,
+      };
+
+      const hostOrderIdSet = new Set(hostProductOrderIds);
 
       const productRows: ProductOrderTableRow[] = (productOrdersData || []).map(
         (order: Record<string, unknown>) => {
@@ -320,13 +364,15 @@ export function useProductOrdersTable(
             totalAmount: Number(order.total_amount) || 0,
             metadata: order.metadata,
             orderItems,
-            ...commissionContext,
+            ...hostCommissionContext,
           });
 
           return {
             rowId: `product-${id}`,
             orderId: id,
             source: 'product' as const,
+            viewContext: 'host' as const,
+            canViewOrderDetails: true,
             createdAt: order.created_at as string,
             orderNo: (order.order_no as string | null) ?? null,
             buyerName: buildBuyerName(
@@ -350,6 +396,62 @@ export function useProductOrdersTable(
         }
       );
 
+      const partnerProductRows: ProductOrderTableRow[] = partnerFetch.orderRows
+        .filter((order) => !hostOrderIdSet.has(order.id as string))
+        .map((order) => {
+          const id = order.id as string;
+          const paymentStatus = (order.payment_status as string) || 'unpaid';
+          const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
+          const shippedAt = (order.shipped_at as string | null) ?? null;
+          const orderItems = orderItemsMap.get(id) || [];
+          const { label, quantity } = buildProductLabel(orderItems, productsMap);
+          const access = partnerFetch.accessMap.get(id);
+          const canViewOrderDetails = access?.canViewOrderDetails === true;
+
+          const allCommissions = computeProductOrderPartnerCommissions({
+            trackingLinkId: (order.tracking_link_id as string | null) ?? null,
+            totalAmount: Number(order.total_amount) || 0,
+            metadata: order.metadata,
+            orderItems,
+            ...partnerCommissionContext,
+          });
+          const partnerCommissions = filterCommissionLinesForLinkIds(
+            allCommissions,
+            ownPartnerLinkIds
+          );
+
+          const buyerFirst = order.buyer_first_name as string | null;
+          const buyerLast = order.buyer_last_name as string | null;
+          const buyerPhone = order.buyer_phone as string | null;
+          const buyerEmail = order.buyer_email as string | null;
+
+          return {
+            rowId: `product-partner-${id}`,
+            orderId: id,
+            source: 'product' as const,
+            viewContext: 'partner' as const,
+            canViewOrderDetails,
+            createdAt: order.created_at as string,
+            orderNo: (order.order_no as string | null) ?? null,
+            buyerName: canViewOrderDetails
+              ? buildBuyerName(buyerFirst, buyerLast)
+              : maskPartnerPii(buildBuyerName(buyerFirst, buyerLast)),
+            phone: canViewOrderDetails ? buyerPhone : maskPartnerPii(buyerPhone),
+            email: canViewOrderDetails ? buyerEmail : maskPartnerPii(buyerEmail),
+            productLabel: label,
+            eventTitle: null,
+            quantity,
+            amount: Number(order.total_amount) || 0,
+            cost: canViewOrderDetails ? orderItemsLineCost(orderItems, productCostMap) : null,
+            shipping: canViewOrderDetails ? shippingFromOrderMetadata(order.metadata) : null,
+            paymentStatus,
+            fulfillmentStatus,
+            shippedAt,
+            displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+            partnerCommissions,
+          };
+        });
+
       const addonRows: ProductOrderTableRow[] = addonItemsRaw.map((item) => {
         const order = item.orders as Record<string, unknown>;
         const orderId = order.id as string;
@@ -363,13 +465,15 @@ export function useProductOrdersTable(
           addonProductId: item.product_id,
           subtotal: Number(item.subtotal) || 0,
           quantity: item.quantity,
-          ...commissionContext,
+          ...hostCommissionContext,
         });
 
         return {
           rowId: `addon-${item.id}`,
           orderId,
           source: 'event_addon' as const,
+          viewContext: 'host' as const,
+          canViewOrderDetails: true,
           createdAt: order.created_at as string,
           orderNo: (order.order_no as string | null) ?? null,
           buyerName: buildBuyerName(
@@ -392,7 +496,7 @@ export function useProductOrdersTable(
         };
       });
 
-      const merged = [...productRows, ...addonRows];
+      const merged = [...productRows, ...partnerProductRows, ...addonRows];
       merged.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );

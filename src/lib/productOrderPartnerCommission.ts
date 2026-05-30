@@ -214,3 +214,11 @@ export function partnerColumnHeaderLabel(params: {
     ? `${params.partnerOrgName} (${rateLabel})`
     : params.partnerOrgName;
 }
+
+export function filterCommissionLinesForLinkIds(
+  lines: PartnerCommissionLine[],
+  linkIds: Set<string>
+): PartnerCommissionLine[] {
+  if (linkIds.size === 0) return [];
+  return lines.filter((line) => linkIds.has(line.linkId));
+}

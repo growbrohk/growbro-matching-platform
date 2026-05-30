@@ -19,6 +19,10 @@ export interface PartnerPipelineLinkRow {
   collab_partner_role: string | null;
   collab_can_view_order_details: boolean | null;
   collab_can_mark_shipped: boolean | null;
+  status?: string;
+  affiliate_org_id?: string;
+  commission_rate?: number | null;
+  commission_basis?: string | null;
 }
 
 function emptyAccess(): PartnerOrderRowAccess {
@@ -169,6 +173,167 @@ export async function fetchPartnerVisibleOrdersInRange(
   }
 
   return { orderRows: Array.from(orderMap.values()), accessMap };
+}
+
+const PRODUCT_ORDERS_TABLE_SELECT = `
+  id,
+  created_at,
+  order_no,
+  buyer_first_name,
+  buyer_last_name,
+  buyer_email,
+  buyer_phone,
+  total_amount,
+  payment_status,
+  fulfillment_status,
+  shipped_at,
+  tracking_link_id,
+  metadata,
+  host_org_id,
+  order_type
+`;
+
+export interface PartnerProductOrdersTableFetch {
+  orderRows: Record<string, unknown>[];
+  accessMap: PartnerAccessMap;
+  partnerLinkIds: Set<string>;
+  partnerLinks: HostPartnerLinkForTable[];
+}
+
+export type HostPartnerLinkForTable = {
+  id: string;
+  affiliate_org_id: string;
+  commission_rate: number | null;
+  commission_basis: string | null;
+  type: string;
+  collab_sales_scope: string | null;
+  product_id: string | null;
+  status: string;
+};
+
+/**
+ * Product orders visible to an affiliate/collab partner org (Catalog → Products → Orders).
+ * Same scope rules as fetchPartnerVisibleOrdersInRange; includes buyer fields for the table.
+ */
+export async function fetchPartnerVisibleProductOrdersForTable(
+  orgId: string,
+  opts: { startISO?: string | null; endISO?: string | null } = {}
+): Promise<PartnerProductOrdersTableFetch> {
+  const accessMap: PartnerAccessMap = new Map();
+  const partnerLinkIds = new Set<string>();
+  const { startISO, endISO } = opts;
+  const applyDateFilter = Boolean(startISO && endISO);
+
+  const { data: links, error } = await supabase
+    .from('tracking_links' as never)
+    .select(
+      'id, type, host_org_id, event_id, product_id, collab_sales_scope, collab_partner_role, collab_can_view_order_details, collab_can_mark_shipped, status, affiliate_org_id, commission_rate, commission_basis'
+    )
+    .eq('affiliate_org_id', orgId)
+    .in('type', ['affiliate', 'collab'])
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('fetchPartnerVisibleProductOrdersForTable: tracking_links', error);
+    return { orderRows: [], accessMap, partnerLinkIds, partnerLinks: [] };
+  }
+
+  const linkList = (links || []) as PartnerPipelineLinkRow[];
+  linkList.forEach((l) => partnerLinkIds.add(l.id));
+
+  const partnerLinks: HostPartnerLinkForTable[] = linkList.map((l) => ({
+    id: l.id,
+    affiliate_org_id: l.affiliate_org_id ?? orgId,
+    commission_rate: l.commission_rate ?? null,
+    commission_basis: l.commission_basis ?? null,
+    type: l.type,
+    collab_sales_scope: l.collab_sales_scope,
+    product_id: l.product_id,
+    status: l.status ?? 'active',
+  }));
+
+  if (linkList.length === 0) {
+    return { orderRows: [], accessMap, partnerLinkIds, partnerLinks: [] };
+  }
+
+  const orderMap = new Map<string, Record<string, unknown>>();
+
+  const applyOrderFilters = (query: ReturnType<typeof supabase.from>) => {
+    let q = query
+      .eq('order_type', 'product')
+      .in('payment_status', ['submitted', 'paid']);
+    if (applyDateFilter) {
+      q = q.gte('created_at', startISO!).lte('created_at', endISO!);
+    }
+    return q;
+  };
+
+  const attributedLinkIds = linkList.filter(linkIsAttributedOnly).map((l) => l.id);
+
+  if (attributedLinkIds.length > 0) {
+    let attrQuery = supabase
+      .from('orders')
+      .select(PRODUCT_ORDERS_TABLE_SELECT)
+      .in('tracking_link_id', attributedLinkIds);
+
+    attrQuery = applyOrderFilters(attrQuery) as typeof attrQuery;
+
+    const { data: attrOrders, error: oErr } = await attrQuery;
+    if (oErr) {
+      console.error('fetchPartnerVisibleProductOrdersForTable: attributed orders', oErr);
+    } else {
+      for (const row of (attrOrders || []) as Record<string, unknown>[]) {
+        const oid = row.id as string;
+        const tid = row.tracking_link_id as string | null;
+        if (!tid) continue;
+        const link = linkList.find((l) => l.id === tid);
+        if (!link) continue;
+        orderMap.set(oid, row);
+        mergeAccess(accessMap, oid, link);
+      }
+    }
+  }
+
+  for (const link of linkList.filter(
+    (l) => l.type === 'collab' && l.collab_sales_scope === 'all_for_resource' && l.product_id
+  )) {
+    let prodQuery = supabase
+      .from('orders')
+      .select(PRODUCT_ORDERS_TABLE_SELECT)
+      .eq('host_org_id', link.host_org_id);
+
+    prodQuery = applyOrderFilters(prodQuery) as typeof prodQuery;
+
+    const { data: prodOrders, error: pErr } = await prodQuery;
+    if (pErr) {
+      console.error('fetchPartnerVisibleProductOrdersForTable: product orders', pErr);
+      continue;
+    }
+
+    const pid = link.product_id!;
+    for (const row of (prodOrders || []) as Record<string, unknown>[]) {
+      const oid = row.id as string;
+      const { data: line } = await supabase
+        .from('order_items')
+        .select('metadata')
+        .eq('order_id', oid)
+        .limit(8);
+      const hasProduct = (line || []).some(
+        (it: { metadata?: { product_id?: string } }) =>
+          (it.metadata?.product_id as string | undefined) === pid
+      );
+      if (!hasProduct) continue;
+      orderMap.set(oid, row);
+      mergeAccess(accessMap, oid, link);
+    }
+  }
+
+  return {
+    orderRows: Array.from(orderMap.values()),
+    accessMap,
+    partnerLinkIds,
+    partnerLinks,
+  };
 }
 
 export async function collabPartnerCanViewOrderDetails(orderId: string): Promise<boolean> {
