@@ -283,7 +283,9 @@ function isSortKey(key: string): key is SortKey {
 }
 
 function sourceLabel(source: ProductOrderSource): string {
-  return source === 'product' ? 'Product' : 'Event add-on';
+  if (source === 'pos') return 'POS';
+  if (source === 'event_addon') return 'Event add-on';
+  return 'Product';
 }
 
 function getStatusText(displayStatus: string) {
@@ -1066,7 +1068,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Source</div>
-                  {(['product', 'event_addon'] as const).map((src) => (
+                  {(['product', 'pos', 'event_addon'] as const).map((src) => (
                     <div
                       key={src}
                       className="flex items-center space-x-2 cursor-pointer"

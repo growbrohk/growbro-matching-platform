@@ -18,7 +18,7 @@ export type { PartnerCommissionLine };
 
 export type ProductOrdersRangeKey = RangeKey | 'all';
 
-export type ProductOrderSource = 'product' | 'event_addon';
+export type ProductOrderSource = 'product' | 'event_addon' | 'pos';
 
 export type ProductOrderViewContext = 'host' | 'partner';
 
@@ -98,6 +98,16 @@ function formatAddonLabel(label: string | null, variantLabel: string | null): st
 function shippingFromOrderMetadata(metadata: unknown): number | null {
   const fee = shippingFeeFromMetadata(metadata);
   return fee > 0 ? fee : null;
+}
+
+function resolveProductOrderSource(
+  metadata: unknown,
+  fallback: ProductOrderSource
+): ProductOrderSource {
+  if (!metadata || typeof metadata !== 'object') return fallback;
+  const source = (metadata as Record<string, unknown>).source;
+  if (source === 'pos') return 'pos';
+  return fallback;
 }
 
 function maskPartnerPii<T extends string | null>(value: T): T {
@@ -390,7 +400,7 @@ export function useProductOrdersTable(
           return {
             rowId: `product-${id}`,
             orderId: id,
-            source: 'product' as const,
+            source: resolveProductOrderSource(order.metadata, 'product'),
             viewContext: 'host' as const,
             canViewOrderDetails: true,
             createdAt: order.created_at as string,
@@ -452,7 +462,7 @@ export function useProductOrdersTable(
           return {
             rowId: `product-partner-${id}`,
             orderId: id,
-            source: 'product' as const,
+            source: resolveProductOrderSource(order.metadata, 'product'),
             viewContext: 'partner' as const,
             canViewOrderDetails,
             createdAt: order.created_at as string,

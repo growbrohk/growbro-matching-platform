@@ -9,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { PricingOverrideFields } from '@/components/pricing/PricingOverrideFields';
+import { resolveDiscountedPriceFromStrings, roundMoney } from '@/lib/pricing';
 
 export interface CartItem {
   productId: string;
@@ -16,7 +18,10 @@ export interface CartItem {
   name: string;
   variantLabel?: string;
   qty: number;
+  /** Catalog unit price before POS override/discount. */
   unitPrice: number;
+  priceOverride?: string | null;
+  discountPercent?: string | null;
 }
 
 interface CartProps {
@@ -29,6 +34,20 @@ interface CartProps {
 }
 
 type PaymentMethod = 'cash' | 'fps' | 'payme' | 'card-log' | 'other';
+
+function effectiveUnitPrice(item: CartItem): number {
+  return roundMoney(
+    resolveDiscountedPriceFromStrings(
+      item.unitPrice,
+      item.priceOverride,
+      item.discountPercent
+    )
+  );
+}
+
+function lineSubtotal(item: CartItem): number {
+  return roundMoney(effectiveUnitPrice(item) * item.qty);
+}
 
 export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId, activeWarehouseName }: CartProps) {
   const { toast } = useToast();
@@ -102,6 +121,15 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
     onUpdateCart(newCart);
   };
 
+  const updateItemPricing = (
+    index: number,
+    patch: Partial<Pick<CartItem, 'priceOverride' | 'discountPercent'>>
+  ) => {
+    const newCart = [...cart];
+    newCart[index] = { ...newCart[index], ...patch };
+    onUpdateCart(newCart);
+  };
+
   const clearCart = () => {
     onUpdateCart([]);
     toast({
@@ -111,7 +139,9 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
   };
 
   const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-  const total = cart.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const catalogSubtotal = cart.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+  const total = cart.reduce((sum, item) => sum + lineSubtotal(item), 0);
+  const discountTotal = roundMoney(Math.max(0, catalogSubtotal - total));
 
   const handleCompleteSale = async () => {
     if (!currentOrg?.id || !user?.id) {
@@ -166,6 +196,8 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
           metadata: {
             source: 'pos',
             warehouse_id: activeWarehouseId,
+            catalog_subtotal: catalogSubtotal,
+            discount_total: discountTotal > 0 ? discountTotal : undefined,
           },
         })
         .select('id')
@@ -186,6 +218,8 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
 
       // Create order_items and update inventory
       for (const item of cart) {
+        const unitPrice = effectiveUnitPrice(item);
+        const subtotal = lineSubtotal(item);
         // Find inventory_item for this variant+warehouse
         const { data: inventoryItems, error: invError } = await supabase
           .from('inventory_items')
@@ -217,14 +251,19 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
               order_id: order.id,
               ticket_type_id: placeholderTicketType.id, // Placeholder - product info in metadata
               quantity: item.qty,
-              unit_price: item.unitPrice,
-              subtotal: item.qty * item.unitPrice,
+              unit_price: unitPrice,
+              subtotal,
               metadata: {
                 product_id: item.productId,
                 variant_id: item.variantId || null,
                 product_name: item.name,
                 variant_label: item.variantLabel || null,
                 is_product_order: true,
+                catalog_unit_price: item.unitPrice,
+                price_override: item.priceOverride?.trim() ? parseFloat(item.priceOverride) : null,
+                discount_percent: item.discountPercent?.trim()
+                  ? parseFloat(item.discountPercent)
+                  : null,
               },
             } as any);
 
@@ -238,8 +277,11 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
           name: item.name,
           variant_label: item.variantLabel || null,
           quantity: item.qty,
-          unit_price: item.unitPrice,
-          subtotal: item.qty * item.unitPrice,
+          catalog_unit_price: item.unitPrice,
+          unit_price: unitPrice,
+          subtotal,
+          price_override: item.priceOverride?.trim() ? parseFloat(item.priceOverride) : null,
+          discount_percent: item.discountPercent?.trim() ? parseFloat(item.discountPercent) : null,
         });
 
         // Update inventory using adjust_stock RPC
@@ -261,6 +303,8 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
             metadata: {
               source: 'pos',
               warehouse_id: activeWarehouseId,
+              catalog_subtotal: catalogSubtotal,
+              discount_total: discountTotal > 0 ? discountTotal : undefined,
               product_items: productItems,
             },
           })
@@ -329,12 +373,16 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
             </div>
           ) : (
             <div className="space-y-3">
-              {cart.map((item, index) => (
+              {cart.map((item, index) => {
+                const effective = effectiveUnitPrice(item);
+                const hasDiscount = effective < item.unitPrice;
+                return (
                 <div
                   key={`${item.productId}-${item.variantId || 'no-variant'}-${index}`}
-                  className="p-4 rounded-lg border flex items-start justify-between gap-4"
+                  className="p-4 rounded-lg border space-y-3"
                   style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.3)' }}
                 >
+                  <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium" style={{ color: '#0F1F17' }}>
                       {item.name}
@@ -344,8 +392,20 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
                         {item.variantLabel}
                       </div>
                     )}
-                    <div className="text-sm font-semibold mt-1" style={{ color: '#0E7A3A' }}>
-                      HK${item.unitPrice.toFixed(2)} each
+                    <div className="text-sm mt-1" style={{ color: '#0E7A3A' }}>
+                      {hasDiscount ? (
+                        <>
+                          <span className="line-through text-muted-foreground mr-2">
+                            HK${item.unitPrice.toFixed(2)}
+                          </span>
+                          <span className="font-semibold">HK${effective.toFixed(2)} each</span>
+                        </>
+                      ) : (
+                        <span className="font-semibold">HK${item.unitPrice.toFixed(2)} each</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Line total: HK${lineSubtotal(item).toFixed(2)}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -380,8 +440,30 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  </div>
+                  <div onPointerDown={(e) => e.stopPropagation()}>
+                  <PricingOverrideFields
+                    priceOverride={item.priceOverride ?? ''}
+                    discountPercent={item.discountPercent ?? ''}
+                    onPriceOverrideChange={(value) =>
+                      updateItemPricing(index, {
+                        priceOverride: value || null,
+                        ...(value.trim() ? { discountPercent: null } : {}),
+                      })
+                    }
+                    onDiscountPercentChange={(value) =>
+                      updateItemPricing(index, {
+                        discountPercent: value || null,
+                        ...(value.trim() ? { priceOverride: null } : {}),
+                      })
+                    }
+                    currencyLabel="HK$"
+                    disabled={isCompleting}
+                  />
+                  </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>
@@ -406,6 +488,18 @@ export function Cart({ open, onOpenChange, cart, onUpdateCart, activeWarehouseId
             </div>
 
             {/* Total */}
+            {discountTotal > 0 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Subtotal</span>
+                <span>HK${catalogSubtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {discountTotal > 0 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Discount</span>
+                <span>-HK${discountTotal.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-lg font-semibold pt-2 border-t">
               <span style={{ color: '#0F1F17' }}>Total:</span>
               <span style={{ color: '#0E7A3A' }}>HK${total.toFixed(2)}</span>
