@@ -346,6 +346,11 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
+  const posProducts = useMemo(
+    () => filteredProducts.filter((p) => p.is_on_sale !== false),
+    [filteredProducts],
+  );
+
   // Auto-hide CTA after 4 seconds
   useEffect(() => {
     if (!isBulkEdit || !showEditCta) return;
@@ -1214,7 +1219,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   };
 
   const posSelectedProduct = posProductId
-    ? filteredProducts.find((p) => p.id === posProductId) ?? null
+    ? posProducts.find((p) => p.id === posProductId) ?? null
     : null;
 
   if (loading) {
@@ -1335,7 +1340,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
         {selectedSubtab === 'pos' ? (
           <>
             <PosProductGrid
-              products={filteredProducts}
+              products={posProducts}
               onProductClick={(productId) => {
                 setPosProductId(productId);
                 setPosDetailOpen(true);

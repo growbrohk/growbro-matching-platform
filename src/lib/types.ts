@@ -49,6 +49,8 @@ export interface Product {
   base_price?: number;
   metadata: Record<string, any>;
   category_id?: string;
+  /** When false, product is out of sale and hidden from POS / public in-sale views. */
+  is_on_sale?: boolean;
   created_at: string;
   updated_at: string;
 }
