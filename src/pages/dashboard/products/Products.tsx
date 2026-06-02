@@ -20,6 +20,10 @@ import { ProductsContent } from '@/components/catalog/ProductsContent';
 import { Cart, type CartItem } from '@/components/pos/Cart';
 import { PosProductGrid } from '@/components/pos/PosProductGrid';
 import { PosProductDetailSheet } from '@/components/pos/PosProductDetailSheet';
+import {
+  sortByManualDisplayOrder,
+  type ProductSortMode,
+} from '@/lib/utils/product-display-order';
 
 type ProductVariant = {
   id: string;
@@ -126,6 +130,8 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   const [cartOpen, setCartOpen] = useState(false);
   const [posDetailOpen, setPosDetailOpen] = useState(false);
   const [posProductId, setPosProductId] = useState<string | null>(null);
+  const [posProductsSort, setPosProductsSort] = useState<ProductSortMode>('creation');
+  const [posProductsDisplayOrder, setPosProductsDisplayOrder] = useState<string[]>([]);
 
   const canCreate = !!currentOrg?.id;
 
@@ -176,7 +182,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
       setLoading(true);
       try {
         // Fetch categories, warehouses, and variant config in parallel
-        const [categoriesData, warehousesResult, variantConfigData] = await Promise.all([
+        const [categoriesData, warehousesResult, variantConfigData, orgProfileResult] = await Promise.all([
           getCategories(currentOrg.id),
           supabase
             .from('warehouses')
@@ -184,11 +190,25 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
             .eq('org_id', currentOrg.id)
             .order('created_at', { ascending: true }),
           getVariantConfig(currentOrg.id),
+          (supabase
+            .from('org_profiles' as 'org_profiles')
+            .select('products_sort, products_display_order')
+            .eq('org_id', currentOrg.id)
+            .maybeSingle()) as Promise<{
+            data: { products_sort?: ProductSortMode; products_display_order?: string[] } | null;
+            error: Error | null;
+          }>,
         ]);
 
         setCategories(categoriesData);
         setRank1(variantConfigData.rank1);
         setRank2(variantConfigData.rank2);
+
+        const orgProfile = orgProfileResult.data;
+        setPosProductsSort(orgProfile?.products_sort ?? 'creation');
+        setPosProductsDisplayOrder(
+          Array.isArray(orgProfile?.products_display_order) ? orgProfile.products_display_order : [],
+        );
         
         const whs = (warehousesResult.data || []) as Warehouse[];
         setWarehouses(whs);
@@ -346,10 +366,13 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     return filtered;
   }, [productsBeforeVariantFilters, selectedRank1Values, selectedRank2Values, rank1, rank2]);
 
-  const posProducts = useMemo(
-    () => filteredProducts.filter((p) => p.is_on_sale !== false),
-    [filteredProducts],
-  );
+  const posProducts = useMemo(() => {
+    let list = filteredProducts.filter((p) => p.is_on_sale !== false);
+    if (posProductsSort === 'manual' && posProductsDisplayOrder.length > 0) {
+      list = sortByManualDisplayOrder(list, posProductsDisplayOrder);
+    }
+    return list;
+  }, [filteredProducts, posProductsSort, posProductsDisplayOrder]);
 
   // Auto-hide CTA after 4 seconds
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { sortByManualDisplayOrder } from '@/lib/utils/product-display-order';
 
 export interface BrandEvent {
   id: string;
@@ -201,14 +202,7 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
         }
 
         if (productsSort === 'manual' && productsDisplayOrder.length > 0) {
-          const orderSet = new Set(productsDisplayOrder);
-          const ordered = productsDisplayOrder.filter((id) => productsData.some((p) => p.id === id));
-          const orderMap = new Map(ordered.map((id, i) => [id, i]));
-          productsData = [...productsData].sort((a, b) => {
-            const ai = orderMap.get(a.id) ?? 9999;
-            const bi = orderMap.get(b.id) ?? 9999;
-            return ai - bi;
-          });
+          productsData = sortByManualDisplayOrder(productsData, productsDisplayOrder);
         } else if (productsSort === 'random') {
           productsData = shuffle(productsData);
         }
