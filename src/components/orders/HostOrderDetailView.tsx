@@ -25,7 +25,7 @@ const MUTED = 'rgba(15,31,23,0.6)';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-sm font-semibold uppercase tracking-wide mb-1" style={{ color: MUTED }}>
+    <h2 className="text-base font-bold uppercase tracking-wide mb-1" style={{ color: MUTED }}>
       {children}
     </h2>
   );
