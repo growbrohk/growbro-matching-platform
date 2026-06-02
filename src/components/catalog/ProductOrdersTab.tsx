@@ -1339,7 +1339,12 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                   className="border-b border-border cursor-pointer hover:bg-muted/30"
                   onClick={() =>
                     navigate(
-                      `/app/orders/${row.original.orderId}?range=${range === 'all' ? '90d' : range}&tab=all`
+                      `/app/orders/${row.original.orderId}?range=${range === 'all' ? '90d' : range}&tab=all`,
+                      {
+                        state: {
+                          ordersBackTo: '/app/catalog?tab=products&productsSubtab=orders',
+                        },
+                      }
                     )
                   }
                 >

@@ -1,18 +1,30 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DashboardProducts from './dashboard/products/Products';
 import SpacesList from './booking/ResourcesList';
 import EventsList from './events/EventsList.new';
 
 type CatalogTab = 'products' | 'events' | 'spaces';
+type ProductsSubtab = 'catalog' | 'pos' | 'orders';
+
+const PRODUCTS_SUBTABS: ProductsSubtab[] = ['catalog', 'pos', 'orders'];
+
+function parseProductsSubtab(value: string | null): ProductsSubtab {
+  if (value && PRODUCTS_SUBTABS.includes(value as ProductsSubtab)) {
+    return value as ProductsSubtab;
+  }
+  return 'catalog';
+}
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const tabParam = searchParams.get('tab') as CatalogTab | null;
+  const productsSubtabParam = searchParams.get('productsSubtab');
   const [activeTab, setActiveTab] = useState<CatalogTab>(tabParam || 'products');
-  const [productsSubtab, setProductsSubtab] = useState<'catalog' | 'pos' | 'orders'>('catalog');
+  const [productsSubtab, setProductsSubtab] = useState<ProductsSubtab>(
+    parseProductsSubtab(productsSubtabParam)
+  );
 
   useEffect(() => {
     // Sync tab state with URL
@@ -20,14 +32,31 @@ export default function Catalog() {
       setActiveTab(tabParam);
     } else if (!tabParam) {
       // Default to products if no tab specified
-      setSearchParams({ tab: 'products' }, { replace: true });
+      const params = new URLSearchParams(searchParams);
+      params.set('tab', 'products');
+      setSearchParams(params, { replace: true });
     }
-  }, [tabParam, setSearchParams]);
+  }, [tabParam, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    setProductsSubtab(parseProductsSubtab(productsSubtabParam));
+  }, [productsSubtabParam]);
 
   const handleTabChange = (value: string) => {
     const newTab = value as CatalogTab;
     setActiveTab(newTab);
-    setSearchParams({ tab: newTab });
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', newTab);
+    setSearchParams(params);
+  };
+
+  const handleProductsSubtabChange = (value: string) => {
+    const subtab = value as ProductsSubtab;
+    setProductsSubtab(subtab);
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'products');
+    params.set('productsSubtab', subtab);
+    setSearchParams(params);
   };
 
   return (
@@ -46,7 +75,7 @@ export default function Catalog() {
 
             {activeTab === 'products' && (
               <div className="mt-2">
-                <Tabs value={productsSubtab} onValueChange={(v) => setProductsSubtab(v as 'catalog' | 'pos' | 'orders')}>
+                <Tabs value={productsSubtab} onValueChange={handleProductsSubtabChange}>
                   <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="catalog">Catalog</TabsTrigger>
                     <TabsTrigger value="pos">POS</TabsTrigger>
@@ -63,7 +92,7 @@ export default function Catalog() {
             <DashboardProducts
               isEmbeddedInCatalog={true}
               selectedSubtab={productsSubtab}
-              onChangeSubtab={setProductsSubtab}
+              onChangeSubtab={handleProductsSubtabChange}
             />
           </TabsContent>
 
