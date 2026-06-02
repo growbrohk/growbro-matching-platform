@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon, Package, Boxes, Copy } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Save, Trash2, X, AlertCircle, RefreshCw, Warehouse as WarehouseIcon, Package, Boxes, Copy, ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -263,6 +263,65 @@ export interface ProductFormEmbeddedProps {
   onCancel?: () => void;
 }
 
+function ProductFormTopBar({
+  backLabel,
+  onBack,
+  publicUrl,
+}: {
+  backLabel: string;
+  onBack: () => void;
+  publicUrl: string | null;
+}) {
+  const { toast } = useToast();
+
+  return (
+    <div className="mb-2 overflow-hidden">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="text-xs md:text-sm truncate"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {backLabel}
+          </Button>
+        </div>
+
+        {publicUrl && (
+          <div className="flex items-center gap-2 flex-nowrap">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(publicUrl);
+                  toast({ title: 'Copied!', description: 'Link copied to clipboard' });
+                } catch {
+                  toast({ title: 'Error', description: 'Failed to copy link', variant: 'destructive' });
+                }
+              }}
+              aria-label="Copy link"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => window.open(publicUrl, '_blank')}
+              aria-label="Open link"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -346,6 +405,13 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     if (uploadingImage || uploadingGalleryImage) return false;
     return true;
   }, [currentOrg?.id, title, uploadingImage, uploadingGalleryImage]);
+
+  const productPublicUrl = useMemo(() => {
+    if (isEditMode && id && currentOrg?.slug && !embedded) {
+      return `https://growbrohk.com/${currentOrg.slug}/products/${id}`;
+    }
+    return null;
+  }, [isEditMode, id, currentOrg?.slug, embedded]);
 
   // Helper function to upload product image
   const uploadProductImage = async (file: File): Promise<string> => {
@@ -1585,14 +1651,11 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   if (!isEditMode && !productKind) {
     return (
       <div className="max-w-3xl space-y-6 md:space-y-8">
-        <Button
-          variant="ghost"
-          onClick={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
-          className="w-full sm:w-auto"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {embedded ? 'Back' : 'Back to Products'}
-        </Button>
+        <ProductFormTopBar
+          backLabel={embedded ? 'Back' : 'Back to Products'}
+          onBack={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
+          publicUrl={null}
+        />
 
         <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
           <CardHeader className="p-4 md:p-6">
@@ -1637,9 +1700,9 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
 
   return (
     <div className="max-w-3xl space-y-6 md:space-y-8">
-      <Button
-        variant="ghost"
-        onClick={() => {
+      <ProductFormTopBar
+        backLabel={embedded ? 'Back' : isEditMode ? 'Back to Products' : 'Back'}
+        onBack={() => {
           if (embedded) {
             props?.onCancel?.();
           } else if (isEditMode) {
@@ -1648,11 +1711,8 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             setProductKind(null);
           }
         }}
-        className="w-full sm:w-auto"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        {embedded ? 'Back' : isEditMode ? 'Back to Products' : 'Back'}
-      </Button>
+        publicUrl={productPublicUrl}
+      />
 
             <Card className="rounded-3xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
               <CardHeader className="p-4 md:p-6">
