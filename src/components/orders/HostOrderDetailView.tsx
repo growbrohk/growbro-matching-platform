@@ -25,9 +25,18 @@ const MUTED = 'rgba(15,31,23,0.6)';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-xs font-semibold uppercase tracking-wide mt-6 mb-2" style={{ color: MUTED }}>
+    <h2 className="text-sm font-semibold uppercase tracking-wide mb-1" style={{ color: MUTED }}>
       {children}
     </h2>
+  );
+}
+
+function DetailSection({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section>
+      <SectionTitle>{title}</SectionTitle>
+      {children}
+    </section>
   );
 }
 
@@ -156,88 +165,91 @@ function ProductDetailBody({
 
   return (
     <>
-      <SectionTitle>Order summary</SectionTitle>
-      <div className="space-y-1 text-sm" style={{ color: TEXT }}>
-        {o.order_no && (
+      <DetailSection title="Order summary">
+        <div className="space-y-1 text-sm" style={{ color: TEXT }}>
+          {o.order_no && (
+            <p>
+              <span style={{ color: MUTED }}>Order no. </span>
+              {o.order_no}
+            </p>
+          )}
           <p>
-            <span style={{ color: MUTED }}>Order no. </span>
-            {o.order_no}
+            <span style={{ color: MUTED }}>Placed </span>
+            {o.created_at ? format(new Date(o.created_at), 'MMM d, yyyy h:mm a') : '—'}
           </p>
-        )}
-        <p>
-          <span style={{ color: MUTED }}>Placed </span>
-          {o.created_at ? format(new Date(o.created_at), 'MMM d, yyyy h:mm a') : '—'}
-        </p>
-        <p>
-          <span style={{ color: MUTED }}>Payment </span>
-          {o.payment_status ?? '—'}
-          {o.payment_method ? ` · ${o.payment_method}` : ''}
-        </p>
-        <p>
-          <span style={{ color: MUTED }}>Fulfillment </span>
-          {o.fulfillment_status ?? '—'}
-        </p>
-        <p className="font-medium">Total {formatMoney(Number(o.total_amount))}</p>
-      </div>
+          <p>
+            <span style={{ color: MUTED }}>Payment </span>
+            {o.payment_status ?? '—'}
+            {o.payment_method ? ` · ${o.payment_method}` : ''}
+          </p>
+          <p>
+            <span style={{ color: MUTED }}>Fulfillment </span>
+            {o.fulfillment_status ?? '—'}
+          </p>
+          <p className="font-medium">Total {formatMoney(Number(o.total_amount))}</p>
+        </div>
+      </DetailSection>
 
-      <SectionTitle>Buyer</SectionTitle>
-      <div className="text-sm space-y-1" style={{ color: TEXT }}>
-        <p>{[o.buyer_first_name, o.buyer_last_name].filter(Boolean).join(' ') || '—'}</p>
-        {o.buyer_email && <p>{o.buyer_email}</p>}
-        {o.buyer_phone && <p>{o.buyer_phone}</p>}
-      </div>
+      <DetailSection title="Buyer">
+        <div className="text-sm space-y-1" style={{ color: TEXT }}>
+          <p>{[o.buyer_first_name, o.buyer_last_name].filter(Boolean).join(' ') || '—'}</p>
+          {o.buyer_email && <p>{o.buyer_email}</p>}
+          {o.buyer_phone && <p>{o.buyer_phone}</p>}
+        </div>
+      </DetailSection>
 
-      <SectionTitle>Delivery</SectionTitle>
-      <div className="text-sm space-y-2" style={{ color: TEXT }}>
-        <p>
-          <span style={{ color: MUTED }}>Method </span>
-          {deliveryMethod}
-        </p>
-        {deliveryDetails && <DeliveryDetailsRows details={deliveryDetails} />}
-        {shippingRows.length > 0 && (
-          <dl className="grid grid-cols-1 gap-1">
-            {shippingRows.map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-2">
-                <dt style={{ color: MUTED }}>{keyLabel(k)}</dt>
-                <dd>{String(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {dispatchSection}
-      </div>
+      <DetailSection title="Delivery">
+        <div className="text-sm space-y-2" style={{ color: TEXT }}>
+          <p>
+            <span style={{ color: MUTED }}>Method </span>
+            {deliveryMethod}
+          </p>
+          {deliveryDetails && <DeliveryDetailsRows details={deliveryDetails} />}
+          {shippingRows.length > 0 && (
+            <dl className="grid grid-cols-1 gap-1">
+              {shippingRows.map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-2">
+                  <dt style={{ color: MUTED }}>{keyLabel(k)}</dt>
+                  <dd>{String(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {dispatchSection}
+        </div>
+      </DetailSection>
 
-      <SectionTitle>Line items</SectionTitle>
-      <ul className="space-y-3">
-        {data.order_items.map((item) => (
-          <li key={item.id} className="border-b border-gray-100 pb-3 text-sm last:border-0">
-            <div className="font-medium" style={{ color: TEXT }}>
-              {item.product_name}
-              {item.variant_label ? ` — ${item.variant_label}` : ''}
-            </div>
-            <div style={{ color: MUTED }}>
-              Qty {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
-            </div>
-            {item.product_access_variant && (
-              <div className="mt-1 pl-2 border-l-2 border-gray-200">
-                <span style={{ color: MUTED }} className="text-xs uppercase">
-                  Promo link
-                </span>
-                <ProductPromoVariantSummary v={item.product_access_variant} />
+      <DetailSection title="Line items">
+        <ul className="space-y-3">
+          {data.order_items.map((item) => (
+            <li key={item.id} className="border-b border-gray-100 pb-3 text-sm last:border-0">
+              <div className="font-medium" style={{ color: TEXT }}>
+                {item.product_name}
+                {item.variant_label ? ` — ${item.variant_label}` : ''}
               </div>
-            )}
-            {item.metadata && Object.keys(item.metadata).length > 0 && (
-              <div className="mt-2">
-                <JsonBlock value={item.metadata} label="Item metadata" />
+              <div style={{ color: MUTED }}>
+                Qty {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
               </div>
-            )}
-          </li>
-        ))}
-      </ul>
+              {item.product_access_variant && (
+                <div className="mt-1 pl-2 border-l-2 border-gray-200">
+                  <span style={{ color: MUTED }} className="text-xs uppercase">
+                    Promo link
+                  </span>
+                  <ProductPromoVariantSummary v={item.product_access_variant} />
+                </div>
+              )}
+              {item.metadata && Object.keys(item.metadata).length > 0 && (
+                <div className="mt-2">
+                  <JsonBlock value={item.metadata} label="Item metadata" />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </DetailSection>
 
       {proofRef && (
-        <>
-          <SectionTitle>Payment proof</SectionTitle>
+        <DetailSection title="Payment proof">
           <button
             type="button"
             className="text-sm underline"
@@ -246,15 +258,15 @@ function ProductDetailBody({
           >
             View receipt / proof
           </button>
-        </>
+        </DetailSection>
       )}
 
-      <SectionTitle>Raw metadata</SectionTitle>
-      <JsonBlock value={meta} label="order.metadata (JSON)" />
-
-      <div className="mt-4">
-        <JsonBlock value={data} label="Full product order payload (JSON)" />
-      </div>
+      <DetailSection title="Raw metadata">
+        <JsonBlock value={meta} label="order.metadata (JSON)" />
+        <div className="mt-4">
+          <JsonBlock value={data} label="Full product order payload (JSON)" />
+        </div>
+      </DetailSection>
     </>
   );
 }
@@ -321,68 +333,70 @@ function EventDetailBody({
 
   return (
     <>
-      <SectionTitle>Order summary</SectionTitle>
-      <div className="space-y-1 text-sm" style={{ color: TEXT }}>
-        <p className="font-medium">{data.event.title}</p>
-        {o.order_no && (
+      <DetailSection title="Order summary">
+        <div className="space-y-1 text-sm" style={{ color: TEXT }}>
+          <p className="font-medium">{data.event.title}</p>
+          {o.order_no && (
+            <p>
+              <span style={{ color: MUTED }}>Order no. </span>
+              {o.order_no}
+            </p>
+          )}
           <p>
-            <span style={{ color: MUTED }}>Order no. </span>
-            {o.order_no}
+            <span style={{ color: MUTED }}>Placed </span>
+            {o.created_at ? format(new Date(o.created_at), 'MMM d, yyyy h:mm a') : '—'}
           </p>
-        )}
-        <p>
-          <span style={{ color: MUTED }}>Placed </span>
-          {o.created_at ? format(new Date(o.created_at), 'MMM d, yyyy h:mm a') : '—'}
-        </p>
-        <p>
-          <span style={{ color: MUTED }}>Payment </span>
-          {o.payment_status ?? '—'}
-          {o.payment_method ? ` · ${o.payment_method}` : ''}
-        </p>
-        <p>
-          <span style={{ color: MUTED }}>Fulfillment </span>
-          {o.fulfillment_status ?? '—'}
-        </p>
-        <p className="font-medium">Total {formatMoney(Number(o.total_amount))}</p>
-      </div>
+          <p>
+            <span style={{ color: MUTED }}>Payment </span>
+            {o.payment_status ?? '—'}
+            {o.payment_method ? ` · ${o.payment_method}` : ''}
+          </p>
+          <p>
+            <span style={{ color: MUTED }}>Fulfillment </span>
+            {o.fulfillment_status ?? '—'}
+          </p>
+          <p className="font-medium">Total {formatMoney(Number(o.total_amount))}</p>
+        </div>
+      </DetailSection>
 
-      <SectionTitle>Buyer</SectionTitle>
-      <div className="text-sm space-y-1" style={{ color: TEXT }}>
-        <p>{[o.buyer_first_name, o.buyer_last_name].filter(Boolean).join(' ') || '—'}</p>
-        {o.buyer_email && <p>{o.buyer_email}</p>}
-        {o.buyer_phone && <p>{o.buyer_phone}</p>}
-      </div>
+      <DetailSection title="Buyer">
+        <div className="text-sm space-y-1" style={{ color: TEXT }}>
+          <p>{[o.buyer_first_name, o.buyer_last_name].filter(Boolean).join(' ') || '—'}</p>
+          {o.buyer_email && <p>{o.buyer_email}</p>}
+          {o.buyer_phone && <p>{o.buyer_phone}</p>}
+        </div>
+      </DetailSection>
 
-      <SectionTitle>Ticket lines</SectionTitle>
-      <ul className="space-y-3">
-        {data.order_items.map((item) => (
-          <li key={item.id} className="border-b border-gray-100 pb-3 text-sm last:border-0">
-            <div className="font-medium" style={{ color: TEXT }}>
-              {item.ticket_type.name}
-            </div>
-            <div style={{ color: MUTED }}>
-              Qty {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
-            </div>
-            {item.access_variant && (
-              <div className="mt-1 pl-2 border-l-2 border-gray-200">
-                <span style={{ color: MUTED }} className="text-xs uppercase">
-                  Access variant
-                </span>
-                <AccessVariantSummary v={item.access_variant} />
+      <DetailSection title="Ticket lines">
+        <ul className="space-y-3">
+          {data.order_items.map((item) => (
+            <li key={item.id} className="border-b border-gray-100 pb-3 text-sm last:border-0">
+              <div className="font-medium" style={{ color: TEXT }}>
+                {item.ticket_type.name}
               </div>
-            )}
-            {item.metadata && Object.keys(item.metadata).length > 0 && (
-              <div className="mt-2">
-                <JsonBlock value={item.metadata} label="Line metadata" />
+              <div style={{ color: MUTED }}>
+                Qty {item.quantity} × {formatMoney(item.unit_price)} = {formatMoney(item.subtotal)}
               </div>
-            )}
-          </li>
-        ))}
-      </ul>
+              {item.access_variant && (
+                <div className="mt-1 pl-2 border-l-2 border-gray-200">
+                  <span style={{ color: MUTED }} className="text-xs uppercase">
+                    Access variant
+                  </span>
+                  <AccessVariantSummary v={item.access_variant} />
+                </div>
+              )}
+              {item.metadata && Object.keys(item.metadata).length > 0 && (
+                <div className="mt-2">
+                  <JsonBlock value={item.metadata} label="Line metadata" />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </DetailSection>
 
       {(data.order_addon_items?.length ?? 0) > 0 && (
-        <>
-          <SectionTitle>Add-ons</SectionTitle>
+        <DetailSection title="Add-ons">
           <ul className="space-y-2 text-sm">
             {(data.order_addon_items || []).map((a) => (
               <EventAddonLineWithDispatch
@@ -395,47 +409,48 @@ function EventDetailBody({
               />
             ))}
           </ul>
-        </>
+        </DetailSection>
       )}
 
-      <SectionTitle>Tickets</SectionTitle>
-      <div className="space-y-3">
-        {data.tickets.map((t) => (
-          <div
-            key={t.id}
-            className="rounded-lg border border-gray-200 p-3 text-sm space-y-1"
-            style={{ color: TEXT }}
-          >
-            <p className="font-medium">
-              {[t.first_name, t.last_name].filter(Boolean).join(' ') || 'Attendee'}
-            </p>
-            <p style={{ color: MUTED }}>{t.ticket_type?.name ?? 'Ticket'}</p>
-            {t.ticket_type?.valid_for_days && (
-              <p style={{ color: MUTED }}>Valid: {t.ticket_type.valid_for_days}</p>
-            )}
-            {t.email && <p>{t.email}</p>}
-            {t.phone && <p>{t.phone}</p>}
-            <p style={{ color: MUTED }}>
-              Status: {t.status} · QR: {t.qr_code ? `${t.qr_code.slice(0, 8)}…` : '—'}
-            </p>
-          </div>
-        ))}
-      </div>
+      <DetailSection title="Tickets">
+        <div className="space-y-3">
+          {data.tickets.map((t) => (
+            <div
+              key={t.id}
+              className="rounded-lg border border-gray-200 p-3 text-sm space-y-1"
+              style={{ color: TEXT }}
+            >
+              <p className="font-medium">
+                {[t.first_name, t.last_name].filter(Boolean).join(' ') || 'Attendee'}
+              </p>
+              <p style={{ color: MUTED }}>{t.ticket_type?.name ?? 'Ticket'}</p>
+              {t.ticket_type?.valid_for_days && (
+                <p style={{ color: MUTED }}>Valid: {t.ticket_type.valid_for_days}</p>
+              )}
+              {t.email && <p>{t.email}</p>}
+              {t.phone && <p>{t.phone}</p>}
+              <p style={{ color: MUTED }}>
+                Status: {t.status} · QR: {t.qr_code ? `${t.qr_code.slice(0, 8)}…` : '—'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </DetailSection>
 
       {proofRef && (
-        <>
-          <SectionTitle>Payment proof</SectionTitle>
+        <DetailSection title="Payment proof">
           <button type="button" className="text-sm underline" style={{ color: TEXT }} onClick={onOpenProof}>
             View receipt / proof
           </button>
-        </>
+        </DetailSection>
       )}
 
-      <SectionTitle>Raw metadata</SectionTitle>
-      <JsonBlock value={meta} label="order.metadata (JSON)" />
-      <div className="mt-4">
-        <JsonBlock value={data} label="Full event order payload (JSON)" />
-      </div>
+      <DetailSection title="Raw metadata">
+        <JsonBlock value={meta} label="order.metadata (JSON)" />
+        <div className="mt-4">
+          <JsonBlock value={data} label="Full event order payload (JSON)" />
+        </div>
+      </DetailSection>
     </>
   );
 }
