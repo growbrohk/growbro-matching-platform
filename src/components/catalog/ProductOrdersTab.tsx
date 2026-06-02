@@ -539,12 +539,14 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   }, [rows, query, selectedPaymentStatuses, selectedSources, shippedFilter]);
 
   const footerTotals = useMemo(() => {
+    let qtyTotal = 0;
     let amountTotal = 0;
     let costTotal = 0;
     let shippingTotal = 0;
     let paymentFeeTotal = 0;
     const partnerTotals = new Map<string, number>();
     for (const row of filteredRows) {
+      qtyTotal += row.quantity;
       amountTotal += row.amount;
       if (row.cost != null) costTotal += row.cost;
       if (row.shipping != null) shippingTotal += row.shipping;
@@ -554,7 +556,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         partnerTotals.set(key, (partnerTotals.get(key) ?? 0) + line.commissionAmount);
       }
     }
-    return { amountTotal, costTotal, shippingTotal, paymentFeeTotal, partnerTotals };
+    return { qtyTotal, amountTotal, costTotal, shippingTotal, paymentFeeTotal, partnerTotals };
   }, [filteredRows]);
 
   const hasActiveFilters =
@@ -667,6 +669,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
     const totalRow = visibleOrderedColumns.map((col, index) => {
       if (index === 0) return escapeCSV('Total');
+      if (col === 'qty') return escapeCSV(String(footerTotals.qtyTotal));
       if (col === 'amount') return escapeCSV(formatMoney(footerTotals.amountTotal));
       if (col === 'cost') return escapeCSV(formatMoney(footerTotals.costTotal));
       if (col === 'shipping') return escapeCSV(formatMoney(footerTotals.shippingTotal));
@@ -1370,6 +1373,12 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                   let content: React.ReactNode = null;
                   if (index === 0) {
                     content = <span className="font-medium text-foreground">Total</span>;
+                  } else if (colId === 'qty') {
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {footerTotals.qtyTotal}
+                      </span>
+                    );
                   } else if (colId === 'amount') {
                     content = (
                       <span className="whitespace-nowrap tabular-nums font-medium">
