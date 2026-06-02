@@ -2160,7 +2160,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
               <Label htmlFor="cost">Cost (optional)</Label>
               <Input id="cost" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. 80.00" className="h-10" />
               <p className="text-sm text-muted-foreground">
-                Unit cost for profit-based partner commission (shipping is also deducted).
+                Unit cost for profit-based partner commission (shipping and payment fee (Stripe) are also deducted).
               </p>
                       </div>
 

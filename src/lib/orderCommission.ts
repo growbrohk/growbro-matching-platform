@@ -10,7 +10,8 @@ export function orderCommissionableAmount(
   metadata: unknown,
   orderItems: Array<{ quantity: number; metadata: unknown }>,
   productCostMap: Map<string, number>,
-  basis: 'revenue' | 'profit'
+  basis: 'revenue' | 'profit',
+  paymentMethod?: string | null
 ): number {
   const total = Number(totalAmount) || 0;
   if (basis !== 'profit') return total;
@@ -24,7 +25,8 @@ export function orderCommissionableAmount(
       lineCost += (productCostMap.get(pid) || 0) * (Number(item.quantity) || 0);
     }
   }
-  return Math.max(0, total - shipping - lineCost);
+  const paymentFee = computePaymentProcessingFee(paymentMethod, total);
+  return Math.max(0, total - shipping - lineCost - paymentFee);
 }
 
 /** Commissionable amount for a single addon line (no order-level shipping). */
@@ -33,13 +35,25 @@ export function addonLineCommissionableAmount(
   productId: string | null,
   quantity: number,
   productCostMap: Map<string, number>,
-  basis: 'revenue' | 'profit'
+  basis: 'revenue' | 'profit',
+  paymentMethod?: string | null,
+  parentOrderTotal?: number
 ): number {
   const lineTotal = Number(subtotal) || 0;
   if (basis !== 'profit') return lineTotal;
-  if (!productId || !productCostMap.has(productId)) return lineTotal;
+
+  const parentTotal = Number(parentOrderTotal) || 0;
+  let allocatedFee = 0;
+  if (parentTotal > 0) {
+    const orderFee = computePaymentProcessingFee(paymentMethod, parentTotal);
+    allocatedFee = (lineTotal / parentTotal) * orderFee;
+  }
+
+  if (!productId || !productCostMap.has(productId)) {
+    return Math.max(0, lineTotal - allocatedFee);
+  }
   const lineCost = (productCostMap.get(productId) || 0) * (Number(quantity) || 0);
-  return Math.max(0, lineTotal - lineCost);
+  return Math.max(0, lineTotal - lineCost - allocatedFee);
 }
 
 export function computePartnerCommission(
@@ -79,4 +93,48 @@ export function addonLineCost(
 ): number | null {
   if (!productId || !productCostMap.has(productId)) return null;
   return (productCostMap.get(productId) || 0) * (Number(quantity) || 0);
+}
+
+export const STRIPE_FEE_RATE = 0.034;
+export const STRIPE_FEE_FIXED = 2.35;
+
+export function computeStripeProcessingFee(orderAmount: number): number {
+  const total = Number(orderAmount) || 0;
+  return Math.round((total * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100;
+}
+
+export function computePaymentProcessingFee(
+  paymentMethod: string | null | undefined,
+  orderAmount: number
+): number {
+  if (paymentMethod?.toLowerCase() === 'stripe') {
+    return computeStripeProcessingFee(orderAmount);
+  }
+  return 0;
+}
+
+function formatPaymentMoney(amount: number): string {
+  const rounded = Math.round(amount * 100) / 100;
+  if (rounded % 1 === 0) {
+    return `$${rounded.toLocaleString()}`;
+  }
+  return `$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatProductOrderPaymentLabel(
+  paymentMethod: string | null,
+  paymentStatus: string,
+  orderAmount: number
+): string {
+  const method = paymentMethod?.toLowerCase() ?? '';
+  if (method === 'payme') return 'PayMe';
+  if (method === 'stripe') {
+    const fee = computePaymentProcessingFee(paymentMethod, orderAmount);
+    return `Stripe · ${formatPaymentMoney(fee)}`;
+  }
+  if (method === 'fps') return 'FPS';
+  if (method === 'free') return 'Free';
+  if (paymentStatus === 'submitted') return 'Submitted';
+  if (paymentStatus === 'paid') return 'Paid';
+  return paymentStatus || '—';
 }

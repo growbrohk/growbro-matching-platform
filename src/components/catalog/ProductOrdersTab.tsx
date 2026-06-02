@@ -33,6 +33,7 @@ import {
   partnerColumnHeaderLabel,
   partnerColumnKey,
 } from '@/lib/productOrderPartnerCommission';
+import { computePaymentProcessingFee } from '@/lib/orderCommission';
 import {
   Table,
   TableBody,
@@ -87,7 +88,7 @@ const DEFAULT_COLUMN_SIZES: Record<StaticColumnKey, number> = {
   amount: 100,
   cost: 90,
   shipping: 90,
-  payment: 100,
+  payment: 130,
 };
 
 const DEFAULT_PARTNER_COLUMN_SIZE = 120;
@@ -541,17 +542,19 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     let amountTotal = 0;
     let costTotal = 0;
     let shippingTotal = 0;
+    let paymentFeeTotal = 0;
     const partnerTotals = new Map<string, number>();
     for (const row of filteredRows) {
       amountTotal += row.amount;
       if (row.cost != null) costTotal += row.cost;
       if (row.shipping != null) shippingTotal += row.shipping;
+      paymentFeeTotal += computePaymentProcessingFee(row.paymentMethod, row.amount);
       for (const line of row.partnerCommissions) {
         const key = partnerColumnKey(line.linkId);
         partnerTotals.set(key, (partnerTotals.get(key) ?? 0) + line.commissionAmount);
       }
     }
-    return { amountTotal, costTotal, shippingTotal, partnerTotals };
+    return { amountTotal, costTotal, shippingTotal, paymentFeeTotal, partnerTotals };
   }, [filteredRows]);
 
   const hasActiveFilters =
@@ -655,7 +658,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           case 'shipping':
             return escapeCSV(row.shipping != null ? formatMoney(row.shipping) : '');
           case 'payment':
-            return escapeCSV(row.paymentStatus);
+            return escapeCSV(row.paymentLabel);
           default:
             return '';
         }
@@ -667,6 +670,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       if (col === 'amount') return escapeCSV(formatMoney(footerTotals.amountTotal));
       if (col === 'cost') return escapeCSV(formatMoney(footerTotals.costTotal));
       if (col === 'shipping') return escapeCSV(formatMoney(footerTotals.shippingTotal));
+      if (col === 'payment') return escapeCSV(formatMoney(footerTotals.paymentFeeTotal));
       if (isPartnerColumnKey(col)) {
         return escapeCSV(formatMoney(footerTotals.partnerTotals.get(col) ?? 0));
       }
@@ -845,13 +849,15 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         maxSize: 140,
         enableResizing: true,
       }),
-      columnHelper.accessor('paymentStatus', {
+      columnHelper.accessor('paymentLabel', {
         id: 'payment',
         header: 'Payment',
-        cell: ({ row }) => row.original.paymentStatus,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap">{row.original.paymentLabel}</span>
+        ),
         size: DEFAULT_COLUMN_SIZES.payment,
         minSize: 80,
-        maxSize: 140,
+        maxSize: 160,
         enableResizing: true,
       }),
     ],
@@ -1380,6 +1386,12 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                     content = (
                       <span className="whitespace-nowrap tabular-nums font-medium">
                         {formatMoney(footerTotals.shippingTotal)}
+                      </span>
+                    );
+                  } else if (colId === 'payment') {
+                    content = (
+                      <span className="whitespace-nowrap tabular-nums font-medium">
+                        {formatMoney(footerTotals.paymentFeeTotal)}
                       </span>
                     );
                   } else if (isPartnerColumnKey(colId)) {

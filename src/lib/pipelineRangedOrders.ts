@@ -17,7 +17,7 @@ function emptyAggregate(): PipelineOrderAggregate {
 
 /**
  * Paid pipeline orders in the same window as the dashboard.
- * commissionableRevenue uses per-link commission_basis (profit deducts unit cost + shipping).
+ * commissionableRevenue uses per-link commission_basis (profit deducts unit cost, shipping & payment fee).
  */
 export async function fetchRangedPipelineOrderAggregates(
   linkIds: string[],
@@ -39,7 +39,7 @@ export async function fetchRangedPipelineOrderAggregates(
     for (;;) {
       const { data, error } = await supabase
         .from('orders')
-        .select('id, tracking_link_id, total_amount, metadata')
+        .select('id, tracking_link_id, total_amount, metadata, payment_method')
         .in('tracking_link_id', chunk)
         .eq('payment_status', 'paid')
         .gte('created_at', startISO)
@@ -104,7 +104,8 @@ export async function fetchRangedPipelineOrderAggregates(
           row.metadata,
           items,
           productCostMap,
-          basis
+          basis,
+          row.payment_method as string | null
         );
 
         const cur = result.get(linkId) || emptyAggregate();

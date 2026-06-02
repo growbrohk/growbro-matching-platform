@@ -106,6 +106,7 @@ export function computeProductOrderPartnerCommissions(params: {
   trackingLinkId: string | null;
   totalAmount: number;
   metadata: unknown;
+  paymentMethod?: string | null;
   orderItems: Array<{ quantity: number; metadata?: Record<string, unknown> }>;
   linksById: Map<string, HostPartnerLink>;
   allForResourceByProduct: Map<string, HostPartnerLink[]>;
@@ -136,7 +137,8 @@ export function computeProductOrderPartnerCommissions(params: {
       params.metadata,
       itemsForCalc,
       params.productCostMap,
-      basis
+      basis,
+      params.paymentMethod
     );
     lines.push(linkToCommissionLine(link, params.orgNameMap, commissionable));
   }
@@ -148,6 +150,8 @@ export function computeAddonLinePartnerCommissions(params: {
   addonProductId: string | null;
   subtotal: number;
   quantity: number;
+  paymentMethod?: string | null;
+  parentOrderTotal?: number;
   linksById: Map<string, HostPartnerLink>;
   allForResourceByProduct: Map<string, HostPartnerLink[]>;
   productCostMap: Map<string, number>;
@@ -176,7 +180,9 @@ export function computeAddonLinePartnerCommissions(params: {
       params.addonProductId,
       params.quantity,
       params.productCostMap,
-      basis
+      basis,
+      params.paymentMethod,
+      params.parentOrderTotal
     );
     lines.push(linkToCommissionLine(link, params.orgNameMap, commissionable));
   }

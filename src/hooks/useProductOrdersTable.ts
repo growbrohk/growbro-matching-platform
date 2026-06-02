@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
 import { fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
-import { addonLineCost, orderItemsLineCost, shippingFeeFromMetadata } from '@/lib/orderCommission';
+import { addonLineCost, orderItemsLineCost, shippingFeeFromMetadata, formatProductOrderPaymentLabel } from '@/lib/orderCommission';
 import {
   buildHostProductPartnerLinkIndex,
   buildLinksById,
@@ -42,7 +42,9 @@ export interface ProductOrderTableRow {
   cost: number | null;
   /** Order shipping fee from metadata; null when none or not applicable (e.g. add-on line). */
   shipping: number | null;
+  paymentMethod: string | null;
   paymentStatus: string;
+  paymentLabel: string;
   fulfillmentStatus: string | null;
   shippedAt: string | null;
   displayStatus: string;
@@ -102,6 +104,19 @@ function maskPartnerPii<T extends string | null>(value: T): T {
   return (value ? '—' : value) as T;
 }
 
+function paymentFieldsFromOrder(
+  order: Record<string, unknown>,
+  amount: number
+): { paymentMethod: string | null; paymentStatus: string; paymentLabel: string } {
+  const paymentStatus = (order.payment_status as string) || 'unpaid';
+  const paymentMethod = (order.payment_method as string | null) ?? null;
+  return {
+    paymentMethod,
+    paymentStatus,
+    paymentLabel: formatProductOrderPaymentLabel(paymentMethod, paymentStatus, amount),
+  };
+}
+
 const ORDER_SELECT = `
   id,
   created_at,
@@ -112,6 +127,7 @@ const ORDER_SELECT = `
   buyer_phone,
   total_amount,
   payment_status,
+  payment_method,
   fulfillment_status,
   shipped_at,
   tracking_link_id,
@@ -253,11 +269,13 @@ export function useProductOrdersTable(
                 id,
                 created_at,
                 order_no,
+                total_amount,
                 buyer_first_name,
                 buyer_last_name,
                 buyer_email,
                 buyer_phone,
                 payment_status,
+                payment_method,
                 fulfillment_status,
                 shipped_at,
                 event_id,
@@ -353,16 +371,18 @@ export function useProductOrdersTable(
       const productRows: ProductOrderTableRow[] = (productOrdersData || []).map(
         (order: Record<string, unknown>) => {
           const id = order.id as string;
-          const paymentStatus = (order.payment_status as string) || 'unpaid';
           const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
           const shippedAt = (order.shipped_at as string | null) ?? null;
           const orderItems = orderItemsMap.get(id) || [];
           const { label, quantity } = buildProductLabel(orderItems, productsMap);
+          const amount = Number(order.total_amount) || 0;
+          const payment = paymentFieldsFromOrder(order, amount);
 
           const partnerCommissions = computeProductOrderPartnerCommissions({
             trackingLinkId: (order.tracking_link_id as string | null) ?? null,
             totalAmount: Number(order.total_amount) || 0,
             metadata: order.metadata,
+            paymentMethod: payment.paymentMethod,
             orderItems,
             ...hostCommissionContext,
           });
@@ -384,13 +404,15 @@ export function useProductOrdersTable(
             productLabel: label,
             eventTitle: null,
             quantity,
-            amount: Number(order.total_amount) || 0,
+            amount,
             cost: orderItemsLineCost(orderItems, productCostMap),
             shipping: shippingFromOrderMetadata(order.metadata),
-            paymentStatus,
+            paymentMethod: payment.paymentMethod,
+            paymentStatus: payment.paymentStatus,
+            paymentLabel: payment.paymentLabel,
             fulfillmentStatus,
             shippedAt,
-            displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+            displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
             partnerCommissions,
           };
         }
@@ -400,11 +422,12 @@ export function useProductOrdersTable(
         .filter((order) => !hostOrderIdSet.has(order.id as string))
         .map((order) => {
           const id = order.id as string;
-          const paymentStatus = (order.payment_status as string) || 'unpaid';
           const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
           const shippedAt = (order.shipped_at as string | null) ?? null;
           const orderItems = orderItemsMap.get(id) || [];
           const { label, quantity } = buildProductLabel(orderItems, productsMap);
+          const amount = Number(order.total_amount) || 0;
+          const payment = paymentFieldsFromOrder(order, amount);
           const access = partnerFetch.accessMap.get(id);
           const canViewOrderDetails = access?.canViewOrderDetails === true;
 
@@ -412,6 +435,7 @@ export function useProductOrdersTable(
             trackingLinkId: (order.tracking_link_id as string | null) ?? null,
             totalAmount: Number(order.total_amount) || 0,
             metadata: order.metadata,
+            paymentMethod: payment.paymentMethod,
             orderItems,
             ...partnerCommissionContext,
           });
@@ -441,13 +465,15 @@ export function useProductOrdersTable(
             productLabel: label,
             eventTitle: null,
             quantity,
-            amount: Number(order.total_amount) || 0,
+            amount,
             cost: canViewOrderDetails ? orderItemsLineCost(orderItems, productCostMap) : null,
             shipping: canViewOrderDetails ? shippingFromOrderMetadata(order.metadata) : null,
-            paymentStatus,
+            paymentMethod: payment.paymentMethod,
+            paymentStatus: payment.paymentStatus,
+            paymentLabel: payment.paymentLabel,
             fulfillmentStatus,
             shippedAt,
-            displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+            displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
             partnerCommissions,
           };
         });
@@ -456,15 +482,18 @@ export function useProductOrdersTable(
         const order = item.orders as Record<string, unknown>;
         const orderId = order.id as string;
         const eventId = order.event_id as string | null;
-        const paymentStatus = (order.payment_status as string) || 'unpaid';
         const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
         const shippedAt = (order.shipped_at as string | null) ?? null;
+        const amount = Number(item.subtotal) || 0;
+        const payment = paymentFieldsFromOrder(order, amount);
 
         const partnerCommissions = computeAddonLinePartnerCommissions({
           parentTrackingLinkId: (order.tracking_link_id as string | null) ?? null,
           addonProductId: item.product_id,
           subtotal: Number(item.subtotal) || 0,
           quantity: item.quantity,
+          paymentMethod: payment.paymentMethod,
+          parentOrderTotal: Number(order.total_amount) || 0,
           ...hostCommissionContext,
         });
 
@@ -485,13 +514,15 @@ export function useProductOrdersTable(
           productLabel: formatAddonLabel(item.label, item.variant_label),
           eventTitle: eventId ? eventTitleMap.get(eventId) ?? null : null,
           quantity: item.quantity,
-          amount: Number(item.subtotal) || 0,
+          amount,
           cost: addonLineCost(item.product_id, item.quantity, productCostMap),
           shipping: null,
-          paymentStatus,
+          paymentMethod: payment.paymentMethod,
+          paymentStatus: payment.paymentStatus,
+          paymentLabel: payment.paymentLabel,
           fulfillmentStatus,
           shippedAt,
-          displayStatus: deriveDisplayStatus(paymentStatus, shippedAt, fulfillmentStatus),
+          displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
           partnerCommissions,
         };
       });

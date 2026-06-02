@@ -199,12 +199,13 @@ export function PartnerPipelineFields({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="revenue">Revenue (order total)</SelectItem>
-            <SelectItem value="profit">Profit (after product cost + shipping)</SelectItem>
+            <SelectItem value="profit">Profit (after cost, shipping & payment fee)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Profit uses the product&apos;s unit cost and shipping fee on each order. Cost is set on
-          the product form.
+          Profit uses the product&apos;s unit cost and shipping fee on each order. Stripe payment
+          processing fees (3.4% + $2.35) are also deducted when the order was paid via Stripe. Cost
+          is set on the product form.
         </p>
       </div>
 

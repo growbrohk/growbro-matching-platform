@@ -185,6 +185,7 @@ const PRODUCT_ORDERS_TABLE_SELECT = `
   buyer_phone,
   total_amount,
   payment_status,
+  payment_method,
   fulfillment_status,
   shipped_at,
   tracking_link_id,
