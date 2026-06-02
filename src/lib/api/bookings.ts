@@ -96,6 +96,8 @@ export interface OrderWithEvent {
     label: string | null;
     variant_label: string | null;
     ticket_id: string | null;
+    shipped_at?: string | null;
+    carrier_tracking_number?: string | null;
   }>;
   tickets: Array<{
     id: string;
@@ -377,6 +379,8 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       label: item.label,
       variant_label: item.variant_label,
       ticket_id: item.ticket_id,
+      shipped_at: item.shipped_at ?? null,
+      carrier_tracking_number: item.carrier_tracking_number ?? null,
     })),
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,

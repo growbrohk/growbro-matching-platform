@@ -2059,6 +2059,10 @@ export type Database = {
         }[]
       }
       collab_can_mark_order_shipped: { Args: { p_order_id: string }; Returns: boolean }
+      collab_can_mark_addon_item_shipped: {
+        Args: { p_addon_item_id: string }
+        Returns: boolean
+      }
       collab_can_access_order: {
         Args: {
           p_min_role: string
@@ -2139,6 +2143,17 @@ export type Database = {
         Returns: boolean
       }
       set_order_shipped: { Args: { p_order_id: string; p_shipped: boolean }; Returns: boolean }
+      set_addon_item_shipped: {
+        Args: { p_addon_item_id: string; p_shipped: boolean }
+        Returns: boolean
+      }
+      set_addon_item_carrier_tracking: {
+        Args: {
+          p_addon_item_id: string
+          p_carrier_tracking_number: string | null
+        }
+        Returns: boolean
+      }
       update_order_fulfillment: {
         Args: {
           p_confirmed_at?: string

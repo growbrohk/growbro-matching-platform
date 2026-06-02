@@ -11,6 +11,7 @@ const MUTED = 'rgba(15,31,23,0.6)';
 
 export function ProductOrderDispatchPanel({
   orderId,
+  addonItemId,
   shippedAt,
   carrierTrackingNumber,
   paymentStatus,
@@ -18,6 +19,8 @@ export function ProductOrderDispatchPanel({
   canEdit,
 }: {
   orderId: string;
+  /** When set, dispatch applies to a single event add-on line instead of the whole product order. */
+  addonItemId?: string;
   shippedAt: string | null | undefined;
   carrierTrackingNumber: string | null | undefined;
   paymentStatus: string;
@@ -70,15 +73,21 @@ export function ProductOrderDispatchPanel({
     if (togglingShipped) return;
     setTogglingShipped(true);
     try {
-      const { data: ok, error } = await supabase.rpc('set_order_shipped', {
-        p_order_id: orderId,
-        p_shipped: next,
-      });
+      const { data: ok, error } = addonItemId
+        ? await supabase.rpc('set_addon_item_shipped', {
+            p_addon_item_id: addonItemId,
+            p_shipped: next,
+          })
+        : await supabase.rpc('set_order_shipped', {
+            p_order_id: orderId,
+            p_shipped: next,
+          });
       if (error) throw error;
       if (ok !== true) throw new Error('Could not update sent status');
       toast({ title: next ? 'Marked as sent' : 'Sent status cleared' });
       await queryClient.invalidateQueries({ queryKey: ['host-order-detail', orderId] });
       await queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['product-orders-table'] });
     } catch (e: unknown) {
       toast({
         title: 'Error',
@@ -94,15 +103,21 @@ export function ProductOrderDispatchPanel({
     if (savingTracking) return;
     setSavingTracking(true);
     try {
-      const { data: ok, error } = await supabase.rpc('set_order_carrier_tracking', {
-        p_order_id: orderId,
-        p_carrier_tracking_number: trackingDraft.trim() || null,
-      });
+      const { data: ok, error } = addonItemId
+        ? await supabase.rpc('set_addon_item_carrier_tracking', {
+            p_addon_item_id: addonItemId,
+            p_carrier_tracking_number: trackingDraft.trim() || null,
+          })
+        : await supabase.rpc('set_order_carrier_tracking', {
+            p_order_id: orderId,
+            p_carrier_tracking_number: trackingDraft.trim() || null,
+          });
       if (error) throw error;
       if (ok !== true) throw new Error('Could not save tracking');
       toast({ title: 'Tracking saved' });
       await queryClient.invalidateQueries({ queryKey: ['host-order-detail', orderId] });
       await queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['product-orders-table'] });
     } catch (e: unknown) {
       toast({
         title: 'Error',

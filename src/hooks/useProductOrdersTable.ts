@@ -25,6 +25,8 @@ export type ProductOrderViewContext = 'host' | 'partner';
 export interface ProductOrderTableRow {
   rowId: string;
   orderId: string;
+  /** Set for event add-on lines (per-line dispatch). */
+  addonItemId?: string;
   source: ProductOrderSource;
   viewContext: ProductOrderViewContext;
   /** When false (partner row), buyer PII and cost are hidden in the table. */
@@ -241,6 +243,8 @@ export function useProductOrdersTable(
         label: string | null;
         variant_label: string | null;
         product_id: string | null;
+        shipped_at: string | null;
+        carrier_tracking_number: string | null;
         orders: Record<string, unknown>;
       }> = [];
 
@@ -275,6 +279,8 @@ export function useProductOrdersTable(
               label,
               variant_label,
               product_id,
+              shipped_at,
+              carrier_tracking_number,
               orders!inner(
                 id,
                 created_at,
@@ -287,7 +293,6 @@ export function useProductOrdersTable(
                 payment_status,
                 payment_method,
                 fulfillment_status,
-                shipped_at,
                 event_id,
                 tracking_link_id,
                 metadata
@@ -346,6 +351,9 @@ export function useProductOrdersTable(
       });
       partnerLinkList.forEach((link) => {
         if (link.product_id) productIds.add(link.product_id);
+      });
+      partnerFetch.addonItemRows.forEach((item) => {
+        if (item.product_id) productIds.add(item.product_id);
       });
 
       const productsMap = new Map<string, { title: string }>();
@@ -488,12 +496,14 @@ export function useProductOrdersTable(
           };
         });
 
+      const hostAddonItemIds = new Set(addonItemsRaw.map((item) => item.id));
+
       const addonRows: ProductOrderTableRow[] = addonItemsRaw.map((item) => {
         const order = item.orders as Record<string, unknown>;
         const orderId = order.id as string;
         const eventId = order.event_id as string | null;
         const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
-        const shippedAt = (order.shipped_at as string | null) ?? null;
+        const shippedAt = item.shipped_at ?? null;
         const amount = Number(item.subtotal) || 0;
         const payment = paymentFieldsFromOrder(order, amount);
 
@@ -510,6 +520,7 @@ export function useProductOrdersTable(
         return {
           rowId: `addon-${item.id}`,
           orderId,
+          addonItemId: item.id,
           source: 'event_addon' as const,
           viewContext: 'host' as const,
           canViewOrderDetails: true,
@@ -537,7 +548,89 @@ export function useProductOrdersTable(
         };
       });
 
-      const merged = [...productRows, ...partnerProductRows, ...addonRows];
+      const partnerAddonEventIds = [
+        ...new Set(
+          partnerFetch.addonItemRows
+            .map((item) => (item.orders.event_id as string | null) ?? null)
+            .filter(Boolean)
+        ),
+      ] as string[];
+
+      if (partnerAddonEventIds.length > 0) {
+        const { data: partnerEvents } = await supabase
+          .from('events')
+          .select('id, title')
+          .in('id', partnerAddonEventIds);
+        (partnerEvents || []).forEach((e: { id: string; title: string }) => {
+          if (!eventTitleMap.has(e.id)) eventTitleMap.set(e.id, e.title);
+        });
+      }
+
+      const partnerAddonRows: ProductOrderTableRow[] = partnerFetch.addonItemRows
+        .filter((item) => !hostAddonItemIds.has(item.id))
+        .map((item) => {
+          const order = item.orders;
+          const orderId = item.order_id;
+          const eventId = (order.event_id as string | null) ?? null;
+          const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
+          const shippedAt = item.shipped_at ?? null;
+          const amount = Number(item.subtotal) || 0;
+          const payment = paymentFieldsFromOrder(order, amount);
+          const access = partnerFetch.addonItemAccessMap.get(item.id);
+          const canViewOrderDetails = access?.canViewOrderDetails === true;
+
+          const allCommissions = computeAddonLinePartnerCommissions({
+            parentTrackingLinkId: (order.tracking_link_id as string | null) ?? null,
+            addonProductId: item.product_id,
+            subtotal: Number(item.subtotal) || 0,
+            quantity: item.quantity,
+            paymentMethod: payment.paymentMethod,
+            parentOrderTotal: Number(order.total_amount) || 0,
+            ...partnerCommissionContext,
+          });
+          const partnerCommissions = filterCommissionLinesForLinkIds(
+            allCommissions,
+            ownPartnerLinkIds
+          );
+
+          const buyerFirst = order.buyer_first_name as string | null;
+          const buyerLast = order.buyer_last_name as string | null;
+          const buyerPhone = order.buyer_phone as string | null;
+          const buyerEmail = order.buyer_email as string | null;
+
+          return {
+            rowId: `addon-partner-${item.id}`,
+            orderId,
+            addonItemId: item.id,
+            source: 'event_addon' as const,
+            viewContext: 'partner' as const,
+            canViewOrderDetails,
+            createdAt: order.created_at as string,
+            orderNo: (order.order_no as string | null) ?? null,
+            buyerName: canViewOrderDetails
+              ? buildBuyerName(buyerFirst, buyerLast)
+              : maskPartnerPii(buildBuyerName(buyerFirst, buyerLast)),
+            phone: canViewOrderDetails ? buyerPhone : maskPartnerPii(buyerPhone),
+            email: canViewOrderDetails ? buyerEmail : maskPartnerPii(buyerEmail),
+            productLabel: formatAddonLabel(item.label, item.variant_label),
+            eventTitle: eventId ? eventTitleMap.get(eventId) ?? null : null,
+            quantity: item.quantity,
+            amount,
+            cost: canViewOrderDetails
+              ? addonLineCost(item.product_id, item.quantity, productCostMap)
+              : null,
+            shipping: null,
+            paymentMethod: payment.paymentMethod,
+            paymentStatus: payment.paymentStatus,
+            paymentLabel: payment.paymentLabel,
+            fulfillmentStatus,
+            shippedAt,
+            displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
+            partnerCommissions,
+          };
+        });
+
+      const merged = [...productRows, ...partnerProductRows, ...addonRows, ...partnerAddonRows];
       merged.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { PartnerOrderRowAccess } from '@/lib/collab-order-access';
-import { fetchPartnerVisibleOrdersInRange } from '@/lib/collab-order-access';
+import { fetchPartnerVisibleOrdersInRange, fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
 
 export type RangeKey = 'today' | '7d' | '30d' | '90d';
 
@@ -19,6 +19,8 @@ export interface Order {
   metadata: Record<string, any> | null;
   shipped_at?: string | null;
   carrier_tracking_number?: string | null;
+  /** When set, row represents a single event add-on line (pending-shipping / dispatch). */
+  addonItemId?: string | null;
   displayName: string;
   previewImageUrl: string | null;
   /** When set, current org sees this row as affiliate/collab partner (not host). */
@@ -42,6 +44,13 @@ export interface OrdersDashboardData {
 
 /** Product order paid/confirmed, not shipped, and current org may edit dispatch (mirrors HostOrderDetailView). */
 export function isPendingShippingActionable(order: Order): boolean {
+  if (order.addonItemId) {
+    const paymentConfirmed =
+      order.payment_status === 'paid' || order.fulfillment_status === 'confirmed';
+    if (!paymentConfirmed || order.shipped_at) return false;
+    if (order.partnerRowAccess) return order.partnerRowAccess.canMarkShipped === true;
+    return true;
+  }
   if (order.order_type !== 'product') return false;
   const paymentConfirmed =
     order.payment_status === 'paid' || order.fulfillment_status === 'confirmed';
@@ -402,6 +411,190 @@ export function useOrdersDashboard(
         .slice(0, 3);
 
       const pendingShippingFull = orders.filter(isPendingShippingActionable);
+      const pendingAddonIds = new Set<string>();
+
+      // Event add-on lines awaiting dispatch (host org events)
+      if (eventIds.length > 0) {
+        let pendingAddonQuery = supabase
+          .from('orders')
+          .select('id, created_at, payment_status, fulfillment_status, event_id, order_no')
+          .in('event_id', eventIds)
+          .in('payment_status', ['submitted', 'paid'])
+          .gte('created_at', startISO)
+          .lte('created_at', endISO);
+
+        const { data: paidEventOrders } = await pendingAddonQuery;
+        const paidEventOrderIds = (paidEventOrders || []).map((o: { id: string }) => o.id);
+
+        if (paidEventOrderIds.length > 0) {
+          const { data: unshippedAddons } = await supabase
+            .from('order_addon_items')
+            .select(
+              `
+              id,
+              label,
+              variant_label,
+              subtotal,
+              shipped_at,
+              carrier_tracking_number,
+              product_id,
+              orders!inner(
+                id,
+                created_at,
+                payment_status,
+                fulfillment_status,
+                event_id,
+                order_no
+              )
+            `
+            )
+            .in('order_id', paidEventOrderIds)
+            .is('shipped_at', null);
+
+          const addonProductIds = [
+            ...new Set(
+              (unshippedAddons || [])
+                .map((a: { product_id: string }) => a.product_id)
+                .filter(Boolean)
+            ),
+          ];
+          const addonProductsMap = new Map<string, { title: string; image_url: string | null }>();
+          if (addonProductIds.length > 0) {
+            const { data: addonProducts } = await supabase
+              .from('products')
+              .select('id, title, image_url')
+              .in('id', addonProductIds);
+            (addonProducts || []).forEach((p: { id: string; title: string; image_url: string | null }) => {
+              addonProductsMap.set(p.id, { title: p.title, image_url: p.image_url || null });
+            });
+          }
+
+          for (const line of (unshippedAddons || []) as Array<Record<string, unknown>>) {
+            const order = line.orders as Record<string, unknown>;
+            const paymentStatus = (order.payment_status as string) || 'unpaid';
+            const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
+            const paymentConfirmed =
+              paymentStatus === 'paid' || fulfillmentStatus === 'confirmed';
+            if (!paymentConfirmed) continue;
+
+            const productId = line.product_id as string;
+            const product = addonProductsMap.get(productId);
+            const label = (line.label as string | null) || product?.title || 'Add-on';
+            const variant = line.variant_label as string | null;
+            const displayName = variant ? `${variant} — ${label}` : label;
+            const eventId = order.event_id as string | null;
+            const event = eventId ? eventsMap.get(eventId) : null;
+
+            const addonLineId = line.id as string;
+            pendingAddonIds.add(addonLineId);
+
+            pendingShippingFull.push({
+              id: order.id as string,
+              addonItemId: addonLineId,
+              created_at: order.created_at as string,
+              total_amount: Number(line.subtotal) || 0,
+              payment_status: paymentStatus,
+              fulfillment_status: fulfillmentStatus,
+              receipt_url: null,
+              order_no: (order.order_no as string | null) ?? null,
+              event_id: eventId,
+              order_type: 'event',
+              metadata: null,
+              shipped_at: null,
+              carrier_tracking_number: (line.carrier_tracking_number as string | null) ?? null,
+              displayName: event ? `${event.title} — ${displayName}` : displayName,
+              previewImageUrl: product?.image_url ?? event?.instagram_preview_image_url ?? null,
+            });
+          }
+        }
+      }
+
+      // Partner-visible unshipped add-on lines
+      try {
+        const partnerTableFetch = await fetchPartnerVisibleProductOrdersForTable(currentOrg.id, {
+          startISO,
+          endISO,
+        });
+        const addonProductIds = [
+          ...new Set(partnerTableFetch.addonItemRows.map((a) => a.product_id).filter(Boolean)),
+        ];
+        const partnerAddonProductsMap = new Map<string, { title: string; image_url: string | null }>();
+        if (addonProductIds.length > 0) {
+          const { data: addonProducts } = await supabase
+            .from('products')
+            .select('id, title, image_url')
+            .in('id', addonProductIds);
+          (addonProducts || []).forEach((p: { id: string; title: string; image_url: string | null }) => {
+            partnerAddonProductsMap.set(p.id, { title: p.title, image_url: p.image_url || null });
+          });
+        }
+
+        const partnerEventIds = [
+          ...new Set(
+            partnerTableFetch.addonItemRows
+              .map((a) => (a.orders.event_id as string | null) ?? null)
+              .filter(Boolean)
+          ),
+        ] as string[];
+        const partnerEventsMap = new Map<string, { title: string; instagram_preview_image_url: string | null }>();
+        if (partnerEventIds.length > 0) {
+          const { data: pev } = await supabase
+            .from('events')
+            .select('id, title, instagram_preview_image_url')
+            .in('id', partnerEventIds);
+          (pev || []).forEach((e: { id: string; title: string; instagram_preview_image_url: string | null }) => {
+            partnerEventsMap.set(e.id, {
+              title: e.title,
+              instagram_preview_image_url: e.instagram_preview_image_url || null,
+            });
+          });
+        }
+
+        for (const line of partnerTableFetch.addonItemRows) {
+          if (line.shipped_at) continue;
+          if (pendingAddonIds.has(line.id)) continue;
+          const order = line.orders;
+          const paymentStatus = (order.payment_status as string) || 'unpaid';
+          const fulfillmentStatus = (order.fulfillment_status as string | null) ?? null;
+          const paymentConfirmed =
+            paymentStatus === 'paid' || fulfillmentStatus === 'confirmed';
+          if (!paymentConfirmed) continue;
+
+          const access = partnerTableFetch.addonItemAccessMap.get(line.id);
+          if (!access?.canMarkShipped) continue;
+
+          const product = partnerAddonProductsMap.get(line.product_id);
+          const label = line.label || product?.title || 'Add-on';
+          const displayName = line.variant_label ? `${line.variant_label} — ${label}` : label;
+          const eventId = (order.event_id as string | null) ?? null;
+          const event = eventId ? partnerEventsMap.get(eventId) : null;
+
+          pendingShippingFull.push({
+            id: line.order_id,
+            addonItemId: line.id,
+            created_at: order.created_at as string,
+            total_amount: Number(line.subtotal) || 0,
+            payment_status: paymentStatus,
+            fulfillment_status: fulfillmentStatus,
+            receipt_url: null,
+            order_no: (order.order_no as string | null) ?? null,
+            event_id: eventId,
+            order_type: 'event',
+            metadata: null,
+            shipped_at: null,
+            carrier_tracking_number: line.carrier_tracking_number,
+            displayName: event ? `${event.title} — ${displayName}` : displayName,
+            previewImageUrl: product?.image_url ?? event?.instagram_preview_image_url ?? null,
+            partnerRowAccess: access,
+          });
+        }
+      } catch (err) {
+        console.error('Partner add-on pending shipping merge failed:', err);
+      }
+
+      pendingShippingFull.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       const pendingShippingCount = pendingShippingFull.length;
       const pendingShippingOrders = pendingShippingFull.slice(0, 3);
 

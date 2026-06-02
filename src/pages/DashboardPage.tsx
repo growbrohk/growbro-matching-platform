@@ -117,7 +117,10 @@ export default function DashboardPage() {
   const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
   const { data: dashboardData, isLoading } = useOrdersDashboard(selectedRange);
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
-  const [dispatchModalOrderId, setDispatchModalOrderId] = useState<string | null>(null);
+  const [dispatchTarget, setDispatchTarget] = useState<{
+    orderId: string;
+    addonItemId?: string | null;
+  } | null>(null);
 
   // Update URL when range changes
   useEffect(() => {
@@ -194,11 +197,18 @@ export default function DashboardPage() {
     [dashboardData?.pendingShippingOrders],
   );
   useEffect(() => {
-    if (!dispatchModalOrderId) return;
-    if (!pendingShippingOrdersSnapshot.some((o) => o.id === dispatchModalOrderId)) {
-      setDispatchModalOrderId(null);
+    if (!dispatchTarget) return;
+    const stillPending = pendingShippingOrdersSnapshot.some(
+      (o) =>
+        o.id === dispatchTarget.orderId &&
+        (dispatchTarget.addonItemId
+          ? o.addonItemId === dispatchTarget.addonItemId
+          : !o.addonItemId)
+    );
+    if (!stillPending) {
+      setDispatchTarget(null);
     }
-  }, [dispatchModalOrderId, pendingShippingOrdersSnapshot]);
+  }, [dispatchTarget, pendingShippingOrdersSnapshot]);
 
   // Calculate total pipeline revenue: sum of host revenue + sum of affiliate revenue
   const pipelineRevenueTotal = (hostPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0) +
@@ -242,8 +252,14 @@ export default function DashboardPage() {
     pendingShippingCount = 0,
   } = dashboardData || {};
 
-  const dispatchModalOrder = dispatchModalOrderId
-    ? pendingShippingOrders.find((o) => o.id === dispatchModalOrderId)
+  const dispatchModalOrder = dispatchTarget
+    ? pendingShippingOrders.find(
+        (o) =>
+          o.id === dispatchTarget.orderId &&
+          (dispatchTarget.addonItemId
+            ? o.addonItemId === dispatchTarget.addonItemId
+            : !o.addonItemId)
+      )
     : undefined;
 
   return (
@@ -506,7 +522,7 @@ export default function DashboardPage() {
               : '';
             return (
               <DashboardPendingShippingRow
-                key={order.id}
+                key={order.addonItemId ? `addon-${order.addonItemId}` : order.id}
                 name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
@@ -514,7 +530,12 @@ export default function DashboardPage() {
                 onDetails={() =>
                   navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
                 }
-                onOpenDispatch={() => setDispatchModalOrderId(order.id)}
+                onOpenDispatch={() =>
+                  setDispatchTarget({
+                    orderId: order.id,
+                    addonItemId: order.addonItemId ?? null,
+                  })
+                }
               />
             );
           })
@@ -526,9 +547,9 @@ export default function DashboardPage() {
       <CreateTrackingLinkModal open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen} />
 
       <Dialog
-        open={!!dispatchModalOrderId && !!dispatchModalOrder}
+        open={!!dispatchTarget && !!dispatchModalOrder}
         onOpenChange={(open) => {
-          if (!open) setDispatchModalOrderId(null);
+          if (!open) setDispatchTarget(null);
         }}
       >
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -540,6 +561,7 @@ export default function DashboardPage() {
           {dispatchModalOrder ? (
             <ProductOrderDispatchPanel
               orderId={dispatchModalOrder.id}
+              addonItemId={dispatchModalOrder.addonItemId ?? undefined}
               shippedAt={dispatchModalOrder.shipped_at ?? null}
               carrierTrackingNumber={dispatchModalOrder.carrier_tracking_number ?? null}
               paymentStatus={dispatchModalOrder.payment_status}

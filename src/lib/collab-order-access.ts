@@ -50,6 +50,26 @@ function mergeAccess(map: PartnerAccessMap, orderId: string, link: PartnerPipeli
   map.set(orderId, cur);
 }
 
+function mergeAddonAccess(
+  map: Map<string, PartnerOrderRowAccess>,
+  addonItemId: string,
+  link: PartnerPipelineLinkRow
+) {
+  const cur = map.get(addonItemId) ?? emptyAccess();
+  if (link.type === 'collab') {
+    if (link.collab_can_view_order_details === true) {
+      cur.canViewOrderDetails = true;
+    }
+    if (link.collab_partner_role === 'editor') {
+      cur.canConfirmOrder = true;
+    }
+    if (link.collab_partner_role === 'editor' && link.collab_can_mark_shipped === true) {
+      cur.canMarkShipped = true;
+    }
+  }
+  map.set(addonItemId, cur);
+}
+
 function linkIsAttributedOnly(link: PartnerPipelineLinkRow): boolean {
   return link.type === 'affiliate' || link.collab_sales_scope === 'attributed';
 }
@@ -199,7 +219,24 @@ export interface PartnerProductOrdersTableFetch {
   accessMap: PartnerAccessMap;
   partnerLinkIds: Set<string>;
   partnerLinks: HostPartnerLinkForTable[];
+  /** Event add-on lines visible to partner (Catalog → Products → Orders). */
+  addonItemRows: AddonItemTableRow[];
+  /** Per add-on line access keyed by order_addon_items.id */
+  addonItemAccessMap: Map<string, PartnerOrderRowAccess>;
 }
+
+export type AddonItemTableRow = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  subtotal: number;
+  label: string | null;
+  variant_label: string | null;
+  shipped_at: string | null;
+  carrier_tracking_number: string | null;
+  orders: Record<string, unknown>;
+};
 
 export type HostPartnerLinkForTable = {
   id: string;
@@ -236,7 +273,14 @@ export async function fetchPartnerVisibleProductOrdersForTable(
 
   if (error) {
     console.error('fetchPartnerVisibleProductOrdersForTable: tracking_links', error);
-    return { orderRows: [], accessMap, partnerLinkIds, partnerLinks: [] };
+    return {
+      orderRows: [],
+      accessMap,
+      partnerLinkIds,
+      partnerLinks: [],
+      addonItemRows: [],
+      addonItemAccessMap: new Map(),
+    };
   }
 
   const linkList = (links || []) as PartnerPipelineLinkRow[];
@@ -254,10 +298,19 @@ export async function fetchPartnerVisibleProductOrdersForTable(
   }));
 
   if (linkList.length === 0) {
-    return { orderRows: [], accessMap, partnerLinkIds, partnerLinks: [] };
+    return {
+      orderRows: [],
+      accessMap,
+      partnerLinkIds,
+      partnerLinks: [],
+      addonItemRows: [],
+      addonItemAccessMap: new Map(),
+    };
   }
 
   const orderMap = new Map<string, Record<string, unknown>>();
+  const addonItemMap = new Map<string, AddonItemTableRow>();
+  const addonItemAccessMap = new Map<string, PartnerOrderRowAccess>();
 
   const applyOrderFilters = (query: ReturnType<typeof supabase.from>) => {
     let q = query
@@ -329,11 +382,118 @@ export async function fetchPartnerVisibleProductOrdersForTable(
     }
   }
 
+  const productLinksWithId = linkList.filter((l) => l.product_id);
+  if (productLinksWithId.length > 0) {
+    const applyEventOrderFilters = (query: ReturnType<typeof supabase.from>) => {
+      let q = query.eq('order_type', 'event').in('payment_status', ['submitted', 'paid']);
+      if (applyDateFilter) {
+        q = q.gte('created_at', startISO!).lte('created_at', endISO!);
+      }
+      return q;
+    };
+
+    for (const link of productLinksWithId) {
+      const pid = link.product_id!;
+
+      if (linkIsAttributedOnly(link)) {
+        let attrQuery = supabase
+          .from('orders')
+          .select(
+            'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata'
+          )
+          .eq('tracking_link_id', link.id);
+
+        attrQuery = applyEventOrderFilters(attrQuery) as typeof attrQuery;
+
+        const { data: attrEventOrders, error: aeErr } = await attrQuery;
+        if (aeErr) {
+          console.error('fetchPartnerVisibleProductOrdersForTable: attributed event orders', aeErr);
+          continue;
+        }
+
+        for (const row of (attrEventOrders || []) as Record<string, unknown>[]) {
+          const oid = row.id as string;
+          const { data: addonLines } = await supabase
+            .from('order_addon_items')
+            .select(
+              'id, order_id, product_id, quantity, subtotal, label, variant_label, shipped_at, carrier_tracking_number'
+            )
+            .eq('order_id', oid)
+            .eq('product_id', pid);
+
+          for (const line of (addonLines || []) as Record<string, unknown>[]) {
+            const lineId = line.id as string;
+            addonItemMap.set(lineId, {
+              id: lineId,
+              order_id: oid,
+              product_id: pid,
+              quantity: line.quantity as number,
+              subtotal: Number(line.subtotal) || 0,
+              label: (line.label as string | null) ?? null,
+              variant_label: (line.variant_label as string | null) ?? null,
+              shipped_at: (line.shipped_at as string | null) ?? null,
+              carrier_tracking_number: (line.carrier_tracking_number as string | null) ?? null,
+              orders: row,
+            });
+            mergeAddonAccess(addonItemAccessMap, lineId, link);
+          }
+        }
+      }
+
+      if (link.type === 'collab' && link.collab_sales_scope === 'all_for_resource') {
+        let evOrdersQuery = supabase
+          .from('orders')
+          .select(
+            'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata, host_org_id'
+          )
+          .eq('host_org_id', link.host_org_id);
+
+        evOrdersQuery = applyEventOrderFilters(evOrdersQuery) as typeof evOrdersQuery;
+
+        const { data: evOrders, error: evErr } = await evOrdersQuery;
+        if (evErr) {
+          console.error('fetchPartnerVisibleProductOrdersForTable: event orders for addon', evErr);
+          continue;
+        }
+
+        for (const row of (evOrders || []) as Record<string, unknown>[]) {
+          const oid = row.id as string;
+          const { data: addonLines } = await supabase
+            .from('order_addon_items')
+            .select(
+              'id, order_id, product_id, quantity, subtotal, label, variant_label, shipped_at, carrier_tracking_number'
+            )
+            .eq('order_id', oid)
+            .eq('product_id', pid);
+
+          for (const line of (addonLines || []) as Record<string, unknown>[]) {
+            const lineId = line.id as string;
+            addonItemMap.set(lineId, {
+              id: lineId,
+              order_id: oid,
+              product_id: pid,
+              quantity: line.quantity as number,
+              subtotal: Number(line.subtotal) || 0,
+              label: (line.label as string | null) ?? null,
+              variant_label: (line.variant_label as string | null) ?? null,
+              shipped_at: (line.shipped_at as string | null) ?? null,
+              carrier_tracking_number: (line.carrier_tracking_number as string | null) ?? null,
+              orders: row,
+            });
+            mergeAddonAccess(addonItemAccessMap, lineId, link);
+          }
+        }
+      }
+    }
+  }
+
   return {
     orderRows: Array.from(orderMap.values()),
     accessMap,
     partnerLinkIds,
     partnerLinks,
+    addonItemRows: Array.from(addonItemMap.values()),
+    addonItemAccessMap,
   };
 }
 
@@ -356,6 +516,17 @@ export async function collabPartnerCanMarkOrderShipped(orderId: string): Promise
   } as never);
   if (error) {
     console.error('collabPartnerCanMarkOrderShipped', error);
+    return false;
+  }
+  return data === true;
+}
+
+export async function collabPartnerCanMarkAddonItemShipped(addonItemId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('collab_can_mark_addon_item_shipped' as never, {
+    p_addon_item_id: addonItemId,
+  } as never);
+  if (error) {
+    console.error('collabPartnerCanMarkAddonItemShipped', error);
     return false;
   }
   return data === true;

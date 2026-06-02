@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
 import type { OrderWithEvent, TicketTypeAccessVariantSnapshot } from '@/lib/api/bookings';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
-import { collabPartnerCanViewOrderDetails, collabPartnerCanMarkOrderShipped } from '@/lib/collab-order-access';
+import { collabPartnerCanViewOrderDetails, collabPartnerCanMarkOrderShipped, collabPartnerCanMarkAddonItemShipped } from '@/lib/collab-order-access';
 
 const TEXT = '#0F1F17';
 const MUTED = 'rgba(15,31,23,0.6)';
@@ -259,12 +259,60 @@ function ProductDetailBody({
   );
 }
 
+function EventAddonLineWithDispatch({
+  addon,
+  orderId,
+  paymentStatus,
+  fulfillmentStatus,
+  isEventHost,
+}: {
+  addon: NonNullable<OrderWithEvent['order_addon_items']>[number];
+  orderId: string;
+  paymentStatus: string;
+  fulfillmentStatus: string | null | undefined;
+  isEventHost: boolean;
+}) {
+  const paymentConfirmed = paymentStatus === 'paid' || fulfillmentStatus === 'confirmed';
+
+  const { data: collabCanMark } = useQuery({
+    queryKey: ['collab-can-mark-addon-shipped', addon.id],
+    queryFn: () => collabPartnerCanMarkAddonItemShipped(addon.id),
+    enabled: Boolean(addon.id && paymentConfirmed && !isEventHost),
+  });
+
+  return (
+    <li className="border-b border-gray-100 pb-3 text-sm last:border-0" style={{ color: TEXT }}>
+      <div>
+        <span className="font-medium">{addon.label || 'Add-on'}</span>
+        {addon.variant_label ? ` — ${addon.variant_label}` : ''}
+        <span style={{ color: MUTED }}>
+          {' '}
+          · Qty {addon.quantity} · {formatMoney(addon.subtotal)}
+        </span>
+      </div>
+      <ProductOrderDispatchPanel
+        orderId={orderId}
+        addonItemId={addon.id}
+        shippedAt={addon.shipped_at ?? null}
+        carrierTrackingNumber={addon.carrier_tracking_number ?? null}
+        paymentStatus={paymentStatus}
+        fulfillmentStatus={fulfillmentStatus}
+        canEdit={paymentConfirmed && (isEventHost || collabCanMark === true)}
+      />
+    </li>
+  );
+}
+
 function EventDetailBody({
   data,
+  orderId,
+  isEventHost,
   proofRef,
   onOpenProof,
 }: {
   data: OrderWithEvent;
+  orderId: string;
+  isEventHost: boolean;
   proofRef: string | null;
   onOpenProof: () => void;
 }) {
@@ -337,14 +385,14 @@ function EventDetailBody({
           <SectionTitle>Add-ons</SectionTitle>
           <ul className="space-y-2 text-sm">
             {(data.order_addon_items || []).map((a) => (
-              <li key={a.id} style={{ color: TEXT }}>
-                <span className="font-medium">{a.label || 'Add-on'}</span>
-                {a.variant_label ? ` — ${a.variant_label}` : ''}
-                <span style={{ color: MUTED }}>
-                  {' '}
-                  · Qty {a.quantity} · {formatMoney(a.subtotal)}
-                </span>
-              </li>
+              <EventAddonLineWithDispatch
+                key={a.id}
+                addon={a}
+                orderId={orderId}
+                paymentStatus={o.payment_status ?? 'unpaid'}
+                fulfillmentStatus={o.fulfillment_status}
+                isEventHost={isEventHost}
+              />
             ))}
           </ul>
         </>
@@ -428,6 +476,11 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
   const isProductHost = useMemo(() => {
     if (!data || !currentOrg || data.kind !== 'product') return false;
     return data.order.order.host_org_id === currentOrg.id;
+  }, [data, currentOrg]);
+
+  const isEventHost = useMemo(() => {
+    if (!data || !currentOrg || data.kind !== 'event') return false;
+    return data.order.event.org_id === currentOrg.id;
   }, [data, currentOrg]);
 
   const { data: collabCanMarkShipped } = useQuery({
@@ -573,6 +626,8 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
       ) : (
         <EventDetailBody
           data={payload.order}
+          orderId={orderId}
+          isEventHost={isEventHost}
           proofRef={proofRef}
           onOpenProof={() => setShowProofDialog(true)}
         />
