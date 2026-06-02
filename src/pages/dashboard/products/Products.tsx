@@ -18,6 +18,8 @@ import { ProductsToolbar } from '@/components/catalog/ProductsToolbar';
 import { BulkDialogs } from '@/components/catalog/BulkDialogs';
 import { ProductsContent } from '@/components/catalog/ProductsContent';
 import { Cart, type CartItem } from '@/components/pos/Cart';
+import { PosProductGrid } from '@/components/pos/PosProductGrid';
+import { PosProductDetailSheet } from '@/components/pos/PosProductDetailSheet';
 
 type ProductVariant = {
   id: string;
@@ -120,8 +122,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
   const [isTransferSetupOpen, setIsTransferSetupOpen] = useState(false);
 
   // POS cart state
-  const [cart, setCart] = useState<Array<{ productId: string; variantId?: string; name: string; variantLabel?: string; qty: number; unitPrice: number }>>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [posDetailOpen, setPosDetailOpen] = useState(false);
+  const [posProductId, setPosProductId] = useState<string | null>(null);
 
   const canCreate = !!currentOrg?.id;
 
@@ -1150,6 +1154,69 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     }
   };
 
+  const handlePosAddToCart = (item: CartItem) => {
+    if (!selectedWarehouseId) {
+      toast({
+        title: 'Warehouse Required',
+        description: 'Please select a warehouse in Settings',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const addQty = item.qty || 1;
+    const variantId = item.variantId || item.productId;
+    const inventoryItem = products
+      .flatMap((p) => p.inventoryItems)
+      .find((i) => i.variant_id === variantId && i.warehouse_id === selectedWarehouseId);
+
+    const availableStock = inventoryItem?.quantity ?? 0;
+    const existingCartItem = cart.find(
+      (i) => i.productId === item.productId && i.variantId === item.variantId,
+    );
+    const currentCartQty = existingCartItem?.qty ?? 0;
+    const newQty = currentCartQty + addQty;
+
+    if (availableStock === 0) {
+      toast({
+        title: 'Out of Stock',
+        description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} is out of stock in the selected warehouse`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (newQty > availableStock) {
+      toast({
+        title: 'Insufficient Stock',
+        description: `Only ${availableStock} left in this warehouse`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setCart((prev) => {
+      const existingIndex = prev.findIndex(
+        (i) => i.productId === item.productId && i.variantId === item.variantId,
+      );
+      if (existingIndex >= 0) {
+        const newCart = [...prev];
+        newCart[existingIndex] = {
+          ...newCart[existingIndex],
+          qty: newCart[existingIndex].qty + addQty,
+          imageUrl: item.imageUrl ?? newCart[existingIndex].imageUrl,
+          weightKgPerUnit: item.weightKgPerUnit ?? newCart[existingIndex].weightKgPerUnit,
+        };
+        return newCart;
+      }
+      return [...prev, { ...item, qty: addQty }];
+    });
+  };
+
+  const posSelectedProduct = posProductId
+    ? filteredProducts.find((p) => p.id === posProductId) ?? null
+    : null;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -1265,6 +1332,25 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
 
       {/* Content */}
       <div className={isEmbeddedInCatalog ? "mt-0" : "mt-4 space-y-4"}>
+        {selectedSubtab === 'pos' ? (
+          <>
+            <PosProductGrid
+              products={filteredProducts}
+              onProductClick={(productId) => {
+                setPosProductId(productId);
+                setPosDetailOpen(true);
+              }}
+            />
+            <PosProductDetailSheet
+              open={posDetailOpen}
+              onOpenChange={setPosDetailOpen}
+              product={posSelectedProduct}
+              orgId={currentOrg?.id ?? ''}
+              orgName={currentOrg?.name ?? ''}
+              onAddToCart={handlePosAddToCart}
+            />
+          </>
+        ) : (
         <ProductsContent
           products={filteredProducts}
           categories={categories}
@@ -1299,70 +1385,8 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
           transferFromWarehouseId={transferFromWarehouseId}
           transferToWarehouseId={transferToWarehouseId}
           onBeginEditing={() => setShowEditCta(false)}
-          cart={selectedSubtab === 'pos' ? cart : undefined}
-          onAddToCart={selectedSubtab === 'pos' ? (item: CartItem) => {
-            // Strict stock enforcement for POS mode
-            if (!selectedWarehouseId) {
-              toast({
-                title: 'Warehouse Required',
-                description: 'Please select a warehouse in Settings',
-                variant: 'destructive',
-              });
-              return;
-            }
-
-            // Get stock for variant (or product if no variant)
-            const variantId = item.variantId || item.productId;
-            const inventoryItem = products
-              .flatMap(p => p.inventoryItems)
-              .find(i => i.variant_id === variantId && i.warehouse_id === selectedWarehouseId);
-            
-            const availableStock = inventoryItem?.quantity ?? 0;
-
-            // Get current cart quantity for this item
-            const existingCartItem = cart.find(
-              i => i.productId === item.productId && i.variantId === item.variantId
-            );
-            const currentCartQty = existingCartItem?.qty ?? 0;
-            const newQty = currentCartQty + 1;
-
-            // Check stock availability
-            if (availableStock === 0) {
-              toast({
-                title: 'Out of Stock',
-                description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} is out of stock in the selected warehouse`,
-                variant: 'destructive',
-              });
-              return;
-            }
-
-            if (newQty > availableStock) {
-              toast({
-                title: 'Insufficient Stock',
-                description: `Only ${availableStock} left in this warehouse`,
-                variant: 'destructive',
-              });
-              return;
-            }
-
-            // Merge cart items by product_id + variant_id
-            setCart(prev => {
-              const existingIndex = prev.findIndex(
-                i => i.productId === item.productId && i.variantId === item.variantId
-              );
-              if (existingIndex >= 0) {
-                const newCart = [...prev];
-                newCart[existingIndex] = { ...newCart[existingIndex], qty: newCart[existingIndex].qty + 1 };
-                return newCart;
-              }
-              return [...prev, { ...item, qty: 1 }];
-            });
-            toast({
-              title: 'Added to cart',
-              description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} added to cart`,
-            });
-          } : undefined}
         />
+        )}
       </div>
 
       {/* Cart Modal */}

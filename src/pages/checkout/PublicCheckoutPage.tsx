@@ -6,21 +6,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Minus, Plus, ShoppingCart, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { usePublicCart, type PublicCartItem } from '@/contexts/PublicCartContext';
-import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
+import { usePublicCart } from '@/contexts/PublicCartContext';
 import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
+import { CheckoutDeliverySection } from '@/components/checkout/CheckoutDeliverySection';
+import { CheckoutContactSection } from '@/components/checkout/CheckoutContactSection';
+import { CheckoutOrderSummary } from '@/components/checkout/CheckoutOrderSummary';
 import {
   createProductOrder,
   type CreateProductOrderDelivery,
@@ -35,7 +27,11 @@ import {
 import { getOrgBySlugWithProfile, type OrgWithProfile } from '@/lib/api/orgs';
 import type { ContactInfo } from '@/lib/types/booking';
 import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
+import {
+  computeShippingTotals,
+  kgPerUnitForCartLine,
+  parseShippingWeightKgFromMeta,
+} from '@/lib/checkout/shipping';
 
 const BRAND = {
   green: '#0E7A3A',
@@ -44,9 +40,6 @@ const BRAND = {
 };
 
 const PANEL_BORDER = 'rgba(14,122,58,0.14)';
-
-const SHIPPING_RATE_DOOR = 25;
-const SHIPPING_RATE_SF = 16;
 
 function formatPrice(amount: number): string {
   return new Intl.NumberFormat('en-HK', {
@@ -65,28 +58,8 @@ function formatCarouselPrice(amount: number): string {
   }).format(amount);
 }
 
-function parseShippingWeightKgFromMeta(metadata: unknown): number {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 0;
-  const raw = (metadata as Record<string, unknown>).shipping_weight_kg;
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) return raw;
-  if (typeof raw === 'string' && raw.trim() !== '') {
-    const n = Number(raw.trim());
-    if (Number.isFinite(n) && n >= 0) return n;
-  }
-  return 0;
-}
-
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-
-function kgPerUnitForLine(item: PublicCartItem, weightByProductId: Record<string, number>): number {
-  if (item.weightKgPerUnit != null && Number.isFinite(item.weightKgPerUnit) && item.weightKgPerUnit >= 0) {
-    return item.weightKgPerUnit;
-  }
-  const w = weightByProductId[item.productId];
-  if (w != null && Number.isFinite(w) && w >= 0) return w;
-  return 0;
 }
 
 function YouMayAlsoLikeCarousel({
@@ -174,34 +147,14 @@ export default function PublicCheckoutPage() {
   const cartProductKey = useMemo(() => cart.map((c) => c.productId).sort().join(','), [cart]);
 
   const totalShippingKg = useMemo(
-    () => cart.reduce((s, item) => s + item.qty * kgPerUnitForLine(item, weightByProductId), 0),
+    () => cart.reduce((s, item) => s + item.qty * kgPerUnitForCartLine(item, weightByProductId), 0),
     [cart, weightByProductId],
   );
 
-  /** Integer kg billed (matches server CEIL(actual total kg)) for door / SF Locker */
-  const billableShippingKg = useMemo(() => {
-    if (deliveryMethod === 'event_pickup') return 0;
-    if (totalShippingKg <= 0) return 0;
-    const rounded = Number(totalShippingKg.toFixed(6));
-    return Math.ceil(rounded);
-  }, [deliveryMethod, totalShippingKg]);
-
-  const shippingRatePerKg = useMemo(() => {
-    if (deliveryMethod === 'door') return SHIPPING_RATE_DOOR;
-    if (deliveryMethod === 'sf_locker') return SHIPPING_RATE_SF;
-    return 0;
-  }, [deliveryMethod]);
-
-  const shippingFee = useMemo(() => {
-    if (deliveryMethod === 'event_pickup') return 0;
-    return Math.round(billableShippingKg * shippingRatePerKg * 100) / 100;
-  }, [deliveryMethod, billableShippingKg, shippingRatePerKg]);
-
-  const showActualShippingWeight =
-    deliveryMethod !== 'event_pickup' &&
-    totalShippingKg > 0 &&
-    billableShippingKg > 0 &&
-    Number(totalShippingKg.toFixed(4)) !== billableShippingKg;
+  const { billableShippingKg, shippingRatePerKg, shippingFee, showActualShippingWeight } = useMemo(
+    () => computeShippingTotals(deliveryMethod, totalShippingKg),
+    [deliveryMethod, totalShippingKg],
+  );
 
   const grandTotal = total + shippingFee;
 
@@ -622,211 +575,41 @@ export default function PublicCheckoutPage() {
 
         <YouMayAlsoLikeCarousel products={relatedProducts} orgSlug={orgSlug} />
 
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
-            <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
-              Shipping address
-            </h3>
-          </div>
-          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            Select delivery method
-          </p>
+        <CheckoutDeliverySection
+          deliveryMethod={deliveryMethod}
+          onDeliveryMethodChange={setDeliveryMethod}
+          doorCountry={doorCountry}
+          onDoorCountryChange={setDoorCountry}
+          doorBuilding={doorBuilding}
+          onDoorBuildingChange={setDoorBuilding}
+          doorStreet={doorStreet}
+          onDoorStreetChange={setDoorStreet}
+          doorRegion={doorRegion}
+          onDoorRegionChange={setDoorRegion}
+          doorDistrict={doorDistrict}
+          onDoorDistrictChange={setDoorDistrict}
+          sfLockerAddress={sfLockerAddress}
+          onSfLockerAddressChange={setSfLockerAddress}
+          sfLockerCode={sfLockerCode}
+          onSfLockerCodeChange={setSfLockerCode}
+          idPrefix="public-checkout"
+        />
 
-          <div
-            className="border rounded-2xl p-4 md:p-5 space-y-5 mb-6"
-            style={{ borderColor: PANEL_BORDER, backgroundColor: 'rgba(251,248,244,0.9)' }}
-          >
-            <RadioGroup
-              value={deliveryMethod}
-              onValueChange={(v) => setDeliveryMethod(v as ProductDeliveryMethod)}
-              className="space-y-3"
-            >
-              <label
-                className={cn(
-                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
-                  deliveryMethod === 'door' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
-                )}
-              >
-                <RadioGroupItem value="door" id="dm-door" className="mt-0.5" />
-                <span className="flex-1" style={{ color: BRAND.dark }}>
-                  <span className="font-medium">1. Deliver to Door</span>
-                  <span className="text-muted-foreground"> ($25/kg)</span>
-                </span>
-              </label>
-              <label
-                className={cn(
-                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
-                  deliveryMethod === 'sf_locker' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
-                )}
-              >
-                <RadioGroupItem value="sf_locker" id="dm-sf" className="mt-0.5" />
-                <span className="flex-1" style={{ color: BRAND.dark }}>
-                  <span className="font-medium">2. Deliver to SF Locker</span>
-                  <span className="text-muted-foreground"> ($16/kg)</span>
-                </span>
-              </label>
-              <label
-                className={cn(
-                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors',
-                  deliveryMethod === 'event_pickup' ? 'border-[#0E7A3A] bg-[#0E7A3A]/5' : 'border-transparent bg-background/60',
-                )}
-              >
-                <RadioGroupItem value="event_pickup" id="dm-event" className="mt-0.5" />
-                <span className="flex-1" style={{ color: BRAND.dark }}>
-                  <span className="font-medium">3. Pick up in Event</span>
-                  <span className="text-muted-foreground"> ($0)</span>
-                  <span className="block text-xs mt-1 text-muted-foreground">
-                    Please DM IG to arrange pick up
-                  </span>
-                </span>
-              </label>
-            </RadioGroup>
+        <CheckoutContactSection
+          contactInfo={contactInfo}
+          onUpdate={handleContactUpdate}
+          requiredFields={{ firstName: true, lastName: true, email: true, phone: true }}
+        />
 
-            {deliveryMethod === 'door' && (
-              <div className="space-y-3 pt-2 border-t" style={{ borderColor: PANEL_BORDER }}>
-                <div>
-                  <Label>Country *</Label>
-                  <Select value={doorCountry} onValueChange={setDoorCountry}>
-                    <SelectTrigger className="mt-1 rounded-xl">
-                      <SelectValue placeholder="Country" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Hong Kong (SAR)">Hong Kong (SAR)</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Building name, number, floor *</Label>
-                  <Input
-                    value={doorBuilding}
-                    onChange={(e) => setDoorBuilding(e.target.value)}
-                    placeholder="Building Name, number, floor"
-                    className="mt-1 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <Label>Street address *</Label>
-                  <Input
-                    value={doorStreet}
-                    onChange={(e) => setDoorStreet(e.target.value)}
-                    placeholder="Street address"
-                    className="mt-1 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <Label>Region</Label>
-                  <Input value={doorRegion} onChange={(e) => setDoorRegion(e.target.value)} className="mt-1 rounded-xl" />
-                </div>
-                <div>
-                  <Label>District</Label>
-                  <Input
-                    value={doorDistrict}
-                    onChange={(e) => setDoorDistrict(e.target.value)}
-                    className="mt-1 rounded-xl"
-                  />
-                </div>
-              </div>
-            )}
-
-            {deliveryMethod === 'sf_locker' && (
-              <div className="space-y-3 pt-2 border-t" style={{ borderColor: PANEL_BORDER }}>
-                <div>
-                  <Label>SF locker address *</Label>
-                  <Input
-                    value={sfLockerAddress}
-                    onChange={(e) => setSfLockerAddress(e.target.value)}
-                    placeholder="Full locker location"
-                    className="mt-1 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <Label>SF Locker address code *</Label>
-                  <Input
-                    value={sfLockerCode}
-                    onChange={(e) => setSfLockerCode(e.target.value)}
-                    placeholder="Code"
-                    className="mt-1 rounded-xl"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-1 h-6 rounded" style={{ backgroundColor: BRAND.green }} />
-            <h3 className="text-base font-semibold" style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>
-              Contact info
-            </h3>
-          </div>
-          <p className="text-sm mb-4" style={{ color: 'rgba(15,31,23,0.72)' }}>
-            We&apos;ll use this for order updates and delivery
-          </p>
-          <ContactInfoCard
-            contactInfo={contactInfo}
-            onUpdate={handleContactUpdate}
-            title="Contact info"
-            description="Required for order confirmation"
-            showPhone={true}
-            requiredFields={{ firstName: true, lastName: true, email: true, phone: true }}
-            alwaysExpanded
-          />
-        </div>
-
-        <div
-          className="rounded-2xl border bg-background p-5 md:p-6 mb-6"
-          style={{ borderColor: PANEL_BORDER }}
-        >
-          <h3
-            className="text-base font-semibold mb-4"
-            style={{ fontFamily: "'Inter Tight', sans-serif", color: BRAND.dark }}
-          >
-            Order summary
-          </h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between tabular-nums">
-              <span style={{ color: 'rgba(15,31,23,0.72)' }}>Subtotal</span>
-              <span style={{ color: BRAND.dark }}>{formatPrice(total)}</span>
-            </div>
-            {deliveryMethod !== 'event_pickup' && (
-              <div className="flex justify-between gap-4 tabular-nums">
-                <span className="text-right min-w-0" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  {billableShippingKg > 0 ? (
-                    <>
-                      Shipping: {billableShippingKg} kg billed × HK${shippingRatePerKg}/kg
-                      {showActualShippingWeight && (
-                        <span className="block text-xs mt-0.5 font-normal">
-                          Actual weight: {Number(totalShippingKg.toFixed(3))} kg
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>Shipping (— × HK${shippingRatePerKg}/kg)</>
-                  )}
-                </span>
-                <span className="shrink-0" style={{ color: BRAND.dark }}>
-                  {formatPrice(shippingFee)}
-                </span>
-              </div>
-            )}
-            {deliveryMethod === 'event_pickup' && (
-              <div className="flex justify-between tabular-nums">
-                <span style={{ color: 'rgba(15,31,23,0.72)' }}>Shipping</span>
-                <span style={{ color: BRAND.dark }}>{formatPrice(0)}</span>
-              </div>
-            )}
-            <div
-              className="flex justify-between text-base font-semibold pt-3 border-t mt-2 tabular-nums"
-              style={{ borderColor: PANEL_BORDER }}
-            >
-              <span style={{ color: BRAND.dark, fontFamily: "'Inter Tight', sans-serif" }}>Total</span>
-              <span style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>{formatPrice(grandTotal)}</span>
-            </div>
-          </div>
-        </div>
+        <CheckoutOrderSummary
+          subtotal={total}
+          deliveryMethod={deliveryMethod}
+          shippingFee={shippingFee}
+          billableShippingKg={billableShippingKg}
+          shippingRatePerKg={shippingRatePerKg}
+          totalShippingKg={totalShippingKg}
+          showActualShippingWeight={showActualShippingWeight}
+        />
       </div>
 
       <div

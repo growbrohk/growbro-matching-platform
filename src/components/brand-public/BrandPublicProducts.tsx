@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProductMerchCard } from '@/components/products/ProductMerchCard';
 
 const DEFAULT_ACCENT = '#E85D04';
 
@@ -17,15 +18,6 @@ interface BrandPublicProductsProps {
   loading?: boolean;
   isEditMode?: boolean;
   accentColor?: string | null;
-}
-
-function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('en-HK', {
-    style: 'currency',
-    currency: 'HKD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 }
 
 export default function BrandPublicProducts({
@@ -72,36 +64,15 @@ export default function BrandPublicProducts({
         </div>
         <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
           {products.map((product) => (
-            <button
+            <ProductMerchCard
               key={product.id}
-              type="button"
+              title={product.title}
+              imageUrl={product.imageUrl}
+              price={product.price}
+              accentColor={accent}
               onClick={() => handleProductClick(product)}
-              className="flex-shrink-0 w-36 md:w-40 lg:w-48 rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity text-left"
-            >
-              <div className="aspect-square w-full">
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-muted">
-                    <span className="text-xs text-muted-foreground px-2 text-center">{product.title}</span>
-                  </div>
-                )}
-              </div>
-              <div className="p-3 lg:p-4">
-                <p className="font-medium text-sm lg:text-base truncate" style={{ color: '#0F1F17' }}>
-                  {product.title}
-                </p>
-                {product.price != null && product.price > 0 && (
-                  <p className="text-sm lg:text-base font-semibold mt-0.5" style={{ color: accent }}>
-                    {formatPrice(product.price)}
-                  </p>
-                )}
-              </div>
-            </button>
+              className="flex-shrink-0 w-36 md:w-40 lg:w-48"
+            />
           ))}
         </div>
       </div>

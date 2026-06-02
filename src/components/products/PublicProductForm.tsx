@@ -23,6 +23,17 @@ interface Org {
   slug?: string | null;
 }
 
+export interface PosAddToCartItem {
+  productId: string;
+  variantId?: string;
+  name: string;
+  variantLabel?: string;
+  qty: number;
+  unitPrice: number;
+  imageUrl?: string | null;
+  weightKgPerUnit?: number;
+}
+
 interface PublicProductFormProps {
   product: Product;
   variants: ProductVariant[];
@@ -31,6 +42,12 @@ interface PublicProductFormProps {
   relatedProducts?: RelatedProductSummary[];
   /** URL ?code= — matches product_access_variants for promo pricing */
   codeParam?: string | null;
+  /** POS mode: call this instead of public cart */
+  onAddToCart?: (item: PosAddToCartItem) => void;
+  /** Compact layout for POS sheet */
+  compact?: boolean;
+  /** Hide related products carousel */
+  hideRelatedProducts?: boolean;
 }
 
 function formatPrice(amount: number): string {
@@ -49,10 +66,14 @@ export default function PublicProductForm({
   orgSlug,
   relatedProducts = [],
   codeParam = null,
+  onAddToCart,
+  compact = false,
+  hideRelatedProducts = false,
 }: PublicProductFormProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { setOrgId, addItem } = usePublicCart();
+  const isPosMode = Boolean(onAddToCart);
 
   const activeVariants = useMemo(
     () => variants.filter((v) => v.active !== false),
@@ -64,6 +85,7 @@ export default function PublicProductForm({
   const [productAccessVariants, setProductAccessVariants] = useState<ProductAccessVariant[]>([]);
 
   useEffect(() => {
+    if (isPosMode) return;
     let cancelled = false;
     (async () => {
       try {
@@ -76,7 +98,7 @@ export default function PublicProductForm({
     return () => {
       cancelled = true;
     };
-  }, [product.id]);
+  }, [product.id, isPosMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,8 +155,10 @@ export default function PublicProductForm({
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
-    setOrgId(org.id);
-  }, [org.id, setOrgId]);
+    if (!isPosMode) {
+      setOrgId(org.id);
+    }
+  }, [org.id, isPosMode, setOrgId]);
 
   const photos = useMemo(
     () => collectProductPhotoUrls(product as Product & { image_url?: string | null }),
@@ -192,24 +216,25 @@ export default function PublicProductForm({
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
 
-  const handleAddToCart = () => {
+  const buildCartPayload = (): PosAddToCartItem | null => {
     const variant = effectiveSelectedVariant;
-    if (!variant) {
+    if (!variant && activeVariants.length > 0) {
       toast({
         title: 'Cannot add to cart',
         description: 'Please select a variant.',
         variant: 'destructive',
       });
-      return;
+      return null;
     }
-    const variantLabel = hasMultipleVariants ? variant.name : undefined;
+    const variantLabel = hasMultipleVariants && variant ? variant.name : undefined;
     const productRow = product as Product & { image_url?: string | null };
-    const variantPhoto = collectVariantPhotoUrl(variant);
+    const variantPhoto = variant ? collectVariantPhotoUrl(variant) : null;
     const lineImageUrl =
       mainSrc ?? variantPhoto ?? photos[0] ?? productRow.image_url?.trim() ?? null;
-    const pm = product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
-      ? (product.metadata as Record<string, unknown>)
-      : {};
+    const pm =
+      product.metadata && typeof product.metadata === 'object' && !Array.isArray(product.metadata)
+        ? (product.metadata as Record<string, unknown>)
+        : {};
     const rawW = pm.shipping_weight_kg;
     let weightKgPerUnit: number | undefined;
     if (typeof rawW === 'number' && Number.isFinite(rawW) && rawW >= 0) {
@@ -218,20 +243,46 @@ export default function PublicProductForm({
       const n = Number(rawW.trim());
       if (Number.isFinite(n) && n >= 0) weightKgPerUnit = n;
     }
-    addItem({
+    const unitPrice = variant?.price ?? product.base_price ?? 0;
+    return {
       productId: product.id,
-      variantId: variant.id,
+      variantId: variant?.id,
       name: product.title,
       variantLabel,
       imageUrl: lineImageUrl,
-      unitPrice: displayPrice,
-      productAccessVariantId: matchedPromoVariant?.id ?? null,
+      unitPrice: isPosMode ? unitPrice : displayPrice,
       qty: quantityNum,
       weightKgPerUnit,
+    };
+  };
+
+  const handleAddToCart = () => {
+    const payload = buildCartPayload();
+    if (!payload) return;
+
+    if (onAddToCart) {
+      onAddToCart(payload);
+      toast({
+        title: 'Added to cart',
+        description: `${product.title}${payload.variantLabel ? ` (${payload.variantLabel})` : ''} x${payload.qty}`,
+      });
+      return;
+    }
+
+    addItem({
+      productId: payload.productId,
+      variantId: payload.variantId,
+      name: payload.name,
+      variantLabel: payload.variantLabel,
+      imageUrl: payload.imageUrl,
+      unitPrice: payload.unitPrice,
+      productAccessVariantId: matchedPromoVariant?.id ?? null,
+      qty: payload.qty,
+      weightKgPerUnit: payload.weightKgPerUnit,
     });
     toast({
       title: 'Added to cart',
-      description: `${product.title}${variantLabel ? ` (${variantLabel})` : ''} x${quantityNum}`,
+      description: `${product.title}${payload.variantLabel ? ` (${payload.variantLabel})` : ''} x${payload.qty}`,
     });
   };
 
@@ -265,9 +316,9 @@ export default function PublicProductForm({
         description={descriptionText}
         productDetails={productDetails}
         sizeAndFit={sizeFit}
-        defaultAllOpen
+        defaultAllOpen={!compact}
         accordionClassName="border-t border-black/10 pt-2"
-        density="pdp"
+        density={compact ? 'compact' : 'pdp'}
       >
         {hasMultipleVariants && (
           <HierarchicalVariantSelectGroup
@@ -311,7 +362,7 @@ export default function PublicProductForm({
         </div>
       </ProductMerchandiseLayout>
 
-      {relatedProducts.length > 0 && (
+      {!hideRelatedProducts && relatedProducts.length > 0 && (
         <section aria-label="You may also like">
           <h2
             className="text-lg md:text-xl font-semibold mb-4 md:mb-6"
