@@ -27,11 +27,22 @@ import {
   mergeProductDetailMetadata,
 } from '@/lib/utils/product-media';
 import {
+  deleteProduct,
   getProductAccessVariants,
   replaceProductAccessVariants,
   type ProductAccessVariantInput,
   type ProductAccessVariantVisibility,
 } from '@/lib/api/products';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ProductCollabSection } from '@/components/catalog/ProductCollabSection';
 import {
   validateProductPartners,
@@ -326,7 +337,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { currentOrg, user } = useAuth();
+  const { currentOrg, user, orgMemberships } = useAuth();
   const { toast } = useToast();
 
   const embedded = props?.embedded ?? false;
@@ -335,6 +346,10 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [productHostOrgId, setProductHostOrgId] = useState<string | null>(null);
 
   // Product type: when embedded, use props; otherwise user selects (physical / addon)
   const [productType, setProductType] = useState<OrgProductType>(
@@ -412,6 +427,13 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     }
     return null;
   }, [isEditMode, id, currentOrg?.slug, embedded]);
+
+  const canDeleteProduct = useMemo(() => {
+    if (!isEditMode || !id || embedded || !currentOrg?.id || !productHostOrgId) return false;
+    if (productHostOrgId !== currentOrg.id) return false;
+    const role = orgMemberships.find((m) => m.org_id === currentOrg.id)?.role;
+    return role === 'owner' || role === 'admin';
+  }, [isEditMode, id, embedded, currentOrg?.id, productHostOrgId, orgMemberships]);
 
   // Helper function to upload product image
   const uploadProductImage = async (file: File): Promise<string> => {
@@ -562,6 +584,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         if (productError) throw productError;
         const p = product as any as (OrgProduct & { metadata?: any; image_url?: string | null });
 
+        setProductHostOrgId(p.org_id);
         setTitle(p.title);
         setDescription(p.description || '');
         setBasePrice(p.base_price === null ? '' : String(p.base_price));
@@ -1639,6 +1662,58 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!canDeleteProduct || !id) return;
+
+    if (!user?.email) {
+      toast({
+        title: 'Error',
+        description: 'Password confirmation requires an email login.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const password = deletePassword.trim();
+    if (!password) {
+      toast({
+        title: 'Error',
+        description: 'Enter your password to confirm deletion.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setDeleting(true);
+
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password,
+      });
+
+      if (authError) {
+        toast({
+          title: 'Error',
+          description: 'Invalid password. Product was not deleted.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      await deleteProduct(id);
+      toast({ title: 'Success', description: 'Product deleted' });
+      navigate('/app/products');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to delete product';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+      setDeletePassword('');
+      setShowDeleteDialog(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -2455,17 +2530,35 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             )}
 
 
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
+              <div className="flex flex-col gap-3 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
+                  disabled={saving || deleting}
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+                {canDeleteProduct && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={saving || deleting}
+                    className="w-full sm:w-auto"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Product
+                  </Button>
+                )}
+              </div>
               <Button
-                type="button"
-                variant="outline"
-                onClick={() => (embedded ? props?.onCancel?.() : navigate('/app/products'))}
-                disabled={saving}
+                type="submit"
+                disabled={!canSubmit || saving || deleting}
                 className="w-full sm:w-auto"
               >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!canSubmit || saving} className="w-full sm:w-auto">
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                 {isEditMode ? 'Save Changes' : 'Create Product'}
               </Button>
@@ -2528,6 +2621,61 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (deleting) return;
+          setShowDeleteDialog(open);
+          if (!open) setDeletePassword('');
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {title.trim() ? `"${title.trim()}"` : 'this product'}? This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="delete-product-password">Password</Label>
+            <Input
+              id="delete-product-password"
+              type="password"
+              autoComplete="current-password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Enter your account password"
+              disabled={deleting}
+              className="h-10"
+            />
+            <p className="text-sm text-muted-foreground">
+              Enter your account password to confirm deletion.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDelete();
+              }}
+              disabled={deleting || !deletePassword.trim()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Warehouse Modal */}
       <Dialog open={createWarehouseOpen} onOpenChange={setCreateWarehouseOpen}>
