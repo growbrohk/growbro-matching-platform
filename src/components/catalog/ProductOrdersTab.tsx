@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
   getCoreRowModel,
@@ -26,6 +25,7 @@ import {
   type ProductOrdersRangeKey,
 } from '@/hooks/useProductOrdersTable';
 import { formatMoney } from '@/hooks/useOrdersDashboard';
+import { HostOrderDetailDialog } from '@/components/orders/HostOrderDetailDialog';
 import {
   formatCommissionRateLabel,
   isPartnerColumnKey,
@@ -308,8 +308,8 @@ interface ProductOrdersTabProps {
 }
 
 export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
-  const navigate = useNavigate();
   const [range, setRange] = useState<ProductOrdersRangeKey>('30d');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const { data: rows = [], isLoading } = useProductOrdersTable(range, { enabled });
 
   const partnerColumns = useMemo(() => buildPartnerColumnsFromRows(rows), [rows]);
@@ -1337,16 +1337,10 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                 <TableRow
                   key={row.id}
                   className="border-b border-border cursor-pointer hover:bg-muted/30"
-                  onClick={() =>
-                    navigate(
-                      `/app/orders/${row.original.orderId}?range=${range === 'all' ? '90d' : range}&tab=all`,
-                      {
-                        state: {
-                          ordersBackTo: '/app/catalog?tab=products&productsSubtab=orders',
-                        },
-                      }
-                    )
-                  }
+                  onClick={() => {
+                    if (!row.original.canViewOrderDetails) return;
+                    setSelectedOrderId(row.original.orderId);
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => {
                     const isLast =
@@ -1440,6 +1434,14 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           </Table>
         </div>
       )}
+
+      <HostOrderDetailDialog
+        open={!!selectedOrderId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedOrderId(null);
+        }}
+        orderId={selectedOrderId}
+      />
     </div>
   );
 }

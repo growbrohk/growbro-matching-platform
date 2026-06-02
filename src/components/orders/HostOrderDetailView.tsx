@@ -440,15 +440,11 @@ function EventDetailBody({
   );
 }
 
-export interface HostOrderDetailViewProps {
+export interface HostOrderDetailContentProps {
   orderId: string;
-  /** Search string for list route, e.g. `?tab=all&range=30d` */
-  listSearch: string;
 }
 
-export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailViewProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
+export function HostOrderDetailContent({ orderId }: HostOrderDetailContentProps) {
   const { currentOrg } = useAuth();
 
   const [showProofDialog, setShowProofDialog] = useState(false);
@@ -534,15 +530,6 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
     void run();
   }, [showProofDialog, proofRef]);
 
-  const back = () => {
-    const state = location.state as { ordersBackTo?: string } | null;
-    if (state?.ordersBackTo) {
-      navigate(state.ordersBackTo);
-      return;
-    }
-    navigate({ pathname: '/app/orders', search: listSearch || undefined });
-  };
-
   if (!currentOrg) {
     return (
       <div className="py-12 text-center text-sm" style={{ color: MUTED }}>
@@ -563,46 +550,22 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
 
   if (isError) {
     return (
-      <div className="space-y-4">
-        <button type="button" className="inline-flex items-center gap-1 text-sm" style={{ color: TEXT }} onClick={back}>
-          <ChevronLeft className="h-4 w-4" />
-          Back
-        </button>
-        <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Failed to load order'}</p>
-      </div>
+      <p className="text-sm text-destructive">
+        {error instanceof Error ? error.message : 'Failed to load order'}
+      </p>
     );
   }
 
   if (!payload) {
     return (
-      <div className="space-y-4">
-        <button type="button" className="inline-flex items-center gap-1 text-sm" style={{ color: TEXT }} onClick={back}>
-          <ChevronLeft className="h-4 w-4" />
-          Back
-        </button>
-        <p className="text-sm" style={{ color: MUTED }}>
-          Order not found or you do not have access to this order.
-        </p>
-      </div>
+      <p className="text-sm" style={{ color: MUTED }}>
+        Order not found or you do not have access to this order.
+      </p>
     );
   }
 
   return (
-    <div className={cn('w-full space-y-2 pb-8')}>
-      <button
-        type="button"
-        className="inline-flex items-center gap-1 text-sm hover:underline mb-2"
-        style={{ color: TEXT }}
-        onClick={back}
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back
-      </button>
-
-      <h1 className="text-2xl font-bold uppercase tracking-tight" style={{ color: TEXT }}>
-        Order details
-      </h1>
-
+    <>
       {payload.kind === 'product' ? (
         <ProductDetailBody
           data={payload.order}
@@ -662,6 +625,46 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export interface HostOrderDetailViewProps {
+  orderId: string;
+  /** Search string for list route, e.g. `?tab=all&range=30d` */
+  listSearch: string;
+}
+
+export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailViewProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const back = () => {
+    const state = location.state as { ordersBackTo?: string } | null;
+    if (state?.ordersBackTo) {
+      navigate(state.ordersBackTo);
+      return;
+    }
+    navigate({ pathname: '/app/orders', search: listSearch || undefined });
+  };
+
+  return (
+    <div className={cn('w-full space-y-2 pb-8')}>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-sm hover:underline mb-2"
+        style={{ color: TEXT }}
+        onClick={back}
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back
+      </button>
+
+      <h1 className="text-2xl font-bold uppercase tracking-tight" style={{ color: TEXT }}>
+        Order details
+      </h1>
+
+      <HostOrderDetailContent orderId={orderId} />
     </div>
   );
 }
