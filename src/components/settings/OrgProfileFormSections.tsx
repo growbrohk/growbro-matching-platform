@@ -1,6 +1,5 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ImageIcon, Upload } from 'lucide-react';
 
@@ -15,10 +14,6 @@ const inputStyle = { backgroundColor: '#FBF8F4', color: '#0F1F17' };
 export interface OrgProfileFormSectionsProps {
   name: string;
   onNameChange: (value: string) => void;
-  instagram: string;
-  onInstagramChange: (value: string) => void;
-  address: string;
-  onAddressChange: (value: string) => void;
   logoUrl: string;
   uploadingLogo: boolean;
   logoRenderNonce: number;
@@ -31,10 +26,6 @@ export interface OrgProfileFormSectionsProps {
 export default function OrgProfileFormSections({
   name,
   onNameChange,
-  instagram,
-  onInstagramChange,
-  address,
-  onAddressChange,
   logoUrl,
   uploadingLogo,
   logoRenderNonce,
@@ -101,34 +92,6 @@ export default function OrgProfileFormSections({
                 </span>
               </label>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor={pid('instagram')} style={labelStyle}>
-              Instagram <span className="text-xs text-gray-500">(optional)</span>
-            </Label>
-            <Input
-              id={pid('instagram')}
-              value={instagram}
-              onChange={(e) => onInstagramChange(e.target.value)}
-              placeholder="@handle or URL"
-              className="h-10"
-              style={inputStyle}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor={pid('address')} style={labelStyle}>
-              Address <span className="text-xs text-gray-500">(optional)</span>
-            </Label>
-            <Textarea
-              id={pid('address')}
-              value={address}
-              onChange={(e) => onAddressChange(e.target.value)}
-              placeholder="Street address, building name, unit number..."
-              className="min-h-[80px]"
-              style={inputStyle}
-            />
           </div>
         </CardContent>
       </Card>

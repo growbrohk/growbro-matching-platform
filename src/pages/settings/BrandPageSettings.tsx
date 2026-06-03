@@ -413,10 +413,6 @@ export default function BrandPageSettings() {
         orgId={currentOrg.id}
         name={orgForm.name}
         onNameChange={orgForm.setName}
-        instagram={orgForm.instagram}
-        onInstagramChange={orgForm.setInstagram}
-        address={orgForm.address}
-        onAddressChange={orgForm.setAddress}
         logoUrl={orgForm.logoUrl}
         uploadingLogo={orgForm.uploadingLogo}
         logoRenderNonce={orgForm.logoRenderNonce}
