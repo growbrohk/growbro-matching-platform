@@ -27,7 +27,6 @@ export default function OnboardingNew() {
   const [instagram, setInstagram] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
   const [address, setAddress] = useState('');
-  const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -122,7 +121,7 @@ export default function OnboardingNew() {
           category,
           instagram: instagram.trim() || null,
           address: address.trim(),
-          bio: bio.trim() || null,
+          bio: null,
           website: website.trim() || null,
           logo_url: resolvedLogoUrl,
         } as any, {
@@ -289,33 +288,6 @@ export default function OnboardingNew() {
                 <p className="text-xs pt-2 border-t" style={{ color: 'rgba(15,31,23,0.6)', borderColor: 'rgba(14,122,58,0.14)' }}>
                   You can edit your profile anytime via Account → Edit page
                 </p>
-              </CardContent>
-            </Card>
-
-            {/* B) Profile description (optional) */}
-            <Card className="rounded-2xl border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: '#FBF8F4' }}>
-              <CardHeader className="p-4">
-                <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-                  Profile description
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bio" style={{ color: '#0F1F17' }}>
-                    Short intro <span className="text-xs text-gray-500">(optional)</span>
-                  </Label>
-                  <Textarea
-                    id="bio"
-                    value={bio}
-                    onChange={(e) => setBio(e.target.value)}
-                    placeholder="Tell collaborators about yourself..."
-                    className="min-h-[100px]"
-                    style={{ backgroundColor: '#FBF8F4', color: '#0F1F17' }}
-                  />
-                  <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    Shown to collaborators.
-                  </p>
-                </div>
               </CardContent>
             </Card>
 

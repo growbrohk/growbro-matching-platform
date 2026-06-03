@@ -27,8 +27,6 @@ export interface OrgProfileFormSectionsProps {
   onCategoryChange: (value: OrgProfileCategory) => void;
   address: string;
   onAddressChange: (value: string) => void;
-  bio: string;
-  onBioChange: (value: string) => void;
   logoUrl: string;
   onLogoUrlChange: (value: string) => void;
   uploadingLogo: boolean;
@@ -50,8 +48,6 @@ export default function OrgProfileFormSections({
   onCategoryChange,
   address,
   onAddressChange,
-  bio,
-  onBioChange,
   logoUrl,
   onLogoUrlChange,
   uploadingLogo,
@@ -212,32 +208,6 @@ export default function OrgProfileFormSections({
               className="h-10"
               style={inputStyle}
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-3xl border shadow-xl" style={cardStyle}>
-        <CardHeader className="p-4 md:p-6">
-          <CardTitle className="text-lg" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-            Profile description
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6 pt-0 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor={pid('bio')} style={labelStyle}>
-              Short intro <span className="text-xs text-gray-500">(optional)</span>
-            </Label>
-            <Textarea
-              id={pid('bio')}
-              value={bio}
-              onChange={(e) => onBioChange(e.target.value)}
-              placeholder="Tell collaborators about yourself..."
-              className="min-h-[100px]"
-              style={inputStyle}
-            />
-            <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              Shown to collaborators.
-            </p>
           </div>
         </CardContent>
       </Card>
