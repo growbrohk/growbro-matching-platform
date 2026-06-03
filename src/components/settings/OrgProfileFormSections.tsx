@@ -3,10 +3,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Upload } from 'lucide-react';
-import type { OrgProfileCategory, OrgProfileRole } from '@/hooks/use-org-profile-form';
+import type { OrgProfileCategory } from '@/hooks/use-org-profile-form';
 
 const cardStyle = {
   borderColor: 'rgba(14,122,58,0.14)',
@@ -17,8 +16,6 @@ const labelStyle = { color: '#0F1F17' };
 const inputStyle = { backgroundColor: '#FBF8F4', color: '#0F1F17' };
 
 export interface OrgProfileFormSectionsProps {
-  roles: OrgProfileRole[];
-  onRoleToggle: (role: OrgProfileRole) => void;
   name: string;
   onNameChange: (value: string) => void;
   instagram: string;
@@ -38,8 +35,6 @@ export interface OrgProfileFormSectionsProps {
 }
 
 export default function OrgProfileFormSections({
-  roles,
-  onRoleToggle,
   name,
   onNameChange,
   instagram,
@@ -68,35 +63,6 @@ export default function OrgProfileFormSections({
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 md:p-6 pt-0 space-y-4">
-          <div className="space-y-2">
-            <Label style={labelStyle}>
-              Roles <span className="text-red-500">*</span>
-            </Label>
-            <div className="space-y-2">
-              {(
-                [
-                  ['brand', 'Brand', 'role-brand'],
-                  ['venue', 'Venue', 'role-venue'],
-                  ['content_creator', 'Content Creator', 'role-content-creator'],
-                ] as const
-              ).map(([role, label, htmlFor]) => (
-                <div key={role} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={pid(htmlFor)}
-                    checked={roles.includes(role)}
-                    onCheckedChange={() => onRoleToggle(role)}
-                  />
-                  <label htmlFor={pid(htmlFor)} className="text-sm font-medium leading-none" style={labelStyle}>
-                    {label}
-                  </label>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              Select all that apply
-            </p>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor={pid('name')} style={labelStyle}>
               Name <span className="text-red-500">*</span>

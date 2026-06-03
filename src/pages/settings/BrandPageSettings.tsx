@@ -320,7 +320,6 @@ export default function BrandPageSettings() {
         .upsert(
           {
             org_id: currentOrg.id,
-            roles: orgForm.roles,
             category: orgForm.category,
             instagram: orgForm.instagram.trim() || null,
             address: orgForm.address.trim(),
@@ -412,8 +411,6 @@ export default function BrandPageSettings() {
       <OrgProfileFormSections
         idPrefix="brand-page"
         orgId={currentOrg.id}
-        roles={orgForm.roles}
-        onRoleToggle={orgForm.handleRoleToggle}
         name={orgForm.name}
         onNameChange={orgForm.setName}
         instagram={orgForm.instagram}

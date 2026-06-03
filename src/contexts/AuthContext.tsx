@@ -21,7 +21,6 @@ export interface OrgMember {
 
 export interface OrgProfile {
   org_id: string;
-  roles: string[];
   category: 'f&b' | 'retail' | 'service' | 'other';
   instagram: string | null;
   address: string;

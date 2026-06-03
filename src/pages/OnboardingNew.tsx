@@ -7,13 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Upload } from 'lucide-react';
 import { uploadOrgProfileLogo } from '@/lib/storage/uploadOrgProfileLogo';
 import { toast } from 'sonner';
 
-type Role = 'brand' | 'venue' | 'content_creator';
 type Category = 'f&b' | 'retail' | 'service' | 'other';
 
 export default function OnboardingNew() {
@@ -22,7 +20,6 @@ export default function OnboardingNew() {
   const [loading, setLoading] = useState(false);
   
   // Form fields
-  const [roles, setRoles] = useState<Role[]>([]);
   const [name, setName] = useState('');
   const [instagram, setInstagram] = useState('');
   const [category, setCategory] = useState<Category | ''>('');
@@ -43,20 +40,8 @@ export default function OnboardingNew() {
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
 
-  const handleRoleToggle = (role: Role) => {
-    setRoles(prev => 
-      prev.includes(role) 
-        ? prev.filter(r => r !== role)
-        : [...prev, role]
-    );
-  };
-
   const handleSubmit = async () => {
     // Validation
-    if (roles.length === 0) {
-      toast.error('Please select at least one role');
-      return;
-    }
     if (!name.trim()) {
       toast.error('Please enter your name');
       return;
@@ -117,7 +102,6 @@ export default function OnboardingNew() {
         .from('org_profiles' as any)
         .upsert({
           org_id: orgId,
-          roles,
           category,
           instagram: instagram.trim() || null,
           address: address.trim(),
@@ -164,62 +148,7 @@ export default function OnboardingNew() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0 space-y-4">
-                
-                {/* 1) Roles */}
-                <div className="space-y-2">
-                  <Label style={{ color: '#0F1F17' }}>
-                    Roles <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="role-brand" 
-                        checked={roles.includes('brand')}
-                        onCheckedChange={() => handleRoleToggle('brand')}
-                      />
-                      <label 
-                        htmlFor="role-brand" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        style={{ color: '#0F1F17' }}
-                      >
-                        Brand
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="role-venue" 
-                        checked={roles.includes('venue')}
-                        onCheckedChange={() => handleRoleToggle('venue')}
-                      />
-                      <label 
-                        htmlFor="role-venue" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        style={{ color: '#0F1F17' }}
-                      >
-                        Venue
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="role-content-creator" 
-                        checked={roles.includes('content_creator')}
-                        onCheckedChange={() => handleRoleToggle('content_creator')}
-                      />
-                      <label 
-                        htmlFor="role-content-creator" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        style={{ color: '#0F1F17' }}
-                      >
-                        Content Creator
-                      </label>
-                    </div>
-                  </div>
-                  <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    Select all that apply (You can change this later via Account → Edit page)
-                  </p>
-                </div>
-
-                {/* 2) Name */}
+                {/* Name */}
                 <div className="space-y-2">
                   <Label htmlFor="name" style={{ color: '#0F1F17' }}>
                     Name <span className="text-red-500">*</span>

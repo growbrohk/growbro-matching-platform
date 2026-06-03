@@ -4,11 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { uploadOrgProfileLogo } from '@/lib/storage/uploadOrgProfileLogo';
 import { toast } from 'sonner';
 
-export type OrgProfileRole = 'brand' | 'venue' | 'content_creator';
 export type OrgProfileCategory = 'f&b' | 'retail' | 'service' | 'other';
 
 export interface OrgProfileFormState {
-  roles: OrgProfileRole[];
   name: string;
   instagram: string;
   category: OrgProfileCategory | '';
@@ -22,7 +20,6 @@ export function useOrgProfileForm() {
   const { currentOrg, refreshOrgMemberships } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(true);
-  const [roles, setRoles] = useState<OrgProfileRole[]>([]);
   const [name, setName] = useState('');
   const [instagram, setInstagram] = useState('');
   const [category, setCategory] = useState<OrgProfileCategory | ''>('');
@@ -34,15 +31,8 @@ export function useOrgProfileForm() {
   const [logoRenderNonce, setLogoRenderNonce] = useState(0);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleRoleToggle = (role: OrgProfileRole) => {
-    setRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-    );
-  };
-
   const applyProfileRow = useCallback((profile: OrgProfile) => {
     setProfileExists(true);
-    setRoles((profile.roles || []) as OrgProfileRole[]);
     setCategory((profile.category || '') as OrgProfileCategory);
     setInstagram(profile.instagram || '');
     setAddress(profile.address || '');
@@ -67,8 +57,7 @@ export function useOrgProfileForm() {
       if (error?.code === 'PGRST116') {
         setProfileExists(false);
         const metadata = currentOrg.metadata || {};
-        if (metadata.roles || metadata.category || metadata.address) {
-          setRoles(metadata.roles || []);
+        if (metadata.category || metadata.address) {
           setCategory(metadata.category || '');
           setInstagram(metadata.instagram || '');
           setAddress(metadata.address || '');
@@ -121,10 +110,6 @@ export function useOrgProfileForm() {
   };
 
   const validate = (): boolean => {
-    if (roles.length === 0) {
-      toast.error('Please select at least one role');
-      return false;
-    }
     if (!name.trim()) {
       toast.error('Please enter your name');
       return false;
@@ -152,7 +137,6 @@ export function useOrgProfileForm() {
 
     const profileData = {
       org_id: currentOrg.id,
-      roles,
       category,
       instagram: instagram.trim() || null,
       address: address.trim(),
@@ -173,7 +157,6 @@ export function useOrgProfileForm() {
   };
 
   const getFormState = (): OrgProfileFormState => ({
-    roles,
     name,
     instagram,
     category,
@@ -187,8 +170,6 @@ export function useOrgProfileForm() {
     currentOrg,
     loading,
     profileExists,
-    roles,
-    setRoles,
     name,
     setName,
     instagram,
@@ -206,7 +187,6 @@ export function useOrgProfileForm() {
     uploadingLogo,
     logoRenderNonce,
     logoFileInputRef,
-    handleRoleToggle,
     handleLogoFileChange,
     loadProfile,
     hydrateFromProfileData,

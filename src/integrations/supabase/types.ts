@@ -907,7 +907,6 @@ export type Database = {
           instagram: string | null
           logo_url: string | null
           org_id: string
-          roles: string[]
           updated_at: string
           website: string | null
         }
@@ -919,7 +918,6 @@ export type Database = {
           instagram?: string | null
           logo_url?: string | null
           org_id: string
-          roles?: string[]
           updated_at?: string
           website?: string | null
         }
@@ -931,7 +929,6 @@ export type Database = {
           instagram?: string | null
           logo_url?: string | null
           org_id?: string
-          roles?: string[]
           updated_at?: string
           website?: string | null
         }
