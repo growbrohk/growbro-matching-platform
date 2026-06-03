@@ -418,7 +418,6 @@ export default function BrandPageSettings() {
         address={orgForm.address}
         onAddressChange={orgForm.setAddress}
         logoUrl={orgForm.logoUrl}
-        onLogoUrlChange={orgForm.setLogoUrl}
         uploadingLogo={orgForm.uploadingLogo}
         logoRenderNonce={orgForm.logoRenderNonce}
         logoFileInputRef={orgForm.logoFileInputRef}

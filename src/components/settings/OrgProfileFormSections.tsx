@@ -20,7 +20,6 @@ export interface OrgProfileFormSectionsProps {
   address: string;
   onAddressChange: (value: string) => void;
   logoUrl: string;
-  onLogoUrlChange: (value: string) => void;
   uploadingLogo: boolean;
   logoRenderNonce: number;
   logoFileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -37,7 +36,6 @@ export default function OrgProfileFormSections({
   address,
   onAddressChange,
   logoUrl,
-  onLogoUrlChange,
   uploadingLogo,
   logoRenderNonce,
   logoFileInputRef,
@@ -103,17 +101,6 @@ export default function OrgProfileFormSections({
                 </span>
               </label>
             </div>
-            <Label htmlFor={pid('logoUrl')} className="text-xs font-normal" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Or paste image URL
-            </Label>
-            <Input
-              id={pid('logoUrl')}
-              value={logoUrl}
-              onChange={(e) => onLogoUrlChange(e.target.value)}
-              placeholder="https://example.com/logo.png"
-              className="h-10"
-              style={inputStyle}
-            />
           </div>
 
           <div className="space-y-2">
