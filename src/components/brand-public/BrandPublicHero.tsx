@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import BrandPublicHeader from '@/components/brand-public/BrandPublicHeader';
+import BrandPublicHeader, { type BrandPublicHeaderVariant } from '@/components/brand-public/BrandPublicHeader';
 
 interface BrandPublicHeroProps {
   org: { id: string; name: string; slug?: string | null };
   isOwner?: boolean;
+  headerVariant?: BrandPublicHeaderVariant;
   profile: {
     logo_url?: string | null;
     hero_banner_url?: string | null;
@@ -20,6 +21,7 @@ export default function BrandPublicHero({
   org,
   profile,
   isOwner,
+  headerVariant = 'standalone',
 }: BrandPublicHeroProps) {
   const rawImages = profile?.hero_banner_images;
   const images: string[] = Array.isArray(rawImages)
@@ -42,7 +44,13 @@ export default function BrandPublicHero({
 
   return (
     <section className="relative w-full min-h-[40vh] md:min-h-[45vh] lg:min-h-[55vh] flex flex-col">
-      <BrandPublicHeader org={org} profile={profile} showBackLink={false} isOwner={isOwner} />
+      <BrandPublicHeader
+        org={org}
+        profile={profile}
+        showBackLink={false}
+        isOwner={isOwner}
+        variant={headerVariant}
+      />
 
       {/* Hero banner carousel */}
       <div

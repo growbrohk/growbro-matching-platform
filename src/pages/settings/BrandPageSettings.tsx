@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, OrgProfile } from '@/contexts/AuthContext';
+import { useOrgProfileForm } from '@/hooks/use-org-profile-form';
+import OrgProfileFormSections from '@/components/settings/OrgProfileFormSections';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +21,8 @@ function withCacheBust(url: string): string {
 
 export default function BrandPageSettings() {
   const navigate = useNavigate();
-  const { currentOrg } = useAuth();
+  const { currentOrg, refreshOrgMemberships } = useAuth();
+  const orgForm = useOrgProfileForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileExists, setProfileExists] = useState(true);
@@ -74,8 +77,10 @@ export default function BrandPageSettings() {
 
       if (error?.code === 'PGRST116') {
         setProfileExists(false);
+        orgForm.hydrateFromProfileData(null, currentOrg.name);
       } else if (!error && data) {
         setProfileExists(true);
+        orgForm.hydrateFromProfileData(data, currentOrg.name);
         const heroImgs = data.hero_banner_images;
         const heroArr = Array.isArray(heroImgs) ? heroImgs : [];
         if (heroArr.length > 0) {
@@ -129,7 +134,7 @@ export default function BrandPageSettings() {
     } finally {
       setLoading(false);
     }
-  }, [currentOrg]);
+  }, [currentOrg, orgForm.hydrateFromProfileData]);
 
   useEffect(() => {
     loadProfile();
@@ -299,47 +304,70 @@ export default function BrandPageSettings() {
 
   const handleSave = async () => {
     if (!currentOrg) return;
+    if (!orgForm.validate()) return;
+
     setSaving(true);
     try {
+      const { error: updateOrgError } = await supabase
+        .from('orgs')
+        .update({ name: orgForm.name.trim() })
+        .eq('id', currentOrg.id);
+
+      if (updateOrgError) throw updateOrgError;
+
       const { error } = await (supabase
         .from('org_profiles' as any)
-        .update({
-          hero_banner_url: heroBannerImages[0] || null,
-          hero_banner_images: heroBannerImages.filter(Boolean),
-          accent_color: accentColor || '#E85D04',
-          top_section: topSection,
-          bottom_section: bottomSection,
-          events_filter: eventsFilter,
-          events_sort: eventsSort,
-          events_display_order: eventsDisplayOrder,
-          products_filter: productsFilter,
-          products_sort: productsSort,
-          products_display_order: productsDisplayOrder,
-          hero_headline: heroHeadline || null,
-          hero_subheadline: heroSubheadline || null,
-          description_intro: descriptionIntro || null,
-          description_body: descriptionBody || null,
-          description_images: descriptionImages.filter(Boolean),
-          description_illustration_url: descriptionIllustrationUrl || null,
-          description_tagline: descriptionTagline || null,
-          description_tagline_body: descriptionTaglineBody || null,
-          footer_tagline: footerTagline || null,
-          footer_body: footerBody || null,
-          footer_contact_email: footerContactEmail || null,
-          footer_illustration_url: footerIllustrationUrl || null,
-          footer_links: footerLinks.filter((l) => l.label.trim() && l.url.trim()),
-          enable_stripe: enableStripe || null,
-          enable_payme: enablePayme || null,
-          enable_fps: enableFps || null,
-          payme_link: paymeLink.trim() || null,
-          fps_link: fpsLink.trim() || null,
-        })
-        .eq('org_id', currentOrg.id)) as { error: any };
+        .upsert(
+          {
+            org_id: currentOrg.id,
+            roles: orgForm.roles,
+            category: orgForm.category,
+            instagram: orgForm.instagram.trim() || null,
+            address: orgForm.address.trim(),
+            bio: orgForm.bio.trim() || null,
+            website: orgForm.website.trim() || null,
+            logo_url: orgForm.logoUrl.trim() || null,
+            hero_banner_url: heroBannerImages[0] || null,
+            hero_banner_images: heroBannerImages.filter(Boolean),
+            accent_color: accentColor || '#E85D04',
+            top_section: topSection,
+            bottom_section: bottomSection,
+            events_filter: eventsFilter,
+            events_sort: eventsSort,
+            events_display_order: eventsDisplayOrder,
+            products_filter: productsFilter,
+            products_sort: productsSort,
+            products_display_order: productsDisplayOrder,
+            hero_headline: heroHeadline || null,
+            hero_subheadline: heroSubheadline || null,
+            description_intro: descriptionIntro || null,
+            description_body: descriptionBody || null,
+            description_images: descriptionImages.filter(Boolean),
+            description_illustration_url: descriptionIllustrationUrl || null,
+            description_tagline: descriptionTagline || null,
+            description_tagline_body: descriptionTaglineBody || null,
+            footer_tagline: footerTagline || null,
+            footer_body: footerBody || null,
+            footer_contact_email: footerContactEmail || null,
+            footer_illustration_url: footerIllustrationUrl || null,
+            footer_links: footerLinks.filter((l) => l.label.trim() && l.url.trim()),
+            enable_stripe: enableStripe || null,
+            enable_payme: enablePayme || null,
+            enable_fps: enableFps || null,
+            payme_link: paymeLink.trim() || null,
+            fps_link: fpsLink.trim() || null,
+          } as any,
+          { onConflict: 'org_id' }
+        )) as { error: { message?: string } | null };
 
       if (error) throw error;
-      toast.success('Brand page saved');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save');
+
+      await refreshOrgMemberships();
+      setProfileExists(true);
+      toast.success('Page saved');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -369,20 +397,42 @@ export default function BrandPageSettings() {
           Back
         </Button>
         <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Inter Tight', sans-serif", color: '#0F1F17' }}>
-          Brand Page
+          Edit page
         </h1>
         <p className="mt-2 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-          Customize your public brand page. Add hero, description, and footer content.
+          Profile details, hero, events, products, and footer for your public brand page.
         </p>
         {!profileExists && (
-          <p className="mt-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
-            Complete your profile first in{' '}
-            <button type="button" onClick={() => navigate('/app/settings/profile')} className="underline font-medium">
-              Edit Profile
-            </button>
+          <p className="mt-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: 'rgba(14,122,58,0.1)', color: '#0E7A3A' }}>
+            Complete the profile sections below, then save to publish your page.
           </p>
         )}
       </div>
+
+      <OrgProfileFormSections
+        idPrefix="brand-page"
+        orgId={currentOrg.id}
+        roles={orgForm.roles}
+        onRoleToggle={orgForm.handleRoleToggle}
+        name={orgForm.name}
+        onNameChange={orgForm.setName}
+        instagram={orgForm.instagram}
+        onInstagramChange={orgForm.setInstagram}
+        category={orgForm.category}
+        onCategoryChange={orgForm.setCategory}
+        address={orgForm.address}
+        onAddressChange={orgForm.setAddress}
+        bio={orgForm.bio}
+        onBioChange={orgForm.setBio}
+        website={orgForm.website}
+        onWebsiteChange={orgForm.setWebsite}
+        logoUrl={orgForm.logoUrl}
+        onLogoUrlChange={orgForm.setLogoUrl}
+        uploadingLogo={orgForm.uploadingLogo}
+        logoRenderNonce={orgForm.logoRenderNonce}
+        logoFileInputRef={orgForm.logoFileInputRef}
+        onLogoFileChange={orgForm.handleLogoFileChange}
+      />
 
       {/* Hero */}
       <Card className="rounded-3xl border shadow-xl" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}>
@@ -872,11 +922,11 @@ export default function BrandPageSettings() {
       <div className="flex justify-end pb-8">
         <Button
           onClick={handleSave}
-          disabled={saving || !profileExists}
+          disabled={saving}
           style={{ backgroundColor: '#0E7A3A', color: 'white' }}
         >
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save
+          Save changes
         </Button>
       </div>
     </div>

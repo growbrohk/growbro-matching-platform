@@ -190,7 +190,7 @@ export default function ProfileActions({ mode, onEdit, otherOrgId, orgSlug }: Pr
             if (onEdit) {
               onEdit();
             } else {
-              navigate('/app/settings/profile');
+              navigate('/app/settings/brand-page');
             }
           }}
           variant="ghost"

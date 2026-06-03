@@ -529,7 +529,7 @@ function AppRoutes() {
       <Route path="/app/settings/profile" element={<ProtectedRoute><AppLayout><ProfileSettings /></AppLayout></ProtectedRoute>} />
       <Route path="/app/settings/brand-page" element={<ProtectedRoute><AppLayout><BrandPageSettings /></AppLayout></ProtectedRoute>} />
       
-      {/* Account route - Profile page (new preferred route) */}
+      {/* Account route - embedded public brand page */}
       <Route path="/app/account" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
       
       {/* Poster Space routes */}

@@ -216,7 +216,7 @@ export default function OnboardingNew() {
                     </div>
                   </div>
                   <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                    Select all that apply (You can change this later in Settings → Profile)
+                    Select all that apply (You can change this later via Account → Edit page)
                   </p>
                 </div>
 
@@ -287,7 +287,7 @@ export default function OnboardingNew() {
                 </div>
 
                 <p className="text-xs pt-2 border-t" style={{ color: 'rgba(15,31,23,0.6)', borderColor: 'rgba(14,122,58,0.14)' }}>
-                  You can edit your profile anytime via Settings → Profile
+                  You can edit your profile anytime via Account → Edit page
                 </p>
               </CardContent>
             </Card>
@@ -420,7 +420,7 @@ export default function OnboardingNew() {
                 Create profile
               </Button>
               <p className="text-xs text-center" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                You can edit your profile anytime via Settings → Profile
+                You can edit your profile anytime via Account → Edit page
               </p>
             </div>
 

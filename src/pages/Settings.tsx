@@ -73,18 +73,18 @@ export default function Settings() {
               <div>
                 <CardTitle className="text-lg flex items-center gap-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                   <User className="h-5 w-5" />
-                  Profile
+                  Account
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Edit your brand / venue profile
+                  Preview your public brand page as customers see it
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent className="p-4 md:p-6 pt-0">
-            <Link to="/app/settings/profile">
+            <Link to="/app/account">
               <Button variant="outline" className="w-full sm:w-auto">
-                Edit Profile
+                View Account
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
@@ -97,10 +97,10 @@ export default function Settings() {
               <div>
                 <CardTitle className="text-lg flex items-center gap-2" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
                   <Tags className="h-5 w-5" />
-                  Brand Page
+                  Edit page
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Customize your public brand page (hero, events, description, products, footer)
+                  Profile, hero, events, products, description, and footer
                 </CardDescription>
               </div>
             </div>
@@ -108,7 +108,7 @@ export default function Settings() {
           <CardContent className="p-4 md:p-6 pt-0">
             <Link to="/app/settings/brand-page">
               <Button variant="outline" className="w-full sm:w-auto">
-                Edit Brand Page
+                Edit page
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

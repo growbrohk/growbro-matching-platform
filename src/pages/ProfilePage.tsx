@@ -1,49 +1,35 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
-import ProfileHeader from '@/components/profile/ProfileHeader';
-import ProfileActions from '@/components/profile/ProfileActions';
-import ProfileGrid from '@/components/profile/ProfileGrid';
-import { getOrgStats } from '@/lib/api/orgs';
+import BrandPageView from '@/components/brand-public/BrandPageView';
+import { useBrandPageData } from '@/hooks/use-brand-page-data';
 import { supabase } from '@/integrations/supabase/client';
 import { OrgProfile } from '@/contexts/AuthContext';
-import { useConnectedCount } from '@/hooks/use-connected-count';
+import type { OrgWithProfile } from '@/lib/api/orgs';
 
 export default function ProfilePage() {
   const { currentOrg } = useAuth();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<OrgProfile | null>(null);
-  const [stats, setStats] = useState({
-    catalogCount: 0,
-    collabsCount: 0,
-    connectCount: 0,
-  });
-  
-  // Fetch connected count using hook for real-time updates
-  const { data: connectedCountData } = useConnectedCount(currentOrg?.id);
-  const connectedCount: number = (connectedCountData ?? stats.connectCount) as number;
 
   useEffect(() => {
     if (!currentOrg) return;
 
     const loadProfileData = async () => {
       try {
-        // Load profile from org_profiles table
+        setLoading(true);
         const { data: profileData, error: profileError } = await (supabase
           .from('org_profiles' as any)
           .select('*')
           .eq('org_id', currentOrg.id)
-          .single()) as { data: OrgProfile | null; error: any };
+          .single()) as { data: OrgProfile | null; error: { code?: string } | null };
 
         if (!profileError && profileData) {
           setProfile(profileData);
+        } else if (profileError?.code !== 'PGRST116') {
+          console.error('Error loading profile:', profileError);
         }
-
-        // Fetch stats using API helper
-        const orgStats = await getOrgStats(currentOrg.id);
-        setStats(orgStats);
       } catch (error) {
         console.error('Error loading profile data:', error);
       } finally {
@@ -54,6 +40,25 @@ export default function ProfilePage() {
     loadProfileData();
   }, [currentOrg]);
 
+  const org: OrgWithProfile | null = useMemo(() => {
+    if (!currentOrg) return null;
+    return {
+      id: currentOrg.id,
+      name: currentOrg.name,
+      slug: currentOrg.slug ?? null,
+      metadata: currentOrg.metadata || {},
+      created_at: currentOrg.created_at,
+      updated_at: currentOrg.updated_at,
+      profile,
+    };
+  }, [currentOrg, profile]);
+
+  const { events, products, loading: dataLoading } = useBrandPageData(
+    org?.id,
+    org?.slug,
+    org?.profile
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -62,7 +67,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!currentOrg) {
+  if (!currentOrg || !org) {
     return (
       <div className="flex items-center justify-center py-12">
         <p style={{ color: '#0F1F17' }}>No organization selected</p>
@@ -71,27 +76,28 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="w-full px-6 py-6 md:py-8">
-      <div className="relative">
-        <div className="absolute top-0 right-0">
-          <ProfileActions mode="owner" orgSlug={currentOrg.slug} />
+    <div className="space-y-0">
+      {!currentOrg.slug && (
+        <div
+          className="mb-4 rounded-xl border px-4 py-3 text-sm"
+          style={{ borderColor: 'rgba(14,122,58,0.2)', backgroundColor: 'rgba(14,122,58,0.08)', color: '#0F1F17' }}
+        >
+          Your public page URL is not set yet. Update your organization name in{' '}
+          <Link to="/app/settings" className="underline font-medium">
+            Settings
+          </Link>{' '}
+          so visitors can find you.
         </div>
-        <ProfileHeader
-          org={currentOrg}
-          profile={profile}
-          stats={stats}
-          mode="owner"
-          connectedCount={connectedCount}
-          onConnectStatClick={() => navigate(`/app/org/${currentOrg.id}/connections`)}
-        />
-      </div>
-      
-      <ProfileGrid
-        orgId={currentOrg.id}
-        orgSlug={currentOrg.slug}
-        mode="owner"
+      )}
+
+      <BrandPageView
+        org={org}
+        events={events}
+        products={products}
+        dataLoading={dataLoading}
+        isOwner
+        variant="embedded"
       />
     </div>
   );
 }
-

@@ -5,11 +5,14 @@ import { usePublicCart } from '@/contexts/PublicCartContext';
 
 const DEFAULT_ACCENT = '#E85D04';
 
+export type BrandPublicHeaderVariant = 'standalone' | 'embedded';
+
 interface BrandPublicHeaderProps {
   org: { id: string; name: string; slug?: string | null };
   profile: { logo_url?: string | null; accent_color?: string | null } | null;
   showBackLink?: boolean;
   isOwner?: boolean;
+  variant?: BrandPublicHeaderVariant;
 }
 
 export default function BrandPublicHeader({
@@ -17,6 +20,7 @@ export default function BrandPublicHeader({
   profile,
   showBackLink = false,
   isOwner = false,
+  variant = 'standalone',
 }: BrandPublicHeaderProps) {
   const { orgId, setOrgId, totalQty } = usePublicCart();
   const logoUrl = profile?.logo_url || null;
@@ -27,10 +31,16 @@ export default function BrandPublicHeader({
     setOrgId(org.id);
   }, [org.id, setOrgId]);
 
+  const embedded = variant === 'embedded';
+
   return (
     <>
       <div
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 md:px-6 lg:px-8 lg:py-4"
+        className={
+          embedded
+            ? 'sticky top-0 z-40 flex items-center justify-between px-4 py-3 md:px-6'
+            : 'fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 md:px-6 lg:px-8 lg:py-4'
+        }
         style={{ backgroundColor: accentColor }}
       >
       <Link to={brandUrl} className="flex items-center gap-2">
@@ -65,8 +75,7 @@ export default function BrandPublicHeader({
         )}
       </div>
     </div>
-      {/* Spacer so content below is not hidden under fixed header */}
-      <div className="h-14 md:h-16" aria-hidden="true" />
+      {!embedded && <div className="h-14 md:h-16" aria-hidden="true" />}
     </>
   );
 }
