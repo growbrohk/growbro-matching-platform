@@ -127,6 +127,51 @@ export async function getOrgBySlugWithProfile(orgSlug: string): Promise<OrgWithP
   };
 }
 
+export type OrgPaymentDefaults = {
+  enable_stripe: boolean;
+  enable_payme: boolean;
+  enable_fps: boolean;
+  payme_link: string;
+  fps_link: string;
+};
+
+/**
+ * Load org-level payment method defaults from Brand Page settings (org_profiles).
+ */
+export async function getOrgPaymentDefaults(orgId: string): Promise<OrgPaymentDefaults | null> {
+  const { data, error } = await (supabase
+    .from('org_profiles' as any)
+    .select('enable_stripe, enable_payme, enable_fps, payme_link, fps_link')
+    .eq('org_id', orgId)
+    .maybeSingle()) as {
+    data: {
+      enable_stripe?: boolean | null;
+      enable_payme?: boolean | null;
+      enable_fps?: boolean | null;
+      payme_link?: string | null;
+      fps_link?: string | null;
+    } | null;
+    error: { code?: string; message?: string } | null;
+  };
+
+  if (error?.code === 'PGRST116' || !data) {
+    return null;
+  }
+
+  if (error) {
+    console.warn('Failed to fetch org payment defaults:', error);
+    return null;
+  }
+
+  return {
+    enable_stripe: data.enable_stripe ?? false,
+    enable_payme: data.enable_payme ?? false,
+    enable_fps: data.enable_fps ?? false,
+    payme_link: data.payme_link || '',
+    fps_link: data.fps_link || '',
+  };
+}
+
 /**
  * Resolve the public URL slug for an org (for redirects). Uses stored slug when set;
  * otherwise derives from name the same way canonical brand URLs do when slug is absent.

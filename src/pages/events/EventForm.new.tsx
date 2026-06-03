@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +62,7 @@ import { compressImageToWebp } from '@/lib/images/compressReceiptImage';
 import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 import { getEventPreviewStoragePathFromPublicUrl } from '@/lib/storage/eventPreviewPaths';
+import { getOrgPaymentDefaults } from '@/lib/api/orgs';
 
 export type EventFormCollabEditorContext = {
   hostOrgId: string;
@@ -151,6 +152,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [enableFps, setEnableFps] = useState<boolean>(false);
   const [paymeLink, setPaymeLink] = useState<string>('');
   const [fpsLink, setFpsLink] = useState<string>('');
+  const [paymentDefaultsLoaded, setPaymentDefaultsLoaded] = useState(false);
 
   // Event Ticket Terms & Conditions (editable, preset with default)
   const [ticketTermsAndConditions, setTicketTermsAndConditions] = useState<string>(DEFAULT_EVENT_TICKET_TERMS);
@@ -296,6 +298,40 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
     loadEvent();
   }, [id, isEditMode, currentOrg, collabEditorContext, navigate, toast]);
+
+  // Pre-fill payment methods from Brand Page settings for new events
+  useEffect(() => {
+    if (isEditMode || !effectiveOrgId) return;
+
+    let cancelled = false;
+
+    const loadPaymentDefaults = async () => {
+      try {
+        const defaults = await getOrgPaymentDefaults(effectiveOrgId);
+        if (cancelled || !defaults) return;
+
+        setEnablePayme(defaults.enable_payme);
+        setEnableFps(defaults.enable_fps);
+        setPaymeLink(defaults.payme_link);
+        setFpsLink(defaults.fps_link);
+
+        const hasAnyDefault =
+          defaults.enable_payme ||
+          defaults.enable_fps ||
+          defaults.payme_link.trim().length > 0 ||
+          defaults.fps_link.trim().length > 0;
+        setPaymentDefaultsLoaded(hasAnyDefault);
+      } catch {
+        // Form remains usable with hard defaults
+      }
+    };
+
+    loadPaymentDefaults();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, effectiveOrgId]);
 
   // Progressive disclosure: show ticket types section when basic info is filled
   useEffect(() => {
@@ -1534,6 +1570,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
               Payment Methods
             </h2>
+            {paymentDefaultsLoaded && (
+              <p className="text-xs text-muted-foreground">
+                Pre-filled from your{' '}
+                <Link to="/app/settings/brand-page" className="underline hover:text-foreground">
+                  Brand Page settings
+                </Link>
+                . You can override for this event.
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
