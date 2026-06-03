@@ -424,8 +424,6 @@ export default function BrandPageSettings() {
         onAddressChange={orgForm.setAddress}
         bio={orgForm.bio}
         onBioChange={orgForm.setBio}
-        website={orgForm.website}
-        onWebsiteChange={orgForm.setWebsite}
         logoUrl={orgForm.logoUrl}
         onLogoUrlChange={orgForm.setLogoUrl}
         uploadingLogo={orgForm.uploadingLogo}
