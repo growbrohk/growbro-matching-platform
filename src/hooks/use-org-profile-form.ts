@@ -114,14 +114,6 @@ export function useOrgProfileForm() {
       toast.error('Please enter your name');
       return false;
     }
-    if (!category) {
-      toast.error('Please select a category');
-      return false;
-    }
-    if (!address.trim()) {
-      toast.error('Please enter your address');
-      return false;
-    }
     return true;
   };
 
@@ -137,9 +129,9 @@ export function useOrgProfileForm() {
 
     const profileData = {
       org_id: currentOrg.id,
-      category,
+      category: category || 'other',
       instagram: instagram.trim() || null,
-      address: address.trim(),
+      address: address.trim() || '',
       bio: bio.trim() || null,
       website: website.trim() || null,
       logo_url: logoUrl.trim() || null,

@@ -320,9 +320,9 @@ export default function BrandPageSettings() {
         .upsert(
           {
             org_id: currentOrg.id,
-            category: orgForm.category,
+            category: orgForm.category || 'other',
             instagram: orgForm.instagram.trim() || null,
-            address: orgForm.address.trim(),
+            address: orgForm.address.trim() || '',
             bio: orgForm.bio.trim() || null,
             website: orgForm.website.trim() || null,
             logo_url: orgForm.logoUrl.trim() || null,
@@ -415,8 +415,6 @@ export default function BrandPageSettings() {
         onNameChange={orgForm.setName}
         instagram={orgForm.instagram}
         onInstagramChange={orgForm.setInstagram}
-        category={orgForm.category}
-        onCategoryChange={orgForm.setCategory}
         address={orgForm.address}
         onAddressChange={orgForm.setAddress}
         logoUrl={orgForm.logoUrl}

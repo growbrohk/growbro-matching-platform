@@ -1,11 +1,8 @@
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Upload } from 'lucide-react';
-import type { OrgProfileCategory } from '@/hooks/use-org-profile-form';
+import { ImageIcon, Upload } from 'lucide-react';
 
 const cardStyle = {
   borderColor: 'rgba(14,122,58,0.14)',
@@ -20,8 +17,6 @@ export interface OrgProfileFormSectionsProps {
   onNameChange: (value: string) => void;
   instagram: string;
   onInstagramChange: (value: string) => void;
-  category: OrgProfileCategory | '';
-  onCategoryChange: (value: OrgProfileCategory) => void;
   address: string;
   onAddressChange: (value: string) => void;
   logoUrl: string;
@@ -39,8 +34,6 @@ export default function OrgProfileFormSections({
   onNameChange,
   instagram,
   onInstagramChange,
-  category,
-  onCategoryChange,
   address,
   onAddressChange,
   logoUrl,
@@ -78,6 +71,52 @@ export default function OrgProfileFormSections({
           </div>
 
           <div className="space-y-2">
+            <Label style={labelStyle}>
+              Logo <span className="text-xs text-gray-500">(optional)</span>
+            </Label>
+            <div className="flex items-center gap-4">
+              {logoUrl ? (
+                <img
+                  key={logoRenderNonce}
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-24 w-24 object-contain rounded-lg border"
+                />
+              ) : (
+                <div className="h-24 w-24 rounded-lg border border-dashed flex items-center justify-center bg-muted/50">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+              <label className={orgId && !uploadingLogo ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}>
+                <input
+                  ref={logoFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id={pid('logo-upload')}
+                  disabled={uploadingLogo || !orgId}
+                  onChange={onLogoFileChange}
+                />
+                <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-muted">
+                  <Upload className="h-4 w-4" />
+                  {uploadingLogo ? 'Uploading...' : 'Upload'}
+                </span>
+              </label>
+            </div>
+            <Label htmlFor={pid('logoUrl')} className="text-xs font-normal" style={{ color: 'rgba(15,31,23,0.72)' }}>
+              Or paste image URL
+            </Label>
+            <Input
+              id={pid('logoUrl')}
+              value={logoUrl}
+              onChange={(e) => onLogoUrlChange(e.target.value)}
+              placeholder="https://example.com/logo.png"
+              className="h-10"
+              style={inputStyle}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor={pid('instagram')} style={labelStyle}>
               Instagram <span className="text-xs text-gray-500">(optional)</span>
             </Label>
@@ -92,25 +131,8 @@ export default function OrgProfileFormSections({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={pid('category')} style={labelStyle}>
-              Category <span className="text-red-500">*</span>
-            </Label>
-            <Select value={category} onValueChange={(val) => onCategoryChange(val as OrgProfileCategory)}>
-              <SelectTrigger className="h-10" style={inputStyle}>
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="f&b">F&B</SelectItem>
-                <SelectItem value="retail">Retail</SelectItem>
-                <SelectItem value="service">Service</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor={pid('address')} style={labelStyle}>
-              Exact address <span className="text-red-500">*</span>
+              Address <span className="text-xs text-gray-500">(optional)</span>
             </Label>
             <Textarea
               id={pid('address')}
@@ -118,60 +140,6 @@ export default function OrgProfileFormSections({
               onChange={(e) => onAddressChange(e.target.value)}
               placeholder="Street address, building name, unit number..."
               className="min-h-[80px]"
-              style={inputStyle}
-            />
-            <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              Please type your actual address (street / building name).
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label style={labelStyle}>
-              Logo <span className="text-xs text-gray-500">(optional)</span>
-            </Label>
-            <input
-              ref={logoFileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              id={pid('logo-upload')}
-              onChange={onLogoFileChange}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-10"
-                style={{ borderColor: 'rgba(14,122,58,0.25)', color: '#0F1F17' }}
-                disabled={uploadingLogo || !orgId}
-                onClick={() => logoFileInputRef.current?.click()}
-              >
-                {uploadingLogo ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}
-                Upload photo
-              </Button>
-              {logoUrl ? (
-                <img
-                  key={logoRenderNonce}
-                  src={logoUrl}
-                  alt=""
-                  className="h-10 w-10 rounded-lg border object-cover"
-                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                />
-              ) : null}
-            </div>
-            <Label htmlFor={pid('logoUrl')} className="text-xs font-normal" style={{ color: 'rgba(15,31,23,0.72)' }}>
-              Or paste image URL
-            </Label>
-            <Input
-              id={pid('logoUrl')}
-              value={logoUrl}
-              onChange={(e) => onLogoUrlChange(e.target.value)}
-              placeholder="https://example.com/logo.png"
-              className="h-10"
               style={inputStyle}
             />
           </div>
