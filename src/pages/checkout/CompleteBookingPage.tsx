@@ -2065,6 +2065,7 @@ export default function CompleteBookingPage() {
                   email: true,
                   phone: true,
                 }}
+                alwaysExpanded={true}
               />
             </>
           )}
