@@ -1,34 +1,44 @@
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatShortEventDate } from '@/lib/utils/datetime';
+import BrandEventCard from '@/components/brand-public/BrandEventCard';
+import type { BrandEvent } from '@/hooks/use-brand-page-data';
 
 const DEFAULT_ACCENT = '#E85D04';
 
-function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('en-HK', {
-    style: 'currency',
-    currency: 'HKD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-interface EventItem {
-  id: string;
-  title: string;
-  slug?: string | null;
-  imageUrl: string | null;
-  orgSlug?: string | null;
-  dateStrings?: string[];
-  priceFrom?: number | null;
-}
-
 interface BrandPublicEventsProps {
   orgSlug: string | null;
-  events: EventItem[];
+  events: BrandEvent[];
   loading?: boolean;
   isEditMode?: boolean;
   accentColor?: string | null;
+}
+
+function EventsSectionHeader({
+  accent,
+  orgSlug,
+  onSeeAll,
+}: {
+  accent: string;
+  orgSlug: string | null;
+  onSeeAll: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-6 lg:mb-8">
+      <h2 className="text-xl lg:text-2xl font-bold" style={{ color: accent }}>
+        Event
+      </h2>
+      {orgSlug && (
+        <button
+          type="button"
+          onClick={onSeeAll}
+          className="text-sm font-medium hover:underline"
+          style={{ color: accent }}
+        >
+          See all
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function BrandPublicEvents({
@@ -41,7 +51,11 @@ export default function BrandPublicEvents({
   const navigate = useNavigate();
   const accent = accentColor || DEFAULT_ACCENT;
 
-  const handleEventClick = (e: EventItem) => {
+  const handleSeeAll = () => {
+    if (orgSlug) navigate(`/${orgSlug}/events`);
+  };
+
+  const handleEventClick = (e: BrandEvent) => {
     const s = e.orgSlug || orgSlug;
     if (e.slug && s) {
       navigate(`/${s}/${e.slug}`);
@@ -52,7 +66,7 @@ export default function BrandPublicEvents({
     return (
       <section className="w-full px-4 py-4 md:py-6 lg:py-8">
         <div className="max-w-6xl lg:max-w-7xl mx-auto">
-          <h2 className="text-xl lg:text-2xl font-bold mb-6 lg:mb-8" style={{ color: accent }}>Event</h2>
+          <EventsSectionHeader accent={accent} orgSlug={orgSlug} onSeeAll={handleSeeAll} />
           <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="aspect-[4/5] w-48 md:w-56 lg:w-64 flex-shrink-0 rounded-lg" />
@@ -68,40 +82,16 @@ export default function BrandPublicEvents({
   return (
     <section className="w-full px-4 py-4 md:py-6 lg:py-8 bg-muted/20">
       <div className="max-w-6xl lg:max-w-7xl mx-auto">
-        <h2 className="text-xl lg:text-2xl font-bold mb-6 lg:mb-8" style={{ color: accent }}>Event</h2>
+        <EventsSectionHeader accent={accent} orgSlug={orgSlug} onSeeAll={handleSeeAll} />
         <div className="flex gap-4 lg:gap-6 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
           {events.map((event) => (
-            <button
+            <BrandEventCard
               key={event.id}
-              type="button"
+              event={event}
+              accentColor={accent}
               onClick={() => handleEventClick(event)}
-              className="relative flex-shrink-0 w-48 md:w-56 lg:w-64 aspect-[4/5] rounded-xl overflow-hidden bg-muted hover:opacity-90 transition-opacity group"
-            >
-              {event.imageUrl ? (
-                <img
-                  src={event.imageUrl}
-                  alt={event.title}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-muted">
-                  <span className="text-sm text-muted-foreground px-2 text-center">{event.title}</span>
-                </div>
-              )}
-              {event.priceFrom != null && (
-                <div className="absolute top-2 right-2 lg:top-3 lg:right-3 px-2 py-1 lg:px-3 lg:py-1.5 rounded-md text-xs lg:text-sm font-medium" style={{ backgroundColor: accent, color: 'white' }}>
-                  {event.priceFrom === 0 ? 'Free' : `From ${formatPrice(event.priceFrom)}`}
-                </div>
-              )}
-              <div className="absolute inset-x-0 bottom-0 p-4 lg:p-5 bg-gradient-to-t from-black/70 to-transparent space-y-1">
-                <p className="text-white font-medium text-sm lg:text-base truncate">{event.title}</p>
-                {event.dateStrings && event.dateStrings.length > 0 && (
-                  <p className="text-white/90 text-xs lg:text-sm truncate">
-                    {event.dateStrings.map(formatShortEventDate).join(', ')}
-                  </p>
-                )}
-              </div>
-            </button>
+              className="flex-shrink-0 w-48 md:w-56 lg:w-64"
+            />
           ))}
         </div>
       </div>

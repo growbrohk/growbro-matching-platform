@@ -38,10 +38,25 @@ function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
-export function useBrandPageData(orgId: string, orgSlug: string | null, profile?: BrandPageProfileConfig | null) {
+export interface UseBrandPageDataOptions {
+  eventsLimit?: number;
+  productsLimit?: number;
+  loadProducts?: boolean;
+}
+
+export function useBrandPageData(
+  orgId: string,
+  orgSlug: string | null,
+  profile?: BrandPageProfileConfig | null,
+  options?: UseBrandPageDataOptions,
+) {
   const [events, setEvents] = useState<BrandEvent[]>([]);
   const [products, setProducts] = useState<BrandProduct[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const eventsLimit = options?.eventsLimit ?? 20;
+  const productsLimit = options?.productsLimit ?? 20;
+  const loadProducts = options?.loadProducts ?? true;
 
   const eventsFilter = profile?.events_filter ?? 'all';
   const eventsSort = profile?.events_sort ?? 'creation';
@@ -75,23 +90,30 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
         }
         eventsQuery = eventsQuery.limit(50);
 
-        let productsQuery = supabase
-          .from('products')
-          .select('id, title, image_url, metadata, base_price, created_at')
-          .eq('org_id', orgId)
-          .eq('type', 'physical');
+        let productsQuery = loadProducts
+          ? supabase
+              .from('products')
+              .select('id, title, image_url, metadata, base_price, created_at')
+              .eq('org_id', orgId)
+              .eq('type', 'physical')
+          : null;
 
-        if (productsFilter === 'in_sale_only') {
-          productsQuery = productsQuery.eq('is_on_sale', true);
+        if (productsQuery) {
+          if (productsFilter === 'in_sale_only') {
+            productsQuery = productsQuery.eq('is_on_sale', true);
+          }
+          if (productsSort === 'date' || productsSort === 'creation') {
+            productsQuery = productsQuery.order('created_at', { ascending: productsSort === 'date' });
+          } else {
+            productsQuery = productsQuery.order('created_at', { ascending: false });
+          }
+          productsQuery = productsQuery.limit(50);
         }
-        if (productsSort === 'date' || productsSort === 'creation') {
-          productsQuery = productsQuery.order('created_at', { ascending: productsSort === 'date' });
-        } else {
-          productsQuery = productsQuery.order('created_at', { ascending: false });
-        }
-        productsQuery = productsQuery.limit(50);
 
-        const [eventsRes, productsRes] = await Promise.all([eventsQuery, productsQuery]);
+        const [eventsRes, productsRes] = await Promise.all([
+          eventsQuery,
+          productsQuery ?? Promise.resolve({ data: [] as any[] }),
+        ]);
 
         let eventsData = (eventsRes.data || []) as any[];
         let productsData = (productsRes.data || []) as any[];
@@ -144,7 +166,7 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
           }
         }
 
-        if (extraProductPairs.length > 0) {
+        if (loadProducts && extraProductPairs.length > 0) {
           const ids = extraProductPairs.map((x) => x.id);
           const slugById = new Map(extraProductPairs.map((x) => [x.id, x.hostSlug]));
           let extraPQ = supabase
@@ -174,7 +196,7 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
           );
         }
 
-        if (productsSort === 'date' || productsSort === 'creation') {
+        if (loadProducts && (productsSort === 'date' || productsSort === 'creation')) {
           productsData = [...productsData].sort((a, b) => {
             const at = new Date(a.created_at).getTime();
             const bt = new Date(b.created_at).getTime();
@@ -201,14 +223,18 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
           eventsData = shuffle(eventsData);
         }
 
-        if (productsSort === 'manual' && productsDisplayOrder.length > 0) {
-          productsData = sortByManualDisplayOrder(productsData, productsDisplayOrder);
-        } else if (productsSort === 'random') {
-          productsData = shuffle(productsData);
+        if (loadProducts) {
+          if (productsSort === 'manual' && productsDisplayOrder.length > 0) {
+            productsData = sortByManualDisplayOrder(productsData, productsDisplayOrder);
+          } else if (productsSort === 'random') {
+            productsData = shuffle(productsData);
+          }
+          productsData = productsData.slice(0, productsLimit);
+        } else {
+          productsData = [];
         }
 
-        eventsData = eventsData.slice(0, 20);
-        productsData = productsData.slice(0, 20);
+        eventsData = eventsData.slice(0, eventsLimit);
 
         const eventIds = eventsData.map((e) => e.id);
         let minPriceByEvent: Record<string, number> = {};
@@ -270,7 +296,7 @@ export function useBrandPageData(orgId: string, orgSlug: string | null, profile?
     };
 
     load();
-  }, [orgId, orgSlug, eventsFilter, eventsSort, JSON.stringify(eventsDisplayOrder), productsFilter, productsSort, JSON.stringify(productsDisplayOrder)]);
+  }, [orgId, orgSlug, eventsFilter, eventsSort, JSON.stringify(eventsDisplayOrder), productsFilter, productsSort, JSON.stringify(productsDisplayOrder), eventsLimit, productsLimit, loadProducts]);
 
   return { events, products, loading };
 }

@@ -64,6 +64,12 @@ function isBot(userAgent: string): boolean {
   return BOT_PATTERNS.some((p) => ua.includes(p));
 }
 
+const RESERVED_EVENT_SLUGS = new Set([
+  'events',
+  'checkout',
+  'products',
+]);
+
 export default async function middleware(request: Request) {
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean);
@@ -77,6 +83,10 @@ export default async function middleware(request: Request) {
 
   // Skip reserved paths
   if (RESERVED_ORG_SLUGS.has(orgSlug.toLowerCase())) {
+    return next();
+  }
+
+  if (RESERVED_EVENT_SLUGS.has(eventSlug.toLowerCase())) {
     return next();
   }
 

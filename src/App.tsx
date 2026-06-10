@@ -42,6 +42,7 @@ import PublicPosterSpaceRequest from "./pages/public/PublicPosterSpaceRequest";
 import PublicPosterSpaceRequestSuccess from "./pages/public/PublicPosterSpaceRequestSuccess";
 import PublicProfile from "./pages/public/PublicProfile";
 import PublicProductPage from "./pages/public/PublicProductPage";
+import PublicBrandEventsPage from "./pages/public/PublicBrandEventsPage";
 import PublicProductByIdRedirect from "./pages/public/PublicProductByIdRedirect";
 import TrackingRedirect from "./pages/public/TrackingRedirect";
 import TrackingRedirectHandler from "./pages/public/TrackingRedirectHandler";
@@ -543,6 +544,9 @@ function AppRoutes() {
       
       {/* Public Product Page - Must be before /:orgSlug/:eventSlug */}
       <Route path="/:orgSlug/products/:productId" element={<PublicProductPage />} />
+
+      {/* Public Brand Events List - Must be before /:orgSlug/:eventSlug */}
+      <Route path="/:orgSlug/events" element={<PublicBrandEventsPage />} />
       
       {/* Product checkout flow */}
       <Route path="/:orgSlug/checkout" element={<PublicCheckoutPage />} />
