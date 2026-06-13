@@ -7,6 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const STRIPE_FEE_RATE = 0.034;
+const STRIPE_FEE_FIXED = 2.35;
+
+function computeStripeProcessingFee(orderAmount: number): number {
+  const total = Number(orderAmount) || 0;
+  return Math.round((total * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100;
+}
+
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
   console.log(`[create-stripe-checkout-session] ${step}${detailsStr}`);
@@ -51,6 +59,7 @@ serve(async (req) => {
     let successUrl: string;
     let cancelUrl: string;
     let enableStripe = false;
+    let stripeFeeBearer: "host" | "user" = "host";
 
     if (!eventRpcError && eventRpcData?.order && eventRpcData?.event) {
       // Event order
@@ -58,6 +67,7 @@ serve(async (req) => {
       order = eventRpcData.order;
       orderItems = eventRpcData.order_items || [];
       enableStripe = !!event.enable_stripe;
+      stripeFeeBearer = event.stripe_fee_bearer === "user" ? "user" : "host";
       successUrl = `${origin}/booking/success/${order_id}`;
       cancelUrl = `${origin}/booking/payment/${order_id}`;
     } else {
@@ -76,6 +86,7 @@ serve(async (req) => {
       order = productRpcData.order;
       orderItems = productRpcData.order_items || [];
       enableStripe = !!org.enable_stripe;
+      stripeFeeBearer = org.stripe_fee_bearer === "user" ? "user" : "host";
       const orgSlug = org.slug || org.id;
       successUrl = `${origin}/${orgSlug}/checkout/success/${order_id}`;
       cancelUrl = `${origin}/${orgSlug}/checkout/payment/${order_id}`;
@@ -147,8 +158,30 @@ serve(async (req) => {
     const lineTotalCents = lineItems.reduce((sum, li) => {
       return sum + li.price_data.unit_amount * li.quantity;
     }, 0);
+
+    let stripeServiceFee = 0;
+    if (stripeFeeBearer === "user") {
+      const subtotalAmount = lineTotalCents / 100;
+      stripeServiceFee = computeStripeProcessingFee(subtotalAmount);
+      if (stripeServiceFee > 0) {
+        lineItems.push({
+          price_data: {
+            currency,
+            product_data: {
+              name: "Credit card service charge (3.4% + HK$2.35)",
+            },
+            unit_amount: Math.round(stripeServiceFee * 100),
+          },
+          quantity: 1,
+        });
+      }
+    }
+
+    const checkoutTotalCents = lineItems.reduce((sum, li) => {
+      return sum + li.price_data.unit_amount * li.quantity;
+    }, 0);
     const orderTotalCents = Math.round(totalAmount * 100);
-    if (lineTotalCents !== orderTotalCents) {
+    if (stripeFeeBearer === "host" && lineTotalCents !== orderTotalCents) {
       logStep("Line items total mismatch order.total_amount", {
         lineTotalCents,
         orderTotalCents,
@@ -166,10 +199,25 @@ serve(async (req) => {
 
     logStep("Checkout session created", { sessionId: session.id });
 
+    const existingMetadata =
+      order.metadata && typeof order.metadata === "object"
+        ? order.metadata as Record<string, unknown>
+        : {};
+    const orderUpdate: Record<string, unknown> = {
+      stripe_checkout_session_id: session.id,
+    };
+    if (stripeServiceFee > 0) {
+      orderUpdate.metadata = {
+        ...existingMetadata,
+        stripe_service_fee: stripeServiceFee,
+        stripe_fee_bearer: stripeFeeBearer,
+      };
+    }
+
     // Store session ID in orders for future refunds
     await supabaseClient
       .from("orders")
-      .update({ stripe_checkout_session_id: session.id })
+      .update(orderUpdate)
       .eq("id", order_id);
 
     return new Response(

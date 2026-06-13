@@ -10,6 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { CreditCard, Smartphone, QrCode, ChevronUp, ChevronDown, ExternalLink } from 'lucide-react';
+import {
+  computeStripeCheckoutTotal,
+  formatStripeFeeLabel,
+  type StripeFeeBearer,
+} from '@/lib/orderCommission';
 
 const BRAND = {
   green: '#0E7A3A',
@@ -26,6 +31,9 @@ export interface PaymentMethodSelectorProps {
   onReceiptChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   paymentLinks: { payme?: string | null; fps?: string | null };
   isCompressing?: boolean;
+  stripeFeeBearer?: StripeFeeBearer | null;
+  orderSubtotal?: number;
+  currency?: string;
 }
 
 export function PaymentMethodSelector({
@@ -36,10 +44,23 @@ export function PaymentMethodSelector({
   onReceiptChange,
   paymentLinks,
   isCompressing = false,
+  stripeFeeBearer = 'host',
+  orderSubtotal = 0,
+  currency = 'HKD',
 }: PaymentMethodSelectorProps) {
   const selectMethod = (method: PaymentMethod) => {
     onSelect(method);
   };
+
+  const formatPrice = (amount: number): string => {
+    const prefix = currency === 'HKD' ? 'HK$' : currency;
+    return `${prefix} ${amount.toFixed(2)}`;
+  };
+
+  const stripeCheckout =
+    stripeFeeBearer === 'user'
+      ? computeStripeCheckoutTotal(orderSubtotal, 'user')
+      : null;
 
   if (availableMethods.length === 0) {
     return (
@@ -107,10 +128,35 @@ export function PaymentMethodSelector({
                       )}
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2 px-4 pb-4">
-                    <p className="text-sm text-muted-foreground">
-                      You will be redirected to complete payment securely.
-                    </p>
+                  <CollapsibleContent className="pt-2 px-4 pb-4 space-y-2">
+                    {stripeFeeBearer === 'user' && stripeCheckout ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          You bear the credit card service charge ({formatStripeFeeLabel()}).
+                        </p>
+                        <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          <div className="flex justify-between">
+                            <span>Subtotal</span>
+                            <span>{formatPrice(stripeCheckout.subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Service fee</span>
+                            <span>{formatPrice(stripeCheckout.serviceFee)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium pt-1 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                            <span>Total</span>
+                            <span>{formatPrice(stripeCheckout.grandTotal)}</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          You will be redirected to complete payment securely.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        You will be redirected to complete payment securely.
+                      </p>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               </div>

@@ -152,6 +152,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [enableFps, setEnableFps] = useState<boolean>(false);
   const [paymeLink, setPaymeLink] = useState<string>('');
   const [fpsLink, setFpsLink] = useState<string>('');
+  const [stripeFeeBearer, setStripeFeeBearer] = useState<'host' | 'user'>('host');
   const [paymentDefaultsLoaded, setPaymentDefaultsLoaded] = useState(false);
 
   // Event Ticket Terms & Conditions (editable, preset with default)
@@ -232,6 +233,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setEnableFps(event.enable_fps || false);
         setPaymeLink(event.payme_link || '');
         setFpsLink(event.fps_link || '');
+        setStripeFeeBearer(event.stripe_fee_bearer === 'user' ? 'user' : 'host');
 
         // Load T&C and full metadata (for merge on save)
         const metadata = (event as any).metadata || {};
@@ -314,12 +316,14 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setEnableFps(defaults.enable_fps);
         setPaymeLink(defaults.payme_link);
         setFpsLink(defaults.fps_link);
+        setStripeFeeBearer(defaults.stripe_fee_bearer);
 
         const hasAnyDefault =
           defaults.enable_payme ||
           defaults.enable_fps ||
           defaults.payme_link.trim().length > 0 ||
-          defaults.fps_link.trim().length > 0;
+          defaults.fps_link.trim().length > 0 ||
+          defaults.stripe_fee_bearer === 'user';
         setPaymentDefaultsLoaded(hasAnyDefault);
       } catch {
         // Form remains usable with hard defaults
@@ -892,6 +896,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         enable_fps: enableFps || null,
         payme_link: paymeLink.trim() || null,
         fps_link: fpsLink.trim() || null,
+        stripe_fee_bearer: enableStripe ? stripeFeeBearer : 'host',
         metadata: {
           ...eventMetadata,
           ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
@@ -1602,6 +1607,32 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   onCheckedChange={setEnableStripe}
                 />
               </div>
+              {enableStripe && (
+                <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                  <Label className="text-xs md:text-sm font-medium">Credit card service charge (3.4% + HK$2.35)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Applies to Stripe card payments only.
+                  </p>
+                  <RadioGroup
+                    value={stripeFeeBearer}
+                    onValueChange={(value) => setStripeFeeBearer(value as 'host' | 'user')}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="host" id="stripe-fee-host" />
+                      <Label htmlFor="stripe-fee-host" className="text-xs md:text-sm font-normal cursor-pointer">
+                        Host bears service charge
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="user" id="stripe-fee-user" />
+                      <Label htmlFor="stripe-fee-user" className="text-xs md:text-sm font-normal cursor-pointer">
+                        Buyer bears service charge
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
             </div>
 
             {/* PayMe */}

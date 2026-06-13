@@ -183,6 +183,7 @@ export interface Event {
   enable_fps?: boolean | null;
   payme_link?: string | null;
   fps_link?: string | null;
+  stripe_fee_bearer?: 'host' | 'user' | null;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;

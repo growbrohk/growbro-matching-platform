@@ -425,6 +425,7 @@ export type Database = {
           slug: string | null
           start_at: string
           status: string
+          stripe_fee_bearer: string
           title: string
           updated_at: string
           venue_org_id: string | null
@@ -450,6 +451,7 @@ export type Database = {
           slug?: string | null
           start_at: string
           status?: string
+          stripe_fee_bearer?: string
           title: string
           updated_at?: string
           venue_org_id?: string | null
@@ -475,6 +477,7 @@ export type Database = {
           slug?: string | null
           start_at?: string
           status?: string
+          stripe_fee_bearer?: string
           title?: string
           updated_at?: string
           venue_org_id?: string | null
@@ -909,6 +912,7 @@ export type Database = {
           org_id: string
           updated_at: string
           website: string | null
+          stripe_fee_bearer?: string
         }
         Insert: {
           address: string
@@ -920,6 +924,7 @@ export type Database = {
           org_id: string
           updated_at?: string
           website?: string | null
+          stripe_fee_bearer?: string
         }
         Update: {
           address?: string
@@ -931,6 +936,7 @@ export type Database = {
           org_id?: string
           updated_at?: string
           website?: string | null
+          stripe_fee_bearer?: string
         }
         Relationships: [
           {

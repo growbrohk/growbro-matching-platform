@@ -133,6 +133,7 @@ export type OrgPaymentDefaults = {
   enable_fps: boolean;
   payme_link: string;
   fps_link: string;
+  stripe_fee_bearer: 'host' | 'user';
 };
 
 /**
@@ -141,7 +142,7 @@ export type OrgPaymentDefaults = {
 export async function getOrgPaymentDefaults(orgId: string): Promise<OrgPaymentDefaults | null> {
   const { data, error } = await (supabase
     .from('org_profiles' as any)
-    .select('enable_stripe, enable_payme, enable_fps, payme_link, fps_link')
+    .select('enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer')
     .eq('org_id', orgId)
     .maybeSingle()) as {
     data: {
@@ -150,6 +151,7 @@ export async function getOrgPaymentDefaults(orgId: string): Promise<OrgPaymentDe
       enable_fps?: boolean | null;
       payme_link?: string | null;
       fps_link?: string | null;
+      stripe_fee_bearer?: string | null;
     } | null;
     error: { code?: string; message?: string } | null;
   };
@@ -169,6 +171,7 @@ export async function getOrgPaymentDefaults(orgId: string): Promise<OrgPaymentDe
     enable_fps: data.enable_fps ?? false,
     payme_link: data.payme_link || '',
     fps_link: data.fps_link || '',
+    stripe_fee_bearer: data.stripe_fee_bearer === 'user' ? 'user' : 'host',
   };
 }
 

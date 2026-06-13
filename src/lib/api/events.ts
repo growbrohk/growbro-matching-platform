@@ -69,6 +69,7 @@ export interface CreateEventData {
   enable_fps?: boolean | null;
   payme_link?: string | null;
   fps_link?: string | null;
+  stripe_fee_bearer?: 'host' | 'user' | null;
   metadata?: Record<string, any>;
 }
 
@@ -181,6 +182,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.fps_link !== undefined) {
     updateFields.fps_link = data.fps_link;
+  }
+  if (data.stripe_fee_bearer !== undefined) {
+    updateFields.stripe_fee_bearer = data.stripe_fee_bearer;
   }
   if (data.metadata !== undefined && data.metadata !== null) {
     updateFields.metadata = data.metadata;

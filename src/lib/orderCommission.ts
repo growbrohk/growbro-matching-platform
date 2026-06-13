@@ -98,9 +98,25 @@ export function addonLineCost(
 export const STRIPE_FEE_RATE = 0.034;
 export const STRIPE_FEE_FIXED = 2.35;
 
+export type StripeFeeBearer = 'host' | 'user';
+
 export function computeStripeProcessingFee(orderAmount: number): number {
   const total = Number(orderAmount) || 0;
   return Math.round((total * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100;
+}
+
+export function computeStripeCheckoutTotal(
+  subtotal: number,
+  bearer: StripeFeeBearer | null | undefined
+): { subtotal: number; serviceFee: number; grandTotal: number } {
+  const base = Number(subtotal) || 0;
+  const serviceFee = bearer === 'user' ? computeStripeProcessingFee(base) : 0;
+  const grandTotal = Math.round((base + serviceFee) * 100) / 100;
+  return { subtotal: base, serviceFee, grandTotal };
+}
+
+export function formatStripeFeeLabel(): string {
+  return `3.4% + HK$${STRIPE_FEE_FIXED.toFixed(2)}`;
 }
 
 export function computePaymentProcessingFee(

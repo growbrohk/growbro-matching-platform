@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, Upload, Image as ImageIcon, ChevronUp, ChevronDown, CreditCard, Smartphone, QrCode } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 
@@ -60,6 +61,7 @@ export default function BrandPageSettings() {
   const [enableFps, setEnableFps] = useState(false);
   const [paymeLink, setPaymeLink] = useState('');
   const [fpsLink, setFpsLink] = useState('');
+  const [stripeFeeBearer, setStripeFeeBearer] = useState<'host' | 'user'>('host');
   const [footerLinks, setFooterLinks] = useState<{ label: string; url: string }[]>([
     { label: 'Meet us on the Run', url: '' },
     { label: 'FAQs', url: '' },
@@ -118,6 +120,7 @@ export default function BrandPageSettings() {
         setEnableFps((data as any).enable_fps ?? false);
         setPaymeLink((data as any).payme_link || '');
         setFpsLink((data as any).fps_link || '');
+        setStripeFeeBearer((data as any).stripe_fee_bearer === 'user' ? 'user' : 'host');
         setFooterLinks(
           Array.isArray(data.footer_links) && data.footer_links.length > 0
             ? data.footer_links
@@ -355,6 +358,7 @@ export default function BrandPageSettings() {
             enable_fps: enableFps || null,
             payme_link: paymeLink.trim() || null,
             fps_link: fpsLink.trim() || null,
+            stripe_fee_bearer: enableStripe ? stripeFeeBearer : 'host',
           } as any,
           { onConflict: 'org_id' }
         )) as { error: { message?: string } | null };
@@ -609,6 +613,30 @@ export default function BrandPageSettings() {
               Enable Stripe (credit card)
             </label>
           </div>
+          {enableStripe && (
+            <div className="ml-6 space-y-2">
+              <Label className="text-sm font-medium">Credit card service charge (3.4% + HK$2.35)</Label>
+              <p className="text-xs text-muted-foreground">Applies to Stripe card payments for product checkout.</p>
+              <RadioGroup
+                value={stripeFeeBearer}
+                onValueChange={(value) => setStripeFeeBearer(value as 'host' | 'user')}
+                className="space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="host" id="org-stripe-fee-host" />
+                  <Label htmlFor="org-stripe-fee-host" className="text-sm font-normal cursor-pointer">
+                    Host bears service charge
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="user" id="org-stripe-fee-user" />
+                  <Label htmlFor="org-stripe-fee-user" className="text-sm font-normal cursor-pointer">
+                    Buyer bears service charge
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
           <div className="flex items-center space-x-2">
             <Checkbox id="enable_payme" checked={enablePayme} onCheckedChange={(v) => setEnablePayme(!!v)} />
             <label htmlFor="enable_payme" className="flex items-center gap-2 text-sm font-medium cursor-pointer">

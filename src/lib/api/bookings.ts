@@ -69,6 +69,7 @@ export interface OrderWithEvent {
     enable_fps: boolean | null;
     payme_link: string | null;
     fps_link: string | null;
+    stripe_fee_bearer?: 'host' | 'user' | null;
     org_id: string;
   };
   order_items: Array<{
@@ -328,6 +329,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       enable_fps: eventData.enable_fps,
       payme_link: eventData.payme_link,
       fps_link: eventData.fps_link,
+      stripe_fee_bearer: eventData.stripe_fee_bearer === 'user' ? 'user' : 'host',
       org_id: eventData.org_id,
     },
     order_items: orderItems.map((item: any) => {

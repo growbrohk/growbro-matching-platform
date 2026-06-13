@@ -74,6 +74,7 @@ export interface OrderWithOrgAndProducts {
     enable_fps: boolean;
     payme_link: string | null;
     fps_link: string | null;
+    stripe_fee_bearer?: 'host' | 'user' | null;
   };
   order_items: Array<{
     id: string;

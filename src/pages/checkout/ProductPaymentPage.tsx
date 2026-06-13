@@ -17,6 +17,7 @@ import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { PaymentMethodSelector, type PaymentMethod } from '@/components/booking/PaymentMethodSelector';
 import { supabase } from '@/integrations/supabase/client';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
+import { computeStripeCheckoutTotal, formatStripeFeeLabel } from '@/lib/orderCommission';
 
 const BRAND = {
   green: '#0E7A3A',
@@ -259,8 +260,13 @@ export default function ProductPaymentPage() {
   if (!data) return null;
 
   const { order, org, order_items } = data;
-  const totalAmount = Number(order.total_amount);
+  const subtotal = Number(order.total_amount);
   const currency = order.currency || 'HKD';
+  const stripeFeeBearer = org.stripe_fee_bearer === 'user' ? 'user' : 'host';
+  const stripeCheckout = computeStripeCheckoutTotal(subtotal, stripeFeeBearer);
+  const showStripeFee =
+    selectedPaymentMethod === 'stripe' && stripeFeeBearer === 'user' && stripeCheckout.serviceFee > 0;
+  const displayAmount = showStripeFee ? stripeCheckout.grandTotal : subtotal;
 
   const availablePaymentMethods: PaymentMethod[] = [];
   if (org.enable_stripe) availablePaymentMethods.push('stripe');
@@ -268,7 +274,7 @@ export default function ProductPaymentPage() {
   if (org.enable_fps && org.fps_link) availablePaymentMethods.push('fps');
 
   // Free order - redirect to success
-  if (totalAmount <= 0) {
+  if (subtotal <= 0) {
     navigate(`/${orgSlug}/checkout/success/${orderId}`, { replace: true });
     return null;
   }
@@ -295,9 +301,16 @@ export default function ProductPaymentPage() {
 
         <div className="mb-6">
           <h2 className="text-5xl font-bold mb-2" style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
-            {formatPrice(totalAmount, currency)}
+            {formatPrice(displayAmount, currency)}
           </h2>
-          <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Total amount</p>
+          {showStripeFee ? (
+            <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              <p>Subtotal {formatPrice(subtotal, currency)} + service fee {formatPrice(stripeCheckout.serviceFee, currency)} ({formatStripeFeeLabel()})</p>
+              <p>Total amount</p>
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Total amount</p>
+          )}
         </div>
 
         <div
@@ -429,6 +442,9 @@ export default function ProductPaymentPage() {
           onReceiptChange={handleReceiptChange}
           paymentLinks={{ payme: org.payme_link, fps: org.fps_link }}
           isCompressing={isCompressing}
+          stripeFeeBearer={stripeFeeBearer}
+          orderSubtotal={subtotal}
+          currency={currency}
         />
       </div>
 

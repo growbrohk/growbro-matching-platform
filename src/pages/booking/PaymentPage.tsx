@@ -26,6 +26,7 @@ import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { Loader2 } from 'lucide-react';
 import { PaymentMethodSelector, type PaymentMethod } from '@/components/booking/PaymentMethodSelector';
 import { supabase } from '@/integrations/supabase/client';
+import { computeStripeCheckoutTotal, formatStripeFeeLabel } from '@/lib/orderCommission';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -370,8 +371,13 @@ export default function PaymentPage() {
   }
 
   const event = order.event;
-  const totalAmount = Number(order.total_amount);
+  const subtotal = Number(order.total_amount);
   const currency = order.currency || 'HKD';
+  const stripeFeeBearer = event.stripe_fee_bearer === 'user' ? 'user' : 'host';
+  const stripeCheckout = computeStripeCheckoutTotal(subtotal, stripeFeeBearer);
+  const showStripeFee =
+    selectedPaymentMethod === 'stripe' && stripeFeeBearer === 'user' && stripeCheckout.serviceFee > 0;
+  const displayAmount = showStripeFee ? stripeCheckout.grandTotal : subtotal;
 
   // Format date/time based on ticket types in order (not both days)
   const formatOrderDateTime = () => {
@@ -419,9 +425,16 @@ export default function PaymentPage() {
         {/* Price Display */}
         <div className="mb-6">
           <h2 className="text-5xl font-bold mb-2" style={{ color: BRAND.green, fontFamily: "'Inter Tight', sans-serif" }}>
-            {formatPrice(totalAmount, currency)}
+            {formatPrice(displayAmount, currency)}
           </h2>
-          <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Total amount</p>
+          {showStripeFee ? (
+            <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              <p>Subtotal {formatPrice(subtotal, currency)} + service fee {formatPrice(stripeCheckout.serviceFee, currency)} ({formatStripeFeeLabel()})</p>
+              <p>Total amount</p>
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>Total amount</p>
+          )}
         </div>
 
         {/* Event Summary */}
@@ -519,6 +532,9 @@ export default function PaymentPage() {
           onReceiptChange={handleReceiptChange}
           paymentLinks={{ payme: event.payme_link, fps: event.fps_link }}
           isCompressing={isCompressing}
+          stripeFeeBearer={stripeFeeBearer}
+          orderSubtotal={subtotal}
+          currency={currency}
         />
       </div>
 
