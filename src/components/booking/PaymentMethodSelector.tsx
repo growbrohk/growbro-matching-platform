@@ -85,83 +85,6 @@ export function PaymentMethodSelector({
           onValueChange={(value) => selectMethod(value as PaymentMethod)}
         >
           <div className="space-y-3">
-            {availableMethods.includes('stripe') && (
-              <div>
-                <Collapsible
-                  open={selectedMethod === 'stripe'}
-                  onOpenChange={(open) => {
-                    if (!open && selectedMethod === 'stripe') {
-                      onSelect(null);
-                    }
-                  }}
-                >
-                  <CollapsibleTrigger asChild>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2"
-                      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        selectMethod('stripe');
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          selectMethod('stripe');
-                        }
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <RadioGroupItem value="stripe" id="stripe" onClick={(e) => e.stopPropagation()} />
-                        <label htmlFor="stripe" className="flex items-center gap-3 cursor-pointer flex-1">
-                          <CreditCard className="h-5 w-5" style={{ color: BRAND.green }} />
-                          <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
-                        </label>
-                      </div>
-                      {selectedMethod === 'stripe' ? (
-                        <ChevronUp className="h-4 w-4" style={{ color: BRAND.green }} />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" style={{ color: BRAND.green }} />
-                      )}
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2 px-4 pb-4 space-y-2">
-                    {stripeFeeBearer === 'user' && stripeCheckout ? (
-                      <>
-                        <p className="text-sm text-muted-foreground">
-                          With service charge ({formatStripeFeeLabel()})
-                        </p>
-                        <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                          <div className="flex justify-between">
-                            <span>Subtotal</span>
-                            <span>{formatPrice(stripeCheckout.subtotal)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Service fee</span>
-                            <span>{formatPrice(stripeCheckout.serviceFee)}</span>
-                          </div>
-                          <div className="flex justify-between font-medium pt-1 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                            <span>Total</span>
-                            <span>{formatPrice(stripeCheckout.grandTotal)}</span>
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          You will be redirected to complete payment securely.
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        You will be redirected to complete payment securely.
-                      </p>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-
             {availableMethods.includes('payme') && (
               <div>
                 <Collapsible
@@ -248,6 +171,83 @@ export function PaymentMethodSelector({
                         <p className="text-xs text-muted-foreground mt-1">Selected: {receiptFile.name}</p>
                       )}
                     </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+
+            {availableMethods.includes('stripe') && (
+              <div>
+                <Collapsible
+                  open={selectedMethod === 'stripe'}
+                  onOpenChange={(open) => {
+                    if (!open && selectedMethod === 'stripe') {
+                      onSelect(null);
+                    }
+                  }}
+                >
+                  <CollapsibleTrigger asChild>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2"
+                      style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        selectMethod('stripe');
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          selectMethod('stripe');
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <RadioGroupItem value="stripe" id="stripe" onClick={(e) => e.stopPropagation()} />
+                        <label htmlFor="stripe" className="flex items-center gap-3 cursor-pointer flex-1">
+                          <CreditCard className="h-5 w-5" style={{ color: BRAND.green }} />
+                          <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
+                        </label>
+                      </div>
+                      {selectedMethod === 'stripe' ? (
+                        <ChevronUp className="h-4 w-4" style={{ color: BRAND.green }} />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" style={{ color: BRAND.green }} />
+                      )}
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2 px-4 pb-4 space-y-2">
+                    {stripeFeeBearer === 'user' && stripeCheckout ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          With service charge ({formatStripeFeeLabel()})
+                        </p>
+                        <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          <div className="flex justify-between">
+                            <span>Subtotal</span>
+                            <span>{formatPrice(stripeCheckout.subtotal)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Service fee</span>
+                            <span>{formatPrice(stripeCheckout.serviceFee)}</span>
+                          </div>
+                          <div className="flex justify-between font-medium pt-1 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                            <span>Total</span>
+                            <span>{formatPrice(stripeCheckout.grandTotal)}</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          You will be redirected to complete payment securely.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        You will be redirected to complete payment securely.
+                      </p>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               </div>
