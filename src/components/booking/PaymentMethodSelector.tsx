@@ -132,7 +132,7 @@ export function PaymentMethodSelector({
                     {stripeFeeBearer === 'user' && stripeCheckout ? (
                       <>
                         <p className="text-sm text-muted-foreground">
-                          You bear the credit card service charge ({formatStripeFeeLabel()}).
+                          With service charge ({formatStripeFeeLabel()})
                         </p>
                         <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
                           <div className="flex justify-between">
