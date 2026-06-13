@@ -209,7 +209,14 @@ export function PaymentMethodSelector({
                         <RadioGroupItem value="stripe" id="stripe" onClick={(e) => e.stopPropagation()} />
                         <label htmlFor="stripe" className="flex items-center gap-3 cursor-pointer flex-1">
                           <CreditCard className="h-5 w-5" style={{ color: BRAND.green }} />
-                          <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
+                          <div className="flex flex-col">
+                            <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
+                            {stripeFeeBearer === 'user' && (
+                              <span className="text-xs text-muted-foreground">
+                                With service charge ({formatStripeFeeLabel()})
+                              </span>
+                            )}
+                          </div>
                         </label>
                       </div>
                       {selectedMethod === 'stripe' ? (
@@ -222,9 +229,6 @@ export function PaymentMethodSelector({
                   <CollapsibleContent className="pt-2 px-4 pb-4 space-y-2">
                     {stripeFeeBearer === 'user' && stripeCheckout ? (
                       <>
-                        <p className="text-sm text-muted-foreground">
-                          With service charge ({formatStripeFeeLabel()})
-                        </p>
                         <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
                           <div className="flex justify-between">
                             <span>Subtotal</span>
