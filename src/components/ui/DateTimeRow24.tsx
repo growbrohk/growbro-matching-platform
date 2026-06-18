@@ -31,7 +31,20 @@ export function DateTimeRow24({
     return utcToDatetimeLocal(date.toISOString());
   };
 
-  const localDateTimeString = getLocalDateTimeString(value);
+  const clampDate = (date: Date): Date => {
+    let result = date;
+    if (min && result < min) result = new Date(min);
+    if (max && result > max) result = new Date(max);
+    return result;
+  };
+
+  const displayValue = value ? clampDate(value) : null;
+  const localDateTimeString = getLocalDateTimeString(displayValue);
+
+  const minStr = min ? getLocalDateTimeString(min) : undefined;
+  const maxStr = max ? getLocalDateTimeString(max) : undefined;
+  const effectiveMinStr = minStr && maxStr && minStr > maxStr ? undefined : minStr;
+  const effectiveMaxStr = minStr && maxStr && minStr > maxStr ? undefined : maxStr;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
@@ -43,16 +56,7 @@ export function DateTimeRow24({
     const utcString = datetimeLocalToUTC(newValue);
     if (!utcString) return;
 
-    let resultDate = new Date(utcString);
-
-    if (min && resultDate < min) {
-      resultDate = new Date(min);
-    }
-    if (max && resultDate > max) {
-      resultDate = new Date(max);
-    }
-
-    onChange(resultDate);
+    onChange(clampDate(new Date(utcString)));
   };
 
   return (
@@ -63,8 +67,8 @@ export function DateTimeRow24({
         onChange={handleChange}
         disabled={disabled}
         step={minuteStep * 60}
-        min={min ? getLocalDateTimeString(min) : undefined}
-        max={max ? getLocalDateTimeString(max) : undefined}
+        min={effectiveMinStr}
+        max={effectiveMaxStr}
         aria-label={ariaLabel}
         className={cn(
           "h-10 w-full min-w-0 rounded-2xl border-2 px-3 text-sm bg-[#FBF8F4] border-[rgba(14,122,58,0.14)]",

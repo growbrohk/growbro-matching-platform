@@ -104,6 +104,59 @@ interface TicketTypeForm {
   threshold_to_show?: number | null;
 }
 
+function processTicketAvailability(
+  tt: TicketTypeForm,
+  effectiveEventEnd: Date
+): {
+  availabilityMode: 'always' | 'scheduled';
+  availableStartAt: string | null;
+  availableEndAt: string | null;
+} {
+  const availabilityMode = tt.availability_mode || 'always';
+  let availableStartAt: string | null = null;
+  let availableEndAt: string | null = null;
+
+  if (availabilityMode === 'scheduled') {
+    if (tt.available_start_at) {
+      availableStartAt = tt.available_start_at.toISOString();
+    }
+    if (tt.available_end_at) {
+      const endDate = tt.available_end_at;
+      const finalEndAt = endDate > effectiveEventEnd ? effectiveEventEnd : endDate;
+      availableEndAt = finalEndAt.toISOString();
+    }
+  }
+
+  return { availabilityMode, availableStartAt, availableEndAt };
+}
+
+function validateScheduledAvailability(
+  tt: TicketTypeForm,
+  index: number,
+  effectiveEventEnd: Date | null
+): string[] {
+  const errors: string[] = [];
+  const label = tt.name.trim() || `Ticket Type ${index + 1}`;
+  const availabilityMode = tt.availability_mode || 'always';
+
+  if (availabilityMode !== 'scheduled') return errors;
+
+  if (!tt.available_start_at || !tt.available_end_at) {
+    errors.push(`${label}: Both sales start and sales end are required for scheduled availability`);
+    return errors;
+  }
+
+  if (tt.available_start_at >= tt.available_end_at) {
+    errors.push(`${label}: Sales start must be before sales end`);
+  }
+
+  if (effectiveEventEnd && tt.available_end_at > effectiveEventEnd) {
+    errors.push(`${label}: Sales end cannot be after the event end time`);
+  }
+
+  return errors;
+}
+
 export default function EventForm({ collabEditorContext = null }: EventFormProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -351,6 +404,40 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     }
   }, [ticketTypes.length]);
 
+  const hasDay2 = day2StartAt != null && day2EndAt != null;
+  const effectiveEventEnd = day2EndAt ?? endAt;
+
+  // Re-clamp ticket schedule dates when event boundaries change
+  useEffect(() => {
+    if (!effectiveEventEnd) return;
+
+    setTicketTypes((prev) => {
+      let anyChanged = false;
+      const next = prev.map((tt) => {
+        if ((tt.availability_mode || 'always') !== 'scheduled') return tt;
+
+        let available_start_at = tt.available_start_at ?? null;
+        let available_end_at = tt.available_end_at ?? null;
+        let itemChanged = false;
+
+        if (available_end_at && available_end_at > effectiveEventEnd) {
+          available_end_at = effectiveEventEnd;
+          itemChanged = true;
+        }
+        if (available_start_at && available_end_at && available_start_at >= available_end_at) {
+          available_end_at = null;
+          itemChanged = true;
+        }
+
+        if (!itemChanged) return tt;
+        anyChanged = true;
+        return { ...tt, available_start_at, available_end_at };
+      });
+
+      return anyChanged ? next : prev;
+    });
+  }, [endAt, day2EndAt, effectiveEventEnd]);
+
   const generateAccessCode = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
@@ -359,8 +446,6 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     }
     return code;
   };
-
-  const hasDay2 = day2StartAt != null && day2EndAt != null;
 
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, {
@@ -396,7 +481,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   };
 
   const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean | Date | number) => {
-    setTicketTypes(ticketTypes.map((tt, i) => 
+    setTicketTypes((prev) => prev.map((tt, i) =>
       i === index ? { ...tt, [field]: value } : tt
     ));
   };
@@ -850,6 +935,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         if (!tt.quota || parseInt(tt.quota) <= 0) {
           errors.push(`Ticket Type ${index + 1}: Available tickets must be greater than 0`);
         }
+
+        errors.push(
+          ...validateScheduledAvailability(tt, index, effectiveEventEnd)
+        );
       });
     }
     
@@ -952,30 +1041,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           }
 
           // Process availability fields
-          const availabilityMode = tt.availability_mode || 'always';
-          let availableStartAt: string | null = null;
-          let availableEndAt: string | null = null;
-
-          if (availabilityMode === 'scheduled') {
-            // Validate and process scheduled availability
-            if (tt.available_start_at) {
-              availableStartAt = tt.available_start_at.toISOString();
-            }
-            if (tt.available_end_at) {
-              const endDate = tt.available_end_at;
-              // Cap available_end_at to event.end_at
-              const finalEndAt = endDate > effectiveEventEnd ? effectiveEventEnd : endDate;
-              availableEndAt = finalEndAt.toISOString();
-              
-              // Validate: start must be < end
-              if (availableStartAt && new Date(availableStartAt) >= finalEndAt) {
-                throw new Error(`Ticket "${tt.name}": Available start time must be before end time`);
-              }
-            } else if (availableStartAt) {
-              // If start is provided but end is not, require end
-              throw new Error(`Ticket "${tt.name}": Both start and end times are required for scheduled availability`);
-            }
-          }
+          const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
+            tt,
+            effectiveEventEnd
+          );
 
           const accessVariants = (tt.access_variants || []).map((v) => ({
             visibility_mode: v.visibility_mode,
@@ -1106,30 +1175,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           }
 
           // Process availability fields
-          const availabilityMode = tt.availability_mode || 'always';
-          let availableStartAt: string | null = null;
-          let availableEndAt: string | null = null;
-
-          if (availabilityMode === 'scheduled') {
-            // Validate and process scheduled availability
-            if (tt.available_start_at) {
-              availableStartAt = tt.available_start_at.toISOString();
-            }
-            if (tt.available_end_at) {
-              const endDate = tt.available_end_at;
-              // Cap available_end_at to effective event end
-              const finalEndAt = endDate > effectiveEventEnd ? effectiveEventEnd : endDate;
-              availableEndAt = finalEndAt.toISOString();
-              
-              // Validate: start must be < end
-              if (availableStartAt && new Date(availableStartAt) >= finalEndAt) {
-                throw new Error(`Ticket "${tt.name}": Available start time must be before end time`);
-              }
-            } else if (availableStartAt) {
-              // If start is provided but end is not, require end
-              throw new Error(`Ticket "${tt.name}": Both start and end times are required for scheduled availability`);
-            }
-          }
+          const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
+            tt,
+            effectiveEventEnd
+          );
 
           const accessVariantsCreate = (tt.access_variants || []).map((v) => ({
             visibility_mode: v.visibility_mode,
@@ -1201,7 +1250,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-8 overflow-hidden">
+      <form onSubmit={handleSubmit} noValidate className="space-y-8 overflow-hidden">
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
@@ -1906,14 +1955,18 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                                   id={`available-start-${index}`}
                                   value={tt.available_start_at || null}
                                   onChange={(date) => {
-                                    updateTicketTypeForm(index, 'available_start_at', date);
-                                    // Validate: if end exists and new start >= end, clear end
-                                    if (date && tt.available_end_at && date >= tt.available_end_at) {
-                                      updateTicketTypeForm(index, 'available_end_at', null);
-                                    }
+                                    setTicketTypes((prev) => prev.map((t, i) => {
+                                      if (i !== index) return t;
+                                      const next = { ...t, available_start_at: date };
+                                      if (date && t.available_end_at && date >= t.available_end_at) {
+                                        next.available_end_at = null;
+                                      }
+                                      return next;
+                                    }));
+                                    if (validationErrors.length > 0) setValidationErrors([]);
                                   }}
                                   disabled={tt.is_active === false}
-                                  max={(day2EndAt || endAt) || undefined}
+                                  max={effectiveEventEnd || undefined}
                                   ariaLabel="Sales start date and time"
                                   className="mt-1"
                                 />
@@ -1926,16 +1979,16 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                                   id={`available-end-${index}`}
                                   value={tt.available_end_at || null}
                                   onChange={(date) => {
-                                    // Cap to event.end_at if provided
-                                    if (date && endAt && date > endAt) {
-                                      updateTicketTypeForm(index, 'available_end_at', endAt);
+                                    if (date && effectiveEventEnd && date > effectiveEventEnd) {
+                                      updateTicketTypeForm(index, 'available_end_at', effectiveEventEnd);
                                     } else {
                                       updateTicketTypeForm(index, 'available_end_at', date);
                                     }
+                                    if (validationErrors.length > 0) setValidationErrors([]);
                                   }}
                                   disabled={tt.is_active === false}
-                                  min={tt.available_start_at || startAt || undefined}
-                                  max={(day2EndAt || endAt) || undefined}
+                                  min={tt.available_start_at || undefined}
+                                  max={effectiveEventEnd || undefined}
                                   ariaLabel="Sales end date and time"
                                   className="mt-1"
                                 />

@@ -455,7 +455,7 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
       .eq('id', ticketTypeId);
 
     if (updateError) {
-      console.warn('Failed to update ticket type fields:', updateError);
+      throw new Error(updateError.message || 'Failed to update ticket type fields');
     }
   }
 
