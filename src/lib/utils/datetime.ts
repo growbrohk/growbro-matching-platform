@@ -159,6 +159,28 @@ export function formatTicketTypeDateTime(
   return `${day1}, ${day2}`;
 }
 
+function formatSingleTimeInHK(dateString: string): string {
+  const date = new Date(dateString);
+  const hk = new Date(date.toLocaleString('en-US', { timeZone: TIMEZONE }));
+  const hours = hk.getHours().toString().padStart(2, '0');
+  const minutes = hk.getMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
+ * Format scheduled sales window for display
+ * Same day: "Jan 6 (Mon) 10:00–18:00"
+ * Different days: "Jan 6 (Mon) 10:00 – Jan 7 (Tue) 18:00"
+ */
+export function formatSalesWindow(startAt: string, endAt: string): string {
+  const startDate = formatEventDate(startAt);
+  const endDate = formatEventDate(endAt);
+  if (startDate === endDate) {
+    return `${startDate} ${formatEventTime(startAt, endAt)}`;
+  }
+  return `${startDate} ${formatSingleTimeInHK(startAt)} – ${endDate} ${formatSingleTimeInHK(endAt)}`;
+}
+
 /**
  * Format message time for WhatsApp-style display
  * - If today: "11:27 PM" (12-hour format)

@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
-import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay, formatTicketTypeDateTime } from '@/lib/utils/datetime';
+import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay, formatTicketTypeDateTime, formatSalesWindow } from '@/lib/utils/datetime';
 import {
   BookingDraft,
   saveBookingDraft,
@@ -625,6 +625,15 @@ export default function PublicEventForm({
                             {isUnavailable && (
                               <p className="text-xs text-red-600 mt-1">
                                 {availability.reason || 'Unavailable'}
+                                {tt.availability_mode === 'scheduled' &&
+                                  tt.available_start_at &&
+                                  tt.available_end_at &&
+                                  (availability.reason === 'Sales not started' || availability.reason === 'Sales closed') && (
+                                    <span className="text-muted-foreground">
+                                      {' · '}
+                                      {formatSalesWindow(tt.available_start_at, tt.available_end_at)}
+                                    </span>
+                                  )}
                               </p>
                             )}
                           </div>
