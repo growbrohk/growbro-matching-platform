@@ -115,7 +115,8 @@ export default function CollabResults() {
         let query = supabase
           .from('poster_spaces')
           .select('*')
-          .eq('status', 'published');
+          .eq('status', 'published')
+          .limit(500);
 
         // Apply category filter if categories exist
         if (categories.length > 0) {
@@ -143,51 +144,31 @@ export default function CollabResults() {
             .in('id', orgIds);
 
           if (!orgsError && orgsData) {
-            // Generate slugs for orgs that don't have them
-            const slugUpdates: Array<{ id: string; slug: string }> = [];
-            
             orgsData.forEach((org) => {
               let slug = org.slug;
-              
-              // If no slug, generate one
+
+              // If no slug, derive one in-memory for navigation only (no DB writes)
               if (!slug) {
                 slug = org.name
                   .toLowerCase()
                   .replace(/[^a-z0-9]+/g, '-')
                   .replace(/^-+|-+$/g, '') || 'org';
-                
-                // Check for uniqueness (simple check - in production, use DB function)
-                const existingSlug = orgsData.find(o => o.slug === slug && o.id !== org.id);
+
+                const existingSlug = orgsData.find((o) => o.slug === slug && o.id !== org.id);
                 if (existingSlug) {
-                  // Append counter if conflict
                   let counter = 1;
-                  while (orgsData.find(o => o.slug === `${slug}-${counter}`)) {
+                  while (orgsData.find((o) => o.slug === `${slug}-${counter}`)) {
                     counter++;
                   }
                   slug = `${slug}-${counter}`;
                 }
-                
-                slugUpdates.push({ id: org.id, slug });
               }
-              
+
               orgMapData[org.id] = {
                 name: org.name,
                 slug: slug || undefined,
               };
             });
-            
-            // Update orgs with generated slugs (if user has permission)
-            if (slugUpdates.length > 0) {
-              // Try to update slugs - this may fail if user doesn't have permission
-              // That's okay - the profile lookup will handle it
-              for (const update of slugUpdates) {
-                await supabase
-                  .from('orgs')
-                  .update({ slug: update.slug })
-                  .eq('id', update.id);
-                // Don't wait for errors - continue even if update fails
-              }
-            }
           }
         }
 

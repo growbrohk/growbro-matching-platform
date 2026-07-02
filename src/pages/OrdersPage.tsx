@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateOrderQueries } from '@/lib/queryInvalidation';
 
 type OrderTab = 'pending' | 'completed' | 'all';
 
@@ -154,7 +155,7 @@ export default function OrdersPage() {
                 priceLabel={formatMoney(order.total_amount)}
                 onDetails={() => navigate(`/app/orders/${order.id}${listSearch}`)}
                 onConfirm={() => {
-                  queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+                  void invalidateOrderQueries(queryClient, order.id, order.event_id ?? null);
                 }}
                 showConfirm={showConfirm}
                 showDetailsButton={showDetailsButton}

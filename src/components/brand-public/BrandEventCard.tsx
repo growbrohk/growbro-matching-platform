@@ -45,6 +45,7 @@ export default function BrandEventCard({
         <img
           src={event.imageUrl}
           alt={event.title}
+          loading="lazy"
           className="w-full h-full object-cover"
         />
       ) : (

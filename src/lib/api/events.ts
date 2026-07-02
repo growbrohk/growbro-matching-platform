@@ -1,5 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+
+const EVENT_LIST_SELECT =
+  'id, org_id, venue_org_id, title, description, start_at, end_at, day_2_start_at, day_2_end_at, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at';
 
 /**
  * Convert a string to a URL-friendly slug
@@ -352,9 +356,10 @@ export async function deleteEvent(eventId: string, orgId: string): Promise<void>
 export async function getEvents(orgId: string): Promise<Event[]> {
   const { data, error } = await supabase
     .from('events')
-    .select('*')
+    .select(EVENT_LIST_SELECT)
     .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(DEFAULT_LIST_LIMIT);
 
   if (error) {
     throw new Error(error.message || 'Failed to fetch events');

@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { generateShortCode } from '@/lib/utils/short-code';
+import { DEFAULT_LIST_LIMIT, ENQUIRIES_FEED_FETCH_LIMIT } from '@/lib/constants/query-limits';
 
 export type PosterSpaceCategory = 
   | 'poster_space' 
@@ -49,6 +50,7 @@ export interface PosterSpaceBookingRequest {
   duration_units: number;
   computed_end_date: string;
   status: 'pending' | 'approved' | 'declined' | 'cancelled';
+  host_seen_at?: string | null;
   created_at: string;
 }
 
@@ -200,7 +202,8 @@ export async function getPosterSpacesByOrg(orgId: string): Promise<PosterSpace[]
     .from('poster_spaces')
     .select('*')
     .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(DEFAULT_LIST_LIMIT);
 
   if (error) {
     console.error('Error fetching poster spaces:', error);
@@ -380,16 +383,21 @@ export async function getBookingRequestsForSpace(
 /**
  * Batch-load booking requests for many poster spaces (one round trip)
  */
+const BOOKING_REQUEST_LIST_SELECT =
+  'id, poster_space_id, requester_user_id, requester_name, requester_email, message, requested_start_date, duration_units, computed_end_date, status, host_seen_at, created_at';
+
 export async function getBookingRequestsForSpaces(
-  spaceIds: string[]
+  spaceIds: string[],
+  limit = ENQUIRIES_FEED_FETCH_LIMIT
 ): Promise<PosterSpaceBookingRequest[]> {
   if (spaceIds.length === 0) return [];
 
   const { data, error } = await supabase
     .from('poster_space_booking_requests')
-    .select('*')
+    .select(BOOKING_REQUEST_LIST_SELECT)
     .in('poster_space_id', spaceIds)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(limit);
 
   if (error) {
     console.error('Error fetching booking requests for spaces:', error);

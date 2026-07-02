@@ -6,6 +6,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Product, ProductType, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls } from '@/lib/utils/product-media';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+
+const PRODUCT_LIST_SELECT =
+  'id, org_id, type, title, description, base_price, metadata, category_id, is_on_sale, image_url, cost, created_at, updated_at';
 
 // ============================================================================
 // TYPES
@@ -73,9 +77,10 @@ export interface ProductAccessVariantInput {
 export async function getProducts(orgId: string): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(PRODUCT_LIST_SELECT)
     .eq('org_id', orgId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(DEFAULT_LIST_LIMIT);
 
   if (error) throw error;
   return data || [];

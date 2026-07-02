@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { usePendingConnectionsCount, type PendingConnection } from '@/hooks/use-pending-connections-count';
 import { Loader2 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidateConnectionQueries } from '@/lib/queryInvalidation';
 
 interface SuggestedOrg {
   id: string;
@@ -20,6 +21,7 @@ interface SuggestedOrg {
 export default function ConnectRequestsPage() {
   const navigate = useNavigate();
   const { currentOrg } = useAuth();
+  const queryClient = useQueryClient();
   const { data: pendingData, refetch: refetchPending } = usePendingConnectionsCount();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [dismissedSuggestedIds, setDismissedSuggestedIds] = useState<Set<string>>(new Set());
@@ -95,10 +97,10 @@ export default function ConnectRequestsPage() {
 
       if (!allOrgs) return [];
 
-      // Filter out connected orgs and randomize
+      // Filter out connected orgs (deterministic order for stable cache)
       const availableOrgs = allOrgs
         .filter((org) => !connectedOrgIds.has(org.id))
-        .sort(() => Math.random() - 0.5)
+        .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, 10);
 
       // Fetch org profiles for logo_url
@@ -146,6 +148,7 @@ export default function ConnectRequestsPage() {
 
       // Optimistically remove from list
       await refetchPending();
+      await invalidateConnectionQueries(queryClient, currentOrg.id);
     } catch (error) {
       console.error('Error accepting connection:', error);
       alert('Failed to accept connection. Please try again.');
@@ -177,6 +180,7 @@ export default function ConnectRequestsPage() {
 
       // Optimistically remove from list
       await refetchPending();
+      await invalidateConnectionQueries(queryClient, currentOrg.id);
     } catch (error) {
       console.error('Error rejecting connection:', error);
       alert('Failed to reject connection. Please try again.');
@@ -217,6 +221,7 @@ export default function ConnectRequestsPage() {
       
       // Refetch suggested to update UI (will exclude this org now)
       await refetchSuggested();
+      await invalidateConnectionQueries(queryClient, currentOrg.id, targetOrgId);
     } catch (error: any) {
       console.error('Error requesting connection:', error);
       if (error.message?.includes('already') || error.message?.includes('pending') || error.message?.includes('connected')) {

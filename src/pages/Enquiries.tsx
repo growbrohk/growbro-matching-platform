@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Mail, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -8,6 +8,10 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getBookingRequestsForSpaces } from '@/lib/api/poster-spaces';
+import {
+  ENQUIRIES_FEED_FETCH_LIMIT,
+  ENQUIRIES_PAGE_SIZE,
+} from '@/lib/constants/query-limits';
 import { useNavigate } from 'react-router-dom';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
 import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
@@ -22,8 +26,6 @@ type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
 /** Columns required by HostEnquiryOrderCard / enquiry list (avoids select *) */
 const HOST_ORDER_CARD_COLUMNS =
   'order_id,order_no,fulfillment_status,confirmed_at,updated_at,payment_method,receipt_url,metadata,buyer_first_name,buyer_last_name,buyer_phone,total_amount,currency,event_id,event_title,event_start_at,event_location_text,event_cover_image_url,org_id,tickets_count';
-
-const ENQUIRIES_HOST_ORDERS_LIMIT = 200;
 
 export interface EnquiryItem {
   id: string;
@@ -40,6 +42,27 @@ export interface EnquiryItem {
   spaceType?: string;
 }
 
+interface AffiliateRequestRow {
+  id: string;
+  tracking_link_id: string;
+  host_org_id: string;
+  affiliate_org_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  tracking_link: {
+    slug: string;
+    label: string | null;
+    destination_url: string;
+    commission_rate: number;
+    start_date: string;
+    end_date: string;
+  };
+  host_org: {
+    name: string;
+    slug?: string;
+  };
+}
+
 export default function Enquiries() {
   const navigate = useNavigate();
   const { currentOrg } = useAuth();
@@ -50,10 +73,11 @@ export default function Enquiries() {
   const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
   const [messageEnquiries, setMessageEnquiries] = useState<MessageEnquiryRowData[]>([]);
   const [hostOrders, setHostOrders] = useState<HostOrderCardData[]>([]);
-  const [affiliateRequests, setAffiliateRequests] = useState<any[]>([]);
+  const [affiliateRequests, setAffiliateRequests] = useState<AffiliateRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(ENQUIRIES_PAGE_SIZE);
 
-  const fetchEnquiries = useCallback(async () => {
+  const fetchEnquiries = useCallback(async (options?: { isCancelled?: () => boolean }) => {
     if (!currentOrg) return;
     setLoading(true);
     try {
@@ -75,8 +99,11 @@ export default function Enquiries() {
           .select(HOST_ORDER_CARD_COLUMNS)
           .eq('org_id', currentOrg.id)
           .order('updated_at', { ascending: false })
-          .limit(ENQUIRIES_HOST_ORDERS_LIMIT),
-        supabase.rpc('get_conversation_inbox', { p_org_id: currentOrg.id }),
+          .limit(ENQUIRIES_FEED_FETCH_LIMIT),
+        supabase.rpc('get_conversation_inbox', {
+          p_org_id: currentOrg.id,
+          p_limit: ENQUIRIES_FEED_FETCH_LIMIT,
+        }),
         supabase
           .from('affiliate_requests')
           .select(`
@@ -100,7 +127,8 @@ export default function Enquiries() {
           )
         `)
           .eq('affiliate_org_id', currentOrg.id)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(ENQUIRIES_FEED_FETCH_LIMIT),
       ]);
 
       const allRequests: Array<{ request: any; space: any }> = [];
@@ -248,11 +276,11 @@ export default function Enquiries() {
           tracking_link_id: req.tracking_link_id,
           host_org_id: req.host_org_id,
           affiliate_org_id: req.affiliate_org_id,
-          status: req.status,
+          status: req.status as 'pending' | 'accepted' | 'rejected',
           created_at: req.created_at,
           tracking_link: req.tracking_links,
           host_org: Array.isArray(req.orgs) ? req.orgs[0] : req.orgs,
-        }));
+        })) as AffiliateRequestRow[];
         setAffiliateRequests(transformedRequests);
 
         for (const req of transformedRequests) {
@@ -287,9 +315,12 @@ export default function Enquiries() {
         return dateB - dateA;
       });
 
-      setEnquiries(allEnquiries);
+      if (options?.isCancelled?.()) return;
 
-      if (unreadRequestIds.length > 0) {
+      setEnquiries(allEnquiries);
+      setVisibleCount(ENQUIRIES_PAGE_SIZE);
+
+      if (unreadRequestIds.length > 0 && !options?.isCancelled?.()) {
         void supabase
           .from('poster_space_booking_requests')
           .update({ host_seen_at: new Date().toISOString() })
@@ -302,33 +333,75 @@ export default function Enquiries() {
     } catch (error) {
       console.error('Error fetching enquiries:', error);
     } finally {
-      setLoading(false);
+      if (!options?.isCancelled?.()) {
+        setLoading(false);
+      }
     }
   }, [currentOrg, refetchUnreadCount]);
 
+  const handleEnquiriesRefresh = useCallback(() => {
+    void fetchEnquiries();
+  }, [fetchEnquiries]);
+
   useEffect(() => {
     if (!currentOrg) return;
-    fetchEnquiries();
+
+    let cancelled = false;
+    void fetchEnquiries({ isCancelled: () => cancelled });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentOrg, fetchEnquiries]);
 
-  const filteredEnquiries = enquiries.filter((enquiry) => {
-    if (filter === 'all') {
-      return enquiry.status !== 'archived';
-    }
-    if (filter === 'archived') {
-      return enquiry.status === 'archived';
-    }
-    if (filter === 'requests') {
-      return enquiry.type === 'request' && enquiry.status !== 'archived';
-    }
-    if (filter === 'messages') {
-      return enquiry.type === 'message' && enquiry.status !== 'archived';
-    }
-    if (filter === 'sales_orders') {
-      return enquiry.type === 'sales_order' && enquiry.status !== 'archived';
-    }
-    return true;
-  });
+  useEffect(() => {
+    setVisibleCount(ENQUIRIES_PAGE_SIZE);
+  }, [filter]);
+
+  const filteredEnquiries = useMemo(
+    () =>
+      enquiries.filter((enquiry) => {
+        if (filter === 'all') {
+          return enquiry.status !== 'archived';
+        }
+        if (filter === 'archived') {
+          return enquiry.status === 'archived';
+        }
+        if (filter === 'requests') {
+          return enquiry.type === 'request' && enquiry.status !== 'archived';
+        }
+        if (filter === 'messages') {
+          return enquiry.type === 'message' && enquiry.status !== 'archived';
+        }
+        if (filter === 'sales_orders') {
+          return enquiry.type === 'sales_order' && enquiry.status !== 'archived';
+        }
+        return true;
+      }),
+    [enquiries, filter]
+  );
+
+  const visibleEnquiries = useMemo(
+    () => filteredEnquiries.slice(0, visibleCount),
+    [filteredEnquiries, visibleCount]
+  );
+
+  const hostOrdersById = useMemo(
+    () => new Map(hostOrders.map((order) => [order.order_id, order])),
+    [hostOrders]
+  );
+
+  const messageEnquiriesById = useMemo(
+    () => new Map(messageEnquiries.map((row) => [row.conversation_id, row])),
+    [messageEnquiries]
+  );
+
+  const affiliateRequestsById = useMemo(
+    () => new Map(affiliateRequests.map((req) => [req.id, req])),
+    [affiliateRequests]
+  );
+
+  const hasMoreEnquiries = visibleCount < filteredEnquiries.length;
 
   const getEmptyStateMessage = () => {
     switch (filter) {
@@ -343,6 +416,50 @@ export default function Enquiries() {
       default:
         return 'No enquiries yet';
     }
+  };
+
+  const renderEnquiryRow = (enquiry: EnquiryItem) => {
+    if (enquiry.type === 'message') {
+      const messageData = messageEnquiriesById.get(enquiry.id);
+      if (messageData) {
+        return <MessageEnquiryRow key={enquiry.id} data={messageData} />;
+      }
+      return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
+    }
+
+    if (enquiry.type === 'sales_order') {
+      const orderData = hostOrdersById.get(enquiry.id);
+      if (orderData) {
+        return (
+          <HostEnquiryOrderCard
+            key={enquiry.id}
+            order={orderData}
+            onConfirmed={handleEnquiriesRefresh}
+            onDetails={() =>
+              navigate(`/app/orders/${orderData.order_id}`, {
+                state: { ordersBackTo: '/app/enquiries' },
+              })
+            }
+          />
+        );
+      }
+      return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
+    }
+
+    if (enquiry.type === 'request') {
+      const affiliateReq = affiliateRequestsById.get(enquiry.id);
+      if (affiliateReq?.status === 'pending') {
+        return (
+          <AffiliateRequestCard
+            key={enquiry.id}
+            request={affiliateReq}
+            onStatusChange={handleEnquiriesRefresh}
+          />
+        );
+      }
+    }
+
+    return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
   };
 
   return (
@@ -447,60 +564,25 @@ export default function Enquiries() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {/* Render affiliate requests first (if pending) */}
-          {affiliateRequests
-            .filter(req => req.status === 'pending' && (filter === 'all' || filter === 'requests'))
-            .map((req) => (
-              <AffiliateRequestCard
-                key={req.id}
-                request={req}
-                onStatusChange={fetchEnquiries}
-              />
-            ))}
-          
-          {/* Render other enquiries */}
-          {filteredEnquiries.map((enquiry) => {
-            // Skip affiliate requests that are already rendered above
-            const isAffiliateRequest = affiliateRequests.some(req => req.id === enquiry.id);
-            if (isAffiliateRequest && enquiry.type === 'request') {
-              return null; // Already rendered above
-            }
+          {visibleEnquiries.map((enquiry) => renderEnquiryRow(enquiry))}
 
-            // Render message enquiries with WhatsApp-style component
-            if (enquiry.type === 'message') {
-              const messageData = messageEnquiries.find(m => m.conversation_id === enquiry.id);
-              if (messageData) {
-                return <MessageEnquiryRow key={enquiry.id} data={messageData} />;
-              }
-              // Fallback to standard card if messageData not found (shouldn't happen)
-              return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
-            }
-            // Render sales orders with HostEnquiryOrderCard
-            if (enquiry.type === 'sales_order') {
-              const orderData = hostOrders.find(o => o.order_id === enquiry.id);
-              if (orderData) {
-                return (
-                  <HostEnquiryOrderCard
-                    key={enquiry.id}
-                    order={orderData}
-                    onConfirmed={fetchEnquiries}
-                    onDetails={() =>
-                      navigate(`/app/orders/${orderData.order_id}`, {
-                        state: { ordersBackTo: '/app/enquiries' },
-                      })
-                    }
-                  />
-                );
-              }
-              // Fallback to standard card if orderData not found
-              return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
-            }
-            // Render other enquiries with standard card
-            return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
-          })}
+          {hasMoreEnquiries && (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
+                Showing {visibleEnquiries.length} of {filteredEnquiries.length}
+              </p>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                style={{ borderColor: 'rgba(14,122,58,0.2)' }}
+                onClick={() => setVisibleCount((count) => count + ENQUIRIES_PAGE_SIZE)}
+              >
+                Load more
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-

@@ -356,6 +356,7 @@ export default function ProfileGrid({ orgId, orgSlug, mode, tabVariant = 'owner'
               <img
                 src={item.imageUrl}
                 alt={item.title}
+                loading="lazy"
                 className="w-full h-full object-cover"
               />
             ) : (

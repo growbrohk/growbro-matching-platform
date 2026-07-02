@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { PartnerOrderRowAccess } from '@/lib/collab-order-access';
 import { fetchPartnerVisibleOrdersInRange, fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
 
 export type RangeKey = 'today' | '7d' | '30d' | '90d';
 
@@ -171,7 +172,8 @@ export function useOrdersDashboard(
         .eq('host_org_id', currentOrg.id)
         .gte('created_at', startISO)
         .lte('created_at', endISO)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(DEFAULT_LIST_LIMIT);
 
       const { data: productOrdersData } = await productOrdersQuery;
 
@@ -197,7 +199,8 @@ export function useOrdersDashboard(
           .in('event_id', eventIds)
           .gte('created_at', startISO)
           .lte('created_at', endISO)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_LIST_LIMIT);
         eventOrdersData = data || [];
       }
 

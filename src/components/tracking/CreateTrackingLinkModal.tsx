@@ -598,6 +598,8 @@ export function CreateTrackingLinkModal({
             : 'Tracking link created successfully!',
       });
 
+      onSuccess?.();
+
       // Reset form after a delay
       setTimeout(() => {
         handleClose();

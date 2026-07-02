@@ -27,6 +27,7 @@ import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLin
 import { PipelineRow } from '@/hooks/usePipelineRows';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { invalidatePipelineQueries } from '@/lib/queryInvalidation';
 
 /**
  * Format money as HKD currency
@@ -122,7 +123,7 @@ export default function PipelinePage() {
   };
 
   const handleEditSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['pipeline-rows'] });
+    void invalidatePipelineQueries(queryClient);
   };
 
   const handleCopyLink = async (slug: string) => {

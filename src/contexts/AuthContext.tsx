@@ -75,11 +75,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [orgMemberships, setOrgMemberships] = useState<OrgMember[]>([]);
   const [orgMembershipsStatus, setOrgMembershipsStatus] = useState<OrgMembershipsStatus>('loading');
   const [loading, setLoading] = useState(true);
+  const currentOrgRef = useRef<Org | null>(null);
+
+  useEffect(() => {
+    currentOrgRef.current = currentOrg;
+  }, [currentOrg]);
 
   const fetchOrgMemberships = async (userId: string) => {
     const { data: memberships, error } = await supabase
       .from('org_members')
-      .select('*, orgs(*)')
+      .select('id, org_id, user_id, role, created_at, orgs(id, name, slug, metadata, created_at, updated_at)')
       .eq('user_id', userId);
     
     if (error) {
@@ -100,13 +105,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }));
       setOrgMemberships(memberData);
 
-      // Set current org to first membership if not already set
-      if (!currentOrg) {
+      const preservedOrg = currentOrgRef.current;
+      if (!preservedOrg) {
         const firstOrg = memberships[0].orgs as Org;
         setCurrentOrg(firstOrg);
       } else {
-        // Refresh current org data
-        const orgData = memberships.find((m: any) => m.org_id === currentOrg.id)?.orgs as Org | undefined;
+        const orgData = memberships.find((m: any) => m.org_id === preservedOrg.id)?.orgs as Org | undefined;
         if (orgData) {
           setCurrentOrg(orgData);
         }

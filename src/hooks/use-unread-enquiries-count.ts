@@ -1,64 +1,33 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Hook to fetch and poll unread enquiries count.
- * Polls every 30 seconds while mounted.
+ * Shared unread enquiries count — React Query dedupes polling across AppLayout + page mounts.
  */
 export function useUnreadEnquiriesCount() {
   const { currentOrg } = useAuth();
-  const [count, setCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
 
-  const fetchCount = useCallback(async () => {
-    if (!currentOrg?.id) {
-      setCount(0);
-      setLoading(false);
-      return;
-    }
+  const { data: count = 0, isLoading: loading, refetch } = useQuery({
+    queryKey: ['unread-enquiries-count', currentOrg?.id],
+    queryFn: async () => {
+      if (!currentOrg?.id) return 0;
 
-    try {
       const { data, error } = await supabase.rpc('get_unread_enquiries_count', {
         p_org_id: currentOrg.id,
       });
 
       if (error) {
         console.error('Error fetching unread count:', error);
-        setCount(0);
-      } else {
-        setCount(data || 0);
+        return 0;
       }
-    } catch (error) {
-      console.error('Error fetching unread count:', error);
-      setCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentOrg?.id]);
 
-  useEffect(() => {
-    if (!currentOrg?.id) {
-      setCount(0);
-      setLoading(false);
-      return;
-    }
+      return data || 0;
+    },
+    enabled: !!currentOrg?.id,
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+  });
 
-    // Initial fetch
-    fetchCount();
-
-    // Poll every 30 seconds. The 30s cadence is enough to keep the badge
-    // fresh without refetching on every browser tab refocus (which used to
-    // contribute to the "page refreshes on tab switch" symptom).
-    const interval = setInterval(() => {
-      fetchCount();
-    }, 30000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [currentOrg?.id, fetchCount]);
-
-  return { count, loading, refetch: fetchCount };
+  return { count, loading, refetch };
 }
-

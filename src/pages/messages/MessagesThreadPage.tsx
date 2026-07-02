@@ -48,92 +48,102 @@ export default function MessagesThreadPage() {
 
   useEffect(() => {
     if (!conversationId || !currentOrg) return;
-    loadConversation();
-  }, [conversationId, currentOrg]);
 
-  const markAsRead = async () => {
-    if (!conversationId || !currentOrg) return;
+    let cancelled = false;
 
-    try {
-      // Update last_read_at for the current org's participation
-      await supabase
-        .from('conversation_participants')
-        .update({ last_read_at: new Date().toISOString() })
-        .eq('conversation_id', conversationId)
-        .eq('org_id', currentOrg.id);
-      
-      // Refetch unread count to update badge
-      refetchUnreadCount();
-    } catch (error) {
-      console.error('Error marking conversation as read:', error);
-      // Don't show error to user, just log it
-    }
-  };
+    const load = async () => {
+      if (!conversationId || !currentOrg) return;
 
-  const loadConversation = async () => {
-    if (!conversationId || !currentOrg) return;
+      try {
+        setLoading(true);
 
-    try {
-      setLoading(true);
+        const { data: participants, error: participantsError } = await supabase
+          .from('conversation_participants')
+          .select('org_id')
+          .eq('conversation_id', conversationId);
 
-      // Get conversation participants to find the other org
-      const { data: participants, error: participantsError } = await supabase
-        .from('conversation_participants')
-        .select('org_id')
-        .eq('conversation_id', conversationId);
+        if (cancelled) return;
+        if (participantsError) throw participantsError;
 
-      if (participantsError) throw participantsError;
+        const otherOrgId = participants?.find((p) => p.org_id !== currentOrg.id)?.org_id;
+        if (!otherOrgId) {
+          toast.error('Conversation not found');
+          navigate('/app/enquiries');
+          return;
+        }
 
-      const otherOrgId = participants?.find(p => p.org_id !== currentOrg.id)?.org_id;
-      if (!otherOrgId) {
-        toast.error('Conversation not found');
-        navigate('/app/enquiries');
-        return;
-      }
-
-      // Fetch other org with profile
-      const { data: orgData, error: orgError } = await supabase
-        .from('orgs')
-        .select(`
+        const [{ data: orgData, error: orgError }, { data: messagesData, error: messagesError }] =
+          await Promise.all([
+            supabase
+              .from('orgs')
+              .select(`
           id,
           name,
           slug,
           org_profiles(category, address, logo_url)
         `)
-        .eq('id', otherOrgId)
-        .single();
+              .eq('id', otherOrgId)
+              .single(),
+            supabase
+              .from('conversation_messages')
+              .select('*')
+              .eq('conversation_id', conversationId)
+              .order('created_at', { ascending: true }),
+          ]);
 
-      if (orgError) throw orgError;
+        if (cancelled) return;
+        if (orgError) throw orgError;
+        if (messagesError) throw messagesError;
 
-      const profileData = Array.isArray(orgData.org_profiles) 
-        ? orgData.org_profiles[0] 
-        : orgData.org_profiles;
+        const profileData = Array.isArray(orgData.org_profiles)
+          ? orgData.org_profiles[0]
+          : orgData.org_profiles;
 
-      setOtherOrg({
-        id: orgData.id,
-        name: orgData.name,
-        slug: orgData.slug,
-        profile: profileData || null,
-      });
+        setOtherOrg({
+          id: orgData.id,
+          name: orgData.name,
+          slug: orgData.slug,
+          profile: profileData || null,
+        });
+        setMessages(messagesData || []);
 
-      // Fetch messages
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('conversation_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
+        await supabase
+          .from('conversation_participants')
+          .update({ last_read_at: new Date().toISOString() })
+          .eq('conversation_id', conversationId)
+          .eq('org_id', currentOrg.id);
 
-      if (messagesError) throw messagesError;
-      setMessages(messagesData || []);
+        if (!cancelled) {
+          refetchUnreadCount();
+        }
+      } catch (error: unknown) {
+        console.error('Error loading conversation:', error);
+        if (!cancelled) {
+          toast.error('Failed to load conversation');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
 
-      // Mark as read AFTER messages are loaded
-      await markAsRead();
-    } catch (error: any) {
-      console.error('Error loading conversation:', error);
-      toast.error('Failed to load conversation');
-    } finally {
-      setLoading(false);
-    }
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, currentOrg, navigate, refetchUnreadCount]);
+
+  const reloadMessages = async () => {
+    if (!conversationId) return;
+    const { data: messagesData, error: messagesError } = await supabase
+      .from('conversation_messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
+    if (messagesError) throw messagesError;
+    setMessages(messagesData || []);
   };
 
   const handleSend = async () => {
@@ -152,9 +162,8 @@ export default function MessagesThreadPage() {
       if (error) throw error;
 
       setMessage('');
-      // Reload messages
-      await loadConversation();
-    } catch (error: any) {
+      await reloadMessages();
+    } catch (error: unknown) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
     } finally {

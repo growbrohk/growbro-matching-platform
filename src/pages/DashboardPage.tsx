@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
+import { invalidateOrderQueries, invalidatePipelineQueries } from '@/lib/queryInvalidation';
 
 /**
  * Format money as HKD currency
@@ -482,8 +483,7 @@ export default function DashboardPage() {
                   navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
                 }
                 onConfirm={() => {
-                  // Invalidate queries to refresh data
-                  queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
+                  void invalidateOrderQueries(queryClient, order.id, order.event_id ?? null);
                 }}
                 showConfirm={showConfirm}
                 orderId={order.id}
@@ -544,7 +544,13 @@ export default function DashboardPage() {
       </div>
 
       {/* Tracking Link Modal */}
-      <CreateTrackingLinkModal open={isTrackingModalOpen} onOpenChange={setIsTrackingModalOpen} />
+      <CreateTrackingLinkModal
+        open={isTrackingModalOpen}
+        onOpenChange={setIsTrackingModalOpen}
+        onSuccess={() => {
+          void invalidatePipelineQueries(queryClient);
+        }}
+      />
 
       <Dialog
         open={!!dispatchTarget && !!dispatchModalOrder}

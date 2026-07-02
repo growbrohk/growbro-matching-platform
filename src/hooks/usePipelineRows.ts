@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getEvent } from '@/lib/api/events';
-import { getProduct } from '@/lib/api/products';
+import {
+  fetchEventTitleMap,
+  fetchProductTitleMap,
+  fetchTrackingLinkClickCounts,
+} from '@/lib/api/pipeline-fetch-helpers';
 import { fetchRangedPipelineOrderAggregates } from '@/lib/pipelineRangedOrders';
 import type { RangeKey } from '@/hooks/useOrdersDashboard';
 
@@ -97,35 +100,10 @@ export function usePipelineRows({ mode, orgId, rangeKey }: UsePipelineRowsOption
         if (link.host_org_id) hostOrgIds.add(link.host_org_id);
       });
 
-      // Fetch event titles
-      const eventTitleMap = new Map<string, string>();
-      await Promise.all(
-        Array.from(eventIds).map(async (eventId) => {
-          try {
-            const event = await getEvent(eventId);
-            if (event) {
-              eventTitleMap.set(eventId, event.title);
-            }
-          } catch (err) {
-            console.error(`Error fetching event ${eventId}:`, err);
-          }
-        })
-      );
-
-      // Fetch product titles
-      const productTitleMap = new Map<string, string>();
-      await Promise.all(
-        Array.from(productIds).map(async (productId) => {
-          try {
-            const product = await getProduct(productId);
-            if (product) {
-              productTitleMap.set(productId, product.title);
-            }
-          } catch (err) {
-            console.error(`Error fetching product ${productId}:`, err);
-          }
-        })
-      );
+      const [eventTitleMap, productTitleMap] = await Promise.all([
+        fetchEventTitleMap(Array.from(eventIds)),
+        fetchProductTitleMap(Array.from(productIds)),
+      ]);
 
       // Fetch affiliate org names
       const affiliateOrgNameMap = new Map<string, string>();
@@ -158,15 +136,7 @@ export function usePipelineRows({ mode, orgId, rangeKey }: UsePipelineRowsOption
       // Fetch clicks, orders, and revenue for each link
       const linkIds = links.map((link: any) => link.id);
       
-      // Get clicks count
-      const { data: clicksData } = await (supabase.from('tracking_clicks' as any) as any)
-        .select('tracking_link_id')
-        .in('tracking_link_id', linkIds);
-
-      const clicksMap = new Map<string, number>();
-      (clicksData || []).forEach((click: any) => {
-        clicksMap.set(click.tracking_link_id, (clicksMap.get(click.tracking_link_id) || 0) + 1);
-      });
+      const clicksMap = await fetchTrackingLinkClickCounts(linkIds);
 
       const linkBasisMap = new Map<string, 'revenue' | 'profit'>();
       links.forEach((link: { id: string; commission_basis?: string | null }) => {

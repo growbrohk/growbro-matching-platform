@@ -71,6 +71,8 @@ export function useBrandPageData(
       return;
     }
 
+    let cancelled = false;
+
     const load = async () => {
       try {
         setLoading(true);
@@ -253,6 +255,8 @@ export function useBrandPageData(
           });
         }
 
+        if (cancelled) return;
+
         setEvents(
           eventsData.map((e) => {
             let imageUrl = e.instagram_preview_image_url || null;
@@ -291,11 +295,17 @@ export function useBrandPageData(
       } catch (err) {
         console.error('Error loading brand page data:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    load();
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [orgId, orgSlug, eventsFilter, eventsSort, JSON.stringify(eventsDisplayOrder), productsFilter, productsSort, JSON.stringify(productsDisplayOrder), eventsLimit, productsLimit, loadProducts]);
 
   return { events, products, loading };

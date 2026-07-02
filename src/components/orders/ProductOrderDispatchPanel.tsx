@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { invalidateOrderQueries } from '@/lib/queryInvalidation';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -85,9 +86,7 @@ export function ProductOrderDispatchPanel({
       if (error) throw error;
       if (ok !== true) throw new Error('Could not update sent status');
       toast({ title: next ? 'Marked as sent' : 'Sent status cleared' });
-      await queryClient.invalidateQueries({ queryKey: ['host-order-detail', orderId] });
-      await queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
-      await queryClient.invalidateQueries({ queryKey: ['product-orders-table'] });
+      await invalidateOrderQueries(queryClient, orderId);
     } catch (e: unknown) {
       toast({
         title: 'Error',
@@ -115,9 +114,7 @@ export function ProductOrderDispatchPanel({
       if (error) throw error;
       if (ok !== true) throw new Error('Could not save tracking');
       toast({ title: 'Tracking saved' });
-      await queryClient.invalidateQueries({ queryKey: ['host-order-detail', orderId] });
-      await queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] });
-      await queryClient.invalidateQueries({ queryKey: ['product-orders-table'] });
+      await invalidateOrderQueries(queryClient, orderId);
     } catch (e: unknown) {
       toast({
         title: 'Error',

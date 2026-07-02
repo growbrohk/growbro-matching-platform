@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 const CLICK_TRACK_TIMEOUT_MS = 1500;
+const redirectInFlight = new Set<string>();
 
 /**
  * Tracking Redirect Handler
@@ -15,8 +16,16 @@ const CLICK_TRACK_TIMEOUT_MS = 1500;
 export default function TrackingRedirectHandler() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
+    if (!slug || hasStartedRef.current || redirectInFlight.has(slug)) {
+      return;
+    }
+
+    hasStartedRef.current = true;
+    redirectInFlight.add(slug);
+
     async function handleRedirect() {
       if (!slug) {
         // Invalid slug, redirect to homepage

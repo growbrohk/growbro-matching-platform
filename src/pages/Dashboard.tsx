@@ -28,46 +28,51 @@ export default function Dashboard() {
   useEffect(() => {
     if (!currentOrg) return;
 
+    let cancelled = false;
+
     const fetchStats = async () => {
       try {
-        // Orders count - using orders table (placeholder for now since it's not fully implemented)
-        // @ts-ignore - Supabase type inference issue
-        const ordersResult = await supabase
-          .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', currentOrg.id);
-        const ordersCount = ordersResult.count;
-
-        // Collaborations count - placeholder (collab features are "coming soon")
-        const collaborationsCount = 0;
-
-        // Upcoming count - upcoming events + bookings
         const now = new Date().toISOString();
-        const { count: upcomingEventsCount } = await supabase
-          .from('events')
-          .select('*', { count: 'exact', head: true })
-          .eq('org_id', currentOrg.id)
-          .gte('start_at', now);
+        const dateOnly = now.split('T')[0];
 
-        const { count: upcomingBookingsCount } = await supabase
-          .from('bookings')
-          .select('*', { count: 'exact', head: true })
-          .or(`brand_org_id.eq.${currentOrg.id},venue_org_id.eq.${currentOrg.id}`)
-          .gte('date', now.split('T')[0]);
+        const [ordersResult, upcomingEventsResult, upcomingBookingsResult] = await Promise.all([
+          supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('org_id', currentOrg.id),
+          supabase
+            .from('events')
+            .select('*', { count: 'exact', head: true })
+            .eq('org_id', currentOrg.id)
+            .gte('start_at', now),
+          supabase
+            .from('bookings')
+            .select('*', { count: 'exact', head: true })
+            .or(`brand_org_id.eq.${currentOrg.id},venue_org_id.eq.${currentOrg.id}`)
+            .gte('date', dateOnly),
+        ]);
+
+        if (cancelled) return;
 
         setStats({
-          ordersCount: ordersCount || 0,
-          collaborationsCount,
-          upcomingCount: (upcomingEventsCount || 0) + (upcomingBookingsCount || 0),
+          ordersCount: ordersResult.count || 0,
+          collaborationsCount: 0,
+          upcomingCount: (upcomingEventsResult.count || 0) + (upcomingBookingsResult.count || 0),
         });
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchStats();
+    void fetchStats();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentOrg]);
 
   return (

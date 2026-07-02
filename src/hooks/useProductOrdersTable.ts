@@ -13,6 +13,7 @@ import {
   type HostPartnerLink,
   type PartnerCommissionLine,
 } from '@/lib/productOrderPartnerCommission';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
 
 export type { PartnerCommissionLine };
 
@@ -180,7 +181,7 @@ export function useProductOrdersTable(
         { data: hostLinks, error: linksError },
         partnerFetch,
       ] = await Promise.all([
-        productOrdersQuery.order('created_at', { ascending: false }),
+        productOrdersQuery.order('created_at', { ascending: false }).limit(DEFAULT_LIST_LIMIT),
         supabase
           .from('tracking_links')
           .select(

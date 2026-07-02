@@ -2050,7 +2050,7 @@ export type Database = {
         }[]
       }
       get_conversation_inbox: {
-        Args: { p_org_id: string }
+        Args: { p_org_id: string; p_limit?: number }
         Returns: {
           conversation_id: string
           last_message_at: string

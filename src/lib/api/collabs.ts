@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { generateTrackingShortCode } from '@/lib/utils/short-code';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
 
 export type CollabStatus = 'pending' | 'approved' | 'declined' | 'cancelled' | 'active' | 'ended';
 export type PricingModel = 'fixed' | 'revenue_share' | 'hybrid';
@@ -286,7 +287,8 @@ export async function getCollabsForOrg(orgId: string): Promise<Collab[]> {
     .from('collabs')
     .select('*')
     .or(`host_org_id.eq.${orgId},brand_org_id.eq.${orgId}`)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(DEFAULT_LIST_LIMIT);
 
   if (error) {
     console.error('Error fetching collabs:', error);

@@ -52,40 +52,50 @@ export default function PublicEventPage() {
       return;
     }
 
-    fetchEvent();
-  }, [orgSlug, eventSlug]);
+    let cancelled = false;
 
-  const fetchEvent = async () => {
-    if (!orgSlug || !eventSlug) return;
+    const fetchEvent = async () => {
+      try {
+        setLoading(true);
 
-    try {
-      setLoading(true);
-      
-      // Fetch event by slugs
-      const eventData = await getPublicEventBySlugs(orgSlug, eventSlug);
-      
-      if (!eventData || eventData.status !== 'published') {
-        setEvent(null);
-        setLoading(false);
-        return;
+        const eventData = await getPublicEventBySlugs(orgSlug, eventSlug);
+
+        if (cancelled) return;
+
+        if (!eventData || eventData.status !== 'published') {
+          setEvent(null);
+          return;
+        }
+
+        setEvent(eventData);
+
+        const [orgData, types] = await Promise.all([
+          getOrgBySlug(orgSlug),
+          getTicketTypes(eventData.id, true, true),
+        ]);
+
+        if (cancelled) return;
+
+        setOrg(orgData);
+        setTicketTypes(types);
+      } catch (error) {
+        console.error('Error fetching event:', error);
+        if (!cancelled) {
+          setEvent(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
+    };
 
-      setEvent(eventData);
+    void fetchEvent();
 
-      // Fetch org info
-      const orgData = await getOrgBySlug(orgSlug);
-      setOrg(orgData);
-
-      // Fetch ticket types with remaining count and access variants
-      const types = await getTicketTypes(eventData.id, true, true);
-      setTicketTypes(types);
-    } catch (error) {
-      console.error('Error fetching event:', error);
-      setEvent(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [orgSlug, eventSlug]);
 
 
   if (loading) {

@@ -41,7 +41,7 @@ export function ProductMerchCard({
     >
       <div className="aspect-square w-full">
         {imageUrl ? (
-          <img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+          <img src={imageUrl} alt={title} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-muted">
             <span className="text-xs text-muted-foreground px-2 text-center">{title}</span>

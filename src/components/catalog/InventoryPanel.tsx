@@ -66,46 +66,43 @@ export function InventoryPanel({ orgId }: InventoryPanelProps) {
     if (!effectiveOrgId) return;
     setLoading(true);
     try {
-      // Fetch warehouses
-      const { data: whData, error: whErr } = await supabase
-        .from('warehouses')
-        .select('id, org_id, name, address')
-        .eq('org_id', effectiveOrgId)
-        .order('created_at', { ascending: true });
+      const [{ data: whData, error: whErr }, { data: productsData, error: productsErr }] =
+        await Promise.all([
+          supabase
+            .from('warehouses')
+            .select('id, org_id, name, address')
+            .eq('org_id', effectiveOrgId)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('products')
+            .select('id, org_id, title')
+            .eq('org_id', effectiveOrgId)
+            .order('title', { ascending: true }),
+        ]);
       if (whErr) throw whErr;
-
-      // Fetch products
-      const { data: productsData, error: productsErr } = await supabase
-        .from('products')
-        .select('id, org_id, title')
-        .eq('org_id', effectiveOrgId)
-        .order('title', { ascending: true });
       if (productsErr) throw productsErr;
 
       const products = (productsData as any as Product[]) || [];
-      const productIds = products.map(p => p.id);
+      const productIds = products.map((p) => p.id);
 
-      // Fetch variants
-      const { data: variantsData, error: variantsErr } = await supabase
-        .from('product_variants')
-        .select('id, product_id, name, sku')
-        .in('product_id', productIds.length > 0 ? productIds : ['00000000-0000-0000-0000-000000000000'])
-        .order('created_at', { ascending: true });
+      const [{ data: variantsData, error: variantsErr }, { data: invData, error: invErr }, config] =
+        await Promise.all([
+          supabase
+            .from('product_variants')
+            .select('id, product_id, name, sku')
+            .in('product_id', productIds.length > 0 ? productIds : ['00000000-0000-0000-0000-000000000000'])
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('inventory_items')
+            .select('id, org_id, warehouse_id, variant_id, quantity')
+            .eq('org_id', effectiveOrgId),
+          getVariantConfig(effectiveOrgId),
+        ]);
       if (variantsErr) throw variantsErr;
-
-      const variants = (variantsData as any as Variant[]) || [];
-
-      // Fetch inventory items
-      const { data: invData, error: invErr } = await supabase
-        .from('inventory_items')
-        .select('id, org_id, warehouse_id, variant_id, quantity')
-        .eq('org_id', effectiveOrgId);
       if (invErr) throw invErr;
 
+      const variants = (variantsData as any as Variant[]) || [];
       const inventoryItems = (invData as any as InventoryItem[]) || [];
-
-      // Load variant option order from org_variant_config table
-      const config = await getVariantConfig(effectiveOrgId);
       const savedOrder = [config.rank1, config.rank2].filter(Boolean);
       setVariantOptionOrder(savedOrder);
 
