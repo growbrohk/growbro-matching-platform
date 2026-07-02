@@ -1,16 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useOrdersDashboard, formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
+import { formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
+import { useDashboardSummary } from '@/hooks/useDashboardSummary';
+import { useDashboardPipelineStats } from '@/hooks/useDashboardPipelineStats';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { OrderListRowCompact } from '@/components/OrderListRowCompact';
-import { ChevronRight, Loader2, Plus } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { CreateTrackingLinkModal } from '@/components/tracking/CreateTrackingLinkModal';
-import { supabase } from '@/integrations/supabase/client';
-import { usePipelineRows } from '@/hooks/usePipelineRows';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,43 @@ import {
 } from '@/components/ui/dialog';
 import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
 import { invalidateOrderQueries, invalidatePipelineQueries } from '@/lib/queryInvalidation';
+
+function StatCardSkeleton() {
+  return (
+    <Card className="rounded-xl min-w-0">
+      <CardContent className="p-6">
+        <Skeleton className="h-9 w-24 mb-2" />
+        <Skeleton className="h-4 w-20" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function PipelineCardSkeleton() {
+  return (
+    <div className="min-w-0 bg-gray-100 rounded-xl p-4">
+      <Skeleton className="h-8 w-10 mb-2" />
+      <Skeleton className="h-3 w-16" />
+    </div>
+  );
+}
+
+function OrderListSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-4 py-3 border-b border-gray-200">
+          <Skeleton className="w-12 h-12 rounded flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+          <Skeleton className="h-4 w-14" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Format money as HKD currency
@@ -116,7 +154,11 @@ export default function DashboardPage() {
     : '30d';
   
   const [selectedRange, setSelectedRange] = useState<RangeKey>(initialRange);
-  const { data: dashboardData, isLoading } = useOrdersDashboard(selectedRange);
+  const { data: summaryData, isLoading: summaryLoading } = useDashboardSummary(selectedRange);
+  const { data: pipelineStats, isLoading: pipelineLoading } = useDashboardPipelineStats(
+    currentOrg?.id || '',
+    selectedRange
+  );
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<{
     orderId: string;
@@ -130,72 +172,9 @@ export default function DashboardPage() {
     setSearchParams(params, { replace: true });
   }, [selectedRange, searchParams, setSearchParams]);
 
-  // Fetch enquiries count (unresolved)
-  // TODO: Replace with actual enquiries table query if table exists
-  const { data: enquiriesCount = 0 } = useQuery({
-    queryKey: ['enquiries-count', currentOrg?.id],
-    queryFn: async () => {
-      if (!currentOrg) return 0;
-      // TODO: Query enquiries table for unresolved count
-      // For now, return placeholder
-      return 0;
-    },
-    enabled: !!currentOrg,
-  });
-
-  // Fetch channels count (tracking_links where host_org_id=currentOrg.id, type IN ('tracking', 'affiliate'), and status='active')
-  // Only counts links where currentOrg is the host, NOT where currentOrg is the affiliate partner
-  const { data: channelsCount = 0 } = useQuery({
-    queryKey: ['tracking-channels-count', currentOrg?.id],
-    queryFn: async () => {
-      if (!currentOrg) return 0;
-      const { count, error } = await (supabase.from('tracking_links' as any) as any)
-        .select('*', { count: 'exact', head: true })
-        .eq('host_org_id', currentOrg.id)
-        .in('type', ['tracking', 'affiliate', 'collab'])
-        .eq('status', 'active');
-      if (error) {
-        console.error('Error fetching channels count:', error);
-        return 0;
-      }
-      return count || 0;
-    },
-    enabled: !!currentOrg,
-  });
-
-  // Fetch collab count (tracking_links where affiliate_org_id=currentOrg.id and status='active')
-  const { data: collabCount = 0 } = useQuery({
-    queryKey: ['tracking-collab-count', currentOrg?.id],
-    queryFn: async () => {
-      if (!currentOrg) return 0;
-      const { count, error } = await (supabase.from('tracking_links' as any) as any)
-        .select('*', { count: 'exact', head: true })
-        .eq('affiliate_org_id', currentOrg.id)
-        .eq('status', 'active');
-      if (error) {
-        console.error('Error fetching collab count:', error);
-        return 0;
-      }
-      return count || 0;
-    },
-    enabled: !!currentOrg,
-  });
-
-  // Fetch pipeline revenue totals (host + affiliate)
-  const { data: hostPipelineRows = [] } = usePipelineRows({ 
-    mode: 'host', 
-    orgId: currentOrg?.id || '',
-    rangeKey: selectedRange,
-  });
-  const { data: collabPipelineRows = [] } = usePipelineRows({ 
-    mode: 'collab', 
-    orgId: currentOrg?.id || '',
-    rangeKey: selectedRange,
-  });
-
   const pendingShippingOrdersSnapshot = useMemo(
-    () => dashboardData?.pendingShippingOrders ?? [],
-    [dashboardData?.pendingShippingOrders],
+    () => summaryData?.pendingShippingOrders ?? [],
+    [summaryData?.pendingShippingOrders],
   );
   useEffect(() => {
     if (!dispatchTarget) return;
@@ -211,9 +190,18 @@ export default function DashboardPage() {
     }
   }, [dispatchTarget, pendingShippingOrdersSnapshot]);
 
-  // Calculate total pipeline revenue: sum of host revenue + sum of affiliate revenue
-  const pipelineRevenueTotal = (hostPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0) +
-    (collabPipelineRows || []).reduce((sum, row) => sum + (row.revenue || 0), 0);
+  const {
+    revenueTotal = 0,
+    ordersCountSubmittedPaid = 0,
+    pendingCountSubmitted = 0,
+    pendingOrders = [],
+    pendingShippingOrders = [],
+    pendingShippingCount = 0,
+  } = summaryData || {};
+
+  const channelsCount = pipelineStats?.channelsCount ?? 0;
+  const collabCount = pipelineStats?.collabCount ?? 0;
+  const pipelineRevenueTotal = pipelineStats?.pipelineRevenueTotal ?? 0;
 
   const rangeOptions: { key: RangeKey; label: string }[] = [
     { key: 'today', label: 'today' },
@@ -225,33 +213,6 @@ export default function DashboardPage() {
   const handleViewAllPending = () => {
     navigate(`/app/orders?range=${selectedRange}&tab=pending`);
   };
-
-  const handleCollabClick = () => {
-    // TODO: Route to collab page when ready
-    navigate('/app/collab');
-  };
-
-  const handleEnquiriesClick = () => {
-    // TODO: Route to enquiries page when ready
-    navigate('/app/enquiries');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
-      </div>
-    );
-  }
-
-  const { 
-    revenueTotal = 0, 
-    ordersCountSubmittedPaid = 0, 
-    pendingCountSubmitted = 0,
-    pendingOrders = [],
-    pendingShippingOrders = [],
-    pendingShippingCount = 0,
-  } = dashboardData || {};
 
   const dispatchModalOrder = dispatchTarget
     ? pendingShippingOrders.find(
@@ -306,51 +267,58 @@ export default function DashboardPage() {
 
       {/* Top Summary: Two Cards in One Row */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Revenue Card */}
-        <Card className="rounded-xl @container min-w-0">
-          <CardContent className="min-w-0 p-6">
-            <div
-              className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
-              title={formatMoney(revenueTotal)}
-            >
-              <div
-                className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
-                style={{ color: '#0F1F17' }}
-              >
-                {formatMoney(revenueTotal)}
-              </div>
-            </div>
-            <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-              total revenue
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Orders Card */}
-        <Link
-          to={`/app/orders?range=${selectedRange}&tab=all`}
-          className="block min-w-0 cursor-pointer rounded-xl no-underline text-inherit outline-none transition-opacity hover:opacity-90 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#0E7A3A] focus-visible:ring-offset-2"
-          aria-label={`View orders, ${ordersCountSubmittedPaid} in selected period`}
-        >
-          <Card className="h-full rounded-xl @container min-w-0">
-            <CardContent className="min-w-0 p-6">
-              <div
-                className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
-                title={String(ordersCountSubmittedPaid)}
-              >
+        {summaryLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <Card className="rounded-xl @container min-w-0">
+              <CardContent className="min-w-0 p-6">
                 <div
-                  className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
-                  style={{ color: '#0F1F17' }}
+                  className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
+                  title={formatMoney(revenueTotal)}
                 >
-                  {ordersCountSubmittedPaid}
+                  <div
+                    className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
+                    style={{ color: '#0F1F17' }}
+                  >
+                    {formatMoney(revenueTotal)}
+                  </div>
                 </div>
-              </div>
-              <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                orders
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+                <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                  total revenue
+                </div>
+              </CardContent>
+            </Card>
+
+            <Link
+              to={`/app/orders?range=${selectedRange}&tab=all`}
+              className="block min-w-0 cursor-pointer rounded-xl no-underline text-inherit outline-none transition-opacity hover:opacity-90 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[#0E7A3A] focus-visible:ring-offset-2"
+              aria-label={`View orders, ${ordersCountSubmittedPaid} in selected period`}
+            >
+              <Card className="h-full rounded-xl @container min-w-0">
+                <CardContent className="min-w-0 p-6">
+                  <div
+                    className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
+                    title={String(ordersCountSubmittedPaid)}
+                  >
+                    <div
+                      className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
+                      style={{ color: '#0F1F17' }}
+                    >
+                      {ordersCountSubmittedPaid}
+                    </div>
+                  </div>
+                  <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                    orders
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </>
+        )}
       </div>
 
       {/* Pipeline Section */}
@@ -369,66 +337,73 @@ export default function DashboardPage() {
           </button>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {/* Channels Card */}
-          <button
-            onClick={() => {
-              navigate(`/app/dashboard/pipelines?mode=host&range=${selectedRange}`);
-            }}
-            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
-          >
-            <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {channelsCount}
-            </div>
-            <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
-              channels
-            </div>
-            <ChevronRight 
-              className="h-4 w-4 absolute right-3 bottom-3" 
-              style={{ color: '#0F1F17' }} 
-            />
-          </button>
+          {pipelineLoading ? (
+            <>
+              <PipelineCardSkeleton />
+              <PipelineCardSkeleton />
+              <PipelineCardSkeleton />
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  navigate(`/app/dashboard/pipelines?mode=host&range=${selectedRange}`);
+                }}
+                className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+              >
+                <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+                  {channelsCount}
+                </div>
+                <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
+                  channels
+                </div>
+                <ChevronRight
+                  className="h-4 w-4 absolute right-3 bottom-3"
+                  style={{ color: '#0F1F17' }}
+                />
+              </button>
 
-          {/* Collab Card */}
-          <button
-            onClick={() => {
-              navigate(`/app/dashboard/pipelines?mode=collab&range=${selectedRange}`);
-            }}
-            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
-          >
-            <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
-              {collabCount}
-            </div>
-            <div className="text-xs font-medium mb-1 pr-7" style={{ color: '#0F1F17' }}>
-              collab
-            </div>
-            <ChevronRight 
-              className="h-4 w-4 absolute right-3 bottom-3" 
-              style={{ color: '#0F1F17' }} 
-            />
-          </button>
+              <button
+                onClick={() => {
+                  navigate(`/app/dashboard/pipelines?mode=collab&range=${selectedRange}`);
+                }}
+                className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+              >
+                <div className="text-2xl font-bold mb-1" style={{ color: '#0F1F17' }}>
+                  {collabCount}
+                </div>
+                <div className="text-xs font-medium mb-1 pr-7" style={{ color: '#0F1F17' }}>
+                  collab
+                </div>
+                <ChevronRight
+                  className="h-4 w-4 absolute right-3 bottom-3"
+                  style={{ color: '#0F1F17' }}
+                />
+              </button>
 
-          {/* Revenue Card */}
-          <button
-            onClick={() => {
-              navigate(`/app/dashboard/pipeline-revenue?range=${selectedRange}`);
-            }}
-            className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
-          >
-            <div
-              className="text-2xl font-bold mb-1 tabular-nums truncate pr-7"
-              style={{ color: '#0F1F17' }}
-              title={formatHKD(pipelineRevenueTotal)}
-            >
-              {formatHKD(pipelineRevenueTotal)}
-            </div>
-            <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
-              revenue
-            </div>
-            <ChevronRight 
-              className="h-4 w-4 absolute right-3 bottom-3" 
-              style={{ color: '#0F1F17' }} 
-            />
-          </button>
+              <button
+                onClick={() => {
+                  navigate(`/app/dashboard/pipeline-revenue?range=${selectedRange}`);
+                }}
+                className="min-w-0 bg-gray-100 rounded-xl p-4 text-left hover:bg-gray-200 transition-colors relative"
+              >
+                <div
+                  className="text-2xl font-bold mb-1 tabular-nums truncate pr-7"
+                  style={{ color: '#0F1F17' }}
+                  title={formatHKD(pipelineRevenueTotal)}
+                >
+                  {formatHKD(pipelineRevenueTotal)}
+                </div>
+                <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
+                  revenue
+                </div>
+                <ChevronRight
+                  className="h-4 w-4 absolute right-3 bottom-3"
+                  style={{ color: '#0F1F17' }}
+                />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -458,7 +433,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Order Rows */}
-        {pendingOrders.length === 0 ? (
+        {summaryLoading ? (
+          <OrderListSkeleton />
+        ) : pendingOrders.length === 0 ? (
           <div className="py-8 text-center text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
             No pending orders
           </div>
@@ -511,7 +488,9 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-        {pendingShippingOrders.length === 0 ? (
+        {summaryLoading ? (
+          <OrderListSkeleton />
+        ) : pendingShippingOrders.length === 0 ? (
           <div className="py-8 text-center text-sm" style={{ color: 'rgba(15,31,23,0.6)' }}>
             No orders waiting to ship
           </div>

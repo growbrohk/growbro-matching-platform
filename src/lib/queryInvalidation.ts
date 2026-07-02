@@ -5,6 +5,7 @@ export async function invalidatePipelineQueries(queryClient: QueryClient) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ['pipeline-rows'] }),
     queryClient.invalidateQueries({ queryKey: ['pipeline-revenue-rows'] }),
+    queryClient.invalidateQueries({ queryKey: ['dashboard-pipeline-stats'] }),
     queryClient.invalidateQueries({ queryKey: ['tracking-channels-count'] }),
     queryClient.invalidateQueries({ queryKey: ['tracking-collab-count'] }),
   ]);
@@ -52,6 +53,7 @@ export async function invalidateOrderQueries(
 ) {
   const tasks: Promise<void>[] = [
     queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] }),
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
     queryClient.invalidateQueries({ queryKey: ['product-orders-table'] }),
   ];
 
