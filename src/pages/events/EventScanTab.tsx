@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { getValidEndTimestamp } from '@/lib/utils/event-time-slots';
+import { getValidEndTimestamp, type EventTimeSlotFields } from '@/lib/utils/event-time-slots';
 
 const TICKET_LOOKUP_SELECT = `
   id,
@@ -38,13 +38,27 @@ const TICKET_LOOKUP_SELECT = `
     buyer_last_name,
     buyer_email,
     buyer_phone,
-    metadata
+    metadata,
+    order_addon_items(
+      order_id,
+      ticket_id,
+      label,
+      variant_label,
+      quantity
+    )
   ),
   ticket_type:ticket_types(
     name,
     valid_for_days
   )
 `;
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
+}
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
@@ -226,7 +240,13 @@ function buildAttendeeName(ticket: {
   return ticket.first_name || ticket.order?.buyer_first_name || 'Attendee';
 }
 
-export function EventScanTab({ eventId }: { eventId: string }) {
+export function EventScanTab({
+  eventId,
+  eventSchedule,
+}: {
+  eventId: string;
+  eventSchedule: EventTimeSlotFields | null;
+}) {
   const [scanning, setScanning] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [lastScanResult, setLastScanResult] = useState<{
@@ -473,7 +493,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       console.warn('Error querying by qr_code:', errorByQr);
     }
 
-    if (!ticket) {
+    if (!ticket && isValidUuid(identifier)) {
       const { data: ticketById, error: errorById } = await supabase
         .from('tickets')
         .select(TICKET_LOOKUP_SELECT)
@@ -509,6 +529,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       buyer_email?: string | null;
       buyer_phone?: string | null;
       metadata?: { remark?: string } | null;
+      order_addon_items?: AddonItem[];
     };
     const ticketType = ticket.ticket_type as { name?: string; valid_for_days?: string } | null;
 
@@ -526,30 +547,19 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     const ticketTypeName = ticketType?.name || 'Unknown';
     const remark = (ticket.remark as string | null) || order.metadata?.remark || '';
 
-    const { data: addonData } = await supabase
-      .from('order_addon_items')
-      .select('order_id, ticket_id, label, variant_label, quantity')
-      .eq('order_id', order.id);
-
     const addons = formatTicketAddons(
       ticket.id as string,
       order.id,
-      (addonData || []) as AddonItem[],
+      order.order_addon_items ?? [],
     );
 
     let validEnd: number | undefined;
-    const { data: eventData, error: eventError } = await supabase
-      .from('events')
-      .select('end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at')
-      .eq('id', order.event_id)
-      .single();
-
-    if (!eventError && eventData) {
+    if (eventSchedule) {
       const now = new Date().getTime();
       const validForDays = ticketType?.valid_for_days || 'day_1';
       const ticketTimeSlot = ticket.time_slot as string | null | undefined;
       validEnd = getValidEndTimestamp(
-        eventData,
+        eventSchedule,
         validForDays,
         ticketTimeSlot ?? (validForDays !== 'each' ? validForDays : null),
       );
@@ -675,11 +685,10 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
 
-    await stopScanning();
-
     const identifier = extractTicketIdentifier(decodedText);
     if (!identifier) {
       isProcessingRef.current = false;
+      await stopScanning();
       toast({
         title: 'Invalid QR Code',
         description: 'Could not extract ticket identifier from QR code',
@@ -688,8 +697,10 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       return;
     }
 
+    setLookupLoading(true);
+    const stopPromise = stopScanning();
+
     try {
-      setLookupLoading(true);
       const result = await lookupTicket(identifier);
       openConfirmDialog(result);
 
@@ -716,6 +727,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
 
       isProcessingRef.current = false;
     } finally {
+      await stopPromise;
       setLookupLoading(false);
     }
   };

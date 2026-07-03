@@ -318,7 +318,7 @@ export default function EventDetail() {
 
         {allowedTabs.has('scan') && (
           <TabsContent value="scan" className="mt-0">
-            <EventScanTab eventId={id} />
+            <EventScanTab eventId={id} eventSchedule={event} />
           </TabsContent>
         )}
       </Tabs>
