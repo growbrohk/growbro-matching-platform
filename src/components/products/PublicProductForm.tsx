@@ -15,6 +15,7 @@ import {
 import { getVariantConfig } from '@/lib/api/variant-config';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
+import { getVariantOptionValue } from '@/lib/utils/variant-parser';
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
 
 interface Org {
@@ -245,6 +246,30 @@ export default function PublicProductForm({
     return Math.max(0, stock - cartQty);
   };
 
+  const getStockForPickerValue = (
+    optionName: string,
+    value: string,
+    prefix: Record<string, string>,
+  ): number => {
+    const candidates = activeVariants.filter(
+      (v) =>
+        getVariantOptionValue(v.name, optionName) === value &&
+        Object.entries(prefix).every(
+          ([k, pv]) => getVariantOptionValue(v.name, k) === pv,
+        ),
+    );
+    return candidates.reduce((sum, v) => sum + getRemainingStock(v.id), 0);
+  };
+
+  const renderPosStockSuffix = (remaining: number) => {
+    if (!isPosMode || !posWarehouseId) return null;
+    return remaining === 0 ? (
+      <span className="text-destructive"> (Out of stock)</span>
+    ) : (
+      <span className="text-muted-foreground"> ({remaining} left)</span>
+    );
+  };
+
   const remainingStock = useMemo(
     () => getRemainingStock(effectiveSelectedVariant?.id),
     [
@@ -375,9 +400,26 @@ export default function PublicProductForm({
             variantRankOrder={variantRankOrder}
             variantValueOrders={variantValueOrders}
             autoSelectFirst
-            flatItemSuffix={(v) =>
-              v.price != null && v.price > 0 ? ` - ${formatPrice(Number(v.price))}` : null
+            isValueDisabled={
+              isPosMode && posWarehouseId
+                ? (optionName, value, prefix) =>
+                    getStockForPickerValue(optionName, value, prefix) === 0
+                : undefined
             }
+            hierarchicalItemSuffix={
+              isPosMode && posWarehouseId
+                ? (optionName, value, prefix) =>
+                    renderPosStockSuffix(getStockForPickerValue(optionName, value, prefix))
+                : undefined
+            }
+            flatItemSuffix={(v) => (
+              <>
+                {v.price != null && v.price > 0 ? ` - ${formatPrice(Number(v.price))}` : null}
+                {isPosMode && posWarehouseId
+                  ? renderPosStockSuffix(getRemainingStock(v.id))
+                  : null}
+              </>
+            )}
           />
         )}
 

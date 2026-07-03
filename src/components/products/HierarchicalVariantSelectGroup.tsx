@@ -37,6 +37,12 @@ export interface HierarchicalVariantSelectGroupProps {
     value: string,
     prefix: Record<string, string>,
   ) => boolean;
+  /** Hierarchical only — appended after option value (e.g. stock left). */
+  hierarchicalItemSuffix?: (
+    optionName: string,
+    value: string,
+    prefix: Record<string, string>,
+  ) => ReactNode;
   triggerClassName?: string;
   labelClassName?: string;
   /** Changes to this key reset picker internal state (e.g. product id). */
@@ -71,6 +77,7 @@ function HierarchicalVariantSelectGroup({
   flatItemSuffix,
   flatItemDisabled,
   isValueDisabled,
+  hierarchicalItemSuffix,
   triggerClassName = 'w-full rounded-2xl',
   labelClassName = 'text-sm font-medium',
   instanceKey = '',
@@ -301,6 +308,7 @@ function HierarchicalVariantSelectGroup({
                       return (
                         <SelectItem key={c} value={c} disabled={dimDisabled}>
                           {c}
+                          {hierarchicalItemSuffix?.(optionName, c, prefix)}
                         </SelectItem>
                       );
                     })}
