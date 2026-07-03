@@ -237,7 +237,8 @@ export default function SuccessfulBookingPage() {
                       dateTime={order.event.start_at}
                       dateTimeFormatted={formatTicketTypeDateTime(
                         order.event,
-                        { valid_for_days: ticket.ticket_type?.valid_for_days }
+                        { valid_for_days: ticket.ticket_type?.valid_for_days },
+                        ticket.time_slot ?? undefined
                       )}
                       venue={venue}
                       checkinCode={ticket.qr_code}

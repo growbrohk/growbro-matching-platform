@@ -14,12 +14,19 @@ import {
 } from '@/components/ui/dialog';
 import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
-import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay, formatTicketTypeDateTime, formatSalesWindow } from '@/lib/utils/datetime';
+import { formatTicketTypeDateTime, formatSalesWindow } from '@/lib/utils/datetime';
 import {
+  formatEventTimeSlotsList,
+  formatSlotRange,
+  getConfiguredTimeSlots,
+  getSlotRemainingForTicketType,
   getSlotStartAt,
   getValidEndTimestamp,
   getValidForDaysLabel,
   hasMultipleTimeSlots,
+  isAllAccessValidForDays,
+  ticketTypeAppliesToSlot,
+  type TimeSlotKey,
 } from '@/lib/utils/event-time-slots';
 import {
   BookingDraft,
@@ -54,6 +61,39 @@ export default function PublicEventForm({
   const navigate = useNavigate();
   const [selections, setSelections] = useState<Record<string, number>>(initialSelections);
   const [showContinueDialog, setShowContinueDialog] = useState(false);
+  const multiSlotEvent = hasMultipleTimeSlots(event);
+  const configuredTimeSlots = useMemo(() => getConfiguredTimeSlots(event), [event]);
+  const timeSlotsList = useMemo(() => formatEventTimeSlotsList(event), [event]);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotKey | null>(null);
+
+  const handleSelectTimeSlot = (slotKey: TimeSlotKey) => {
+    setSelectedTimeSlot(slotKey);
+    setSelections((prev) => {
+      const updated = { ...prev };
+      ticketTypes.forEach((tt) => {
+        if (!isAllAccessValidForDays(tt.valid_for_days)) {
+          updated[tt.id] = 0;
+        }
+      });
+      return updated;
+    });
+  };
+
+  const getEffectiveRemaining = useCallback((
+    tt: TicketType,
+    variant: TicketTypeAccessVariant | null,
+    slotKey?: TimeSlotKey | null
+  ): number | undefined => {
+    if (variant?.quota != null && variant.remaining_count != null) {
+      return variant.remaining_count;
+    }
+    if (tt.valid_for_days === 'each' && slotKey) {
+      return getSlotRemainingForTicketType(tt, slotKey);
+    }
+    if (tt.remaining_count !== undefined) return tt.remaining_count;
+    if (tt.quota < 999999) return tt.quota;
+    return undefined;
+  }, []);
 
   // Initialize selections from props - ONLY if selections are currently empty
   // Use functional update to avoid overwriting user choices
@@ -251,6 +291,29 @@ export default function PublicEventForm({
 
   const visibleTicketTypes = visibleTicketTypesWithPrice.map(x => x.tt);
 
+  const slotScopedTicketsWithPrice = useMemo(() => {
+    if (!multiSlotEvent || !selectedTimeSlot) return [];
+    return visibleTicketTypesWithPrice.filter(({ tt }) =>
+      ticketTypeAppliesToSlot(tt.valid_for_days, selectedTimeSlot)
+    );
+  }, [visibleTicketTypesWithPrice, multiSlotEvent, selectedTimeSlot]);
+
+  const allAccessTicketsWithPrice = useMemo(() => {
+    if (!multiSlotEvent) return [];
+    return visibleTicketTypesWithPrice.filter(({ tt }) =>
+      isAllAccessValidForDays(tt.valid_for_days)
+    );
+  }, [visibleTicketTypesWithPrice, multiSlotEvent]);
+
+  const singleSlotTicketsWithPrice = useMemo(() => {
+    if (multiSlotEvent) return [];
+    return visibleTicketTypesWithPrice;
+  }, [visibleTicketTypesWithPrice, multiSlotEvent]);
+
+  const ticketsForDisplay = multiSlotEvent
+    ? [...slotScopedTicketsWithPrice, ...allAccessTicketsWithPrice]
+    : singleSlotTicketsWithPrice;
+
   // Check if there are any code-only or affiliate-only tickets (for hint messages)
   const hasCodeOnlyTickets = ticketTypes.some(tt => {
     const variants = tt.access_variants || [];
@@ -371,7 +434,7 @@ export default function PublicEventForm({
     return () => clearInterval(interval);
   }, [event, ticketTypes, codeParam, refParam, isTicketAvailable, getTicketVisibility]);
 
-  const updateQuantity = (ticketTypeId: string, quantity: number) => {
+  const updateQuantity = (ticketTypeId: string, quantity: number, maxRemaining?: number) => {
     console.log(`🟢 [PublicEventForm] updateQuantity called: ticketTypeId=${ticketTypeId}, quantity=${quantity}`);
     
     const ticketType = ticketTypes.find(tt => tt.id === ticketTypeId);
@@ -389,7 +452,8 @@ export default function PublicEventForm({
 
     // Use functional update to ensure we're working with latest state
     setSelections(prev => {
-      const newQty = Math.max(0, Math.min(4, quantity));
+      const cap = maxRemaining != null ? Math.min(4, maxRemaining) : 4;
+      const newQty = Math.max(0, Math.min(cap, quantity));
       const updated = {
         ...prev,
         [ticketTypeId]: newQty
@@ -407,11 +471,119 @@ export default function PublicEventForm({
   };
 
   const hasSelections = () => {
-    // Only count selections for visible and available tickets
-    return visibleTicketTypes.some(tt => {
+    return ticketsForDisplay.some(({ tt }) => {
       const availability = isTicketAvailable(tt);
       return availability.available && (selections[tt.id] || 0) > 0;
     });
+  };
+
+  const renderTicketCard = (
+    { tt, effectivePrice, discountPercent, variant }: {
+      tt: TicketType;
+      effectivePrice: number;
+      discountPercent: number | null;
+      variant: TicketTypeAccessVariant | null;
+    },
+    options?: { slotKey?: TimeSlotKey | null; hideDateTime?: boolean }
+  ) => {
+    const slotKey = options?.slotKey ?? null;
+    const availability = isTicketAvailable(tt);
+    const isUnavailable = !availability.available;
+    const showDiscount = discountPercent != null && discountPercent > 0;
+    const remainingCount = getEffectiveRemaining(tt, variant, slotKey ?? selectedTimeSlot);
+    const showSlotLabel = multiSlotEvent && isAllAccessValidForDays(tt.valid_for_days);
+
+    return (
+      <div
+        key={tt.id}
+        className={`border rounded-lg p-4 space-y-3 ${isUnavailable ? 'opacity-60' : ''}`}
+        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
+              {tt.name}
+              {showSlotLabel && (
+                <span className="text-xs font-normal text-muted-foreground ml-1">
+                  ({getValidForDaysLabel(tt.valid_for_days)})
+                </span>
+              )}
+            </h3>
+            {!options?.hideDateTime && !multiSlotEvent && (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {formatTicketTypeDateTime(event, tt, slotKey ?? undefined)}
+              </p>
+            )}
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              {showDiscount ? (
+                <>
+                  <span className="text-sm text-muted-foreground line-through">${tt.price.toFixed(2)}</span>
+                  <span className="text-base font-medium" style={{ color: '#0E7A3A' }}>${effectivePrice.toFixed(2)}</span>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(14,122,58,0.15)', color: '#0E7A3A' }}>
+                    {discountPercent}% off
+                  </span>
+                </>
+              ) : (
+                <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                  ${effectivePrice.toFixed(2)}
+                </span>
+              )}
+              {(() => {
+                const showRemaining = tt.show_remaining_count !== false;
+                if (!showRemaining || remainingCount === undefined) return null;
+                if (tt.threshold_to_show != null && remainingCount > tt.threshold_to_show) return null;
+                return (
+                  <span className="text-xs text-muted-foreground">
+                    {remainingCount} remaining
+                  </span>
+                );
+              })()}
+            </div>
+            {tt.description && tt.description.trim() && (
+              <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">
+                {tt.description.trim()}
+              </p>
+            )}
+            {isUnavailable && (
+              <p className="text-xs text-red-600 mt-1">
+                {availability.reason || 'Unavailable'}
+                {tt.availability_mode === 'scheduled' &&
+                  tt.available_start_at &&
+                  tt.available_end_at &&
+                  (availability.reason === 'Sales not started' || availability.reason === 'Sales closed') && (
+                    <span className="text-muted-foreground">
+                      {' · '}
+                      {formatSalesWindow(tt.available_start_at, tt.available_end_at)}
+                    </span>
+                  )}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-muted-foreground">Quantity:</label>
+          <Select
+            value={(selections[tt.id] || 0).toString()}
+            onValueChange={(value) => updateQuantity(tt.id, parseInt(value), remainingCount)}
+            disabled={isUnavailable || (multiSlotEvent && !isAllAccessValidForDays(tt.valid_for_days) && !selectedTimeSlot)}
+          >
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(() => {
+                const maxQty = remainingCount != null ? Math.min(4, remainingCount) : 4;
+                return [0, 1, 2, 3, 4].filter(n => n <= maxQty);
+              })().map((num) => (
+                <SelectItem key={num} value={num.toString()}>
+                  {num}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    );
   };
 
   const subtotal = calculateSubtotal();
@@ -439,6 +611,8 @@ export default function PublicEventForm({
     visibleTicketTypesWithPrice.forEach(({ tt, effectivePrice, variant }) => {
       const qty = selections[tt.id] || 0;
       if (qty > 0) {
+        const isAllAccess = isAllAccessValidForDays(tt.valid_for_days);
+        const timeSlot = !isAllAccess && multiSlotEvent ? selectedTimeSlot ?? undefined : undefined;
         const finalQty = Math.max(1, qty);
         lines.push({
           label: tt.name,
@@ -447,7 +621,10 @@ export default function PublicEventForm({
           qty: finalQty,
           ticketTypeId: tt.id,
           ticketTypeAccessVariantId: variant?.id ?? null,
-          dateTimeLabel: formatTicketTypeDateTime(event, tt),
+          dateTimeLabel: isAllAccess
+            ? formatTicketTypeDateTime(event, tt)
+            : formatTicketTypeDateTime(event, tt, timeSlot),
+          timeSlot: timeSlot ?? undefined,
         });
       }
     });
@@ -506,19 +683,23 @@ export default function PublicEventForm({
                 {/* Date, Time, Location */}
                 <div className="space-y-1 break-words">
                   <div>
-                    <span className="text-sm text-muted-foreground">Date & Time:</span>{' '}
-                    <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                      {formatEventDateTimeMultiDay(
-                        event.start_at,
-                        event.end_at,
-                        event.day_2_start_at,
-                        event.day_2_end_at,
-                        event.day_3_start_at,
-                        event.day_3_end_at,
-                        event.day_4_start_at,
-                        event.day_4_end_at
-                      )}
-                    </span>
+                    <span className="text-sm text-muted-foreground">Date & Time:</span>
+                    {multiSlotEvent ? (
+                      <ol className="list-decimal list-inside space-y-0.5 mt-1">
+                        {timeSlotsList.map((slot) => (
+                          <li key={slot.key} className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                            {slot.label}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <>
+                        {' '}
+                        <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
+                          {formatSlotRange(event.start_at, event.end_at)}
+                        </span>
+                      </>
+                    )}
                   </div>
                   {event.location_text && (
                     <div>
@@ -556,109 +737,99 @@ export default function PublicEventForm({
             {/* Tickets Section */}
             {ticketTypes.length > 0 && (
               <div className="space-y-4">
-                <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                  Tickets
-                </p>
-                {visibleTicketTypes.length > 0 ? (
-                  visibleTicketTypesWithPrice.map(({ tt, effectivePrice, discountPercent, variant }) => {
-                    const availability = isTicketAvailable(tt);
-                    const isUnavailable = !availability.available;
-                    const showDiscount = discountPercent != null && discountPercent > 0;
-                    const remainingCount = variant?.quota != null && variant?.remaining_count != null
-                      ? variant.remaining_count
-                      : (tt.remaining_count !== undefined ? tt.remaining_count : (tt.quota < 999999 ? tt.quota : undefined));
-                    
-                    return (
-                      <div
-                        key={tt.id}
-                        className={`border rounded-lg p-4 space-y-3 ${isUnavailable ? 'opacity-60' : ''}`}
-                        style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
-                              {tt.name}
-                              {hasMultipleTimeSlots(event) && tt.valid_for_days && (
-                                <span className="text-xs font-normal text-muted-foreground ml-1">
-                                  ({getValidForDaysLabel(tt.valid_for_days)})
-                                </span>
-                              )}
-                            </h3>
-                            <p className="text-sm text-muted-foreground mt-0.5">
-                              {formatTicketTypeDateTime(event, tt)}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              {showDiscount ? (
-                                <>
-                                  <span className="text-sm text-muted-foreground line-through">${tt.price.toFixed(2)}</span>
-                                  <span className="text-base font-medium" style={{ color: '#0E7A3A' }}>${effectivePrice.toFixed(2)}</span>
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(14,122,58,0.15)', color: '#0E7A3A' }}>
-                                    {discountPercent}% off
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                                  ${effectivePrice.toFixed(2)}
-                                </span>
-                              )}
-                              {(() => {
-                                const showRemaining = tt.show_remaining_count !== false;
-                                if (!showRemaining || remainingCount === undefined) return null;
-                                if (tt.threshold_to_show != null && remainingCount > tt.threshold_to_show) return null;
-                                return (
-                                  <span className="text-xs text-muted-foreground">
-                                    {remainingCount} {remainingCount === 1 ? 'remaining' : 'remaining'}
-                                  </span>
-                                );
-                              })()}
-                            </div>
-                            {tt.description && tt.description.trim() && (
-                              <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">
-                                {tt.description.trim()}
-                              </p>
-                            )}
-                            {isUnavailable && (
-                              <p className="text-xs text-red-600 mt-1">
-                                {availability.reason || 'Unavailable'}
-                                {tt.availability_mode === 'scheduled' &&
-                                  tt.available_start_at &&
-                                  tt.available_end_at &&
-                                  (availability.reason === 'Sales not started' || availability.reason === 'Sales closed') && (
-                                    <span className="text-muted-foreground">
-                                      {' · '}
-                                      {formatSalesWindow(tt.available_start_at, tt.available_end_at)}
-                                    </span>
-                                  )}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <label className="text-sm text-muted-foreground">Quantity:</label>
-                          <Select
-                            value={(selections[tt.id] || 0).toString()}
-                            onValueChange={(value) => updateQuantity(tt.id, parseInt(value))}
-                            disabled={isUnavailable}
+                {multiSlotEvent && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                      1. Choose a time slot
+                    </p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {configuredTimeSlots.map((slot) => {
+                        const isSelected = selectedTimeSlot === slot.key;
+                        const slotAvailability = visibleTicketTypesWithPrice.reduce((sum, { tt, variant }) => {
+                          if (!ticketTypeAppliesToSlot(tt.valid_for_days, slot.key)) return sum;
+                          const remaining = getEffectiveRemaining(tt, variant, slot.key);
+                          return sum + (remaining ?? 0);
+                        }, 0);
+                        return (
+                          <button
+                            key={slot.key}
+                            type="button"
+                            onClick={() => handleSelectTimeSlot(slot.key)}
+                            className={`text-left border rounded-lg p-3 transition-colors ${
+                              isSelected ? 'ring-2 ring-[#0E7A3A] bg-[#0E7A3A]/5' : 'hover:bg-muted/50'
+                            }`}
+                            style={{ borderColor: 'rgba(14,122,58,0.14)' }}
                           >
-                            <SelectTrigger className="w-24">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(() => {
-                                const maxQty = remainingCount != null ? Math.min(4, remainingCount) : 4;
-                                return [0, 1, 2, 3, 4].filter(n => n <= maxQty);
-                              })().map((num) => (
-                                <SelectItem key={num} value={num.toString()}>
-                                  {num}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                              {slot.slotNumber}. {formatSlotRange(slot.startAt, slot.endAt)}
+                            </span>
+                            {slotAvailability > 0 && (
+                              <span className="block text-xs text-muted-foreground mt-0.5">
+                                Tickets available
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {multiSlotEvent && selectedTimeSlot && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                      2. Choose tickets
+                    </p>
+                    {slotScopedTicketsWithPrice.length > 0 ? (
+                      slotScopedTicketsWithPrice.map((item) =>
+                        renderTicketCard(item, { slotKey: selectedTimeSlot, hideDateTime: true })
+                      )
+                    ) : (
+                      <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                        No tickets available for this time slot.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {multiSlotEvent && allAccessTicketsWithPrice.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                      All-access tickets
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Valid for all time slots — no slot selection required.
+                    </p>
+                    {allAccessTicketsWithPrice.map((item) => renderTicketCard(item))}
+                  </div>
+                )}
+
+                {!multiSlotEvent && (
+                  <>
+                    <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                      Tickets
+                    </p>
+                    {visibleTicketTypes.length > 0 ? (
+                      singleSlotTicketsWithPrice.map((item) => renderTicketCard(item))
+                    ) : (
+                      <div className="border rounded-lg p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                        <p className="text-base font-medium mb-2" style={{ color: '#0F1F17' }}>
+                          No tickets available for this link.
+                        </p>
+                        <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.72)' }}>
+                          {!refParam && hasAffiliateOnlyTickets && (
+                            <p>Try an affiliate link (?ref=...)</p>
+                          )}
+                          {!codeParam && hasCodeOnlyTickets && (
+                            <p>Try a code (?code=...)</p>
+                          )}
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
+                    )}
+                  </>
+                )}
+
+                {multiSlotEvent && visibleTicketTypes.length === 0 && (
                   <div className="border rounded-lg p-8 text-center" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
                     <p className="text-base font-medium mb-2" style={{ color: '#0F1F17' }}>
                       No tickets available for this link.

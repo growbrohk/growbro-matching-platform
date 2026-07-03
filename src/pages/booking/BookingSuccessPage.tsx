@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
-import { formatEventDateTimeMultiDay } from '@/lib/utils/datetime';
+import { formatEventTimeSlotsDisplayText } from '@/lib/utils/event-time-slots';
 import { CreditCard, Smartphone, QrCode, ChevronDown, Loader2, ExternalLink, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -370,7 +370,7 @@ export default function BookingSuccessPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Date & Time</p>
                     <p>
-                      {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at, event.day_3_start_at, event.day_3_end_at, event.day_4_start_at, event.day_4_end_at)}
+                      {formatEventTimeSlotsDisplayText(event)}
                     </p>
                   </div>
                   {event.location_text && (

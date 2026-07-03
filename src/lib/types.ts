@@ -223,10 +223,12 @@ export interface TicketType {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
+  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
+  slot_remaining?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
   remaining_count?: number; // Calculated field: quota - sold tickets (valid/scanned)
   created_at: string;
   updated_at: string;

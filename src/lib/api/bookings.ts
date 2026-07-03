@@ -107,6 +107,7 @@ export interface OrderWithEvent {
   tickets: Array<{
     id: string;
     ticket_type_id: string;
+    time_slot?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | null;
     qr_code: string;
     status: string;
     first_name: string | null;
@@ -116,7 +117,7 @@ export interface OrderWithEvent {
     ticket_type?: {
       id: string;
       name: string;
-      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
+      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
     };
   }>;
 }
@@ -141,12 +142,15 @@ export async function createBooking(
   const orderLines = draft.lines
     .filter(line => line.qty > 0)
     .map(line => {
-      const base = {
+      const base: Record<string, unknown> = {
         ticket_type_id: line.ticketTypeId,
         quantity: line.qty,
       };
       if (line.ticketTypeAccessVariantId) {
-        return { ...base, ticket_type_access_variant_id: line.ticketTypeAccessVariantId };
+        base.ticket_type_access_variant_id = line.ticketTypeAccessVariantId;
+      }
+      if (line.timeSlot) {
+        base.time_slot = line.timeSlot;
       }
       return base;
     });
@@ -395,6 +399,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
     tickets: Array.isArray(tickets) ? tickets.map((ticket: any) => ({
       id: ticket.id,
       ticket_type_id: ticket.ticket_type_id,
+      time_slot: ticket.time_slot ?? null,
       qr_code: ticket.qr_code || '', // Ensure qr_code is always a string
       status: ticket.status,
       first_name: ticket.first_name,

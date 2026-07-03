@@ -153,9 +153,10 @@ export function formatEventDateTimeMultiDay(
  */
 export function formatTicketTypeDateTime(
   event: EventTimeSlotFields,
-  ticketType: { valid_for_days?: ValidForDays | string | null }
+  ticketType: { valid_for_days?: ValidForDays | string | null },
+  explicitTimeSlot?: import('@/lib/utils/event-time-slots').TimeSlotKey | null
 ): string {
-  return formatTicketTypeDateTimeFromEvent(event, ticketType);
+  return formatTicketTypeDateTimeFromEvent(event, ticketType, explicitTimeSlot);
 }
 
 function formatSingleTimeInHK(dateString: string): string {

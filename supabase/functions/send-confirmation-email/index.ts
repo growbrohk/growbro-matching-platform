@@ -76,6 +76,10 @@ function formatTicketTypeDateTimeHKT(
       .join('; ') + ' (HKT)';
   }
 
+  if (validFor === 'each') {
+    return 'Per purchased time slot (see ticket details)';
+  }
+
   const slot = slots.find((s) => s.key === validFor);
   if (slot) {
     return `${formatEventTimeHKT(slot.start)} – ${formatEventTimeHKT(slot.end)} (HKT)`;
@@ -86,6 +90,7 @@ function formatTicketTypeDateTimeHKT(
 
 function getValidForDaysLabelHKT(value: string): string {
   if (value === 'all' || value === 'both') return 'All time slots';
+  if (value === 'each') return 'Each time slot';
   const slotNumber = value.replace('day_', '');
   return `Time Slot ${slotNumber} only`;
 }
@@ -184,7 +189,7 @@ Deno.serve(async (req) => {
 
     const { data: tickets } = await supabase
       .from('tickets')
-      .select('id')
+      .select('id, time_slot, ticket_type:ticket_types(valid_for_days)')
       .eq('order_id', order_id)
       .order('created_at');
 
@@ -223,10 +228,28 @@ Deno.serve(async (req) => {
     const eventTitle = event?.title || 'Event';
     let eventStartAt: string;
     if (event?.start_at && orderItems && orderItems.length > 0) {
+      const ticketSlots = (tickets || [])
+        .map((t: any) => t.time_slot as string | null)
+        .filter(Boolean);
       const uniqueValidFor = [...new Set(
         orderItems.map((oi: any) => oi.ticket_type?.valid_for_days || 'day_1')
       )];
-      if (uniqueValidFor.length === 1) {
+      if (ticketSlots.length > 0 && uniqueValidFor.every((v) => v === 'each')) {
+        const slots = [
+          { key: 'day_1', start: event.start_at, end: event.end_at },
+          { key: 'day_2', start: event.day_2_start_at, end: event.day_2_end_at },
+          { key: 'day_3', start: event.day_3_start_at, end: event.day_3_end_at },
+          { key: 'day_4', start: event.day_4_start_at, end: event.day_4_end_at },
+        ].filter((s) => s.start && s.end) as { key: string; start: string; end: string }[];
+        eventStartAt = [...new Set(ticketSlots)]
+          .map((slotKey) => {
+            const slot = slots.find((s) => s.key === slotKey);
+            if (!slot) return null;
+            return `${getValidForDaysLabelHKT(slotKey)}: ${formatEventTimeHKT(slot.start)} – ${formatEventTimeHKT(slot.end)}`;
+          })
+          .filter(Boolean)
+          .join('; ') + ' (HKT)';
+      } else if (uniqueValidFor.length === 1) {
         eventStartAt = formatTicketTypeDateTimeHKT(event, uniqueValidFor[0]);
       } else {
         const dayLabels: Record<string, string> = {

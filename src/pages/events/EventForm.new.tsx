@@ -64,11 +64,16 @@ import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 import { getEventPreviewStoragePathFromPublicUrl } from '@/lib/storage/eventPreviewPaths';
 import { getOrgPaymentDefaults } from '@/lib/api/orgs';
 import {
+  formatSlotRange,
   getConfiguredTimeSlots,
   getDefaultNextSlotTimes,
   getEffectiveEventEndDate,
   getValidForDaysOptions,
+  stripSlotFromSlotQuotas,
+  ticketTypeHasSales,
+  ticketTypeHasVariantQuotas,
   validForDaysReferencesRemovedSlot,
+  type TimeSlotKey,
   type ValidForDays,
 } from '@/lib/utils/event-time-slots';
 
@@ -110,6 +115,36 @@ interface TicketTypeForm {
   valid_for_days?: ValidForDays;
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
+  slot_quotas?: Partial<Record<TimeSlotKey, string>>;
+  /** Loaded from get_ticket_types_with_remaining for edit-mode guards */
+  remaining_count?: number;
+}
+
+function buildSlotQuotasPayload(
+  tt: TicketTypeForm,
+  configuredSlots: ReturnType<typeof getConfiguredTimeSlots>
+): Partial<Record<TimeSlotKey, number>> | undefined {
+  if (tt.valid_for_days !== 'each') return undefined;
+  const payload: Partial<Record<TimeSlotKey, number>> = {};
+  configuredSlots.forEach((slot) => {
+    const raw = tt.slot_quotas?.[slot.key];
+    if (raw != null && raw !== '') {
+      payload[slot.key] = parseInt(raw, 10);
+    }
+  });
+  return Object.keys(payload).length > 0 ? payload : undefined;
+}
+
+function resolveTicketQuotaForSave(
+  tt: TicketTypeForm,
+  configuredSlots: ReturnType<typeof getConfiguredTimeSlots>
+): number {
+  if (tt.valid_for_days === 'each') {
+    const slotQuotas = buildSlotQuotasPayload(tt, configuredSlots);
+    if (!slotQuotas) return 1;
+    return Object.values(slotQuotas).reduce((sum, n) => sum + n, 0);
+  }
+  return parseInt(tt.quota, 10);
 }
 
 function processTicketAvailability(
@@ -381,7 +416,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setTicketTermsAndConditions(metadata.ticket_terms_and_conditions ?? DEFAULT_EVENT_TICKET_TERMS);
 
         // Load ticket types with access variants
-        const types = await getTicketTypes(id, false, true);
+        const types = await getTicketTypes(id, true, true);
         setExistingTicketTypes(types);
         setTicketTypes(types.map(t => {
           const variants = t.access_variants && t.access_variants.length > 0
@@ -419,6 +454,12 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
             available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
             valid_for_days: (t.valid_for_days as ValidForDays) || 'day_1',
+            slot_quotas: t.slot_quotas
+              ? Object.fromEntries(
+                  Object.entries(t.slot_quotas).map(([k, v]) => [k, String(v)])
+                ) as Partial<Record<TimeSlotKey, string>>
+              : undefined,
+            remaining_count: t.remaining_count,
             show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
             threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
           };
@@ -581,6 +622,17 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       });
     }
     setTicketTypes(ticketTypes.filter((_, i) => i !== index));
+  };
+
+  const updateSlotQuota = (ticketIndex: number, slotKey: TimeSlotKey, value: string) => {
+    setTicketTypes((prev) =>
+      prev.map((t, i) =>
+        i === ticketIndex
+          ? { ...t, slot_quotas: { ...t.slot_quotas, [slotKey]: value } }
+          : t
+      )
+    );
+    if (validationErrors.length > 0) setValidationErrors([]);
   };
 
   const updateTicketTypeForm = (index: number, field: keyof TicketTypeForm, value: string | string[] | null | boolean | Date | number) => {
@@ -1056,8 +1108,19 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         if (priceStr !== '' && (isNaN(parseFloat(priceStr)) || parseFloat(priceStr) < 0)) {
           errors.push(`Ticket Type ${index + 1}: Price must be a valid number >= 0`);
         }
-        if (!tt.quota || parseInt(tt.quota) <= 0) {
-          errors.push(`Ticket Type ${index + 1}: Available tickets must be greater than 0`);
+        const label = tt.name.trim() || `Ticket Type ${index + 1}`;
+        if (tt.valid_for_days === 'each') {
+          configuredTimeSlots.forEach((slot) => {
+            const raw = tt.slot_quotas?.[slot.key];
+            if (!raw || parseInt(raw, 10) <= 0) {
+              errors.push(`${label}: Available tickets for Time Slot ${slot.slotNumber} must be greater than 0`);
+            }
+          });
+          if (ticketTypeHasVariantQuotas(tt.access_variants)) {
+            errors.push(`${label}: Per-slot inventory cannot be combined with access variant quotas`);
+          }
+        } else if (!tt.quota || parseInt(tt.quota) <= 0) {
+          errors.push(`${label}: Available tickets must be greater than 0`);
         }
 
         errors.push(
@@ -1183,7 +1246,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             effectiveEventEndDate
           );
 
-          const accessVariants = (tt.access_variants || []).map((v) => ({
+          const accessVariants = (tt.valid_for_days === 'each'
+            ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
+            : (tt.access_variants || [])
+          ).map((v) => ({
             visibility_mode: v.visibility_mode,
             access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
@@ -1193,6 +1259,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             is_active: v.is_active !== false,
           }));
 
+          const slotQuotasPayload = buildSlotQuotasPayload(tt, configuredTimeSlots);
+          const ticketQuota = resolveTicketQuotaForSave(tt, configuredTimeSlots);
+
           if (tt.id && !tt.isNew) {
             // Update existing
             const priceStr = (tt.price || '').trim();
@@ -1201,7 +1270,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               id: tt.id,
               name: tt.name.trim(),
               price: ticketPrice,
-              quota: parseInt(tt.quota),
+              quota: ticketQuota,
+              slot_quotas: tt.valid_for_days === 'each' ? (slotQuotasPayload ?? null) : null,
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
               access_variants: accessVariants.length > 0 ? accessVariants : undefined,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
@@ -1221,7 +1291,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               event_id: savedEventId,
               name: tt.name.trim(),
               price: ticketPrice,
-              quota: parseInt(tt.quota),
+              quota: ticketQuota,
+              slot_quotas: tt.valid_for_days === 'each' ? slotQuotasPayload : undefined,
               metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
               access_variants: accessVariants.length > 0 ? accessVariants : undefined,
               is_active: tt.is_active !== undefined ? tt.is_active : true,
@@ -1326,7 +1397,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             effectiveEventEndDate
           );
 
-          const accessVariantsCreate = (tt.access_variants || []).map((v) => ({
+          const accessVariantsCreate = (tt.valid_for_days === 'each'
+            ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
+            : (tt.access_variants || [])
+          ).map((v) => ({
             visibility_mode: v.visibility_mode,
             access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
@@ -1336,13 +1410,17 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             is_active: v.is_active !== false,
           }));
 
+          const slotQuotasPayloadCreate = buildSlotQuotasPayload(tt, configuredTimeSlots);
+          const ticketQuotaCreate = resolveTicketQuotaForSave(tt, configuredTimeSlots);
+
           const priceStr = (tt.price || '').trim();
           const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
           await createTicketType({
             event_id: savedEventId,
             name: tt.name.trim(),
             price: ticketPrice,
-            quota: parseInt(tt.quota),
+            quota: ticketQuotaCreate,
+            slot_quotas: tt.valid_for_days === 'each' ? slotQuotasPayloadCreate : undefined,
             metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
             access_variants: accessVariantsCreate.length > 0 ? accessVariantsCreate : undefined,
             is_active: tt.is_active !== undefined ? tt.is_active : true,
@@ -1642,6 +1720,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_2')
                       ? 'day_1'
                       : tt.valid_for_days,
+                    slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_2'),
                   }))
                 );
               }}
@@ -1670,6 +1749,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_3')
                       ? 'day_1'
                       : tt.valid_for_days,
+                    slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_3'),
                   }))
                 );
               }}
@@ -1696,6 +1776,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_4')
                       ? 'day_1'
                       : tt.valid_for_days,
+                    slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_4'),
                   }))
                 );
               }}
@@ -2042,19 +2123,62 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                         </Label>
                         <Select
                           value={tt.valid_for_days || 'day_1'}
-                          onValueChange={(value) => updateTicketTypeForm(index, 'valid_for_days', value as ValidForDays)}
+                          onValueChange={(value) => {
+                            const next = value as ValidForDays;
+                            setTicketTypes((prev) =>
+                              prev.map((t, i) => {
+                                if (i !== index) return t;
+                                const updated: TicketTypeForm = { ...t, valid_for_days: next };
+                                if (next === 'each') {
+                                  const initial: Partial<Record<TimeSlotKey, string>> = {};
+                                  configuredTimeSlots.forEach((slot) => {
+                                    initial[slot.key] = t.slot_quotas?.[slot.key] || t.quota || '100';
+                                  });
+                                  updated.slot_quotas = initial;
+                                  updated.access_variants = (t.access_variants || []).map((v) => ({
+                                    ...v,
+                                    quota: null,
+                                  }));
+                                } else {
+                                  updated.slot_quotas = undefined;
+                                }
+                                return updated;
+                              })
+                            );
+                            if (validationErrors.length > 0) setValidationErrors([]);
+                          }}
                         >
-                          <SelectTrigger id={`valid-for-days-${index}`} className="w-full max-w-[220px]">
+                          <SelectTrigger id={`valid-for-days-${index}`} className="w-full max-w-[280px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {getValidForDaysOptions(configuredTimeSlots).map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
+                            {getValidForDaysOptions(configuredTimeSlots).map((option) => {
+                              const hasSales = ticketTypeHasSales({
+                                remaining_count: tt.remaining_count,
+                                quota: parseInt(tt.quota || '0', 10) || 0,
+                              });
+                              const hasVariantQuotas = ticketTypeHasVariantQuotas(tt.access_variants);
+                              const disabledEach = option.value === 'each' && hasSales;
+                              const disabledByVariants = option.value === 'each' && hasVariantQuotas;
+                              return (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                  disabled={disabledEach || disabledByVariants}
+                                >
+                                  {option.label}
+                                  {disabledEach ? ' (unavailable after sales)' : ''}
+                                  {disabledByVariants ? ' (incompatible with variant quotas)' : ''}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
+                        {tt.valid_for_days === 'each' && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Set available tickets separately for each time slot. Cannot be combined with variant quotas.
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -2078,26 +2202,59 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                         />
                       </div>
 
-                      <div>
-                        <Label htmlFor={`ticket-quota-${index}`} className="text-xs md:text-sm font-medium">
-                          Available tickets
+                      {tt.valid_for_days !== 'each' && (
+                        <div>
+                          <Label htmlFor={`ticket-quota-${index}`} className="text-xs md:text-sm font-medium">
+                            Available tickets
+                            <span className="text-red-500 ml-1">*</span>
+                          </Label>
+                          <Input
+                            id={`ticket-quota-${index}`}
+                            type="number"
+                            min="1"
+                            value={tt.quota}
+                            onChange={(e) => {
+                              updateTicketTypeForm(index, 'quota', e.target.value);
+                              if (validationErrors.length > 0) setValidationErrors([]);
+                            }}
+                            placeholder="100"
+                            required
+                            className="mt-1"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {tt.valid_for_days === 'each' && (
+                      <div className="space-y-3">
+                        <Label className="text-xs md:text-sm font-medium">
+                          Available tickets per time slot
                           <span className="text-red-500 ml-1">*</span>
                         </Label>
-                        <Input
-                          id={`ticket-quota-${index}`}
-                          type="number"
-                          min="1"
-                          value={tt.quota}
-                          onChange={(e) => {
-                            updateTicketTypeForm(index, 'quota', e.target.value);
-                            if (validationErrors.length > 0) setValidationErrors([]);
-                          }}
-                          placeholder="100"
-                          required
-                          className="mt-1"
-                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {configuredTimeSlots.map((slot) => (
+                            <div key={slot.key}>
+                              <Label htmlFor={`slot-quota-${index}-${slot.key}`} className="text-xs font-medium">
+                                Time Slot {slot.slotNumber}
+                                <span className="block font-normal text-muted-foreground">
+                                  {formatSlotRange(slot.startAt, slot.endAt)}
+                                </span>
+                              </Label>
+                              <Input
+                                id={`slot-quota-${index}-${slot.key}`}
+                                type="number"
+                                min="1"
+                                value={tt.slot_quotas?.[slot.key] ?? ''}
+                                onChange={(e) => updateSlotQuota(index, slot.key, e.target.value)}
+                                placeholder="100"
+                                required
+                                className="mt-1"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* On Sale Toggle */}
                     <div className="pt-4 border-t" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
@@ -2297,14 +2454,19 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                               type="number"
                               min="1"
                               value={variant.quota ?? ''}
+                              disabled={tt.valid_for_days === 'each'}
                               onChange={(e) => {
                                 const v = e.target.value.trim();
                                 handleUpdateAccessVariant(index, vIdx, 'quota', v ? v : null);
                               }}
-                              placeholder="Use ticket type quota"
+                              placeholder={tt.valid_for_days === 'each' ? 'Not available with per-slot inventory' : 'Use ticket type quota'}
                               className="mt-1 max-w-[120px]"
                             />
-                            <p className="text-xs text-muted-foreground mt-0.5">Max tickets through this variant. Leave empty to use ticket type quota.</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {tt.valid_for_days === 'each'
+                                ? 'Variant quotas are disabled when using per-slot inventory.'
+                                : 'Max tickets through this variant. Leave empty to use ticket type quota.'}
+                            </p>
                           </div>
                           {variant.visibility_mode === 'code' && variant.access_code && eventId && eventSlug && effectiveOrgSlug && (
                             <div>

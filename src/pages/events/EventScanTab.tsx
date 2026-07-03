@@ -230,6 +230,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
           first_name,
           last_name,
           order_id,
+          time_slot,
           order:orders!inner(
             id,
             event_id
@@ -262,6 +263,7 @@ export function EventScanTab({ eventId }: { eventId: string }) {
             first_name,
             last_name,
             order_id,
+            time_slot,
             order:orders!inner(
               id,
               event_id
@@ -308,7 +310,12 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       if (!eventError && eventData) {
         const now = new Date().getTime();
         const validForDays = ticketType?.valid_for_days || 'day_1';
-        const validEnd = getValidEndTimestamp(eventData, validForDays);
+        const ticketTimeSlot = (ticket as { time_slot?: string | null }).time_slot;
+        const validEnd = getValidEndTimestamp(
+          eventData,
+          validForDays,
+          ticketTimeSlot ?? (validForDays !== 'each' ? validForDays : null)
+        );
 
         const FIVE_MINUTES_MS = 5 * 60 * 1000;
         if (now > validEnd + FIVE_MINUTES_MS) {

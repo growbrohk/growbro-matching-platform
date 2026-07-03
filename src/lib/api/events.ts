@@ -109,10 +109,11 @@ export interface CreateTicketTypeData {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
+  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -125,7 +126,8 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
+  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
 }
 
 /**
@@ -464,6 +466,9 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   }
   if (data.valid_for_days !== undefined) {
     updateFields.valid_for_days = data.valid_for_days;
+  }
+  if (data.slot_quotas !== undefined) {
+    updateFields.slot_quotas = data.slot_quotas;
   }
   if (data.description !== undefined) {
     updateFields.description = data.description;

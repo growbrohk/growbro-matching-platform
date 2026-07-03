@@ -1,7 +1,7 @@
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 
 export type TimeSlotKey = 'day_1' | 'day_2' | 'day_3' | 'day_4';
-export type ValidForDays = TimeSlotKey | 'both' | 'all';
+export type ValidForDays = TimeSlotKey | 'both' | 'all' | 'each';
 
 export interface EventTimeSlotFields {
   start_at: string;
@@ -62,10 +62,18 @@ function isAllSlotsValue(validForDays: ValidForDays): boolean {
 
 export function getValidEndTimestamp(
   event: EventTimeSlotFields,
-  validForDays?: ValidForDays | string | null
+  validForDays?: ValidForDays | string | null,
+  explicitTimeSlot?: TimeSlotKey | string | null
 ): number {
-  const validFor = (validForDays || 'day_1') as ValidForDays;
   const slots = getConfiguredTimeSlots(event);
+  const slotKey = (explicitTimeSlot || validForDays || 'day_1') as ValidForDays;
+
+  if (explicitTimeSlot && slots.some((s) => s.key === explicitTimeSlot)) {
+    const slot = slots.find((s) => s.key === explicitTimeSlot);
+    if (slot) return new Date(slot.endAt).getTime();
+  }
+
+  const validFor = (validForDays || 'day_1') as ValidForDays;
 
   if (slots.length <= 1 || validFor === 'day_1') {
     return new Date(event.end_at).getTime();
@@ -73,6 +81,11 @@ export function getValidEndTimestamp(
 
   if (isAllSlotsValue(validFor)) {
     return Math.max(...slots.map((slot) => new Date(slot.endAt).getTime()));
+  }
+
+  if (validFor === 'each' && slotKey !== 'each') {
+    const slot = slots.find((s) => s.key === slotKey);
+    if (slot) return new Date(slot.endAt).getTime();
   }
 
   const slot = slots.find((s) => s.key === validFor);
@@ -88,21 +101,30 @@ export function getValidForDaysLabel(value: ValidForDays | string | null | undef
   if (validFor === 'all' || validFor === 'both') {
     return 'All time slots';
   }
+  if (validFor === 'each') {
+    return 'Each time slot';
+  }
   const slotNumber = validFor.replace('day_', '');
   return `Time Slot ${slotNumber} only`;
 }
 
 export function getValidForDaysOptions(
-  slots: ConfiguredTimeSlot[]
+  slots: ConfiguredTimeSlot[],
+  options?: { allowEach?: boolean; allowAll?: boolean }
 ): { value: ValidForDays; label: string }[] {
-  const options = slots.map((slot) => ({
-    value: slot.key,
+  const result = slots.map((slot) => ({
+    value: slot.key as ValidForDays,
     label: `Time Slot ${slot.slotNumber} only`,
   }));
   if (slots.length > 1) {
-    options.push({ value: 'all', label: 'All time slots' });
+    if (options?.allowEach !== false) {
+      result.push({ value: 'each', label: 'Each time slot (separate inventory)' });
+    }
+    if (options?.allowAll !== false) {
+      result.push({ value: 'all', label: 'All time slots' });
+    }
   }
-  return options;
+  return result;
 }
 
 export function formatSlotRange(startAt: string, endAt: string): string {
@@ -114,12 +136,61 @@ export function formatEventDateTimeMultiDayFromEvent(event: EventTimeSlotFields)
   return slots.map((slot) => formatSlotRange(slot.startAt, slot.endAt)).join(', ');
 }
 
+export function formatEventTimeSlotsList(
+  event: EventTimeSlotFields
+): { key: TimeSlotKey; number: number; label: string }[] {
+  return getConfiguredTimeSlots(event).map((slot) => ({
+    key: slot.key,
+    number: slot.slotNumber,
+    label: formatSlotRange(slot.startAt, slot.endAt),
+  }));
+}
+
+export function isAllAccessValidForDays(value: ValidForDays | string | null | undefined): boolean {
+  const validFor = (value || 'day_1') as ValidForDays;
+  return validFor === 'all' || validFor === 'both';
+}
+
+export function getSlotRemainingForTicketType(
+  ticketType: { valid_for_days?: ValidForDays | string | null; slot_remaining?: Partial<Record<TimeSlotKey, number>> | null },
+  slotKey: TimeSlotKey
+): number | undefined {
+  if (ticketType.valid_for_days === 'each' && ticketType.slot_remaining) {
+    const remaining = ticketType.slot_remaining[slotKey];
+    return remaining !== undefined ? remaining : undefined;
+  }
+  return undefined;
+}
+
+export function ticketTypeAppliesToSlot(
+  validForDays: ValidForDays | string | null | undefined,
+  slotKey: TimeSlotKey
+): boolean {
+  const validFor = (validForDays || 'day_1') as ValidForDays;
+  if (validFor === 'each' || validFor === slotKey) return true;
+  return false;
+}
+
+export function formatEventTimeSlotsDisplayText(event: EventTimeSlotFields): string {
+  const list = formatEventTimeSlotsList(event);
+  if (list.length <= 1) {
+    return list[0]?.label ?? formatSlotRange(event.start_at, event.end_at);
+  }
+  return list.map((slot) => `${slot.number}. ${slot.label}`).join('\n');
+}
+
 export function formatTicketTypeDateTimeFromEvent(
   event: EventTimeSlotFields,
-  ticketType: { valid_for_days?: ValidForDays | string | null }
+  ticketType: { valid_for_days?: ValidForDays | string | null },
+  explicitTimeSlot?: TimeSlotKey | null
 ): string {
   const validFor = (ticketType.valid_for_days || 'day_1') as ValidForDays;
   const slots = getConfiguredTimeSlots(event);
+
+  if (explicitTimeSlot) {
+    const slot = slots.find((s) => s.key === explicitTimeSlot);
+    if (slot) return formatSlotRange(slot.startAt, slot.endAt);
+  }
 
   if (slots.length <= 1 || validFor === 'day_1') {
     return formatSlotRange(event.start_at, event.end_at);
@@ -127,6 +198,11 @@ export function formatTicketTypeDateTimeFromEvent(
 
   if (isAllSlotsValue(validFor)) {
     return slots.map((slot) => formatSlotRange(slot.startAt, slot.endAt)).join(', ');
+  }
+
+  if (validFor === 'each' && explicitTimeSlot) {
+    const slot = slots.find((s) => s.key === explicitTimeSlot);
+    if (slot) return formatSlotRange(slot.startAt, slot.endAt);
   }
 
   const slot = slots.find((s) => s.key === validFor);
@@ -137,6 +213,16 @@ export function formatTicketTypeDateTimeFromEvent(
   return formatSlotRange(event.start_at, event.end_at);
 }
 
+export function formatSlotDateTimeByKey(
+  event: EventTimeSlotFields,
+  slotKey: TimeSlotKey
+): string {
+  const slots = getConfiguredTimeSlots(event);
+  const slot = slots.find((s) => s.key === slotKey);
+  if (slot) return formatSlotRange(slot.startAt, slot.endAt);
+  return formatSlotRange(event.start_at, event.end_at);
+}
+
 export function validForDaysReferencesRemovedSlot(
   validForDays: ValidForDays | string | null | undefined,
   removedSlotKey: TimeSlotKey
@@ -144,10 +230,34 @@ export function validForDaysReferencesRemovedSlot(
   const validFor = validForDays || 'day_1';
   if (validFor === removedSlotKey) return true;
   if (isAllSlotsValue(validFor)) return true;
+  if (validFor === 'each') return true;
   const removedNumber = parseInt(removedSlotKey.replace('day_', ''), 10);
   const validNumber = parseInt(String(validFor).replace('day_', ''), 10);
   if (!Number.isNaN(validNumber) && validNumber > removedNumber) return true;
   return false;
+}
+
+export function stripSlotFromSlotQuotas(
+  slotQuotas: Partial<Record<TimeSlotKey, string | number>> | null | undefined,
+  removedSlotKey: TimeSlotKey
+): Partial<Record<TimeSlotKey, string>> | undefined {
+  if (!slotQuotas) return undefined;
+  const next = { ...slotQuotas } as Partial<Record<TimeSlotKey, string>>;
+  delete next[removedSlotKey];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+export function ticketTypeHasSales(
+  ticketType: { remaining_count?: number; quota: number }
+): boolean {
+  if (ticketType.remaining_count === undefined) return false;
+  return ticketType.remaining_count < ticketType.quota;
+}
+
+export function ticketTypeHasVariantQuotas(
+  accessVariants?: { quota?: number | string | null }[] | null
+): boolean {
+  return (accessVariants || []).some((v) => v.quota != null && v.quota !== '');
 }
 
 export function getSlotStartAt(
