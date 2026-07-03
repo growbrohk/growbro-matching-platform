@@ -231,8 +231,8 @@ Deno.serve(async (req) => {
       const ticketSlots = (tickets || [])
         .map((t: any) => t.time_slot as string | null)
         .filter(Boolean);
-      const uniqueValidFor = [...new Set(
-        orderItems.map((oi: any) => oi.ticket_type?.valid_for_days || 'day_1')
+      const uniqueValidFor = [...new Set<string>(
+        orderItems.map((oi: any) => (oi.ticket_type?.valid_for_days as string) || 'day_1')
       )];
       if (ticketSlots.length > 0 && uniqueValidFor.every((v) => v === 'each')) {
         const slots = [
@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
           { key: 'day_3', start: event.day_3_start_at, end: event.day_3_end_at },
           { key: 'day_4', start: event.day_4_start_at, end: event.day_4_end_at },
         ].filter((s) => s.start && s.end) as { key: string; start: string; end: string }[];
-        eventStartAt = [...new Set(ticketSlots)]
+        eventStartAt = [...new Set<string>(ticketSlots)]
           .map((slotKey) => {
             const slot = slots.find((s) => s.key === slotKey);
             if (!slot) return null;
