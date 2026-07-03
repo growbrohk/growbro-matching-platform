@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useEventTickets } from '@/hooks/use-event-tickets';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -265,6 +266,7 @@ export function EventScanTab({
   const qrReaderRef = useRef<HTMLDivElement>(null);
   const isProcessingRef = useRef(false);
   const { refetch } = useEventTickets(eventId);
+  const { user } = useAuth();
   const { toast } = useToast();
 
   const scannerConfig = {
@@ -609,33 +611,55 @@ export function EventScanTab({
   };
 
   const confirmCheckIn = async () => {
-    if (!confirmData || !confirmData.canRedeem) return;
+    if (!confirmData || !confirmData.canRedeem || confirmLoading) return;
+
+    const { ticketId, name, ticketType, validEnd, remark: originalRemark } = confirmData;
+    const remarkChanged = confirmRemark !== originalRemark;
+    const remarkValue = confirmRemark;
+
+    if (validEnd != null && Date.now() > validEnd + FIVE_MINUTES_MS) {
+      const errorMessage = 'Ticket no longer valid for this time slot';
+      setLastScanResult({
+        success: false,
+        message: errorMessage,
+        attendeeName: name,
+        ticketType,
+      });
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!user?.id) {
+      toast({
+        title: 'Error',
+        description: 'Not signed in',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setConfirmLoading(true);
+
+    const payload: Record<string, unknown> = {
+      status: 'scanned',
+      scanned_at: new Date().toISOString(),
+      scanned_by: user.id,
+    };
+    if (remarkChanged) {
+      payload.remark = remarkValue || null;
+    }
+
+    closeConfirmDialog();
 
     try {
-      setConfirmLoading(true);
-
-      if (confirmData.validEnd != null) {
-        const now = new Date().getTime();
-        if (now > confirmData.validEnd + FIVE_MINUTES_MS) {
-          throw new Error('Ticket no longer valid for this time slot');
-        }
-      }
-
-      const remarkChanged = confirmRemark !== confirmData.remark;
-      const payload: Record<string, unknown> = {
-        status: 'scanned',
-        scanned_at: new Date().toISOString(),
-        scanned_by: (await supabase.auth.getUser()).data.user?.id || null,
-      };
-
-      if (remarkChanged) {
-        payload.remark = confirmRemark || null;
-      }
-
       const { data: updated, error: updateError } = await supabase
         .from('tickets')
         .update(payload)
-        .eq('id', confirmData.ticketId)
+        .eq('id', ticketId)
         .eq('status', 'valid')
         .select('id');
 
@@ -648,17 +672,16 @@ export function EventScanTab({
       setLastScanResult({
         success: true,
         message: 'Successfully checked in',
-        attendeeName: confirmData.name,
-        ticketType: confirmData.ticketType,
+        attendeeName: name,
+        ticketType,
       });
 
       toast({
         title: 'Success',
-        description: `${confirmData.name} (${confirmData.ticketType}) checked in successfully!`,
+        description: `${name} (${ticketType}) checked in successfully!`,
       });
 
-      refetch();
-      closeConfirmDialog();
+      void refetch();
     } catch (error: unknown) {
       console.error('Error confirming check-in:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to check in ticket';
@@ -666,8 +689,8 @@ export function EventScanTab({
       setLastScanResult({
         success: false,
         message: errorMessage,
-        attendeeName: confirmData.name,
-        ticketType: confirmData.ticketType,
+        attendeeName: name,
+        ticketType,
       });
 
       toast({
@@ -675,9 +698,6 @@ export function EventScanTab({
         description: errorMessage,
         variant: 'destructive',
       });
-
-      setConfirmLoading(false);
-      isProcessingRef.current = false;
     }
   };
 
