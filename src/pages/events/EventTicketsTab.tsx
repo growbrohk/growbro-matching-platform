@@ -35,7 +35,8 @@ const isCheckedIn = (status: string) => status === 'scanned';
 type SortKey = 'status' | 'name' | 'ticketType' | 'ticketPrice';
 type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'ticketPrice' | 'access' | 'remark' | 'addons';
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
+const ALL_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
+const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['status', 'name', 'ticketType', 'addons'];
 const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'addons'];
 
 const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
@@ -50,7 +51,7 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   addons: 240,
 };
 
-const KNOWN_COLUMN_KEYS: ColumnKey[] = [...DEFAULT_COLUMNS];
+const KNOWN_COLUMN_KEYS: ColumnKey[] = [...ALL_COLUMNS];
 
 function migrateLegacyColumnId(key: string): ColumnKey | null {
   if (key === 'orderAmount') return 'ticketPrice';
@@ -93,7 +94,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS);
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [defaultSort, setDefaultSort] = useState<string>('name-asc');
   const [rememberPrefs, setRememberPrefs] = useState(false);
@@ -723,18 +724,18 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   ], []);
 
   const safeVisibleColumns = useMemo(() => {
-    if (!visibleColumns || visibleColumns.length === 0) return DEFAULT_COLUMNS;
+    if (!visibleColumns || visibleColumns.length === 0) return DEFAULT_VISIBLE_COLUMNS;
     return visibleColumns;
   }, [visibleColumns]);
 
   const columnVisibility = useMemo((): VisibilityState => {
     return Object.fromEntries(
-      (DEFAULT_COLUMNS as ColumnKey[]).map(c => [c, safeVisibleColumns.includes(c)])
+      ALL_COLUMNS.map(c => [c, safeVisibleColumns.includes(c)])
     );
   }, [safeVisibleColumns]);
 
   const columnOrder = useMemo(() => {
-    const baseOrder = editMode ? EDIT_MODE_COLUMN_ORDER : DEFAULT_COLUMNS;
+    const baseOrder = editMode ? EDIT_MODE_COLUMN_ORDER : ALL_COLUMNS;
     return baseOrder;
   }, [editMode]);
 
@@ -907,7 +908,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Columns</div>
                   <div className="space-y-2">
-                    {(['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'] as ColumnKey[]).map((column) => {
+                    {ALL_COLUMNS.map((column) => {
                       const columnLabels: Record<ColumnKey, string> = {
                         status: 'Status',
                         name: 'Name',
