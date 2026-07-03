@@ -82,19 +82,131 @@ function formatTicketAddons(ticketId: string, orderId: string, addonItems: Addon
   return allAddons.length > 0 ? allAddons.map(formatAddon).join(', ') : '';
 }
 
-function getCameraErrorMessage(error: { name?: string; message?: string }) {
-  switch (error.name) {
+function parseCameraError(error: unknown): { name?: string; message: string } {
+  if (error instanceof DOMException) {
+    return { name: error.name, message: error.message };
+  }
+  const message =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  const nameMatch = message.match(
+    /(NotAllowedError|NotFoundError|OverconstrainedError|NotReadableError|SecurityError)/,
+  );
+  return { name: nameMatch?.[1], message };
+}
+
+function getCameraErrorMessage(error: unknown) {
+  const { name, message } = parseCameraError(error);
+  switch (name) {
     case 'NotAllowedError':
       return 'Camera permission denied. Allow camera access in browser settings.';
     case 'NotFoundError':
-      return 'No camera found on this device.';
+      return getNoCameraMessage();
     case 'OverconstrainedError':
       return 'Could not open the selected camera. Try a different browser or close other apps using the camera.';
     case 'NotReadableError':
       return 'Camera is in use by another application.';
+    case 'SecurityError':
+      return 'Camera blocked by browser security. Use HTTPS or localhost.';
     default:
-      return error.message || `${error.name || 'Error'}: could not start camera.`;
+      return message || `${name || 'Error'}: could not start camera.`;
   }
+}
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function isEmbeddedBrowser() {
+  return /Electron|Cursor/i.test(navigator.userAgent);
+}
+
+async function hasVideoInputDevice(): Promise<boolean> {
+  if (!navigator.mediaDevices?.enumerateDevices) return true;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.some((d) => d.kind === 'videoinput');
+  } catch {
+    return true;
+  }
+}
+
+function getNoCameraMessage() {
+  if (isEmbeddedBrowser()) {
+    return 'No camera is available in this in-app preview browser. Open this page in Chrome, Safari, or Edge to scan.';
+  }
+  return 'No camera detected. On macOS, allow camera access for your browser in System Settings > Privacy & Security > Camera, close other apps using the camera, then retry.';
+}
+
+async function primeCameraPermission() {
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' },
+    });
+    stream.getTracks().forEach((track) => track.stop());
+  } catch {
+    // Let scanner.start surface the real permission error.
+  }
+}
+
+async function cleanupScannerInstance(scanner: Html5Qrcode) {
+  try {
+    await scanner.stop();
+  } catch {
+    // Scanner may not have started.
+  }
+  try {
+    scanner.clear();
+  } catch {
+    // Ignore clear errors.
+  }
+}
+
+function clearScannerContainer() {
+  const container = document.getElementById('qr-reader');
+  if (container) {
+    container.innerHTML = '';
+  }
+}
+
+async function buildCameraAttempts(): Promise<Array<string | { facingMode: string }>> {
+  const attempts: Array<string | { facingMode: string }> = [];
+  let devices: Array<{ id: string; label: string }> = [];
+
+  try {
+    devices = await Html5Qrcode.getCameras();
+  } catch (err) {
+    console.warn('Could not enumerate cameras:', err);
+  }
+
+  const validDevices = devices.filter((d) => Boolean(d.id));
+
+  if (isMobileDevice()) {
+    const backCamera = validDevices.find((d) => /back|rear|environment/i.test(d.label));
+    if (backCamera?.id) attempts.push(backCamera.id);
+    if (validDevices[0]?.id && validDevices[0].id !== backCamera?.id) {
+      attempts.push(validDevices[0].id);
+    }
+    attempts.push({ facingMode: 'environment' });
+    attempts.push({ facingMode: 'user' });
+  } else {
+    attempts.push({ facingMode: 'user' });
+    for (const device of validDevices) {
+      if (!attempts.includes(device.id)) {
+        attempts.push(device.id);
+      }
+    }
+  }
+
+  if (attempts.length === 0) {
+    attempts.push({ facingMode: 'user' });
+  }
+
+  return attempts;
 }
 
 function buildAttendeeName(ticket: {
@@ -138,12 +250,10 @@ export function EventScanTab({ eventId }: { eventId: string }) {
   const scannerConfig = {
     fps: 10,
     qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-      const minEdgePercentage = 0.7;
       const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-      const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+      const qrboxSize = Math.max(200, Math.floor(minEdgeSize * 0.7));
       return { width: qrboxSize, height: qrboxSize };
     },
-    aspectRatio: 1.0,
   };
 
   useEffect(() => {
@@ -178,38 +288,32 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     setConfirmDialogOpen(true);
   };
 
-  const startScannerCamera = async (scanner: Html5Qrcode) => {
-    let cameraId: string | null = null;
+  const startScannerCamera = async (
+    onScan: (decodedText: string) => void,
+    onScanError: (errorMessage: string) => void,
+  ) => {
+    await primeCameraPermission();
+    const attempts = await buildCameraAttempts();
 
-    try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length > 0) {
-        const backCamera = devices.find((d) => /back|rear|environment/i.test(d.label));
-        cameraId = backCamera?.id ?? devices[0].id;
-      }
-    } catch (err) {
-      console.warn('Could not enumerate cameras:', err);
-    }
+    let lastError: unknown;
 
-    const onScan = (decodedText: string) => {
-      handleScanSuccess(decodedText);
-    };
-    const onScanError = (errorMessage: string) => {
-      if (!errorMessage.includes('NotFoundException') && !errorMessage.includes('No MultiFormat Readers')) {
-        console.debug('Scan error:', errorMessage);
-      }
-    };
+    for (const cameraConfig of attempts) {
+      clearScannerContainer();
+      const scanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = scanner;
 
-    if (cameraId) {
       try {
-        await scanner.start(cameraId, scannerConfig, onScan, onScanError);
+        await scanner.start(cameraConfig, scannerConfig, onScan, onScanError);
         return;
       } catch (err) {
-        console.warn('Failed to start with device id, falling back to user-facing camera:', err);
+        lastError = err;
+        console.warn('Camera start attempt failed:', cameraConfig, err);
+        await cleanupScannerInstance(scanner);
+        scannerRef.current = null;
       }
     }
 
-    await scanner.start({ facingMode: 'user' }, scannerConfig, onScan, onScanError);
+    throw lastError ?? new Error('Could not start camera.');
   };
 
   const startScanning = async () => {
@@ -226,6 +330,15 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       toast({
         title: 'Camera unavailable',
         description: 'Camera requires a secure connection (HTTPS or localhost).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!(await hasVideoInputDevice())) {
+      toast({
+        title: 'No camera found',
+        description: getNoCameraMessage(),
         variant: 'destructive',
       });
       return;
@@ -262,13 +375,29 @@ export function EventScanTab({ eventId }: { eventId: string }) {
         } catch {
           // Ignore stop errors
         }
+        try {
+          scannerRef.current.clear();
+        } catch {
+          // Ignore clear errors
+        }
         scannerRef.current = null;
       }
 
-      const scanner = new Html5Qrcode('qr-reader');
-      scannerRef.current = scanner;
+      clearScannerContainer();
 
-      await startScannerCamera(scanner);
+      const onScan = (decodedText: string) => {
+        handleScanSuccess(decodedText);
+      };
+      const onScanError = (errorMessage: string) => {
+        if (
+          !errorMessage.includes('NotFoundException') &&
+          !errorMessage.includes('No MultiFormat Readers')
+        ) {
+          console.debug('Scan error:', errorMessage);
+        }
+      };
+
+      await startScannerCamera(onScan, onScanError);
 
       setScanning(true);
       setInitializing(false);
@@ -281,10 +410,9 @@ export function EventScanTab({ eventId }: { eventId: string }) {
         qrReaderRef.current.style.display = 'none';
       }
 
-      const err = error as { name?: string; message?: string };
       toast({
         title: 'Error',
-        description: `Failed to start camera. ${getCameraErrorMessage(err)}`,
+        description: `Failed to start camera. ${getCameraErrorMessage(error)}`,
         variant: 'destructive',
       });
     }
