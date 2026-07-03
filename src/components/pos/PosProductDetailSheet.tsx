@@ -1,5 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import PublicProductForm, { type PosAddToCartItem } from '@/components/products/PublicProductForm';
+import type { CartItem } from '@/components/pos/Cart';
 import type { ProductWithDetails } from '@/pages/dashboard/products/Products';
 
 interface PosProductDetailSheetProps {
@@ -8,7 +9,9 @@ interface PosProductDetailSheetProps {
   product: ProductWithDetails | null;
   orgId: string;
   orgName: string;
-  onAddToCart: (item: PosAddToCartItem) => void;
+  selectedWarehouseId: string | null;
+  cart: CartItem[];
+  onAddToCart: (item: PosAddToCartItem) => boolean;
 }
 
 export function PosProductDetailSheet({
@@ -17,13 +20,18 @@ export function PosProductDetailSheet({
   product,
   orgId,
   orgName,
+  selectedWarehouseId,
+  cart,
   onAddToCart,
 }: PosProductDetailSheetProps) {
   if (!product) return null;
 
-  const handleAddToCart = (item: PosAddToCartItem) => {
-    onAddToCart(item);
-    onOpenChange(false);
+  const handleAddToCart = (item: PosAddToCartItem): boolean => {
+    const success = onAddToCart(item);
+    if (success) {
+      onOpenChange(false);
+    }
+    return success;
   };
 
   return (
@@ -41,6 +49,9 @@ export function PosProductDetailSheet({
             hideRelatedProducts
             compact
             onAddToCart={handleAddToCart}
+            posWarehouseId={selectedWarehouseId}
+            posInventoryItems={product.inventoryItems}
+            posCartItems={cart}
           />
         </div>
       </SheetContent>

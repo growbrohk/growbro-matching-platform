@@ -34,6 +34,17 @@ export interface PosAddToCartItem {
   weightKgPerUnit?: number;
 }
 
+type PosInventoryItem = {
+  variant_id: string;
+  warehouse_id: string;
+  quantity: number;
+};
+
+type PosCartLine = {
+  variantId?: string;
+  qty: number;
+};
+
 interface PublicProductFormProps {
   product: Product;
   variants: ProductVariant[];
@@ -43,11 +54,17 @@ interface PublicProductFormProps {
   /** URL ?code= — matches product_access_variants for promo pricing */
   codeParam?: string | null;
   /** POS mode: call this instead of public cart */
-  onAddToCart?: (item: PosAddToCartItem) => void;
+  onAddToCart?: (item: PosAddToCartItem) => boolean;
   /** Compact layout for POS sheet */
   compact?: boolean;
   /** Hide related products carousel */
   hideRelatedProducts?: boolean;
+  /** POS mode: active warehouse for stock checks */
+  posWarehouseId?: string | null;
+  /** POS mode: inventory rows for the current product */
+  posInventoryItems?: PosInventoryItem[];
+  /** POS mode: current cart lines for remaining-stock calculation */
+  posCartItems?: PosCartLine[];
 }
 
 function formatPrice(amount: number): string {
@@ -69,6 +86,9 @@ export default function PublicProductForm({
   onAddToCart,
   compact = false,
   hideRelatedProducts = false,
+  posWarehouseId = null,
+  posInventoryItems = [],
+  posCartItems = [],
 }: PublicProductFormProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -216,6 +236,30 @@ export default function PublicProductForm({
 
   const quantityNum = Math.max(1, Math.min(99, quantity));
 
+  const getRemainingStock = (variantId: string | undefined): number => {
+    if (!isPosMode || !posWarehouseId || !variantId) return 0;
+    const stock = posInventoryItems
+      .filter((i) => i.variant_id === variantId && i.warehouse_id === posWarehouseId)
+      .reduce((sum, i) => sum + i.quantity, 0);
+    const cartQty = posCartItems.find((i) => i.variantId === variantId)?.qty ?? 0;
+    return Math.max(0, stock - cartQty);
+  };
+
+  const remainingStock = useMemo(
+    () => getRemainingStock(effectiveSelectedVariant?.id),
+    [
+      isPosMode,
+      posWarehouseId,
+      posInventoryItems,
+      posCartItems,
+      effectiveSelectedVariant?.id,
+    ],
+  );
+
+  const canAddToCart = isPosMode
+    ? Boolean(posWarehouseId) && remainingStock >= quantityNum
+    : true;
+
   const buildCartPayload = (): PosAddToCartItem | null => {
     const variant = effectiveSelectedVariant;
     if (!variant && activeVariants.length > 0) {
@@ -261,11 +305,13 @@ export default function PublicProductForm({
     if (!payload) return;
 
     if (onAddToCart) {
-      onAddToCart(payload);
-      toast({
-        title: 'Added to cart',
-        description: `${product.title}${payload.variantLabel ? ` (${payload.variantLabel})` : ''} x${payload.qty}`,
-      });
+      const success = onAddToCart(payload);
+      if (success) {
+        toast({
+          title: 'Added to cart',
+          description: `${product.title}${payload.variantLabel ? ` (${payload.variantLabel})` : ''} x${payload.qty}`,
+        });
+      }
       return;
     }
 
@@ -342,16 +388,28 @@ export default function PublicProductForm({
           <Input
             type="number"
             min={1}
-            max={99}
+            max={isPosMode ? Math.max(1, remainingStock) : 99}
             value={quantityNum}
             onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
             className="w-24 rounded-2xl"
           />
+          {isPosMode && (
+            <p
+              className={`text-sm ${remainingStock === 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
+            >
+              {!posWarehouseId
+                ? 'Select a warehouse in Settings to add items'
+                : remainingStock === 0
+                  ? 'Out of stock in selected warehouse'
+                  : `${remainingStock} available in selected warehouse`}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 pt-2">
           <Button
             onClick={handleAddToCart}
+            disabled={!canAddToCart}
             size="lg"
             className="w-full h-12 rounded-2xl font-bold"
             style={{ backgroundColor: '#0E7A3A', color: 'white' }}

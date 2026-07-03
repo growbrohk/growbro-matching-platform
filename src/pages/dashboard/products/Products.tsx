@@ -1182,25 +1182,44 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     }
   };
 
-  const handlePosAddToCart = (item: CartItem) => {
+  const handlePosAddToCart = (item: CartItem): boolean => {
     if (!selectedWarehouseId) {
       toast({
         title: 'Warehouse Required',
         description: 'Please select a warehouse in Settings',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
-    const addQty = item.qty || 1;
-    const variantId = item.variantId || item.productId;
+    const resolvedVariantId =
+      item.variantId ??
+      products.find((p) => p.id === item.productId)?.variants[0]?.id;
+
+    if (!resolvedVariantId) {
+      toast({
+        title: 'Cannot add to cart',
+        description: 'Product has no variants configured.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    const normalizedItem: CartItem = { ...item, variantId: resolvedVariantId };
+    const addQty = normalizedItem.qty || 1;
     const inventoryItem = products
       .flatMap((p) => p.inventoryItems)
-      .find((i) => i.variant_id === variantId && i.warehouse_id === selectedWarehouseId);
+      .find(
+        (i) =>
+          i.variant_id === resolvedVariantId &&
+          i.warehouse_id === selectedWarehouseId,
+      );
 
     const availableStock = inventoryItem?.quantity ?? 0;
     const existingCartItem = cart.find(
-      (i) => i.productId === item.productId && i.variantId === item.variantId,
+      (i) =>
+        i.productId === normalizedItem.productId &&
+        i.variantId === resolvedVariantId,
     );
     const currentCartQty = existingCartItem?.qty ?? 0;
     const newQty = currentCartQty + addQty;
@@ -1208,10 +1227,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
     if (availableStock === 0) {
       toast({
         title: 'Out of Stock',
-        description: `${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} is out of stock in the selected warehouse`,
+        description: `${normalizedItem.name}${normalizedItem.variantLabel ? ` (${normalizedItem.variantLabel})` : ''} is out of stock in the selected warehouse`,
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     if (newQty > availableStock) {
@@ -1220,25 +1239,29 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
         description: `Only ${availableStock} left in this warehouse`,
         variant: 'destructive',
       });
-      return;
+      return false;
     }
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (i) => i.productId === item.productId && i.variantId === item.variantId,
+        (i) =>
+          i.productId === normalizedItem.productId &&
+          i.variantId === resolvedVariantId,
       );
       if (existingIndex >= 0) {
         const newCart = [...prev];
         newCart[existingIndex] = {
           ...newCart[existingIndex],
           qty: newCart[existingIndex].qty + addQty,
-          imageUrl: item.imageUrl ?? newCart[existingIndex].imageUrl,
-          weightKgPerUnit: item.weightKgPerUnit ?? newCart[existingIndex].weightKgPerUnit,
+          imageUrl: normalizedItem.imageUrl ?? newCart[existingIndex].imageUrl,
+          weightKgPerUnit:
+            normalizedItem.weightKgPerUnit ?? newCart[existingIndex].weightKgPerUnit,
         };
         return newCart;
       }
-      return [...prev, { ...item, qty: addQty }];
+      return [...prev, { ...normalizedItem, qty: addQty }];
     });
+    return true;
   };
 
   const posSelectedProduct = posProductId
@@ -1375,6 +1398,8 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
               product={posSelectedProduct}
               orgId={currentOrg?.id ?? ''}
               orgName={currentOrg?.name ?? ''}
+              selectedWarehouseId={selectedWarehouseId}
+              cart={cart}
               onAddToCart={handlePosAddToCart}
             />
           </>
