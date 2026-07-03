@@ -46,21 +46,48 @@ function formatEventTimeHKT(dateString: string) {
 
 /** Format date/time for a ticket type based on valid_for_days (HKT) */
 function formatTicketTypeDateTimeHKT(
-  event: { start_at: string; end_at: string; day_2_start_at?: string | null; day_2_end_at?: string | null },
+  event: {
+    start_at: string;
+    end_at: string;
+    day_2_start_at?: string | null;
+    day_2_end_at?: string | null;
+    day_3_start_at?: string | null;
+    day_3_end_at?: string | null;
+    day_4_start_at?: string | null;
+    day_4_end_at?: string | null;
+  },
   validForDays: string | null
 ): string {
   const validFor = validForDays || 'day_1';
-  const hasDay2 = !!(event.day_2_start_at && event.day_2_end_at);
+  const slots = [
+    { key: 'day_1', start: event.start_at, end: event.end_at },
+    { key: 'day_2', start: event.day_2_start_at, end: event.day_2_end_at },
+    { key: 'day_3', start: event.day_3_start_at, end: event.day_3_end_at },
+    { key: 'day_4', start: event.day_4_start_at, end: event.day_4_end_at },
+  ].filter((slot) => slot.start && slot.end) as { key: string; start: string; end: string }[];
 
-  if (!hasDay2 || validFor === 'day_1') {
+  if (slots.length <= 1 || validFor === 'day_1') {
     return `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)} (HKT)`;
   }
-  if (validFor === 'day_2') {
-    return `${formatEventTimeHKT(event.day_2_start_at!)} – ${formatEventTimeHKT(event.day_2_end_at!)} (HKT)`;
+
+  if (validFor === 'all' || validFor === 'both') {
+    return slots
+      .map((slot) => `${formatEventTimeHKT(slot.start)} – ${formatEventTimeHKT(slot.end)}`)
+      .join('; ') + ' (HKT)';
   }
-  const day1 = `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)}`;
-  const day2 = `${formatEventTimeHKT(event.day_2_start_at!)} – ${formatEventTimeHKT(event.day_2_end_at!)}`;
-  return `${day1}; ${day2} (HKT)`;
+
+  const slot = slots.find((s) => s.key === validFor);
+  if (slot) {
+    return `${formatEventTimeHKT(slot.start)} – ${formatEventTimeHKT(slot.end)} (HKT)`;
+  }
+
+  return `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)} (HKT)`;
+}
+
+function getValidForDaysLabelHKT(value: string): string {
+  if (value === 'all' || value === 'both') return 'All time slots';
+  const slotNumber = value.replace('day_', '');
+  return `Time Slot ${slotNumber} only`;
 }
 
 /* ============================================================================
@@ -151,7 +178,7 @@ Deno.serve(async (req) => {
     ------------------------------------------------------------------------ */
     const { data: event } = await supabase
       .from('events')
-      .select('title, start_at, end_at, day_2_start_at, day_2_end_at, location_text')
+      .select('title, start_at, end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, location_text')
       .eq('id', order.event_id)
       .single();
 
@@ -202,11 +229,18 @@ Deno.serve(async (req) => {
       if (uniqueValidFor.length === 1) {
         eventStartAt = formatTicketTypeDateTimeHKT(event, uniqueValidFor[0]);
       } else {
-        const dayLabels: Record<string, string> = { day_1: 'Day 1', day_2: 'Day 2', both: 'Both days' };
+        const dayLabels: Record<string, string> = {
+          day_1: 'Time Slot 1',
+          day_2: 'Time Slot 2',
+          day_3: 'Time Slot 3',
+          day_4: 'Time Slot 4',
+          both: 'All time slots',
+          all: 'All time slots',
+        };
         eventStartAt = uniqueValidFor
           .map((vf: string) => {
             const formatted = formatTicketTypeDateTimeHKT(event, vf);
-            return `${dayLabels[vf] || vf}: ${formatted}`;
+            return `${dayLabels[vf] || getValidForDaysLabelHKT(vf)}: ${formatted}`;
           })
           .join('; ');
       }

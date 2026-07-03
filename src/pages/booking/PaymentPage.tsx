@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatTicketTypeDateTime, formatEventDate, formatEventTime } from '@/lib/utils/datetime';
+import { getValidForDaysLabel } from '@/lib/utils/event-time-slots';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { Loader2 } from 'lucide-react';
@@ -391,13 +392,12 @@ export default function PaymentPage() {
       items.map((oi) => oi.ticket_type?.valid_for_days || 'day_1')
     )];
     if (uniqueValidFor.length === 1) {
-      return formatTicketTypeDateTime(event, { valid_for_days: uniqueValidFor[0] as 'day_1' | 'day_2' | 'both' });
+      return formatTicketTypeDateTime(event, { valid_for_days: uniqueValidFor[0] });
     }
-    const dayLabels: Record<string, string> = { day_1: 'Day 1', day_2: 'Day 2', both: 'Both days' };
     return uniqueValidFor
       .map((vf) => {
-        const formatted = formatTicketTypeDateTime(event, { valid_for_days: vf as 'day_1' | 'day_2' | 'both' });
-        return `${dayLabels[vf] || vf}: ${formatted}`;
+        const formatted = formatTicketTypeDateTime(event, { valid_for_days: vf });
+        return `${getValidForDaysLabel(vf)}: ${formatted}`;
       })
       .join('; ');
   };

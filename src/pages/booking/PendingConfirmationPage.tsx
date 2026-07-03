@@ -223,7 +223,7 @@ export default function PendingConfirmationPage() {
                   {event.location_text && (
                     <p>📍 {event.location_text}</p>
                   )}
-                  <p>📅 {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at)}</p>
+                  <p>📅 {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at, event.day_3_start_at, event.day_3_end_at, event.day_4_start_at, event.day_4_end_at)}</p>
                 </div>
               </div>
 

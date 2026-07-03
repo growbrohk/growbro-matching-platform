@@ -172,6 +172,10 @@ export interface Event {
   end_at: string;
   day_2_start_at?: string | null;
   day_2_end_at?: string | null;
+  day_3_start_at?: string | null;
+  day_3_end_at?: string | null;
+  day_4_start_at?: string | null;
+  day_4_end_at?: string | null;
   status: EventStatus;
   slug?: string;
   location_text?: string | null;
@@ -219,7 +223,7 @@ export interface TicketType {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'both';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
 import type { OrderWithEvent, TicketTypeAccessVariantSnapshot } from '@/lib/api/bookings';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
+import { getValidForDaysLabel } from '@/lib/utils/event-time-slots';
 import { collabPartnerCanViewOrderDetails, collabPartnerCanMarkOrderShipped, collabPartnerCanMarkAddonItemShipped } from '@/lib/collab-order-access';
 
 const TEXT = '#0F1F17';
@@ -425,7 +426,7 @@ function EventDetailBody({
               </p>
               <p style={{ color: MUTED }}>{t.ticket_type?.name ?? 'Ticket'}</p>
               {t.ticket_type?.valid_for_days && (
-                <p style={{ color: MUTED }}>Valid: {t.ticket_type.valid_for_days}</p>
+                <p style={{ color: MUTED }}>Valid: {getValidForDaysLabel(t.ticket_type.valid_for_days)}</p>
               )}
               {t.email && <p>{t.email}</p>}
               {t.phone && <p>{t.phone}</p>}

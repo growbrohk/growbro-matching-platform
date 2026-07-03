@@ -63,6 +63,14 @@ import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 import { getEventPreviewStoragePathFromPublicUrl } from '@/lib/storage/eventPreviewPaths';
 import { getOrgPaymentDefaults } from '@/lib/api/orgs';
+import {
+  getConfiguredTimeSlots,
+  getDefaultNextSlotTimes,
+  getEffectiveEventEndDate,
+  getValidForDaysOptions,
+  validForDaysReferencesRemovedSlot,
+  type ValidForDays,
+} from '@/lib/utils/event-time-slots';
 
 export type EventFormCollabEditorContext = {
   hostOrgId: string;
@@ -99,7 +107,7 @@ interface TicketTypeForm {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: Date | null;
   available_end_at?: Date | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'both';
+  valid_for_days?: ValidForDays;
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
 }
@@ -157,6 +165,77 @@ function validateScheduledAvailability(
   return errors;
 }
 
+interface OptionalTimeSlotFieldsProps {
+  slotNumber: 2 | 3 | 4;
+  startAt: Date | null;
+  endAt: Date | null;
+  minStart?: Date;
+  onStartChange: (date: Date | null) => void;
+  onEndChange: (date: Date | null) => void;
+  onRemove: () => void;
+  onValidationClear: () => void;
+}
+
+function OptionalTimeSlotFields({
+  slotNumber,
+  startAt,
+  endAt,
+  minStart,
+  onStartChange,
+  onEndChange,
+  onRemove,
+  onValidationClear,
+}: OptionalTimeSlotFieldsProps) {
+  return (
+    <div className="space-y-4 p-4 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base md:text-lg font-semibold" style={{ color: '#0F1F17' }}>
+          Time Slot {slotNumber}
+        </h2>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRemove}
+          className="text-muted-foreground"
+        >
+          Remove Time Slot {slotNumber}
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <Label className="text-sm font-medium">Time Slot {slotNumber} Start</Label>
+          <DateTimeRow24
+            value={startAt}
+            onChange={(date) => {
+              onStartChange(date);
+              onValidationClear();
+            }}
+            disabled={false}
+            min={minStart}
+            ariaLabel={`Time Slot ${slotNumber} start date and time`}
+            className="mt-1 w-full"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-medium">Time Slot {slotNumber} End</Label>
+          <DateTimeRow24
+            value={endAt}
+            onChange={(date) => {
+              onEndChange(date);
+              onValidationClear();
+            }}
+            disabled={false}
+            min={startAt || minStart}
+            ariaLabel={`Time Slot ${slotNumber} end date and time`}
+            className="mt-1 w-full"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EventForm({ collabEditorContext = null }: EventFormProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -193,6 +272,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [endAt, setEndAt] = useState<Date | null>(null);
   const [day2StartAt, setDay2StartAt] = useState<Date | null>(null);
   const [day2EndAt, setDay2EndAt] = useState<Date | null>(null);
+  const [day3StartAt, setDay3StartAt] = useState<Date | null>(null);
+  const [day3EndAt, setDay3EndAt] = useState<Date | null>(null);
+  const [day4StartAt, setDay4StartAt] = useState<Date | null>(null);
+  const [day4EndAt, setDay4EndAt] = useState<Date | null>(null);
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
@@ -274,8 +357,12 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setOgPreviewImageUrl(((event as any).og_preview_image_url as string) || '');
         setStartAt(event.start_at ? new Date(event.start_at) : null);
         setEndAt(event.end_at ? new Date(event.end_at) : null);
-        setDay2StartAt((event as any).day_2_start_at ? new Date((event as any).day_2_start_at) : null);
-        setDay2EndAt((event as any).day_2_end_at ? new Date((event as any).day_2_end_at) : null);
+        setDay2StartAt(event.day_2_start_at ? new Date(event.day_2_start_at) : null);
+        setDay2EndAt(event.day_2_end_at ? new Date(event.day_2_end_at) : null);
+        setDay3StartAt(event.day_3_start_at ? new Date(event.day_3_start_at) : null);
+        setDay3EndAt(event.day_3_end_at ? new Date(event.day_3_end_at) : null);
+        setDay4StartAt(event.day_4_start_at ? new Date(event.day_4_start_at) : null);
+        setDay4EndAt(event.day_4_end_at ? new Date(event.day_4_end_at) : null);
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
@@ -331,7 +418,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             availability_mode: t.availability_mode || 'always',
             available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
             available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
-            valid_for_days: (t.valid_for_days as 'day_1' | 'day_2' | 'both') || 'day_1',
+            valid_for_days: (t.valid_for_days as ValidForDays) || 'day_1',
             show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
             threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
           };
@@ -404,8 +491,24 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     }
   }, [ticketTypes.length]);
 
-  const hasDay2 = day2StartAt != null && day2EndAt != null;
-  const effectiveEventEnd = day2EndAt ?? endAt;
+  const hasTimeSlot2 = day2StartAt != null && day2EndAt != null;
+  const hasTimeSlot3 = day3StartAt != null && day3EndAt != null;
+  const hasTimeSlot4 = day4StartAt != null && day4EndAt != null;
+  const formTimeSlotEvent = startAt && endAt ? {
+    start_at: startAt.toISOString(),
+    end_at: endAt.toISOString(),
+    day_2_start_at: day2StartAt?.toISOString() ?? null,
+    day_2_end_at: day2EndAt?.toISOString() ?? null,
+    day_3_start_at: day3StartAt?.toISOString() ?? null,
+    day_3_end_at: day3EndAt?.toISOString() ?? null,
+    day_4_start_at: day4StartAt?.toISOString() ?? null,
+    day_4_end_at: day4EndAt?.toISOString() ?? null,
+  } : null;
+  const configuredTimeSlots = formTimeSlotEvent ? getConfiguredTimeSlots(formTimeSlotEvent) : [];
+  const hasMultipleTimeSlots = configuredTimeSlots.length > 1;
+  const effectiveEventEnd = formTimeSlotEvent
+    ? getEffectiveEventEndDate(formTimeSlotEvent)
+    : (endAt ?? new Date());
 
   // Re-clamp ticket schedule dates when event boundaries change
   useEffect(() => {
@@ -436,7 +539,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       return anyChanged ? next : prev;
     });
-  }, [endAt, day2EndAt, effectiveEventEnd]);
+  }, [endAt, day2EndAt, day3EndAt, day4EndAt, effectiveEventEnd]);
 
   const generateAccessCode = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -912,13 +1015,34 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       errors.push('Event title is required');
     }
     if (!startAt) {
-      errors.push('Event start date and time is required');
+      errors.push('Time Slot 1 start date and time is required');
     }
     if (!endAt) {
-      errors.push('Event end date and time is required');
+      errors.push('Time Slot 1 end date and time is required');
     }
     if (startAt && endAt && startAt >= endAt) {
-      errors.push('Event end time must be after start time');
+      errors.push('Time Slot 1 end time must be after start time');
+    }
+
+    const optionalSlots = [
+      { number: 2, start: day2StartAt, end: day2EndAt, previousEnd: endAt },
+      { number: 3, start: day3StartAt, end: day3EndAt, previousEnd: day2EndAt ?? endAt },
+      { number: 4, start: day4StartAt, end: day4EndAt, previousEnd: day3EndAt ?? day2EndAt ?? endAt },
+    ] as const;
+
+    for (const slot of optionalSlots) {
+      const hasStart = slot.start != null;
+      const hasEnd = slot.end != null;
+      if (hasStart !== hasEnd) {
+        errors.push(`Time Slot ${slot.number}: Both start and end times are required`);
+        continue;
+      }
+      if (hasStart && hasEnd && slot.start! >= slot.end!) {
+        errors.push(`Time Slot ${slot.number}: End time must be after start time`);
+      }
+      if (hasStart && hasEnd && slot.previousEnd && slot.start! < slot.previousEnd) {
+        errors.push(`Time Slot ${slot.number}: Start time must be after the previous time slot ends`);
+      }
     }
     
     // Validate ticket types if any are added
@@ -977,6 +1101,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         end_at: endAt.toISOString(),
         day_2_start_at: day2StartAt?.toISOString() ?? null,
         day_2_end_at: day2EndAt?.toISOString() ?? null,
+        day_3_start_at: day3StartAt?.toISOString() ?? null,
+        day_3_end_at: day3EndAt?.toISOString() ?? null,
+        day_4_start_at: day4StartAt?.toISOString() ?? null,
+        day_4_end_at: day4EndAt?.toISOString() ?? null,
         location_text: locationText.trim() || null,
         status: status,
         collect_attendee_info: collectAttendeeInfo,
@@ -1017,7 +1145,16 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         }
 
         // Update or create ticket types
-        const effectiveEventEnd = day2EndAt ? new Date(day2EndAt) : new Date(endAt);
+        const effectiveEventEndDate = getEffectiveEventEndDate({
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          day_2_start_at: day2StartAt?.toISOString() ?? null,
+          day_2_end_at: day2EndAt?.toISOString() ?? null,
+          day_3_start_at: day3StartAt?.toISOString() ?? null,
+          day_3_end_at: day3EndAt?.toISOString() ?? null,
+          day_4_start_at: day4StartAt?.toISOString() ?? null,
+          day_4_end_at: day4EndAt?.toISOString() ?? null,
+        });
         for (const tt of ticketTypes) {
           // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
           const ticketMetadata = (tt as any).metadata || {};
@@ -1026,8 +1163,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           // If sales_end_at exists and is after event.end_at, cap it to event.end_at
           if (ticketMetadata.sales_end_at) {
             const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > effectiveEventEnd) {
-              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
+            if (salesEndAt > effectiveEventEndDate) {
+              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
             }
           }
           
@@ -1035,15 +1172,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           const salesEndAtField = (tt as any).sales_end_at;
           if (salesEndAtField) {
             const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > effectiveEventEnd) {
-              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
+            if (salesEndAt > effectiveEventEndDate) {
+              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
             }
           }
 
           // Process availability fields
           const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
             tt,
-            effectiveEventEnd
+            effectiveEventEndDate
           );
 
           const accessVariants = (tt.access_variants || []).map((v) => ({
@@ -1151,7 +1288,16 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         }
 
         // Create ticket types
-        const effectiveEventEnd = day2EndAt ? new Date(day2EndAt) : new Date(endAt);
+        const effectiveEventEndDate = getEffectiveEventEndDate({
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          day_2_start_at: day2StartAt?.toISOString() ?? null,
+          day_2_end_at: day2EndAt?.toISOString() ?? null,
+          day_3_start_at: day3StartAt?.toISOString() ?? null,
+          day_3_end_at: day3EndAt?.toISOString() ?? null,
+          day_4_start_at: day4StartAt?.toISOString() ?? null,
+          day_4_end_at: day4EndAt?.toISOString() ?? null,
+        });
         for (const tt of ticketTypes) {
           // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
           const ticketMetadata = (tt as any).metadata || {};
@@ -1160,8 +1306,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           // If sales_end_at exists and is after event.end_at, cap it to event.end_at
           if (ticketMetadata.sales_end_at) {
             const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > effectiveEventEnd) {
-              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
+            if (salesEndAt > effectiveEventEndDate) {
+              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
             }
           }
           
@@ -1169,15 +1315,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           const salesEndAtField = (tt as any).sales_end_at;
           if (salesEndAtField) {
             const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > effectiveEventEnd) {
-              finalMetadata.sales_end_at = effectiveEventEnd.toISOString();
+            if (salesEndAt > effectiveEventEndDate) {
+              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
             }
           }
 
           // Process availability fields
           const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
             tt,
-            effectiveEventEnd
+            effectiveEventEndDate
           );
 
           const accessVariantsCreate = (tt.access_variants || []).map((v) => ({
@@ -1433,121 +1579,163 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
-              Start Time
-              <span className="text-red-500 ml-1">*</span>
+          <div className="space-y-4 p-4 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
+            <h2 className="text-base md:text-lg font-semibold" style={{ color: '#0F1F17' }}>
+              Time Slot 1
             </h2>
-              <DateTimeRow24
-                value={startAt}
-                onChange={(date) => {
-                  setStartAt(date);
-                  if (validationErrors.length > 0) setValidationErrors([]);
-                }}
-                disabled={false}
-                ariaLabel="Event start date and time"
-                className="w-full"
-              />
-            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <Label className="text-sm font-medium">
+                  Time Slot 1 Start
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <DateTimeRow24
+                  value={startAt}
+                  onChange={(date) => {
+                    setStartAt(date);
+                    if (validationErrors.length > 0) setValidationErrors([]);
+                  }}
+                  disabled={false}
+                  ariaLabel="Time Slot 1 start date and time"
+                  className="mt-1 w-full"
+                />
+              </div>
 
-            <div>
-            <h2 className="text-base md:text-lg font-semibold mb-2" style={{ color: '#0F1F17' }}>
-              End Time
-              <span className="text-red-500 ml-1">*</span>
-            </h2>
-              <DateTimeRow24
-                value={endAt}
-                onChange={(date) => {
-                  setEndAt(date);
-                  if (validationErrors.length > 0) setValidationErrors([]);
-                }}
-                disabled={false}
-                min={startAt || undefined}
-                ariaLabel="Event end date and time"
-                className="w-full"
-              />
+              <div>
+                <Label className="text-sm font-medium">
+                  Time Slot 1 End
+                  <span className="text-red-500 ml-1">*</span>
+                </Label>
+                <DateTimeRow24
+                  value={endAt}
+                  onChange={(date) => {
+                    setEndAt(date);
+                    if (validationErrors.length > 0) setValidationErrors([]);
+                  }}
+                  disabled={false}
+                  min={startAt || undefined}
+                  ariaLabel="Time Slot 1 end date and time"
+                  className="mt-1 w-full"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Optional Day 2 */}
-          {hasDay2 ? (
-            <div className="space-y-4 p-4 rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base md:text-lg font-semibold" style={{ color: '#0F1F17' }}>
-                  Day 2
-                </h2>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDay2StartAt(null);
-                    setDay2EndAt(null);
-                    setTicketTypes(prev => prev.map(tt => ({
-                      ...tt,
-                      valid_for_days: (tt.valid_for_days === 'day_2' || tt.valid_for_days === 'both') ? 'day_1' as const : tt.valid_for_days,
-                    })));
-                  }}
-                  className="text-muted-foreground"
-                >
-                  Remove Day 2
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <Label className="text-sm font-medium">Day 2 Start</Label>
-                  <DateTimeRow24
-                    value={day2StartAt}
-                    onChange={(date) => {
-                      setDay2StartAt(date);
-                      if (validationErrors.length > 0) setValidationErrors([]);
-                    }}
-                    disabled={false}
-                    min={endAt || undefined}
-                    ariaLabel="Day 2 start date and time"
-                    className="mt-1 w-full"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Day 2 End</Label>
-                  <DateTimeRow24
-                    value={day2EndAt}
-                    onChange={(date) => {
-                      setDay2EndAt(date);
-                      if (validationErrors.length > 0) setValidationErrors([]);
-                    }}
-                    disabled={false}
-                    min={day2StartAt || endAt || undefined}
-                    ariaLabel="Day 2 end date and time"
-                    className="mt-1 w-full"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
+          {hasTimeSlot2 && (
+            <OptionalTimeSlotFields
+              slotNumber={2}
+              startAt={day2StartAt}
+              endAt={day2EndAt}
+              minStart={endAt || undefined}
+              onStartChange={setDay2StartAt}
+              onEndChange={setDay2EndAt}
+              onRemove={() => {
+                setDay2StartAt(null);
+                setDay2EndAt(null);
+                setDay3StartAt(null);
+                setDay3EndAt(null);
+                setDay4StartAt(null);
+                setDay4EndAt(null);
+                setTicketTypes((prev) =>
+                  prev.map((tt) => ({
+                    ...tt,
+                    valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_2')
+                      ? 'day_1'
+                      : tt.valid_for_days,
+                  }))
+                );
+              }}
+              onValidationClear={() => {
+                if (validationErrors.length > 0) setValidationErrors([]);
+              }}
+            />
+          )}
+
+          {hasTimeSlot3 && (
+            <OptionalTimeSlotFields
+              slotNumber={3}
+              startAt={day3StartAt}
+              endAt={day3EndAt}
+              minStart={day2EndAt || endAt || undefined}
+              onStartChange={setDay3StartAt}
+              onEndChange={setDay3EndAt}
+              onRemove={() => {
+                setDay3StartAt(null);
+                setDay3EndAt(null);
+                setDay4StartAt(null);
+                setDay4EndAt(null);
+                setTicketTypes((prev) =>
+                  prev.map((tt) => ({
+                    ...tt,
+                    valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_3')
+                      ? 'day_1'
+                      : tt.valid_for_days,
+                  }))
+                );
+              }}
+              onValidationClear={() => {
+                if (validationErrors.length > 0) setValidationErrors([]);
+              }}
+            />
+          )}
+
+          {hasTimeSlot4 && (
+            <OptionalTimeSlotFields
+              slotNumber={4}
+              startAt={day4StartAt}
+              endAt={day4EndAt}
+              minStart={day3EndAt || day2EndAt || endAt || undefined}
+              onStartChange={setDay4StartAt}
+              onEndChange={setDay4EndAt}
+              onRemove={() => {
+                setDay4StartAt(null);
+                setDay4EndAt(null);
+                setTicketTypes((prev) =>
+                  prev.map((tt) => ({
+                    ...tt,
+                    valid_for_days: validForDaysReferencesRemovedSlot(tt.valid_for_days, 'day_4')
+                      ? 'day_1'
+                      : tt.valid_for_days,
+                  }))
+                );
+              }}
+              onValidationClear={() => {
+                if (validationErrors.length > 0) setValidationErrors([]);
+              }}
+            />
+          )}
+
+          {!hasTimeSlot4 && (
             <div>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  if (startAt && endAt) {
-                    const day2Start = new Date(endAt);
-                    day2Start.setDate(day2Start.getDate() + 1);
-                    day2Start.setHours(14, 0, 0, 0);
-                    const day2End = new Date(day2Start);
-                    day2End.setHours(18, 0, 0, 0);
-                    setDay2StartAt(day2Start);
-                    setDay2EndAt(day2End);
+                  if (!startAt || !endAt) return;
+                  const previousEnd = hasTimeSlot3
+                    ? day3EndAt!
+                    : hasTimeSlot2
+                      ? day2EndAt!
+                      : endAt;
+                  const { start, end } = getDefaultNextSlotTimes(previousEnd);
+                  if (!hasTimeSlot2) {
+                    setDay2StartAt(start);
+                    setDay2EndAt(end);
+                  } else if (!hasTimeSlot3) {
+                    setDay3StartAt(start);
+                    setDay3EndAt(end);
+                  } else {
+                    setDay4StartAt(start);
+                    setDay4EndAt(end);
                   }
                 }}
                 disabled={!startAt || !endAt}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Day 2
+                Add Time Slot {hasTimeSlot2 ? (hasTimeSlot3 ? 4 : 3) : 2}
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
-                Add a second day for multi-day events. Ticket types can then be set to Day 1 only, Day 2 only, or Both days.
+                Add another time slot for multi-session events. Ticket types can then be set to a specific time slot or all time slots.
               </p>
             </div>
           )}
@@ -1847,22 +2035,24 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                       </p>
                     </div>
 
-                    {hasDay2 && (
+                    {hasMultipleTimeSlots && (
                       <div>
                         <Label htmlFor={`valid-for-days-${index}`} className="text-xs md:text-sm font-medium">
                           Valid for
                         </Label>
                         <Select
                           value={tt.valid_for_days || 'day_1'}
-                          onValueChange={(value) => updateTicketTypeForm(index, 'valid_for_days', value as 'day_1' | 'day_2' | 'both')}
+                          onValueChange={(value) => updateTicketTypeForm(index, 'valid_for_days', value as ValidForDays)}
                         >
-                          <SelectTrigger id={`valid-for-days-${index}`} className="w-full max-w-[200px]">
+                          <SelectTrigger id={`valid-for-days-${index}`} className="w-full max-w-[220px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="day_1">Day 1 only</SelectItem>
-                            <SelectItem value="day_2">Day 2 only</SelectItem>
-                            <SelectItem value="both">Both days</SelectItem>
+                            {getValidForDaysOptions(configuredTimeSlots).map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -2397,6 +2587,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   end_at: endAt ? endAt.toISOString() : '',
                   day_2_start_at: day2StartAt ? day2StartAt.toISOString() : null,
                   day_2_end_at: day2EndAt ? day2EndAt.toISOString() : null,
+                  day_3_start_at: day3StartAt ? day3StartAt.toISOString() : null,
+                  day_3_end_at: day3EndAt ? day3EndAt.toISOString() : null,
+                  day_4_start_at: day4StartAt ? day4StartAt.toISOString() : null,
+                  day_4_end_at: day4EndAt ? day4EndAt.toISOString() : null,
                   status: 'published',
                   location_text: locationText || null,
                   instagram_preview_image_url: instagramPreviewImageUrl || null,

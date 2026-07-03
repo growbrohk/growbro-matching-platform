@@ -3,7 +3,7 @@ import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
 
 const EVENT_LIST_SELECT =
-  'id, org_id, venue_org_id, title, description, start_at, end_at, day_2_start_at, day_2_end_at, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at';
+  'id, org_id, venue_org_id, title, description, start_at, end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at';
 
 /**
  * Convert a string to a URL-friendly slug
@@ -62,6 +62,10 @@ export interface CreateEventData {
   end_at: string;
   day_2_start_at?: string | null;
   day_2_end_at?: string | null;
+  day_3_start_at?: string | null;
+  day_3_end_at?: string | null;
+  day_4_start_at?: string | null;
+  day_4_end_at?: string | null;
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
   location_text?: string | null;
   instagram_preview_image_url?: string | null;
@@ -105,7 +109,7 @@ export interface CreateTicketTypeData {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'both';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
@@ -121,7 +125,7 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'both';
+  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
 }
 
 /**
@@ -198,6 +202,18 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   }
   if (data.day_2_end_at !== undefined) {
     updateFields.day_2_end_at = data.day_2_end_at;
+  }
+  if (data.day_3_start_at !== undefined) {
+    updateFields.day_3_start_at = data.day_3_start_at;
+  }
+  if (data.day_3_end_at !== undefined) {
+    updateFields.day_3_end_at = data.day_3_end_at;
+  }
+  if (data.day_4_start_at !== undefined) {
+    updateFields.day_4_start_at = data.day_4_start_at;
+  }
+  if (data.day_4_end_at !== undefined) {
+    updateFields.day_4_end_at = data.day_4_end_at;
   }
 
   if (Object.keys(updateFields).length > 0) {

@@ -7,6 +7,7 @@ import { useEventTickets } from '@/hooks/use-event-tickets';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Camera, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getValidEndTimestamp } from '@/lib/utils/event-time-slots';
 
 export function EventScanTab({ eventId }: { eventId: string }) {
   const [scanning, setScanning] = useState(false);
@@ -300,26 +301,14 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       // Fetch event end times to block check-in after the ticket's valid day(s) end
       const { data: eventData, error: eventError } = await supabase
         .from('events')
-        .select('end_at, day_2_start_at, day_2_end_at')
+        .select('end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at')
         .eq('id', order.event_id)
         .single();
 
       if (!eventError && eventData) {
         const now = new Date().getTime();
         const validForDays = ticketType?.valid_for_days || 'day_1';
-        const hasDay2 = !!(eventData.day_2_start_at && eventData.day_2_end_at);
-
-        let validEnd: number;
-
-        if (hasDay2 && validForDays === 'day_2') {
-          validEnd = new Date(eventData.day_2_end_at).getTime();
-        } else if (hasDay2 && validForDays === 'both') {
-          const day1End = new Date(eventData.end_at).getTime();
-          const day2End = new Date(eventData.day_2_end_at).getTime();
-          validEnd = Math.max(day1End, day2End);
-        } else {
-          validEnd = new Date(eventData.end_at).getTime();
-        }
+        const validEnd = getValidEndTimestamp(eventData, validForDays);
 
         const FIVE_MINUTES_MS = 5 * 60 * 1000;
         if (now > validEnd + FIVE_MINUTES_MS) {

@@ -16,6 +16,12 @@ import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import { formatEventDate, formatEventTime, formatEventDateTimeMultiDay, formatTicketTypeDateTime, formatSalesWindow } from '@/lib/utils/datetime';
 import {
+  getSlotStartAt,
+  getValidEndTimestamp,
+  getValidForDaysLabel,
+  hasMultipleTimeSlots,
+} from '@/lib/utils/event-time-slots';
+import {
   BookingDraft,
   saveBookingDraft,
 } from '@/lib/types/booking';
@@ -105,18 +111,7 @@ export default function PublicEventForm({
       return date;
     };
 
-    // Effective end for this ticket type based on valid_for_days
-    const hasDay2 = !!(event as any).day_2_start_at && (event as any).day_2_end_at;
-    let ticketValidEndTime: number;
-    if (hasDay2 && tt.valid_for_days === 'day_2') {
-      ticketValidEndTime = parseUTCDate((event as any).day_2_end_at).getTime();
-    } else if (hasDay2 && tt.valid_for_days === 'both') {
-      const day2End = parseUTCDate((event as any).day_2_end_at).getTime();
-      const day1End = parseUTCDate(event.end_at).getTime();
-      ticketValidEndTime = Math.max(day1End, day2End);
-    } else {
-      ticketValidEndTime = parseUTCDate(event.end_at).getTime();
-    }
+    const ticketValidEndTime = getValidEndTimestamp(event, tt.valid_for_days);
 
     // Hard cutoff: if event has ended (with 5-minute safety margin), ticket is unavailable
     const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -463,16 +458,12 @@ export default function PublicEventForm({
     }
 
     // Compute dateLabel from selected ticket types
-    const hasDay2 = !!(event as any).day_2_start_at && (event as any).day_2_end_at;
     let dateLabel: string;
-    if (hasDay2 && lines.some(l => {
-      const tt = visibleTicketTypes.find(t => t.id === l.ticketTypeId);
-      return tt?.valid_for_days === 'day_2';
-    }) && !lines.some(l => {
-      const tt = visibleTicketTypes.find(t => t.id === l.ticketTypeId);
-      return tt?.valid_for_days === 'day_1' || tt?.valid_for_days === 'both';
-    })) {
-      dateLabel = formatDateForBooking((event as any).day_2_start_at);
+    const uniqueValidFor = [...new Set(
+      lines.map((l) => visibleTicketTypes.find((t) => t.id === l.ticketTypeId)?.valid_for_days || 'day_1')
+    )];
+    if (uniqueValidFor.length === 1) {
+      dateLabel = formatDateForBooking(getSlotStartAt(event, uniqueValidFor[0]));
     } else {
       dateLabel = formatDateForBooking(event.start_at);
     }
@@ -520,8 +511,12 @@ export default function PublicEventForm({
                       {formatEventDateTimeMultiDay(
                         event.start_at,
                         event.end_at,
-                        (event as any).day_2_start_at,
-                        (event as any).day_2_end_at
+                        event.day_2_start_at,
+                        event.day_2_end_at,
+                        event.day_3_start_at,
+                        event.day_3_end_at,
+                        event.day_4_start_at,
+                        event.day_4_end_at
                       )}
                     </span>
                   </div>
@@ -583,9 +578,9 @@ export default function PublicEventForm({
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-base" style={{ color: '#0F1F17' }}>
                               {tt.name}
-                              {(event as any).day_2_start_at && (event as any).day_2_end_at && tt.valid_for_days && (
+                              {hasMultipleTimeSlots(event) && tt.valid_for_days && (
                                 <span className="text-xs font-normal text-muted-foreground ml-1">
-                                  ({tt.valid_for_days === 'day_1' ? 'Day 1 only' : tt.valid_for_days === 'day_2' ? 'Day 2 only' : 'Both days'})
+                                  ({getValidForDaysLabel(tt.valid_for_days)})
                                 </span>
                               )}
                             </h3>

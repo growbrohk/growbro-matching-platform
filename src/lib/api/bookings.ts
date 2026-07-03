@@ -60,6 +60,10 @@ export interface OrderWithEvent {
     end_at: string;
     day_2_start_at?: string | null;
     day_2_end_at?: string | null;
+    day_3_start_at?: string | null;
+    day_3_end_at?: string | null;
+    day_4_start_at?: string | null;
+    day_4_end_at?: string | null;
     location_text: string | null;
     venue_name?: string | null;
     category?: string | null;
@@ -84,7 +88,7 @@ export interface OrderWithEvent {
     ticket_type: {
       id: string;
       name: string;
-      valid_for_days?: 'day_1' | 'day_2' | 'both' | null;
+      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | null;
     };
   }>;
   order_addon_items?: Array<{
@@ -112,7 +116,7 @@ export interface OrderWithEvent {
     ticket_type?: {
       id: string;
       name: string;
-      valid_for_days?: 'day_1' | 'day_2' | 'both';
+      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all';
     };
   }>;
 }
@@ -320,6 +324,10 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       end_at: eventData.end_at,
       day_2_start_at: eventData.day_2_start_at ?? null,
       day_2_end_at: eventData.day_2_end_at ?? null,
+      day_3_start_at: eventData.day_3_start_at ?? null,
+      day_3_end_at: eventData.day_3_end_at ?? null,
+      day_4_start_at: eventData.day_4_start_at ?? null,
+      day_4_end_at: eventData.day_4_end_at ?? null,
       location_text: eventData.location_text,
       venue_name: eventData.venue_name,
       category: eventData.category,

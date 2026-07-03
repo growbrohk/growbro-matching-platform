@@ -409,6 +409,10 @@ export type Database = {
           created_at: string
           day_2_end_at: string | null
           day_2_start_at: string | null
+          day_3_end_at: string | null
+          day_3_start_at: string | null
+          day_4_end_at: string | null
+          day_4_start_at: string | null
           description: string | null
           enable_fps: boolean | null
           enable_payme: boolean | null
@@ -435,6 +439,10 @@ export type Database = {
           created_at?: string
           day_2_end_at?: string | null
           day_2_start_at?: string | null
+          day_3_end_at?: string | null
+          day_3_start_at?: string | null
+          day_4_end_at?: string | null
+          day_4_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null
@@ -461,6 +469,10 @@ export type Database = {
           created_at?: string
           day_2_end_at?: string | null
           day_2_start_at?: string | null
+          day_3_end_at?: string | null
+          day_3_start_at?: string | null
+          day_4_end_at?: string | null
+          day_4_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null

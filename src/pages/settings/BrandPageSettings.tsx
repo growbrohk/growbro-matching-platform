@@ -148,18 +148,18 @@ export default function BrandPageSettings() {
     try {
       const eventsQuery = supabase
         .from('events')
-        .select('id, title, end_at, day_2_end_at')
+        .select('id, title, end_at, day_2_end_at, day_3_end_at, day_4_end_at')
         .eq('org_id', currentOrg.id)
         .eq('status', 'published');
       const [eventsRes, productsRes] = await Promise.all([
         eventsQuery,
         (supabase.from('products') as any).select('id, title, is_on_sale').eq('org_id', currentOrg.id).eq('type', 'physical'),
       ]);
-      let eventsData = (eventsRes.data || []) as { id: string; title: string; end_at?: string; day_2_end_at?: string | null }[];
+      let eventsData = (eventsRes.data || []) as { id: string; title: string; end_at?: string; day_2_end_at?: string | null; day_3_end_at?: string | null; day_4_end_at?: string | null }[];
       if (eventsFilter === 'non_expired') {
         const now = new Date();
         eventsData = eventsData.filter((e) => {
-          const latestEnd = e.day_2_end_at || e.end_at;
+          const latestEnd = e.day_4_end_at || e.day_3_end_at || e.day_2_end_at || e.end_at;
           return latestEnd && new Date(latestEnd) >= now;
         });
       }

@@ -79,7 +79,7 @@ export function useBrandPageData(
 
         let eventsQuery = supabase
           .from('events')
-          .select('id, title, slug, start_at, day_2_start_at, end_at, day_2_end_at, created_at, instagram_preview_image_url, metadata')
+          .select('id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata')
           .eq('org_id', orgId)
           .eq('status', 'published');
 
@@ -158,7 +158,7 @@ export function useBrandPageData(
           const { data: extraEvents } = await supabase
             .from('events')
             .select(
-              'id, title, slug, start_at, day_2_start_at, end_at, day_2_end_at, created_at, instagram_preview_image_url, metadata',
+              'id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata',
             )
             .in('id', ids)
             .eq('status', 'published');
@@ -208,7 +208,7 @@ export function useBrandPageData(
 
         if (eventsFilter === 'non_expired') {
           eventsData = eventsData.filter((e) => {
-            const latestEnd = e.day_2_end_at || e.end_at;
+            const latestEnd = e.day_4_end_at || e.day_3_end_at || e.day_2_end_at || e.end_at;
             return latestEnd && new Date(latestEnd) >= new Date();
           });
         }
@@ -264,6 +264,8 @@ export function useBrandPageData(
             const dateStrings: string[] = [];
             if (e.start_at) dateStrings.push(e.start_at);
             if (e.day_2_start_at) dateStrings.push(e.day_2_start_at);
+            if (e.day_3_start_at) dateStrings.push(e.day_3_start_at);
+            if (e.day_4_start_at) dateStrings.push(e.day_4_start_at);
             const rowSlug = (e as { brand_page_org_slug?: string | null }).brand_page_org_slug;
             return {
               id: e.id,

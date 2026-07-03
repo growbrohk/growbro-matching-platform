@@ -114,49 +114,48 @@ export function formatEventTime(startString: string, endString: string): string 
   return formatTimeRangeForDisplay(startString, endString);
 }
 
+import {
+  formatEventDateTimeMultiDayFromEvent,
+  formatTicketTypeDateTimeFromEvent,
+  type EventTimeSlotFields,
+  type ValidForDays,
+} from '@/lib/utils/event-time-slots';
+
 /**
- * Format multi-day event display
- * 1-day: "Fri 6 Dec, 18:00–22:00"
- * 2-day: "Fri 6 Dec 18:00–22:00, Sat 7 Dec 14:00–20:00"
+ * Format multi-slot event display
+ * 1 slot: "Jan 4 (Sun) 18:00–22:00"
+ * 2+ slots: "Jan 4 (Sun) 18:00–22:00, Jan 5 (Mon) 14:00–20:00, ..."
  */
 export function formatEventDateTimeMultiDay(
   startAt: string,
   endAt: string,
   day2StartAt?: string | null,
-  day2EndAt?: string | null
+  day2EndAt?: string | null,
+  day3StartAt?: string | null,
+  day3EndAt?: string | null,
+  day4StartAt?: string | null,
+  day4EndAt?: string | null
 ): string {
-  const day1 = `${formatEventDate(startAt)} ${formatEventTime(startAt, endAt)}`;
-  if (!day2StartAt || !day2EndAt) {
-    return day1;
-  }
-  const day2 = `${formatEventDate(day2StartAt)} ${formatEventTime(day2StartAt, day2EndAt)}`;
-  return `${day1}, ${day2}`;
+  return formatEventDateTimeMultiDayFromEvent({
+    start_at: startAt,
+    end_at: endAt,
+    day_2_start_at: day2StartAt,
+    day_2_end_at: day2EndAt,
+    day_3_start_at: day3StartAt,
+    day_3_end_at: day3EndAt,
+    day_4_start_at: day4StartAt,
+    day_4_end_at: day4EndAt,
+  });
 }
 
 /**
  * Format date/time for a ticket type based on valid_for_days
- * - day_1: Day 1 range (e.g., "Fri 6 Dec 18:00–22:00")
- * - day_2: Day 2 range (e.g., "Sat 7 Dec 14:00–20:00")
- * - both: Both ranges
- * - Default/1-day event: Day 1 range
  */
 export function formatTicketTypeDateTime(
-  event: { start_at: string; end_at: string; day_2_start_at?: string | null; day_2_end_at?: string | null },
-  ticketType: { valid_for_days?: 'day_1' | 'day_2' | 'both' }
+  event: EventTimeSlotFields,
+  ticketType: { valid_for_days?: ValidForDays | string | null }
 ): string {
-  const validFor = ticketType.valid_for_days || 'day_1';
-  const hasDay2 = !!(event.day_2_start_at && event.day_2_end_at);
-
-  if (!hasDay2 || validFor === 'day_1') {
-    return `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`;
-  }
-  if (validFor === 'day_2') {
-    return `${formatEventDate(event.day_2_start_at!)} ${formatEventTime(event.day_2_start_at!, event.day_2_end_at!)}`;
-  }
-  // both
-  const day1 = `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`;
-  const day2 = `${formatEventDate(event.day_2_start_at!)} ${formatEventTime(event.day_2_start_at!, event.day_2_end_at!)}`;
-  return `${day1}, ${day2}`;
+  return formatTicketTypeDateTimeFromEvent(event, ticketType);
 }
 
 function formatSingleTimeInHK(dateString: string): string {

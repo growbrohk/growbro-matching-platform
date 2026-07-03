@@ -370,7 +370,7 @@ export default function BookingSuccessPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Date & Time</p>
                     <p>
-                      {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at)}
+                      {formatEventDateTimeMultiDay(event.start_at, event.end_at, event.day_2_start_at, event.day_2_end_at, event.day_3_start_at, event.day_3_end_at, event.day_4_start_at, event.day_4_end_at)}
                     </p>
                   </div>
                   {event.location_text && (
