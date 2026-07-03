@@ -1,19 +1,12 @@
 import { useMemo } from 'react';
 import { ProductMerchCard } from '@/components/products/ProductMerchCard';
 import { collectProductPhotoUrls } from '@/lib/utils/product-media';
+import { getMinProductPrice } from '@/lib/utils/product-pricing';
 import type { ProductWithDetails } from '@/pages/dashboard/products/Products';
 
 interface PosProductGridProps {
   products: ProductWithDetails[];
   onProductClick: (productId: string) => void;
-}
-
-function getMinPrice(product: ProductWithDetails): number {
-  if (product.variants.length > 0) {
-    const prices = product.variants.map((v) => v.price || 0).filter((p) => p > 0);
-    if (prices.length > 0) return Math.min(...prices);
-  }
-  return product.base_price || 0;
 }
 
 export function PosProductGrid({ products, onProductClick }: PosProductGridProps) {
@@ -25,7 +18,7 @@ export function PosProductGrid({ products, onProductClick }: PosProductGridProps
           id: product.id,
           title: product.title,
           imageUrl: photos[0] ?? null,
-          price: getMinPrice(product),
+          price: getMinProductPrice(product),
         };
       }),
     [products],

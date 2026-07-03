@@ -1305,7 +1305,11 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
             id: v.id,
             name: v.name.trim(),
               sku,
-            price: toDecimalOrNull(v.price || ''),
+            price: toDecimalOrNull(
+              productKind === 'simple' && !(v.price || '').trim()
+                ? basePrice
+                : (v.price || ''),
+            ),
             active: v.active,
             };
           });

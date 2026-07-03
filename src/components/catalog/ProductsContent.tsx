@@ -8,6 +8,7 @@ import { VariantPicker } from '@/components/pos/VariantPicker';
 import type { ProductCategory } from '@/lib/api/categories-and-tags';
 import type { ProductWithDetails, Warehouse, InventoryItem, ProductVariant } from '@/pages/dashboard/products/Products';
 import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { getMinProductPrice } from '@/lib/utils/product-pricing';
 
 export interface ProductsContentProps {
   products: ProductWithDetails[];
@@ -165,9 +166,10 @@ export function ProductsContent({
           {products.map((product, productIdx) => {
             const isExpanded = expandedProducts.has(product.id);
             const totalQty = getProductQuantity(product);
-            const minPrice = product.variants.length > 0 
-              ? Math.min(...product.variants.map(v => v.price || 0).filter(p => p > 0))
-              : product.base_price || 0;
+            const minPrice = getMinProductPrice(
+              product,
+              isBulkEdit ? pendingEdits : undefined,
+            );
 
             return (
               <div key={product.id} className="border rounded-lg overflow-hidden" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
