@@ -5,9 +5,114 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useEventTickets } from '@/hooks/use-event-tickets';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Camera, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Loader2, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { getValidEndTimestamp } from '@/lib/utils/event-time-slots';
+
+const TICKET_LOOKUP_SELECT = `
+  id,
+  qr_code,
+  status,
+  scanned_at,
+  first_name,
+  last_name,
+  email,
+  phone,
+  remark,
+  order_id,
+  time_slot,
+  order:orders!inner(
+    id,
+    event_id,
+    buyer_first_name,
+    buyer_last_name,
+    buyer_email,
+    buyer_phone,
+    metadata
+  ),
+  ticket_type:ticket_types(
+    name,
+    valid_for_days
+  )
+`;
+
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+type ScanConfirmState = {
+  ticketId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  ticketType: string;
+  addons: string;
+  remark: string;
+  canRedeem: boolean;
+  errorMessage?: string;
+  validEnd?: number;
+};
+
+type AddonItem = {
+  order_id: string;
+  ticket_id: string | null;
+  label: string | null;
+  variant_label: string | null;
+  quantity: number;
+};
+
+function formatAddon(a: { label: string | null; variant_label: string | null; quantity: number }) {
+  const label = a.label || 'Add-on';
+  const variantPart = a.variant_label ? `${a.variant_label} – ` : '';
+  return `${variantPart}${label} × ${a.quantity}`;
+}
+
+function formatTicketAddons(ticketId: string, orderId: string, addonItems: AddonItem[]) {
+  const perTicketAddons = addonItems.filter((a) => a.ticket_id === ticketId);
+  const orderLevelAddons = addonItems.filter((a) => a.ticket_id == null && a.order_id === orderId);
+  const allAddons = [...perTicketAddons, ...orderLevelAddons];
+  return allAddons.length > 0 ? allAddons.map(formatAddon).join(', ') : '';
+}
+
+function getCameraErrorMessage(error: { name?: string; message?: string }) {
+  switch (error.name) {
+    case 'NotAllowedError':
+      return 'Camera permission denied. Allow camera access in browser settings.';
+    case 'NotFoundError':
+      return 'No camera found on this device.';
+    case 'OverconstrainedError':
+      return 'Could not open the selected camera. Try a different browser or close other apps using the camera.';
+    case 'NotReadableError':
+      return 'Camera is in use by another application.';
+    default:
+      return error.message || `${error.name || 'Error'}: could not start camera.`;
+  }
+}
+
+function buildAttendeeName(ticket: {
+  first_name: string | null;
+  last_name: string | null;
+  order: {
+    buyer_first_name?: string | null;
+    buyer_last_name?: string | null;
+  };
+}) {
+  if (ticket.first_name && ticket.last_name) {
+    return `${ticket.first_name} ${ticket.last_name}`.trim();
+  }
+  if (ticket.order?.buyer_first_name && ticket.order?.buyer_last_name) {
+    return `${ticket.order.buyer_first_name} ${ticket.order.buyer_last_name}`.trim();
+  }
+  return ticket.first_name || ticket.order?.buyer_first_name || 'Attendee';
+}
 
 export function EventScanTab({ eventId }: { eventId: string }) {
   const [scanning, setScanning] = useState(false);
@@ -18,14 +123,31 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     attendeeName?: string;
     ticketType?: string;
   } | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmData, setConfirmData] = useState<ScanConfirmState | null>(null);
+  const [confirmRemark, setConfirmRemark] = useState('');
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrReaderRef = useRef<HTMLDivElement>(null);
+  const isProcessingRef = useRef(false);
   const { refetch } = useEventTickets(eventId);
   const { toast } = useToast();
 
+  const scannerConfig = {
+    fps: 10,
+    qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+      const minEdgePercentage = 0.7;
+      const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+      const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+      return { width: qrboxSize, height: qrboxSize };
+    },
+    aspectRatio: 1.0,
+  };
+
   useEffect(() => {
     return () => {
-      // Cleanup scanner on unmount
       if (scannerRef.current) {
         scannerRef.current
           .stop()
@@ -42,6 +164,54 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     };
   }, []);
 
+  const closeConfirmDialog = () => {
+    setConfirmDialogOpen(false);
+    setConfirmData(null);
+    setConfirmRemark('');
+    setConfirmLoading(false);
+    isProcessingRef.current = false;
+  };
+
+  const openConfirmDialog = (data: ScanConfirmState) => {
+    setConfirmData(data);
+    setConfirmRemark(data.remark);
+    setConfirmDialogOpen(true);
+  };
+
+  const startScannerCamera = async (scanner: Html5Qrcode) => {
+    let cameraId: string | null = null;
+
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        const backCamera = devices.find((d) => /back|rear|environment/i.test(d.label));
+        cameraId = backCamera?.id ?? devices[0].id;
+      }
+    } catch (err) {
+      console.warn('Could not enumerate cameras:', err);
+    }
+
+    const onScan = (decodedText: string) => {
+      handleScanSuccess(decodedText);
+    };
+    const onScanError = (errorMessage: string) => {
+      if (!errorMessage.includes('NotFoundException') && !errorMessage.includes('No MultiFormat Readers')) {
+        console.debug('Scan error:', errorMessage);
+      }
+    };
+
+    if (cameraId) {
+      try {
+        await scanner.start(cameraId, scannerConfig, onScan, onScanError);
+        return;
+      } catch (err) {
+        console.warn('Failed to start with device id, falling back to user-facing camera:', err);
+      }
+    }
+
+    await scanner.start({ facingMode: 'user' }, scannerConfig, onScan, onScanError);
+  };
+
   const startScanning = async () => {
     if (!qrReaderRef.current) {
       toast({
@@ -52,44 +222,44 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       return;
     }
 
+    if (!window.isSecureContext) {
+      toast({
+        title: 'Camera unavailable',
+        description: 'Camera requires a secure connection (HTTPS or localhost).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setInitializing(true);
       setLastScanResult(null);
-      
-      // Ensure the div is visible before initializing
-      // Force visibility styles to override any tab hiding
+
       qrReaderRef.current.style.display = 'block';
       qrReaderRef.current.style.visibility = 'visible';
       qrReaderRef.current.style.minHeight = '300px';
       qrReaderRef.current.style.width = '100%';
       qrReaderRef.current.style.position = 'relative';
-      
-      // Wait for next frame to ensure styles are applied
-      await new Promise(resolve => requestAnimationFrame(resolve));
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Verify element is actually visible
+
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       const rect = qrReaderRef.current.getBoundingClientRect();
       const computedStyle = window.getComputedStyle(qrReaderRef.current);
-      
-      console.log('Scanner container check:', {
-        display: computedStyle.display,
-        visibility: computedStyle.visibility,
-        width: rect.width,
-        height: rect.height,
-        top: rect.top,
-        left: rect.left
-      });
-      
-      if (rect.width === 0 || rect.height === 0 || computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+
+      if (
+        rect.width === 0 ||
+        rect.height === 0 ||
+        computedStyle.display === 'none' ||
+        computedStyle.visibility === 'hidden'
+      ) {
         throw new Error('Scanner container is not visible. Please ensure the Scan tab is active and try again.');
       }
 
-      // Stop any existing scanner first
       if (scannerRef.current) {
         try {
           await scannerRef.current.stop();
-        } catch (e) {
+        } catch {
           // Ignore stop errors
         }
         scannerRef.current = null;
@@ -98,74 +268,23 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
 
-      // Try to get available cameras
-      let cameraId: string | null = null;
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          // Prefer back camera (environment), fallback to first available
-          const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
-          cameraId = backCamera?.id || devices[0].id;
-        }
-      } catch (err) {
-        console.warn('Could not enumerate cameras, using default:', err);
-      }
-
-      const cameraConfig = cameraId 
-        ? { deviceId: { exact: cameraId } }
-        : { facingMode: 'environment' }; // Fallback to facingMode
-
-      await scanner.start(
-        cameraConfig,
-        {
-          fps: 10,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const minEdgePercentage = 0.7;
-            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-            const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
-            return {
-              width: qrboxSize,
-              height: qrboxSize
-            };
-          },
-          aspectRatio: 1.0,
-        },
-        (decodedText) => {
-          handleScanSuccess(decodedText);
-        },
-        (errorMessage) => {
-          // Ignore scanning errors (they're frequent during scanning)
-          // Only log if it's a real error, not just "not found"
-          if (!errorMessage.includes('NotFoundException') && !errorMessage.includes('No MultiFormat Readers')) {
-            console.debug('Scan error:', errorMessage);
-          }
-        }
-      );
+      await startScannerCamera(scanner);
 
       setScanning(true);
       setInitializing(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error starting scanner:', error);
       setInitializing(false);
       setScanning(false);
-      
-      // Hide the div if initialization failed
+
       if (qrReaderRef.current) {
         qrReaderRef.current.style.display = 'none';
       }
-      
-      let errorMessage = 'Failed to start camera. ';
-      if (error.name === 'NotAllowedError' || error.message?.includes('permission')) {
-        errorMessage += 'Please allow camera access and try again.';
-      } else if (error.name === 'NotFoundError' || error.message?.includes('camera')) {
-        errorMessage += 'No camera found. Please ensure your device has a camera.';
-      } else {
-        errorMessage += error.message || 'Please check permissions.';
-      }
-      
+
+      const err = error as { name?: string; message?: string };
       toast({
         title: 'Error',
-        description: errorMessage,
+        description: `Failed to start camera. ${getCameraErrorMessage(err)}`,
         variant: 'destructive',
       });
     }
@@ -183,24 +302,23 @@ export function EventScanTab({ eventId }: { eventId: string }) {
     }
     setScanning(false);
     setInitializing(false);
-    
-    // Hide the div when stopping
+
     if (qrReaderRef.current) {
       qrReaderRef.current.style.display = 'none';
     }
   };
 
   const extractTicketIdentifier = (payload: string): string | null => {
-    // Try to parse as URL first
     try {
       const url = new URL(payload);
-      // Check for ticket query param
-      const ticketParam = url.searchParams.get('ticket') || url.searchParams.get('ticket_id') || url.searchParams.get('ticket_code');
+      const ticketParam =
+        url.searchParams.get('ticket') ||
+        url.searchParams.get('ticket_id') ||
+        url.searchParams.get('ticket_code');
       if (ticketParam) return ticketParam;
-      
-      // Check if pathname contains ticket info
+
       const pathParts = url.pathname.split('/');
-      const ticketIndex = pathParts.findIndex(p => p === 'ticket' || p === 'tickets');
+      const ticketIndex = pathParts.findIndex((p) => p === 'ticket' || p === 'tickets');
       if (ticketIndex >= 0 && pathParts[ticketIndex + 1]) {
         return pathParts[ticketIndex + 1];
       }
@@ -208,176 +326,255 @@ export function EventScanTab({ eventId }: { eventId: string }) {
       // Not a URL, treat as direct identifier
     }
 
-    // Treat as direct ticket id/code
     return payload.trim() || null;
   };
 
-  const checkInTicket = async (identifier: string) => {
-    try {
-      // First, find the ticket by qr_code or id
-      // Use maybeSingle() instead of single() to avoid 400 error when ticket not found
-      let ticket: any = null;
-      let fetchError: any = null;
+  const fetchTicketByIdentifier = async (identifier: string) => {
+    let ticket: Record<string, unknown> | null = null;
+    let fetchError: { message: string } | null = null;
 
-      // Try querying by qr_code first
-      const { data: ticketByQr, error: errorByQr } = await supabase
+    const { data: ticketByQr, error: errorByQr } = await supabase
+      .from('tickets')
+      .select(TICKET_LOOKUP_SELECT)
+      .eq('qr_code', identifier)
+      .maybeSingle();
+
+    if (ticketByQr) {
+      ticket = ticketByQr as Record<string, unknown>;
+    } else if (errorByQr) {
+      console.warn('Error querying by qr_code:', errorByQr);
+    }
+
+    if (!ticket) {
+      const { data: ticketById, error: errorById } = await supabase
         .from('tickets')
-        .select(`
-          id,
-          qr_code,
-          status,
-          scanned_at,
-          first_name,
-          last_name,
-          order_id,
-          time_slot,
-          order:orders!inner(
-            id,
-            event_id
-          ),
-          ticket_type:ticket_types(
-            name,
-            valid_for_days
-          )
-        `)
-        .eq('qr_code', identifier)
+        .select(TICKET_LOOKUP_SELECT)
+        .eq('id', identifier)
         .maybeSingle();
 
-      // If found by qr_code, use it
-      if (ticketByQr) {
-        ticket = ticketByQr;
-      } else if (errorByQr) {
-        // If there's an error (not just "not found"), log it but continue to try by id
-        console.warn('Error querying by qr_code:', errorByQr);
+      if (errorById) {
+        fetchError = errorById;
+      } else if (ticketById) {
+        ticket = ticketById as Record<string, unknown>;
       }
+    }
 
-      // If not found by qr_code, try by id
-      if (!ticket) {
-        const { data: ticketById, error: errorById } = await supabase
-          .from('tickets')
-          .select(`
-            id,
-            qr_code,
-            status,
-            scanned_at,
-            first_name,
-            last_name,
-            order_id,
-            time_slot,
-            order:orders!inner(
-              id,
-              event_id
-            ),
-            ticket_type:ticket_types(
-              name,
-              valid_for_days
-            )
-          `)
-          .eq('id', identifier)
-          .maybeSingle();
+    if (fetchError) {
+      throw new Error(`Failed to lookup ticket: ${fetchError.message}`);
+    }
 
-        if (errorById) {
-          fetchError = errorById;
-        } else if (ticketById) {
-          ticket = ticketById;
-        }
+    if (!ticket) {
+      throw new Error('Ticket not found');
+    }
+
+    return ticket;
+  };
+
+  const lookupTicket = async (identifier: string): Promise<ScanConfirmState> => {
+    const ticket = await fetchTicketByIdentifier(identifier);
+
+    const order = ticket.order as {
+      id: string;
+      event_id: string;
+      buyer_first_name?: string | null;
+      buyer_last_name?: string | null;
+      buyer_email?: string | null;
+      buyer_phone?: string | null;
+      metadata?: { remark?: string } | null;
+    };
+    const ticketType = ticket.ticket_type as { name?: string; valid_for_days?: string } | null;
+
+    if (order.event_id !== eventId) {
+      throw new Error('Ticket does not belong to this event');
+    }
+
+    const name = buildAttendeeName({
+      first_name: ticket.first_name as string | null,
+      last_name: ticket.last_name as string | null,
+      order,
+    });
+    const phone = (ticket.phone as string | null) || order.buyer_phone || null;
+    const email = (ticket.email as string | null) || order.buyer_email || null;
+    const ticketTypeName = ticketType?.name || 'Unknown';
+    const remark = (ticket.remark as string | null) || order.metadata?.remark || '';
+
+    const { data: addonData } = await supabase
+      .from('order_addon_items')
+      .select('order_id, ticket_id, label, variant_label, quantity')
+      .eq('order_id', order.id);
+
+    const addons = formatTicketAddons(
+      ticket.id as string,
+      order.id,
+      (addonData || []) as AddonItem[],
+    );
+
+    let validEnd: number | undefined;
+    const { data: eventData, error: eventError } = await supabase
+      .from('events')
+      .select('end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at')
+      .eq('id', order.event_id)
+      .single();
+
+    if (!eventError && eventData) {
+      const now = new Date().getTime();
+      const validForDays = ticketType?.valid_for_days || 'day_1';
+      const ticketTimeSlot = ticket.time_slot as string | null | undefined;
+      validEnd = getValidEndTimestamp(
+        eventData,
+        validForDays,
+        ticketTimeSlot ?? (validForDays !== 'each' ? validForDays : null),
+      );
+
+      if (now > validEnd + FIVE_MINUTES_MS) {
+        return {
+          ticketId: ticket.id as string,
+          name,
+          phone,
+          email,
+          ticketType: ticketTypeName,
+          addons,
+          remark,
+          canRedeem: false,
+          errorMessage: 'Ticket no longer valid for this time slot',
+          validEnd,
+        };
       }
+    }
 
-      if (fetchError) {
-        console.error('Error fetching ticket:', fetchError);
-        throw new Error(`Failed to lookup ticket: ${fetchError.message}`);
-      }
+    if (ticket.status === 'scanned') {
+      return {
+        ticketId: ticket.id as string,
+        name,
+        phone,
+        email,
+        ticketType: ticketTypeName,
+        addons,
+        remark,
+        canRedeem: false,
+        errorMessage: 'Already checked in',
+        validEnd,
+      };
+    }
 
-      if (!ticket) {
-        throw new Error('Ticket not found');
-      }
+    return {
+      ticketId: ticket.id as string,
+      name,
+      phone,
+      email,
+      ticketType: ticketTypeName,
+      addons,
+      remark,
+      canRedeem: true,
+      validEnd,
+    };
+  };
 
-      const order = ticket.order as any;
-      const ticketType = ticket.ticket_type as any;
+  const confirmCheckIn = async () => {
+    if (!confirmData || !confirmData.canRedeem) return;
 
-      // Verify ticket belongs to this event
-      if (order.event_id !== eventId) {
-        throw new Error('Ticket does not belong to this event');
-      }
+    try {
+      setConfirmLoading(true);
 
-      // Fetch event end times to block check-in after the ticket's valid day(s) end
-      const { data: eventData, error: eventError } = await supabase
-        .from('events')
-        .select('end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at')
-        .eq('id', order.event_id)
-        .single();
-
-      if (!eventError && eventData) {
+      if (confirmData.validEnd != null) {
         const now = new Date().getTime();
-        const validForDays = ticketType?.valid_for_days || 'day_1';
-        const ticketTimeSlot = (ticket as { time_slot?: string | null }).time_slot;
-        const validEnd = getValidEndTimestamp(
-          eventData,
-          validForDays,
-          ticketTimeSlot ?? (validForDays !== 'each' ? validForDays : null)
-        );
-
-        const FIVE_MINUTES_MS = 5 * 60 * 1000;
-        if (now > validEnd + FIVE_MINUTES_MS) {
+        if (now > confirmData.validEnd + FIVE_MINUTES_MS) {
           throw new Error('Ticket no longer valid for this time slot');
         }
       }
 
-      // Check if already scanned
-      if (ticket.status === 'scanned') {
-        const attendeeName = ticket.first_name && ticket.last_name
-          ? `${ticket.first_name} ${ticket.last_name}`
-          : 'Attendee';
-        
-        setLastScanResult({
-          success: false,
-          message: 'Already checked in',
-          attendeeName,
-          ticketType: ticketType?.name,
-        });
-        
-        toast({
-          title: 'Already Checked In',
-          description: `${attendeeName} (${ticketType?.name || 'Unknown'}) was already checked in.`,
-          variant: 'default',
-        });
-        return;
+      const remarkChanged = confirmRemark !== confirmData.remark;
+      const payload: Record<string, unknown> = {
+        status: 'scanned',
+        scanned_at: new Date().toISOString(),
+        scanned_by: (await supabase.auth.getUser()).data.user?.id || null,
+      };
+
+      if (remarkChanged) {
+        payload.remark = confirmRemark || null;
       }
 
-      // Update ticket status
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from('tickets')
-        .update({
-          status: 'scanned',
-          scanned_at: new Date().toISOString(),
-          scanned_by: (await supabase.auth.getUser()).data.user?.id || null,
-        })
-        .eq('id', ticket.id);
+        .update(payload)
+        .eq('id', confirmData.ticketId)
+        .eq('status', 'valid')
+        .select('id');
 
       if (updateError) throw updateError;
 
-      const attendeeName = ticket.first_name && ticket.last_name
-        ? `${ticket.first_name} ${ticket.last_name}`
-        : 'Attendee';
+      if (!updated || updated.length === 0) {
+        throw new Error('Ticket was already checked in.');
+      }
 
       setLastScanResult({
         success: true,
         message: 'Successfully checked in',
-        attendeeName,
-        ticketType: ticketType?.name,
+        attendeeName: confirmData.name,
+        ticketType: confirmData.ticketType,
       });
 
       toast({
         title: 'Success',
-        description: `${attendeeName} (${ticketType?.name || 'Unknown'}) checked in successfully!`,
+        description: `${confirmData.name} (${confirmData.ticketType}) checked in successfully!`,
       });
 
-      // Refresh tickets list
       refetch();
-    } catch (error: any) {
-      console.error('Error checking in ticket:', error);
-      const errorMessage = error.message || 'Failed to check in ticket';
-      
+      closeConfirmDialog();
+    } catch (error: unknown) {
+      console.error('Error confirming check-in:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check in ticket';
+
+      setLastScanResult({
+        success: false,
+        message: errorMessage,
+        attendeeName: confirmData.name,
+        ticketType: confirmData.ticketType,
+      });
+
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+
+      setConfirmLoading(false);
+      isProcessingRef.current = false;
+    }
+  };
+
+  const handleScanSuccess = async (decodedText: string) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+
+    await stopScanning();
+
+    const identifier = extractTicketIdentifier(decodedText);
+    if (!identifier) {
+      isProcessingRef.current = false;
+      toast({
+        title: 'Invalid QR Code',
+        description: 'Could not extract ticket identifier from QR code',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setLookupLoading(true);
+      const result = await lookupTicket(identifier);
+      openConfirmDialog(result);
+
+      if (!result.canRedeem && result.errorMessage === 'Already checked in') {
+        toast({
+          title: 'Already Checked In',
+          description: `${result.name} (${result.ticketType}) was already checked in.`,
+        });
+      }
+    } catch (error: unknown) {
+      console.error('Error looking up ticket:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to lookup ticket';
+
       setLastScanResult({
         success: false,
         message: errorMessage,
@@ -388,37 +585,24 @@ export function EventScanTab({ eventId }: { eventId: string }) {
         description: errorMessage,
         variant: 'destructive',
       });
+
+      isProcessingRef.current = false;
+    } finally {
+      setLookupLoading(false);
     }
   };
 
-  const handleScanSuccess = async (decodedText: string) => {
-    // Stop scanning temporarily
-    await stopScanning();
-
-    const identifier = extractTicketIdentifier(decodedText);
-    if (!identifier) {
-      toast({
-        title: 'Invalid QR Code',
-        description: 'Could not extract ticket identifier from QR code',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    await checkInTicket(identifier);
-  };
+  const showStartScanning =
+    !scanning && !initializing && !lookupLoading && !confirmDialogOpen;
 
   return (
     <div className="space-y-6">
       <Card className="rounded-lg border" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <CardHeader>
           <CardTitle>QR Code Scanner</CardTitle>
-          <CardDescription>
-            Scan ticket QR codes to check in attendees
-          </CardDescription>
+          <CardDescription>Scan ticket QR codes to check in attendees</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Scanner Container */}
           <div className="space-y-4">
             <div
               ref={qrReaderRef}
@@ -427,12 +611,22 @@ export function EventScanTab({ eventId }: { eventId: string }) {
               style={{
                 borderColor: scanning ? 'rgba(14,122,58,0.3)' : 'rgba(14,122,58,0.14)',
                 minHeight: '300px',
-                display: 'none', // Hidden by default, shown when scanning starts
+                display: 'none',
               }}
             />
 
-            {!scanning && !initializing && (
+            {lookupLoading && (
               <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                <Loader2 className="h-8 w-8 animate-spin mb-4" style={{ color: '#0E7A3A' }} />
+                <p className="text-muted-foreground">Looking up ticket...</p>
+              </div>
+            )}
+
+            {showStartScanning && (
+              <div
+                className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg"
+                style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+              >
                 <Camera className="h-16 w-16 mb-4" style={{ color: '#0E7A3A', opacity: 0.3 }} />
                 <p className="text-muted-foreground mb-4">Camera not active</p>
                 <Button
@@ -466,10 +660,11 @@ export function EventScanTab({ eventId }: { eventId: string }) {
             )}
           </div>
 
-          {/* Last Scan Result */}
           {lastScanResult && (
             <Alert
-              className={lastScanResult.success ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}
+              className={
+                lastScanResult.success ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'
+              }
             >
               {lastScanResult.success ? (
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -491,6 +686,96 @@ export function EventScanTab({ eventId }: { eventId: string }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={confirmDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeConfirmDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmData?.canRedeem ? 'Confirm Check-in' : 'Ticket Details'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmData?.canRedeem
+                ? 'Review ticket details and confirm before checking in.'
+                : confirmData?.errorMessage || 'This ticket cannot be checked in.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {confirmData && (
+            <div className="space-y-4 py-2">
+              {!confirmData.canRedeem && confirmData.errorMessage && (
+                <Alert className="border-yellow-200 bg-yellow-50">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-700">
+                    {confirmData.errorMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid gap-3 text-sm">
+                <div className="grid grid-cols-[100px_1fr] gap-2">
+                  <span className="text-muted-foreground">Name</span>
+                  <span className="font-medium">{confirmData.name}</span>
+                </div>
+                <div className="grid grid-cols-[100px_1fr] gap-2">
+                  <span className="text-muted-foreground">Phone</span>
+                  <span>{confirmData.phone || '-'}</span>
+                </div>
+                <div className="grid grid-cols-[100px_1fr] gap-2">
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="break-all">{confirmData.email || '-'}</span>
+                </div>
+                <div className="grid grid-cols-[100px_1fr] gap-2">
+                  <span className="text-muted-foreground">Ticket Type</span>
+                  <span>{confirmData.ticketType}</span>
+                </div>
+                <div className="grid grid-cols-[100px_1fr] gap-2">
+                  <span className="text-muted-foreground">Add-ons</span>
+                  <span>{confirmData.addons || 'None'}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="scan-remark">Remark</Label>
+                <Textarea
+                  id="scan-remark"
+                  value={confirmRemark}
+                  onChange={(e) => setConfirmRemark(e.target.value)}
+                  placeholder="Add a remark (optional)"
+                  disabled={!confirmData.canRedeem || confirmLoading}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={closeConfirmDialog} disabled={confirmLoading}>
+              Cancel
+            </Button>
+            {confirmData?.canRedeem && (
+              <Button
+                onClick={confirmCheckIn}
+                disabled={confirmLoading}
+                style={{ backgroundColor: '#0E7A3A', color: 'white' }}
+              >
+                {confirmLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Checking in...
+                  </>
+                ) : (
+                  'Confirm Check-in'
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
