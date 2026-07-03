@@ -18,6 +18,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { formatTicketDateTime } from '@/lib/utils/datetime';
 import React, { useEffect, useRef, useState } from 'react';
 
+export interface TicketCardAddon {
+  label: string;
+  variantLabel?: string | null;
+  quantity: number;
+}
+
 export interface TicketCardProps {
   eventName: string;
   dateTime: string;
@@ -30,10 +36,16 @@ export interface TicketCardProps {
   participantName: string;
   price: number;
   seatNumber?: string | null;
+  addons?: TicketCardAddon[];
 
   currency?: string;
   className?: string;
   captureMode?: boolean;
+}
+
+function formatAddonLine(addon: TicketCardAddon): string {
+  const variant = addon.variantLabel ? ` – ${addon.variantLabel}` : '';
+  return `${addon.label}${variant} × ${addon.quantity}`;
 }
 
 function formatPrice(price: number, currency: string = 'HKD'): string {
@@ -60,6 +72,7 @@ export default function TicketCard({
   participantName,
   price,
   seatNumber,
+  addons,
   currency = 'HKD',
   className = '',
   captureMode = false,
@@ -165,6 +178,21 @@ export default function TicketCard({
               </p>
               <p className="text-[18px] font-extrabold text-black uppercase">{participantName}</p>
             </div>
+
+            {addons && addons.length > 0 && (
+              <div>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
+                  ADD-ONS
+                </p>
+                <div className="space-y-1">
+                  {addons.map((addon, i) => (
+                    <p key={i} className="text-[16px] font-extrabold text-black">
+                      {formatAddonLine(addon)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">

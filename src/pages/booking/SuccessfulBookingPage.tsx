@@ -246,19 +246,14 @@ export default function SuccessfulBookingPage() {
                       participantName={ticketParticipantName}
                       price={pricePerTicket}
                       seatNumber={null}
+                      addons={addonsForTicket.map((a) => ({
+                        label: a.label || 'Add-on',
+                        variantLabel: a.variant_label,
+                        quantity: a.quantity,
+                      }))}
                       currency={order.currency || 'HKD'}
                     />
                   </TicketCardPreview>
-                  {addonsForTicket.length > 0 && (
-                    <div className="mt-3 text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                      {addonsForTicket.map((a) => (
-                        <div key={a.id}>
-                          {a.label}
-                          {a.variant_label && ` – ${a.variant_label}`} × {a.quantity}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
