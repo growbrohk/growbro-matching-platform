@@ -130,7 +130,8 @@ export interface OrderWithEvent {
 export async function createBooking(
   draft: BookingDraft,
   contactInfo: ContactInfo,
-  attendees?: AttendeeInfo[]
+  attendees?: AttendeeInfo[],
+  options?: { marketingOptIn?: boolean }
 ): Promise<CreateBookingResponse> {
   // Get current user if authenticated
   const { data: { user } } = await supabase.auth.getUser();
@@ -229,7 +230,7 @@ export async function createBooking(
   // Call RPC function - NO p_total_amount parameter (removed for security)
   // Server computes total_amount from ticket_types.price × quantity
   // Returns UUID (order_id) - no longer returns edit_token
-  const { data: orderId, error } = await supabase.rpc('create_event_booking' as any, {
+  const rpcArgs: Record<string, unknown> = {
     p_event_id: draft.eventId,
     p_order_lines: orderLines,
     p_buyer_user_id: buyerUserId,
@@ -241,7 +242,13 @@ export async function createBooking(
     p_attendees: attendeesArray,
     p_tracking_link_id: trackingLinkId,
     p_addon_lines: addonLines.length > 0 ? addonLines : null,
-  });
+  };
+
+  if (options?.marketingOptIn !== undefined) {
+    rpcArgs.p_order_metadata = { marketing_opt_in: options.marketingOptIn };
+  }
+
+  const { data: orderId, error } = await supabase.rpc('create_event_booking' as any, rpcArgs);
 
   if (error) {
     console.error('Error creating booking:', error);

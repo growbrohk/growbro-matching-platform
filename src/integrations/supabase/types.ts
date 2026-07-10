@@ -1947,6 +1947,7 @@ export type Database = {
       }
       create_event_booking: {
         Args: {
+          p_addon_lines?: Json
           p_attendees?: Json
           p_buyer_email?: string
           p_buyer_first_name?: string
@@ -1956,6 +1957,7 @@ export type Database = {
           p_currency?: string
           p_event_id: string
           p_order_lines: Json
+          p_order_metadata?: Json
           p_tracking_link_id?: string
         }
         Returns: string

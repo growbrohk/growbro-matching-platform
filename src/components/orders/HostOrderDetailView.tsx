@@ -365,6 +365,12 @@ function EventDetailBody({
           <p>{[o.buyer_first_name, o.buyer_last_name].filter(Boolean).join(' ') || '—'}</p>
           {o.buyer_email && <p>{o.buyer_email}</p>}
           {o.buyer_phone && <p>{o.buyer_phone}</p>}
+          {typeof meta.marketing_opt_in === 'boolean' && (
+            <p>
+              <span style={{ color: MUTED }}>Marketing opt-in </span>
+              {meta.marketing_opt_in ? 'Yes' : 'No'}
+            </p>
+          )}
         </div>
       </DetailSection>
 

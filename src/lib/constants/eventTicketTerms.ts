@@ -50,3 +50,7 @@ Unless otherwise stated, tickets are non-refundable. Ticket transfers may be per
 10. Acceptance of Terms
 
 By purchasing or using a ticket, participants confirm they have read and agreed to these terms and conditions.`;
+
+/** Default label for optional marketing opt-in checkbox at checkout */
+export const DEFAULT_MARKETING_OPT_IN_LABEL =
+  'I would like to receive the latest news and promotions';

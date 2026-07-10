@@ -58,7 +58,10 @@ import { clearBookingDraft } from '@/lib/types/booking';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
-import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
+import {
+  DEFAULT_EVENT_TICKET_TERMS,
+  DEFAULT_MARKETING_OPT_IN_LABEL,
+} from '@/lib/constants/eventTicketTerms';
 
 function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
   const raw = addon.gallery_urls;
@@ -302,6 +305,7 @@ export default function CompleteBookingPage() {
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tcAccepted, setTcAccepted] = useState(true);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [eventAddons, setEventAddons] = useState<EventAddonForCheckout[]>([]);
   // addonSelections: product_id -> { variantId?, qty } (primary mode)
   const [addonSelections, setAddonSelections] = useState<Record<string, { variantId?: string; qty: number }>>({});
@@ -593,6 +597,11 @@ export default function CompleteBookingPage() {
       ),
     [eventAddons, event?.collect_attendee_info, addonSelections, addonSelectionsByAttendee]
   );
+
+  const marketingOptInEnabled = (event as { metadata?: Record<string, unknown> } | null)?.metadata?.marketing_opt_in_enabled === true;
+  const marketingOptInLabel =
+    ((event as { metadata?: Record<string, unknown> } | null)?.metadata?.marketing_opt_in_label as string | undefined)?.trim() ||
+    DEFAULT_MARKETING_OPT_IN_LABEL;
 
   // Check if form is valid (contact/attendees + T&C + required add-ons)
   const isFormValid = (): boolean => {
@@ -2118,6 +2127,22 @@ export default function CompleteBookingPage() {
               I have read and agree to the Event Ticket Terms & Conditions
             </label>
           </div>
+          {marketingOptInEnabled && (
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="marketing-opt-in"
+                checked={marketingOptIn}
+                onCheckedChange={(checked) => setMarketingOptIn(checked === true)}
+              />
+              <label
+                htmlFor="marketing-opt-in"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                style={{ color: '#0F1F17' }}
+              >
+                {marketingOptInLabel}
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
@@ -2202,7 +2227,8 @@ export default function CompleteBookingPage() {
                   const result = await createBooking(
                     finalDraft,
                     contactInfo, // Always use contactInfo (same for FREE route and Per-Ticket mode)
-                    event?.collect_attendee_info === 'per_ticket' ? attendees : undefined
+                    event?.collect_attendee_info === 'per_ticket' ? attendees : undefined,
+                    marketingOptInEnabled ? { marketingOptIn } : undefined
                   );
 
                   // Clear booking draft

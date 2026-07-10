@@ -59,7 +59,10 @@ import { EventAddonsSection } from '@/components/events/EventAddonsSection';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 import { compressImageToWebp } from '@/lib/images/compressReceiptImage';
-import { DEFAULT_EVENT_TICKET_TERMS } from '@/lib/constants/eventTicketTerms';
+import {
+  DEFAULT_EVENT_TICKET_TERMS,
+  DEFAULT_MARKETING_OPT_IN_LABEL,
+} from '@/lib/constants/eventTicketTerms';
 import { TICKET_TYPE_DESCRIPTION_MAX_LENGTH } from '@/lib/constants/events';
 import { getEventPreviewStoragePathFromPublicUrl } from '@/lib/storage/eventPreviewPaths';
 import { getOrgPaymentDefaults } from '@/lib/api/orgs';
@@ -328,7 +331,17 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
   // Event Ticket Terms & Conditions (editable, preset with default)
   const [ticketTermsAndConditions, setTicketTermsAndConditions] = useState<string>(DEFAULT_EVENT_TICKET_TERMS);
+  const [marketingOptInEnabled, setMarketingOptInEnabled] = useState(false);
+  const [marketingOptInLabel, setMarketingOptInLabel] = useState<string>(DEFAULT_MARKETING_OPT_IN_LABEL);
   const [eventMetadata, setEventMetadata] = useState<Record<string, any>>({});
+
+  const mergeEventMetadata = (extra: Record<string, unknown> = {}) => ({
+    ...eventMetadata,
+    ...extra,
+    ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+    marketing_opt_in_enabled: marketingOptInEnabled,
+    marketing_opt_in_label: marketingOptInLabel.trim() || DEFAULT_MARKETING_OPT_IN_LABEL,
+  });
 
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
@@ -414,6 +427,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         const metadata = (event as any).metadata || {};
         setEventMetadata(metadata);
         setTicketTermsAndConditions(metadata.ticket_terms_and_conditions ?? DEFAULT_EVENT_TICKET_TERMS);
+        setMarketingOptInEnabled(metadata.marketing_opt_in_enabled === true);
+        setMarketingOptInLabel(metadata.marketing_opt_in_label ?? DEFAULT_MARKETING_OPT_IN_LABEL);
 
         // Load ticket types with access variants
         const types = await getTicketTypes(id, true, true);
@@ -791,12 +806,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       const publicUrl = urlData.publicUrl;
 
-      const mergedMeta = {
-        ...eventMetadata,
-        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+      const mergedMeta = mergeEventMetadata({
         instagram_preview_image_width: iw,
         instagram_preview_image_height: ih,
-      };
+      });
       setEventMetadata(mergedMeta);
 
       // Update state immediately
@@ -849,17 +862,11 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       await updateEvent({
         id: eventId,
         instagram_preview_image_url: null,
-        metadata: {
-          ...nextMeta,
-          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
-        },
+        metadata: mergeEventMetadata(nextMeta),
       });
 
       // Clear state
-      setEventMetadata({
-        ...nextMeta,
-        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
-      });
+      setEventMetadata(mergeEventMetadata(nextMeta));
       setInstagramPreviewImageUrl('');
 
       toast({
@@ -954,12 +961,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       const publicUrl = urlData.publicUrl;
 
-      const mergedMeta = {
-        ...eventMetadata,
-        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
+      const mergedMeta = mergeEventMetadata({
         og_preview_image_width: ow,
         og_preview_image_height: oh,
-      };
+      });
       setEventMetadata(mergedMeta);
 
       setOgPreviewImageUrl(publicUrl);
@@ -1009,16 +1014,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       await updateEvent({
         id: eventId,
         og_preview_image_url: null,
-        metadata: {
-          ...nextMeta,
-          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
-        },
+        metadata: mergeEventMetadata(nextMeta),
       });
 
-      setEventMetadata({
-        ...nextMeta,
-        ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
-      });
+      setEventMetadata(mergeEventMetadata(nextMeta));
       setOgPreviewImageUrl('');
 
       toast({
@@ -1177,10 +1176,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         payme_link: paymeLink.trim() || null,
         fps_link: fpsLink.trim() || null,
         stripe_fee_bearer: enableStripe ? stripeFeeBearer : 'host',
-        metadata: {
-          ...eventMetadata,
-          ticket_terms_and_conditions: ticketTermsAndConditions.trim() || DEFAULT_EVENT_TICKET_TERMS,
-        },
+        metadata: mergeEventMetadata(),
       };
 
       let eventId: string;
@@ -1882,6 +1878,45 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                 backgroundColor: '#FBF8F4',
               }}
             />
+          </div>
+
+          <div
+            className="rounded-2xl border p-4 space-y-4"
+            style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="marketing-opt-in-enabled" className="text-sm font-medium cursor-pointer">
+                  Show optional marketing opt-in checkbox
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Optional for participants — left unchecked by default
+                </p>
+              </div>
+              <Switch
+                id="marketing-opt-in-enabled"
+                checked={marketingOptInEnabled}
+                onCheckedChange={setMarketingOptInEnabled}
+              />
+            </div>
+            {marketingOptInEnabled && (
+              <div>
+                <Label htmlFor="marketing-opt-in-label" className="text-sm font-medium mb-2 block">
+                  Checkbox label
+                </Label>
+                <Input
+                  id="marketing-opt-in-label"
+                  value={marketingOptInLabel}
+                  onChange={(e) => setMarketingOptInLabel(e.target.value)}
+                  placeholder={DEFAULT_MARKETING_OPT_IN_LABEL}
+                  className="w-full rounded-2xl border-2 px-4 py-3 text-sm"
+                  style={{
+                    borderColor: 'rgba(14,122,58,0.14)',
+                    backgroundColor: '#FBF8F4',
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
