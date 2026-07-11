@@ -15,7 +15,7 @@ import {
 import { getVariantConfig } from '@/lib/api/variant-config';
 import type { Product, ProductVariant } from '@/lib/types';
 import { collectProductPhotoUrls, collectVariantPhotoUrl } from '@/lib/utils/product-media';
-import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { getDefaultVariantId, getVariantOptionValue } from '@/lib/utils/variant-parser';
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
 
 interface Org {
@@ -142,26 +142,7 @@ export default function PublicProductForm({
     };
   }, [org.id]);
 
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
-    const first = activeVariants[0];
-    return first?.id ?? null;
-  });
-
-  useEffect(() => {
-    const first = activeVariants[0];
-    setSelectedVariantId((prev) => {
-      if (first && !activeVariants.some((v) => v.id === prev)) {
-        return first.id;
-      }
-      if (!first) return null;
-      return prev ?? first.id;
-    });
-  }, [product.id, activeVariants]);
-
-  const effectiveSelectedVariant = useMemo(() => {
-    if (activeVariants.length === 0) return undefined;
-    return activeVariants.find((v) => v.id === selectedVariantId) ?? activeVariants[0];
-  }, [activeVariants, selectedVariantId]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   const hierarchicalVariantRows = useMemo(
     () =>
@@ -172,6 +153,20 @@ export default function PublicProductForm({
       })),
     [activeVariants],
   );
+
+  useEffect(() => {
+    const defaultId = getDefaultVariantId(
+      hierarchicalVariantRows,
+      variantRankOrder,
+      variantValueOrders,
+    );
+    if (defaultId) setSelectedVariantId(defaultId);
+  }, [product.id, hierarchicalVariantRows, variantRankOrder, variantValueOrders]);
+
+  const effectiveSelectedVariant = useMemo(() => {
+    if (activeVariants.length === 0) return undefined;
+    return activeVariants.find((v) => v.id === selectedVariantId) ?? activeVariants[0];
+  }, [activeVariants, selectedVariantId]);
 
   const [quantity, setQuantity] = useState(1);
 

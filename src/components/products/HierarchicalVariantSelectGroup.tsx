@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  getDefaultOptionSelections,
   getVariantHierarchy,
   getVariantOptionValue,
   orderVariantValuesForDisplay,
@@ -113,35 +114,11 @@ function HierarchicalVariantSelectGroup({
       return;
     }
 
-    const base = variants[0];
-    const next: Record<string, string> = {};
-    for (const h of hierarchy) {
-      const val = getVariantOptionValue(base.name, h);
-      if (val) next[h] = val;
-    }
-    for (let i = 1; i < hierarchy.length; i++) {
-      const pool = variants.filter((v) => {
-        for (let j = 0; j < i; j++) {
-          const keyOpt = hierarchy[j];
-          const want = next[keyOpt];
-          if (!want) return false;
-          if (getVariantOptionValue(v.name, keyOpt) !== want) return false;
-        }
-        return true;
-      });
-      const optKey = hierarchy[i];
-      const rawVals = [
-        ...new Set(
-          pool
-            .map((v) => getVariantOptionValue(v.name, optKey))
-            .filter((x): x is string => Boolean(x)),
-        ),
-      ];
-      const vals = orderVariantValuesForDisplay(rawVals, optKey, variantValueOrders[optKey]);
-      if (!next[optKey] || !vals.includes(next[optKey])) {
-        next[optKey] = vals[0] ?? '';
-      }
-    }
+    const next = getDefaultOptionSelections(
+      variants.map((v) => v.name),
+      variantRankOrder,
+      variantValueOrders,
+    );
     setOptionSelections(next);
   }, [
     instanceKey,

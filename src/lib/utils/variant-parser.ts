@@ -267,3 +267,64 @@ export function orderVariantValuesForDisplay(
   return [...ordered, ...remainderSorted];
 }
 
+/**
+ * Build default option selections using display order at each hierarchy level.
+ * The first ordered value at rank 1, then the first ordered value at rank 2
+ * among variants matching rank 1, and so on.
+ */
+export function getDefaultOptionSelections(
+  variantNames: string[],
+  rankOrder: string[] = [],
+  valueOrders: Record<string, string[]> = {},
+): Record<string, string> {
+  const hierarchy = getVariantHierarchy(variantNames, rankOrder);
+  const next: Record<string, string> = {};
+
+  for (let i = 0; i < hierarchy.length; i++) {
+    const pool = variantNames.filter((name) => {
+      for (let j = 0; j < i; j++) {
+        const keyOpt = hierarchy[j];
+        const want = next[keyOpt];
+        if (!want) return false;
+        if (getVariantOptionValue(name, keyOpt) !== want) return false;
+      }
+      return true;
+    });
+
+    const optKey = hierarchy[i];
+    const rawVals = [
+      ...new Set(
+        pool
+          .map((name) => getVariantOptionValue(name, optKey))
+          .filter((x): x is string => Boolean(x)),
+      ),
+    ];
+    const vals = orderVariantValuesForDisplay(rawVals, optKey, valueOrders[optKey]);
+    next[optKey] = vals[0] ?? '';
+  }
+
+  return next;
+}
+
+/**
+ * Resolve the variant row id that matches default option selections.
+ * Falls back to the first variant when hierarchy cannot be parsed.
+ */
+export function getDefaultVariantId(
+  variants: Array<{ id: string; name: string }>,
+  rankOrder: string[] = [],
+  valueOrders: Record<string, string[]> = {},
+): string | null {
+  if (variants.length === 0) return null;
+
+  const variantNames = variants.map((v) => v.name);
+  const hierarchy = getVariantHierarchy(variantNames, rankOrder);
+  if (hierarchy.length === 0) return variants[0].id;
+
+  const selections = getDefaultOptionSelections(variantNames, rankOrder, valueOrders);
+  const match = variants.find((v) =>
+    hierarchy.every((h) => getVariantOptionValue(v.name, h) === selections[h]),
+  );
+  return match?.id ?? variants[0].id;
+}
+
