@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ProductCollabSection } from '@/components/catalog/ProductCollabSection';
+import { VariantValueOrderList } from '@/components/catalog/VariantValueOrderList';
+import { getVariantConfig, upsertVariantConfig, type VariantConfig } from '@/lib/api/variant-config';
+import {
+  getUniqueVariantOptionNames,
+  getVariantOptionValue,
+  orderVariantValuesForDisplay,
+  sortVariantOptionNames,
+} from '@/lib/utils/variant-parser';
 import {
   validateProductPartners,
   syncProductPartners,
@@ -166,6 +174,25 @@ function generateVariantCombinations(options: VariantOption[], basePrice: string
       active: true,
       isNew: true,
       sig,
+    };
+  });
+}
+
+function extractVariantOptionsFromNames(
+  variantNames: string[],
+  rankOrder: string[],
+  valueOrders: Record<string, string[]>,
+): VariantOption[] {
+  const optionNames = sortVariantOptionNames(getUniqueVariantOptionNames(variantNames), rankOrder);
+  return optionNames.map((name) => {
+    const values = new Set<string>();
+    for (const variantName of variantNames) {
+      const value = getVariantOptionValue(variantName, name);
+      if (value) values.add(value);
+    }
+    return {
+      name,
+      values: orderVariantValuesForDisplay([...values], name, valueOrders[name]),
     };
   });
 }
@@ -387,6 +414,8 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
   const [variantOptionsDraft, setVariantOptionsDraft] = useState<VariantOption[]>([]);
   const [variantOptionsApplied, setVariantOptionsApplied] = useState<VariantOption[]>([]);
   const [variants, setVariants] = useState<VariantCombination[]>([]);
+  const [variantConfig, setVariantConfig] = useState<VariantConfig | null>(null);
+  const [valueOrderSaving, setValueOrderSaving] = useState(false);
 
   // Product Photo state
   const [photoMode, setPhotoMode] = useState<'url' | 'upload'>('upload');
@@ -664,6 +693,18 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
         
         if (variantsList.length > 0) {
           setVariants(variantsList);
+
+          if (v.length > 1) {
+            const config = variantConfig ?? (await getVariantConfig(currentOrg.id));
+            if (!variantConfig) setVariantConfig(config);
+            const extracted = extractVariantOptionsFromNames(
+              v.map((row: { name?: string }) => row.name || ''),
+              [config.rank1, config.rank2].filter(Boolean),
+              config.value_orders ?? {},
+            );
+            setVariantOptionsDraft(extracted);
+            setVariantOptionsApplied(JSON.parse(JSON.stringify(extracted)));
+          }
         }
         
         // Load warehouses
@@ -834,6 +875,56 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWarehouseId, productKind]);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const config = await getVariantConfig(currentOrg.id);
+        if (!cancelled) setVariantConfig(config);
+      } catch {
+        if (!cancelled) setVariantConfig(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentOrg?.id]);
+
+  const persistValueOrder = async (optionName: string, orderedValues: string[]) => {
+    if (!currentOrg || !optionName.trim()) return;
+    setValueOrderSaving(true);
+    try {
+      const current = variantConfig ?? (await getVariantConfig(currentOrg.id));
+      const merged = {
+        ...(current.value_orders ?? {}),
+        [optionName]: orderedValues,
+      };
+      const config = await upsertVariantConfig(currentOrg.id, {
+        rank1: current.rank1,
+        rank2: current.rank2,
+        value_orders: merged,
+      });
+      setVariantConfig(config);
+      toast({ title: 'Shop display order updated' });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to save display order';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setValueOrderSaving(false);
+    }
+  };
+
+  const reorderOptionValues = async (optIdx: number, nextValues: string[]) => {
+    const optionName = variantOptionsDraft[optIdx]?.name?.trim();
+    setVariantOptionsDraft((prev) =>
+      prev.map((opt, i) => (i === optIdx ? { ...opt, values: nextValues } : opt)),
+    );
+    if (optionName) {
+      await persistValueOrder(optionName, nextValues);
+    }
+  };
 
   // Variant Option Management
   const addOption = () => {
@@ -2400,9 +2491,20 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                       onAddValue={(value) => addOptionValue(optIdx, value)}
                       onUpdateValue={(valIdx, newValue) => updateOptionValue(optIdx, valIdx, newValue)}
                       onRemoveValue={(valIdx) => removeOptionValue(optIdx, valIdx)}
+                      onReorderValues={(nextValues) => reorderOptionValues(optIdx, nextValues)}
                       onRemove={() => removeOption(optIdx)}
+                      valueOrderSaving={valueOrderSaving}
                     />
                   ))}
+
+                  {variantOptionsDraft.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Value order controls how choices appear on your product page. Applies to all products with the same option name.{' '}
+                      <Link to="/app/settings/catalog" className="underline hover:text-foreground">
+                        Manage in Catalog Settings
+                      </Link>
+                    </p>
+                  )}
 
                   {/* Pending changes banner */}
                   {hasPendingOptionChanges && variantOptionsDraft.length > 0 && (
@@ -2733,14 +2835,18 @@ function VariantOptionInput({
   onAddValue,
   onUpdateValue,
   onRemoveValue,
+  onReorderValues,
   onRemove,
+  valueOrderSaving = false,
 }: {
   option: VariantOption;
   onUpdateName: (name: string) => void;
   onAddValue: (value: string) => void;
   onUpdateValue: (valIdx: number, newValue: string) => void;
   onRemoveValue: (valIdx: number) => void;
+  onReorderValues: (nextValues: string[]) => void;
   onRemove: () => void;
+  valueOrderSaving?: boolean;
 }) {
   const [inputValue, setInputValue] = useState('');
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -2818,37 +2924,25 @@ function VariantOptionInput({
         </div>
 
         {option.values.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {option.values.map((value, idx) => (
-              <div key={idx}>
-                {editingIdx === idx ? (
-                  <div className="inline-flex items-center gap-1">
-                    <Input
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={handleEditKeyDown}
-                      onBlur={finishEditing}
-                      autoFocus
-                      className="h-7 w-32 text-sm"
-                    />
-                  </div>
-                ) : (
-                  <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => startEditing(idx, value)}>
-                    {value}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveValue(idx);
-                      }}
-                      className="ml-1 hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-              </div>
-            ))}
+          <div className="space-y-2 mt-2">
+            {editingIdx !== null && (
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                onBlur={finishEditing}
+                autoFocus
+                className="h-8 text-sm"
+              />
+            )}
+            <VariantValueOrderList
+              values={option.values}
+              onChange={onReorderValues}
+              disabled={valueOrderSaving || !option.name.trim()}
+              editable
+              onEditValue={startEditing}
+              onRemoveValue={onRemoveValue}
+            />
           </div>
         )}
       </div>

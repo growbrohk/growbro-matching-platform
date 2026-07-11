@@ -44,6 +44,7 @@ import {
   updateCategoriesSortOrder,
   type CategoryWithCount,
 } from '@/lib/api/categories-and-tags';
+import { VariantValueOrderList } from '@/components/catalog/VariantValueOrderList';
 
 type DeleteCategoryAction = 'cancel' | 'delete' | 'merge';
 
@@ -410,24 +411,6 @@ export default function CatalogSettings() {
     setValueOrderDialogOption(optionName);
   };
 
-  const moveValueDraftUp = (index: number) => {
-    if (index <= 0) return;
-    setValueOrderDraft((prev) => {
-      const next = [...prev];
-      [next[index - 1], next[index]] = [next[index], next[index - 1]];
-      return next;
-    });
-  };
-
-  const moveValueDraftDown = (index: number) => {
-    setValueOrderDraft((prev) => {
-      if (index >= prev.length - 1) return prev;
-      const next = [...prev];
-      [next[index], next[index + 1]] = [next[index + 1], next[index]];
-      return next;
-    });
-  };
-
   const saveValueOrderDraft = async () => {
     if (!currentOrg || !valueOrderDialogOption) return;
     setSaving(true);
@@ -720,44 +703,12 @@ export default function CatalogSettings() {
               Values appear in this order on your public product page. New values you add later are appended using smart sorting.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 max-h-[min(60vh,24rem)] overflow-y-auto py-2">
-            {valueOrderDraft.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No values found.</p>
-            ) : (
-              valueOrderDraft.map((val, idx) => (
-                <div
-                  key={`${val}-${idx}`}
-                  className="flex items-center justify-between gap-2 p-2 rounded-lg border"
-                  style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                >
-                  <span className="text-sm font-medium truncate" style={{ color: '#0F1F17' }}>
-                    {val}
-                  </span>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => moveValueDraftUp(idx)}
-                      disabled={saving || idx === 0}
-                      title="Move up"
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => moveValueDraftDown(idx)}
-                      disabled={saving || idx === valueOrderDraft.length - 1}
-                      title="Move down"
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="max-h-[min(60vh,24rem)] overflow-y-auto py-2">
+            <VariantValueOrderList
+              values={valueOrderDraft}
+              onChange={setValueOrderDraft}
+              disabled={saving}
+            />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setValueOrderDialogOption(null)} disabled={saving}>
