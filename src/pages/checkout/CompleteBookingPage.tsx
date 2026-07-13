@@ -1136,7 +1136,7 @@ export default function CompleteBookingPage() {
                     firstName: true,
                     lastName: true,
                     email: true,
-                    phone: false,
+                    phone: true,
                   }}
                   alwaysExpanded={true}
                 />
