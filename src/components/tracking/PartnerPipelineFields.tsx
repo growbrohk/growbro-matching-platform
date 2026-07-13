@@ -112,7 +112,7 @@ export function PartnerPipelineFields({
   const showCollabPanel = values.pipelineType === 'collab';
   const showProductPublic =
     destinationType === 'product' && !!selectedProductId;
-  const showEventDashboard = destinationType === 'event' && !!selectedEventId;
+  const showEventDashboard = destinationType === 'event';
 
   return (
     <div className="space-y-4">

@@ -56,6 +56,13 @@ import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
 import { EventAddonsSection } from '@/components/events/EventAddonsSection';
+import { EventCollabSection } from '@/components/events/EventCollabSection';
+import {
+  validateEventPartners,
+  syncEventPartners,
+  loadEventPartners,
+  type EventPartnerDraft,
+} from '@/lib/api/event-partners';
 import { datetimeLocalToUTC, utcToDatetimeLocal } from '@/lib/utils/datetime';
 import { DateTimeRow24 } from '@/components/ui/DateTimeRow24';
 import { compressImageToWebp } from '@/lib/images/compressReceiptImage';
@@ -346,6 +353,12 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   // Ticket types
   const [ticketTypes, setTicketTypes] = useState<TicketTypeForm[]>([]);
   const [existingTicketTypes, setExistingTicketTypes] = useState<TicketType[]>([]);
+
+  // Partner collab / affiliate
+  const [collabEnabled, setCollabEnabled] = useState(false);
+  const [eventPartners, setEventPartners] = useState<EventPartnerDraft[]>([]);
+  const [partnersReloadToken, setPartnersReloadToken] = useState(0);
+  const [partnersHydrated, setPartnersHydrated] = useState(false);
 
   // Progressive disclosure states
   const [showTicketTypesSection, setShowTicketTypesSection] = useState(false);
@@ -1150,6 +1163,14 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       return;
     }
 
+    if (!collabEditorContext) {
+      const partnerErr = validateEventPartners(collabEnabled, eventPartners);
+      if (partnerErr) {
+        toast({ title: 'Validation', description: partnerErr, variant: 'destructive' });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // Prepare event data
@@ -1182,6 +1203,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       let eventId: string;
 
       let savedEventId: string;
+      let resolvedSlug = eventSlug;
 
       if (isEditMode && id) {
         // Update existing event
@@ -1192,7 +1214,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         // Fetch updated event to get slug
         const refreshedEvent = await getEvent(id);
         if (refreshedEvent) {
-          setEventSlug((refreshedEvent as any).slug || '');
+          resolvedSlug = (refreshedEvent as any).slug || eventSlug;
+          setEventSlug(resolvedSlug);
         }
 
         // Handle ticket types: delete removed ones, update existing, create new
@@ -1309,7 +1332,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setEventId(newEvent.id);
         
         // Get slug from created event
-        setEventSlug((newEvent as any).slug || '');
+        resolvedSlug = (newEvent as any).slug || eventSlug;
+        setEventSlug(resolvedSlug);
 
         // Move temp uploads to permanent paths now that event id exists
         if (effectiveOrgId && user?.id) {
@@ -1426,6 +1450,25 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             valid_for_days: tt.valid_for_days || 'day_1',
             description: (tt.description || '').trim() || null,
           });
+        }
+      }
+
+      if (!collabEditorContext && effectiveOrgId) {
+        const skipDisableWipe = !collabEnabled && isEditMode && !partnersHydrated;
+        if (!skipDisableWipe) {
+          await syncEventPartners({
+            eventId: savedEventId,
+            eventTitle: title.trim(),
+            eventSlug: resolvedSlug,
+            hostOrgId: effectiveOrgId,
+            hostOrgSlug: effectiveOrgSlug,
+            enabled: collabEnabled,
+            partners: eventPartners,
+          });
+          const loaded = await loadEventPartners(savedEventId, effectiveOrgId);
+          setEventPartners(loaded);
+          setCollabEnabled(loaded.length > 0 ? true : collabEnabled);
+          setPartnersReloadToken((n) => n + 1);
         }
       }
 
@@ -2598,6 +2641,23 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         )}
 
         {showTicketTypesSection && <Separator />}
+
+        {/* Partner collab / affiliate (host only) */}
+        {!collabEditorContext && (
+          <>
+            <EventCollabSection
+              eventId={eventId ?? id ?? undefined}
+              hostOrgId={effectiveOrgId}
+              enabled={collabEnabled}
+              onEnabledChange={setCollabEnabled}
+              partners={eventPartners}
+              onPartnersChange={setEventPartners}
+              reloadToken={partnersReloadToken}
+              onHydrated={() => setPartnersHydrated(true)}
+            />
+            <Separator />
+          </>
+        )}
 
         {/* Section 3b: Add-ons (shown when event exists) */}
         {eventId && currentOrg && !collabEditorContext && (
