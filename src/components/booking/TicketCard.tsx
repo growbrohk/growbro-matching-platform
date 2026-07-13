@@ -28,6 +28,7 @@ export interface TicketCardProps {
   eventName: string;
   dateTime: string;
   dateTimeFormatted?: string; // Optional pre-formatted string for multi-day events
+  timeSlotLabel?: string; // Optional explicit slot label for multi-slot events
   venue: string;
 
   checkinCode: string;
@@ -66,6 +67,7 @@ export default function TicketCard({
   eventName,
   dateTime,
   dateTimeFormatted,
+  timeSlotLabel,
   venue,
   checkinCode,
   qrValue,
@@ -151,6 +153,9 @@ export default function TicketCard({
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">
               DATE AND TIME
             </p>
+            {timeSlotLabel && (
+              <p className="text-[14px] font-bold text-black mb-0.5">{timeSlotLabel}</p>
+            )}
             <p className="text-[16px] font-extrabold text-black">{formattedDateTime}</p>
           </div>
 

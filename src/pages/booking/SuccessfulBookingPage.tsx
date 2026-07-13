@@ -16,6 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { formatTicketTypeDateTime } from '@/lib/utils/datetime';
+import {
+  formatPurchasedTimeSlotShortLabel,
+  hasMultipleTimeSlots,
+} from '@/lib/utils/event-time-slots';
 import TicketCard, { TicketCardPreview } from '@/components/booking/TicketCard';
 import { CheckCircle2, FileText } from 'lucide-react';
 
@@ -224,6 +228,12 @@ export default function SuccessfulBookingPage() {
                 (a) => a.ticket_id === ticket.id
               );
 
+              const multiSlot = hasMultipleTimeSlots(order.event);
+              const timeSlotLabel =
+                multiSlot && ticket.time_slot
+                  ? formatPurchasedTimeSlotShortLabel(ticket.time_slot) ?? undefined
+                  : undefined;
+
               return (
                 <div key={ticket.id || index} className="ticket-page-break mb-12 no-print:last:mb-0">
                   {tickets.length > 1 && (
@@ -240,6 +250,7 @@ export default function SuccessfulBookingPage() {
                         { valid_for_days: ticket.ticket_type?.valid_for_days },
                         ticket.time_slot ?? undefined
                       )}
+                      timeSlotLabel={timeSlotLabel}
                       venue={venue}
                       checkinCode={ticket.qr_code}
                       qrValue={ticket.qr_code}

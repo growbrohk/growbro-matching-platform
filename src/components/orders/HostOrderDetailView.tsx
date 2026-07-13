@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { ProductOrderDispatchPanel } from '@/components/orders/ProductOrderDispatchPanel';
 import type { OrderWithEvent, TicketTypeAccessVariantSnapshot } from '@/lib/api/bookings';
 import type { OrderWithOrgAndProducts } from '@/lib/api/product-checkout';
-import { getValidForDaysLabel } from '@/lib/utils/event-time-slots';
+import { getValidForDaysLabel, formatPurchasedTimeSlotLabel, hasMultipleTimeSlots } from '@/lib/utils/event-time-slots';
 import { collabPartnerCanViewOrderDetails, collabPartnerCanMarkOrderShipped, collabPartnerCanMarkAddonItemShipped } from '@/lib/collab-order-access';
 
 const TEXT = '#0F1F17';
@@ -421,7 +421,12 @@ function EventDetailBody({
 
       <DetailSection title="Tickets">
         <div className="space-y-3">
-          {data.tickets.map((t) => (
+          {data.tickets.map((t) => {
+            const multiSlot = hasMultipleTimeSlots(data.event);
+            const purchasedSlotLabel = multiSlot
+              ? formatPurchasedTimeSlotLabel(data.event, t.time_slot ?? null, t.ticket_type)
+              : null;
+            return (
             <div
               key={t.id}
               className="rounded-lg border border-gray-200 p-3 text-sm space-y-1"
@@ -431,7 +436,10 @@ function EventDetailBody({
                 {[t.first_name, t.last_name].filter(Boolean).join(' ') || 'Attendee'}
               </p>
               <p style={{ color: MUTED }}>{t.ticket_type?.name ?? 'Ticket'}</p>
-              {t.ticket_type?.valid_for_days && (
+              {purchasedSlotLabel && (
+                <p style={{ color: MUTED }}>Time slot: {purchasedSlotLabel}</p>
+              )}
+              {t.ticket_type?.valid_for_days && !t.time_slot && (
                 <p style={{ color: MUTED }}>Valid: {getValidForDaysLabel(t.ticket_type.valid_for_days)}</p>
               )}
               {t.email && <p>{t.email}</p>}
@@ -440,7 +448,8 @@ function EventDetailBody({
                 Status: {t.status} · QR: {t.qr_code ? `${t.qr_code.slice(0, 8)}…` : '—'}
               </p>
             </div>
-          ))}
+            );
+          })}
         </div>
       </DetailSection>
 

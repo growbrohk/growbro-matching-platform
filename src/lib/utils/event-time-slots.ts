@@ -223,6 +223,43 @@ export function formatSlotDateTimeByKey(
   return formatSlotRange(event.start_at, event.end_at);
 }
 
+/** Short label for a purchased slot key, e.g. "Time Slot 2". */
+export function formatPurchasedTimeSlotShortLabel(
+  timeSlot: TimeSlotKey | string | null | undefined
+): string | null {
+  if (!timeSlot || !/^day_[1-4]$/.test(timeSlot)) return null;
+  const slotNumber = timeSlot.replace('day_', '');
+  return `Time Slot ${slotNumber}`;
+}
+
+/**
+ * Human-readable label for which time slot a ticket was purchased for.
+ */
+export function formatPurchasedTimeSlotLabel(
+  event: EventTimeSlotFields,
+  timeSlot: TimeSlotKey | string | null | undefined,
+  ticketType?: { valid_for_days?: ValidForDays | string | null }
+): string {
+  const multi = hasMultipleTimeSlots(event);
+
+  if (!multi) {
+    return formatSlotRange(event.start_at, event.end_at);
+  }
+
+  if (timeSlot && /^day_[1-4]$/.test(timeSlot)) {
+    const key = timeSlot as TimeSlotKey;
+    const short = formatPurchasedTimeSlotShortLabel(key);
+    const datetime = formatSlotDateTimeByKey(event, key);
+    return short ? `${short} — ${datetime}` : datetime;
+  }
+
+  if (ticketType && isAllAccessValidForDays(ticketType.valid_for_days)) {
+    return 'All time slots';
+  }
+
+  return 'All time slots';
+}
+
 export function validForDaysReferencesRemovedSlot(
   validForDays: ValidForDays | string | null | undefined,
   removedSlotKey: TimeSlotKey

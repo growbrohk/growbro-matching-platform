@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TimeSlotKey } from '@/lib/utils/event-time-slots';
 
 export interface EventTicketRow {
   id: string;
@@ -19,6 +20,10 @@ export interface EventTicketRow {
   accessLabel: string;
   /** Optional detail for title attribute (e.g. allowed affiliates) */
   accessTooltip?: string;
+  /** Purchased time slot (day_1..day_4), null for all-access / legacy tickets. */
+  timeSlot: TimeSlotKey | null;
+  /** Ticket type valid_for_days for all-access fallback labeling. */
+  validForDays: string | null;
 }
 
 type AccessFields = {
@@ -89,6 +94,7 @@ export function useEventTickets(eventId: string | undefined) {
           phone,
           remark,
           order_id,
+          time_slot,
           orders!inner(
             id,
             event_id,
@@ -110,6 +116,7 @@ export function useEventTickets(eventId: string | undefined) {
           ),
           ticket_types(
             name,
+            valid_for_days,
             visibility_mode,
             access_code,
             allowed_affiliates
@@ -146,7 +153,15 @@ export function useEventTickets(eventId: string | undefined) {
 
       return ticketRows.map((ticket): EventTicketRow => {
         const order = ticket.orders as Record<string, unknown> | null;
-        const ticketType = ticket.ticket_types as AccessFields & { name?: string } | null;
+        const ticketType = ticket.ticket_types as AccessFields & {
+          name?: string;
+          valid_for_days?: string | null;
+        } | null;
+
+        const rawTimeSlot = (ticket as { time_slot?: string | null }).time_slot;
+        const timeSlot: TimeSlotKey | null =
+          rawTimeSlot && /^day_[1-4]$/.test(rawTimeSlot) ? (rawTimeSlot as TimeSlotKey) : null;
+        const validForDays = ticketType?.valid_for_days ?? null;
 
         const rawOi = ticket.order_items as
           | {
@@ -221,6 +236,8 @@ export function useEventTickets(eventId: string | undefined) {
           ticketUnitPrice,
           currency,
           accessLabel,
+          timeSlot,
+          validForDays,
           ...(accessTooltip ? { accessTooltip } : {}),
         };
       });

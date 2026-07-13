@@ -21,6 +21,11 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import type { EventTicketRow } from '@/hooks/use-event-tickets';
 import { formatMoney } from '@/hooks/useOrdersDashboard';
+import type { Event } from '@/lib/types';
+import {
+  formatPurchasedTimeSlotLabel,
+  hasMultipleTimeSlots,
+} from '@/lib/utils/event-time-slots';
 import {
   Table,
   TableBody,
@@ -33,11 +38,17 @@ import {
 const isCheckedIn = (status: string) => status === 'scanned';
 
 type SortKey = 'status' | 'name' | 'ticketType' | 'ticketPrice';
-type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'ticketPrice' | 'access' | 'remark' | 'addons';
+type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'timeSlot' | 'ticketPrice' | 'access' | 'remark' | 'addons';
 
-const ALL_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
-const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = ['status', 'name', 'ticketType', 'addons'];
-const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'addons'];
+const ALL_COLUMNS: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'timeSlot', 'ticketPrice', 'access', 'remark', 'addons'];
+
+function getDefaultVisibleColumns(multiSlot: boolean): ColumnKey[] {
+  return multiSlot
+    ? ['status', 'name', 'ticketType', 'timeSlot', 'addons']
+    : ['status', 'name', 'ticketType', 'addons'];
+}
+
+const EDIT_MODE_COLUMN_ORDER: ColumnKey[] = ['status', 'name', 'remark', 'phone', 'email', 'ticketType', 'timeSlot', 'ticketPrice', 'access', 'addons'];
 
 const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   status: 90,
@@ -45,6 +56,7 @@ const DEFAULT_COLUMN_SIZES: Record<ColumnKey, number> = {
   phone: 120,
   email: 180,
   ticketType: 120,
+  timeSlot: 200,
   ticketPrice: 110,
   access: 150,
   remark: 160,
@@ -87,14 +99,16 @@ const DEFAULT_SORT_OPTIONS: DefaultSortOption[] = [
 
 const columnHelper = createColumnHelper<EventTicketRow>();
 
-export function EventTicketsTab({ eventId }: { eventId: string }) {
+export function EventTicketsTab({ eventId, event }: { eventId: string; event: Event }) {
+  const multiSlot = hasMultipleTimeSlots(event);
+  const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumns(multiSlot), [multiSlot]);
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMNS);
+  const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(() => getDefaultVisibleColumns(multiSlot));
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
   const [defaultSort, setDefaultSort] = useState<string>('name-asc');
   const [rememberPrefs, setRememberPrefs] = useState(false);
@@ -269,6 +283,12 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     return Array.from(types).sort((a, b) => a.localeCompare(b));
   }, [tickets]);
 
+  const getTimeSlotLabel = useCallback(
+    (ticket: EventTicketRow) =>
+      formatPurchasedTimeSlotLabel(event, ticket.timeSlot, { valid_for_days: ticket.validForDays }),
+    [event],
+  );
+
   const filteredTickets = useMemo(() => {
     if (!tickets) return [];
 
@@ -290,7 +310,8 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         const matchesTicketPrice =
           String(ticket.ticketUnitPrice).toLowerCase().includes(searchLower) ||
           formatMoney(ticket.ticketUnitPrice).toLowerCase().includes(searchLower);
-        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesAccess || matchesAccessTooltip || matchesStatus || matchesTicketPrice;
+        const matchesTimeSlot = getTimeSlotLabel(ticket).toLowerCase().includes(searchLower);
+        return matchesName || matchesPhone || matchesEmail || matchesTicketType || matchesRemark || matchesAddons || matchesAccess || matchesAccessTooltip || matchesStatus || matchesTicketPrice || matchesTimeSlot;
       });
     }
 
@@ -305,7 +326,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
     }
 
     return result;
-  }, [tickets, query, selectedStatuses, selectedTypes]);
+  }, [tickets, query, selectedStatuses, selectedTypes, getTimeSlotLabel]);
 
   const getStatusText = (status: string) => {
     if (isCheckedIn(status)) {
@@ -443,13 +464,14 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) return;
 
-    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'ticketPrice', 'access', 'remark', 'addons'];
+    const columnOrder: ColumnKey[] = ['status', 'name', 'phone', 'email', 'ticketType', 'timeSlot', 'ticketPrice', 'access', 'remark', 'addons'];
     const columnLabels: Record<ColumnKey, string> = {
       status: 'Status',
       name: 'Name',
       phone: 'Phone',
       email: 'Email',
       ticketType: 'Ticket Type',
+      timeSlot: 'Time Slot',
       ticketPrice: 'Ticket price',
       access: 'Access',
       remark: 'Remark',
@@ -481,6 +503,9 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
         }
         if (col === 'ticketPrice') {
           return escapeCSV(formatMoney(ticket.ticketUnitPrice));
+        }
+        if (col === 'timeSlot') {
+          return escapeCSV(getTimeSlotLabel(ticket));
         }
         return escapeCSV(ticket[col as keyof EventTicketRow] as string || '');
       });
@@ -625,6 +650,38 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       maxSize: 300,
       enableResizing: true,
     }),
+    columnHelper.display({
+      id: 'timeSlot',
+      header: 'Time Slot',
+      cell: ({ row }) => {
+        const label = formatPurchasedTimeSlotLabel(event, row.original.timeSlot, {
+          valid_for_days: row.original.validForDays,
+        });
+        return (
+          <span className="max-w-full truncate block" title={label}>
+            {label || '-'}
+          </span>
+        );
+      },
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const a = formatPurchasedTimeSlotLabel(event, rowA.original.timeSlot, {
+          valid_for_days: rowA.original.validForDays,
+        }).toLowerCase();
+        const b = formatPurchasedTimeSlotLabel(event, rowB.original.timeSlot, {
+          valid_for_days: rowB.original.validForDays,
+        }).toLowerCase();
+        const cmp = a.localeCompare(b);
+        if (cmp !== 0) return cmp;
+        const aName = (rowA.original.name || '').toLowerCase();
+        const bName = (rowB.original.name || '').toLowerCase();
+        return aName.localeCompare(bName);
+      },
+      size: DEFAULT_COLUMN_SIZES.timeSlot,
+      minSize: 100,
+      maxSize: 400,
+      enableResizing: true,
+    }),
     columnHelper.accessor('ticketUnitPrice', {
       id: 'ticketPrice',
       header: 'Ticket price',
@@ -721,12 +778,12 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
       maxSize: 300,
       enableResizing: true,
     }),
-  ], []);
+  ], [event]);
 
   const safeVisibleColumns = useMemo(() => {
-    if (!visibleColumns || visibleColumns.length === 0) return DEFAULT_VISIBLE_COLUMNS;
+    if (!visibleColumns || visibleColumns.length === 0) return defaultVisibleColumns;
     return visibleColumns;
-  }, [visibleColumns]);
+  }, [visibleColumns, defaultVisibleColumns]);
 
   const columnVisibility = useMemo((): VisibilityState => {
     return Object.fromEntries(
@@ -915,6 +972,7 @@ export function EventTicketsTab({ eventId }: { eventId: string }) {
                         phone: 'Phone',
                         email: 'Email',
                         ticketType: 'Ticket Type',
+                        timeSlot: 'Time Slot',
                         ticketPrice: 'Ticket price',
                         access: 'Access',
                         remark: 'Remark',

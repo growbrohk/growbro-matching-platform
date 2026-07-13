@@ -294,9 +294,9 @@ export default function EventDetail() {
           </div>
         </div>
 
-        {allowedTabs.has('tickets') && (
+        {allowedTabs.has('tickets') && event && (
           <TabsContent value="tickets" className="mt-0">
-            <EventTicketsTab eventId={id} />
+            <EventTicketsTab eventId={id!} event={event} />
           </TabsContent>
         )}
 
