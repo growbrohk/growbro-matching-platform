@@ -2,6 +2,7 @@ import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 
 export type TimeSlotKey = 'day_1' | 'day_2' | 'day_3' | 'day_4';
 export type ValidForDays = TimeSlotKey | 'both' | 'all' | 'each';
+export type SlotCapacities = Partial<Record<TimeSlotKey, number>>;
 
 export interface EventTimeSlotFields {
   start_at: string;
@@ -151,23 +152,193 @@ export function isAllAccessValidForDays(value: ValidForDays | string | null | un
   return validFor === 'all' || validFor === 'both';
 }
 
-export function getSlotRemainingForTicketType(
-  ticketType: { valid_for_days?: ValidForDays | string | null; slot_remaining?: Partial<Record<TimeSlotKey, number>> | null },
+export interface TicketTypeSlotFields {
+  valid_for_days?: ValidForDays | string | null;
+  valid_for_slots?: TimeSlotKey[] | null;
+  slot_quotas?: Partial<Record<TimeSlotKey, number | string>> | null;
+  quota?: number;
+}
+
+/** Resolve selected slots from valid_for_slots or legacy valid_for_days / each. */
+export function getTicketTypeSelectedSlots(
+  ticketType: TicketTypeSlotFields
+): TimeSlotKey[] {
+  if (isAllAccessValidForDays(ticketType.valid_for_days)) return [];
+  if (ticketType.valid_for_slots && ticketType.valid_for_slots.length > 0) {
+    return [...ticketType.valid_for_slots].sort();
+  }
+  if (ticketType.valid_for_days === 'each' && ticketType.slot_quotas) {
+    return (Object.keys(ticketType.slot_quotas) as TimeSlotKey[]).filter((k) =>
+      /^day_[1-4]$/.test(k)
+    ).sort();
+  }
+  const validFor = (ticketType.valid_for_days || 'day_1') as ValidForDays;
+  if (/^day_[1-4]$/.test(validFor)) return [validFor as TimeSlotKey];
+  return [];
+}
+
+export function ticketTypeUsesPickOneSlots(ticketType: TicketTypeSlotFields): boolean {
+  if (isAllAccessValidForDays(ticketType.valid_for_days)) return false;
+  return getTicketTypeSelectedSlots(ticketType).length > 0
+    || ticketType.valid_for_days === 'each';
+}
+
+/** Derive valid_for_days for legacy consumers from slot selection. */
+export function deriveValidForDaysFromSlots(
+  selectedSlots: TimeSlotKey[],
+  isAllAccess: boolean
+): ValidForDays {
+  if (isAllAccess) return 'all';
+  if (selectedSlots.length === 0) return 'day_1';
+  if (selectedSlots.length === 1) return selectedSlots[0];
+  // Multi pick-one: 'each' keeps per-slot-aware legacy helpers working
+  return 'each';
+}
+
+export function getSlotAllocation(
+  ticketType: TicketTypeSlotFields,
   slotKey: TimeSlotKey
 ): number | undefined {
-  if (ticketType.valid_for_days === 'each' && ticketType.slot_remaining) {
-    const remaining = ticketType.slot_remaining[slotKey];
-    return remaining !== undefined ? remaining : undefined;
+  const raw = ticketType.slot_quotas?.[slotKey];
+  if (raw != null && raw !== '') {
+    const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+    if (!Number.isNaN(n)) return n;
   }
+  const slots = getTicketTypeSelectedSlots(ticketType);
+  if (slots.length === 1 && slots[0] === slotKey && ticketType.quota != null) {
+    return ticketType.quota;
+  }
+  return undefined;
+}
+
+export function getValidForSlotsLabel(
+  ticketType: TicketTypeSlotFields,
+  configuredSlots?: ConfiguredTimeSlot[]
+): string {
+  if (isAllAccessValidForDays(ticketType.valid_for_days)) {
+    return 'All time slots (one ticket grants every slot)';
+  }
+  const selected = getTicketTypeSelectedSlots(ticketType);
+  if (selected.length === 0) return getValidForDaysLabel(ticketType.valid_for_days);
+  if (configuredSlots && selected.length === configuredSlots.length) {
+    return 'All configured time slots (pick one at checkout)';
+  }
+  return selected
+    .map((key) => {
+      const num = configuredSlots?.find((s) => s.key === key)?.slotNumber
+        ?? key.replace('day_', '');
+      return `Time Slot ${num}`;
+    })
+    .join(', ');
+}
+
+export function backfillSlotCapacitiesFromTicketTypes(
+  configuredSlots: ConfiguredTimeSlot[],
+  ticketTypes: TicketTypeSlotFields[],
+  existing?: SlotCapacities | null
+): SlotCapacities {
+  const result: SlotCapacities = { ...(existing ?? {}) };
+  configuredSlots.forEach((slot) => {
+    if (result[slot.key] != null && result[slot.key]! > 0) return;
+    let maxAlloc = 0;
+    ticketTypes.forEach((tt) => {
+      if (isAllAccessValidForDays(tt.valid_for_days)) return;
+      const alloc = getSlotAllocation(tt, slot.key);
+      if (alloc != null && alloc > maxAlloc) maxAlloc = alloc;
+    });
+    result[slot.key] = maxAlloc > 0 ? maxAlloc : 100;
+  });
+  return result;
+}
+
+export function normalizeTicketTypeFromApi(t: TicketTypeSlotFields & {
+  valid_for_days?: ValidForDays | string | null;
+}): {
+  isAllAccess: boolean;
+  selectedSlots: TimeSlotKey[];
+  slotQuotas: Partial<Record<TimeSlotKey, string>>;
+} {
+  const isAllAccess = isAllAccessValidForDays(t.valid_for_days);
+  const selectedSlots = isAllAccess ? [] : getTicketTypeSelectedSlots(t);
+  const slotQuotas: Partial<Record<TimeSlotKey, string>> = {};
+  if (!isAllAccess) {
+    selectedSlots.forEach((key) => {
+      const alloc = getSlotAllocation(t, key);
+      if (alloc != null) slotQuotas[key] = String(alloc);
+    });
+  }
+  return { isAllAccess, selectedSlots, slotQuotas };
+}
+
+export function buildTicketTypeSlotSavePayload(
+  opts: {
+    isAllAccess: boolean;
+    selectedSlots: TimeSlotKey[];
+    slotQuotas: Partial<Record<TimeSlotKey, string>>;
+    aggregateQuota: number;
+  }
+): {
+  valid_for_days: ValidForDays;
+  valid_for_slots: TimeSlotKey[] | null;
+  slot_quotas: Partial<Record<TimeSlotKey, number>> | null;
+  quota: number;
+} {
+  if (opts.isAllAccess) {
+    return {
+      valid_for_days: 'all',
+      valid_for_slots: null,
+      slot_quotas: null,
+      quota: opts.aggregateQuota,
+    };
+  }
+  const slotQuotasPayload: Partial<Record<TimeSlotKey, number>> = {};
+  opts.selectedSlots.forEach((key) => {
+    const raw = opts.slotQuotas[key];
+    if (raw != null && raw !== '') {
+      slotQuotasPayload[key] = parseInt(raw, 10);
+    }
+  });
+  const totalQuota = Object.values(slotQuotasPayload).reduce((sum, n) => sum + n, 0) || opts.aggregateQuota;
+  return {
+    valid_for_days: deriveValidForDaysFromSlots(opts.selectedSlots, false),
+    valid_for_slots: opts.selectedSlots.length > 0 ? opts.selectedSlots : null,
+    slot_quotas: Object.keys(slotQuotasPayload).length > 0 ? slotQuotasPayload : null,
+    quota: totalQuota,
+  };
+}
+
+export function getSlotRemainingForTicketType(
+  ticketType: {
+    valid_for_days?: ValidForDays | string | null;
+    valid_for_slots?: TimeSlotKey[] | null;
+    slot_remaining?: Partial<Record<TimeSlotKey, number>> | null;
+    slot_quotas?: Partial<Record<TimeSlotKey, number>> | null;
+    quota?: number;
+    remaining_count?: number;
+  },
+  slotKey: TimeSlotKey
+): number | undefined {
+  if (ticketType.slot_remaining && ticketType.slot_remaining[slotKey] !== undefined) {
+    return ticketType.slot_remaining[slotKey];
+  }
+  if (ticketTypeUsesPickOneSlots(ticketType) && ticketType.slot_quotas?.[slotKey] != null) {
+    return ticketType.slot_quotas[slotKey];
+  }
+  if (ticketType.remaining_count !== undefined) return ticketType.remaining_count;
   return undefined;
 }
 
 export function ticketTypeAppliesToSlot(
   validForDays: ValidForDays | string | null | undefined,
-  slotKey: TimeSlotKey
+  slotKey: TimeSlotKey,
+  validForSlots?: TimeSlotKey[] | null
 ): boolean {
+  if (validForSlots && validForSlots.length > 0) {
+    return validForSlots.includes(slotKey);
+  }
   const validFor = (validForDays || 'day_1') as ValidForDays;
-  if (validFor === 'each' || validFor === slotKey) return true;
+  if (validFor === 'each') return true;
+  if (validFor === slotKey) return true;
   return false;
 }
 
@@ -262,8 +433,12 @@ export function formatPurchasedTimeSlotLabel(
 
 export function validForDaysReferencesRemovedSlot(
   validForDays: ValidForDays | string | null | undefined,
-  removedSlotKey: TimeSlotKey
+  removedSlotKey: TimeSlotKey,
+  validForSlots?: TimeSlotKey[] | null
 ): boolean {
+  if (validForSlots && validForSlots.length > 0) {
+    return validForSlots.includes(removedSlotKey);
+  }
   const validFor = validForDays || 'day_1';
   if (validFor === removedSlotKey) return true;
   if (isAllSlotsValue(validFor)) return true;
@@ -272,6 +447,15 @@ export function validForDaysReferencesRemovedSlot(
   const validNumber = parseInt(String(validFor).replace('day_', ''), 10);
   if (!Number.isNaN(validNumber) && validNumber > removedNumber) return true;
   return false;
+}
+
+export function stripSlotFromValidForSlots(
+  validForSlots: TimeSlotKey[] | null | undefined,
+  removedSlotKey: TimeSlotKey
+): TimeSlotKey[] | undefined {
+  if (!validForSlots) return undefined;
+  const next = validForSlots.filter((k) => k !== removedSlotKey);
+  return next.length > 0 ? next : undefined;
 }
 
 export function stripSlotFromSlotQuotas(

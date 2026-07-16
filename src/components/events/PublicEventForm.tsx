@@ -22,10 +22,11 @@ import {
   getSlotRemainingForTicketType,
   getSlotStartAt,
   getValidEndTimestamp,
-  getValidForDaysLabel,
+  getValidForSlotsLabel,
   hasMultipleTimeSlots,
   isAllAccessValidForDays,
   ticketTypeAppliesToSlot,
+  ticketTypeUsesPickOneSlots,
   type TimeSlotKey,
 } from '@/lib/utils/event-time-slots';
 import {
@@ -87,7 +88,7 @@ export default function PublicEventForm({
     if (variant?.quota != null && variant.remaining_count != null) {
       return variant.remaining_count;
     }
-    if (tt.valid_for_days === 'each' && slotKey) {
+    if (slotKey && ticketTypeUsesPickOneSlots(tt)) {
       return getSlotRemainingForTicketType(tt, slotKey);
     }
     if (tt.remaining_count !== undefined) return tt.remaining_count;
@@ -294,7 +295,7 @@ export default function PublicEventForm({
   const slotScopedTicketsWithPrice = useMemo(() => {
     if (!multiSlotEvent || !selectedTimeSlot) return [];
     return visibleTicketTypesWithPrice.filter(({ tt }) =>
-      ticketTypeAppliesToSlot(tt.valid_for_days, selectedTimeSlot)
+      ticketTypeAppliesToSlot(tt.valid_for_days, selectedTimeSlot, tt.valid_for_slots)
     );
   }, [visibleTicketTypesWithPrice, multiSlotEvent, selectedTimeSlot]);
 
@@ -505,7 +506,7 @@ export default function PublicEventForm({
               {tt.name}
               {showSlotLabel && (
                 <span className="text-xs font-normal text-muted-foreground ml-1">
-                  ({getValidForDaysLabel(tt.valid_for_days)})
+                  ({getValidForSlotsLabel(tt, configuredTimeSlots)})
                 </span>
               )}
             </h3>
@@ -746,7 +747,7 @@ export default function PublicEventForm({
                       {configuredTimeSlots.map((slot) => {
                         const isSelected = selectedTimeSlot === slot.key;
                         const slotAvailability = visibleTicketTypesWithPrice.reduce((sum, { tt, variant }) => {
-                          if (!ticketTypeAppliesToSlot(tt.valid_for_days, slot.key)) return sum;
+                          if (!ticketTypeAppliesToSlot(tt.valid_for_days, slot.key, tt.valid_for_slots)) return sum;
                           const remaining = getEffectiveRemaining(tt, variant, slot.key);
                           return sum + (remaining ?? 0);
                         }, 0);

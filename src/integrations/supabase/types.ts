@@ -427,6 +427,7 @@ export type Database = {
           org_id: string
           payme_link: string | null
           slug: string | null
+          slot_capacities: Json | null
           start_at: string
           status: string
           stripe_fee_bearer: string
@@ -457,6 +458,7 @@ export type Database = {
           org_id: string
           payme_link?: string | null
           slug?: string | null
+          slot_capacities?: Json | null
           start_at: string
           status?: string
           stripe_fee_bearer?: string
@@ -487,6 +489,7 @@ export type Database = {
           org_id?: string
           payme_link?: string | null
           slug?: string | null
+          slot_capacities?: Json | null
           start_at?: string
           status?: string
           stripe_fee_bearer?: string
@@ -1486,6 +1489,7 @@ export type Database = {
           quota: number
           updated_at: string
           valid_for_days: string
+          valid_for_slots: string[] | null
           visibility_mode: string
         }
         Insert: {
@@ -1505,6 +1509,7 @@ export type Database = {
           quota: number
           updated_at?: string
           valid_for_days?: string
+          valid_for_slots?: string[] | null
           visibility_mode?: string
         }
         Update: {
@@ -1524,6 +1529,7 @@ export type Database = {
           quota?: number
           updated_at?: string
           valid_for_days?: string
+          valid_for_slots?: string[] | null
           visibility_mode?: string
         }
         Relationships: [

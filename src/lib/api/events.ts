@@ -78,6 +78,7 @@ export interface CreateEventData {
   payme_link?: string | null;
   fps_link?: string | null;
   stripe_fee_bearer?: 'host' | 'user' | null;
+  slot_capacities?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
   metadata?: Record<string, any>;
 }
 
@@ -110,6 +111,7 @@ export interface CreateTicketTypeData {
   available_start_at?: string | null;
   available_end_at?: string | null;
   valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
+  valid_for_slots?: ('day_1' | 'day_2' | 'day_3' | 'day_4')[] | null;
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
@@ -127,6 +129,7 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   available_start_at?: string | null;
   available_end_at?: string | null;
   valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
+  valid_for_slots?: ('day_1' | 'day_2' | 'day_3' | 'day_4')[] | null;
   slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
 }
 
@@ -217,6 +220,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   if (data.day_4_end_at !== undefined) {
     updateFields.day_4_end_at = data.day_4_end_at;
   }
+  if (data.slot_capacities !== undefined) {
+    updateFields.slot_capacities = data.slot_capacities;
+  }
 
   if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
@@ -225,7 +231,7 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
       .eq('id', eventId);
 
     if (updateError) {
-      console.warn('Failed to update event fields:', updateError);
+      throw new Error(updateError.message || 'Failed to update event fields after create');
     }
   }
 
@@ -467,6 +473,9 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
   if (data.valid_for_days !== undefined) {
     updateFields.valid_for_days = data.valid_for_days;
   }
+  if (data.valid_for_slots !== undefined) {
+    updateFields.valid_for_slots = data.valid_for_slots;
+  }
   if (data.slot_quotas !== undefined) {
     updateFields.slot_quotas = data.slot_quotas;
   }
@@ -642,6 +651,28 @@ export async function getVariantRemainingCounts(eventId: string): Promise<Map<st
     result.set(row.variant_id, remaining);
   }
   return result;
+}
+
+export type EventSlotSoldCounts = Partial<
+  Record<
+    'day_1' | 'day_2' | 'day_3' | 'day_4',
+    { pool_sold: number; by_ticket_type: Record<string, number> }
+  >
+>;
+
+/**
+ * Per-slot pool sold and per-ticket-type sold counts for host sold-floor validation.
+ */
+export async function getEventSlotSoldCounts(eventId: string): Promise<EventSlotSoldCounts> {
+  const { data, error } = await supabase.rpc('get_event_slot_sold_counts', {
+    p_event_id: eventId,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to fetch slot sold counts');
+  }
+
+  return (data || {}) as EventSlotSoldCounts;
 }
 
 /**
