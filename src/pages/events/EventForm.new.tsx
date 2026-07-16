@@ -193,6 +193,134 @@ function validateScheduledAvailability(
   return errors;
 }
 
+const DEFAULT_ACCESS_VARIANT_FORM: AccessVariantForm = {
+  visibility_mode: 'public',
+  access_code: null,
+  allowed_affiliates: null,
+  price_override: null,
+  discount_percent: null,
+  quota: null,
+  is_active: true,
+};
+
+function mapAccessVariantsFromApi(t: TicketType): AccessVariantForm[] {
+  if (t.access_variants && t.access_variants.length > 0) {
+    return t.access_variants.map((v: TicketTypeAccessVariant) => ({
+      visibility_mode: v.visibility_mode,
+      access_code: v.access_code || null,
+      allowed_affiliates: v.allowed_affiliates || null,
+      price_override: v.price_override != null ? v.price_override.toString() : null,
+      discount_percent: v.discount_percent != null ? v.discount_percent.toString() : null,
+      quota: v.quota != null ? v.quota.toString() : null,
+      is_active: (v as { is_active?: boolean }).is_active !== false,
+    }));
+  }
+  return [{
+    visibility_mode: (t.visibility_mode || 'public') as AccessVariantForm['visibility_mode'],
+    access_code: t.access_code || null,
+    allowed_affiliates: t.allowed_affiliates || null,
+    price_override: null,
+    discount_percent: null,
+    quota: null,
+    is_active: true,
+  }];
+}
+
+function mapTicketTypesFromApi(types: TicketType[]): TicketTypeForm[] {
+  return types.map((t) => {
+    const normalized = normalizeTicketTypeFromApi({
+      valid_for_days: t.valid_for_days,
+      valid_for_slots: t.valid_for_slots,
+      slot_quotas: t.slot_quotas,
+      quota: t.quota,
+    });
+    const variants = mapAccessVariantsFromApi(t);
+    return {
+      id: t.id,
+      name: t.name,
+      price: t.price.toString(),
+      quota: t.quota.toString(),
+      isNew: false,
+      description: t.description || '',
+      visibility_mode: t.visibility_mode || 'public',
+      access_code: t.access_code || null,
+      allowed_affiliates: t.allowed_affiliates || null,
+      access_variants: variants,
+      is_active: t.is_active !== undefined ? t.is_active : true,
+      availability_mode: t.availability_mode || 'always',
+      available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
+      available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
+      valid_for_days: (t.valid_for_days as ValidForDays) || 'day_1',
+      valid_for_slots: normalized.selectedSlots,
+      is_all_access: normalized.isAllAccess,
+      slot_quotas: Object.keys(normalized.slotQuotas).length > 0
+        ? normalized.slotQuotas
+        : t.slot_quotas
+          ? Object.fromEntries(
+              Object.entries(t.slot_quotas).map(([k, v]) => [k, String(v)])
+            ) as Partial<Record<TimeSlotKey, string>>
+          : undefined,
+      remaining_count: t.remaining_count,
+      show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
+      threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
+    };
+  });
+}
+
+function mapAccessVariantsForPreview(
+  variants: AccessVariantForm[] | undefined,
+  ticketTypeId: string,
+  fallback: Pick<TicketTypeForm, 'visibility_mode' | 'access_code' | 'allowed_affiliates'>
+): TicketTypeAccessVariant[] {
+  const list = variants && variants.length > 0
+    ? variants
+    : [{
+        visibility_mode: (fallback.visibility_mode || 'public') as AccessVariantForm['visibility_mode'],
+        access_code: fallback.access_code || null,
+        allowed_affiliates: fallback.allowed_affiliates || null,
+        is_active: true,
+      }];
+  const now = new Date().toISOString();
+  return list.map((v, i) => ({
+    id: `preview-variant-${ticketTypeId}-${i}`,
+    ticket_type_id: ticketTypeId,
+    visibility_mode: v.visibility_mode,
+    access_code: v.access_code || null,
+    allowed_affiliates: v.allowed_affiliates || null,
+    price_override: v.price_override ? parseFloat(v.price_override) : null,
+    discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+    quota: v.quota ? parseInt(v.quota, 10) : null,
+    is_active: v.is_active !== false,
+    created_at: now,
+    updated_at: now,
+  }));
+}
+
+function validateAccessVariants(tt: TicketTypeForm, index: number): string[] {
+  const errors: string[] = [];
+  const label = tt.name.trim() || `Ticket Type ${index + 1}`;
+  const variants = tt.access_variants && tt.access_variants.length > 0
+    ? tt.access_variants
+    : [DEFAULT_ACCESS_VARIANT_FORM];
+
+  variants.forEach((v, vIdx) => {
+    const variantLabel = variants.length > 1
+      ? `${label} access variant ${vIdx + 1}`
+      : label;
+    if (v.visibility_mode === 'code' && !(v.access_code || '').trim()) {
+      errors.push(`${variantLabel}: Access code is required for Code visibility`);
+    }
+    if (
+      v.visibility_mode === 'affiliate'
+      && (!v.allowed_affiliates || v.allowed_affiliates.length === 0)
+    ) {
+      errors.push(`${variantLabel}: At least one affiliate slug is required for Affiliate visibility`);
+    }
+  });
+
+  return errors;
+}
+
 interface OptionalTimeSlotFieldsProps {
   slotNumber: 2 | 3 | 4;
   startAt: Date | null;
@@ -474,62 +602,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           });
         }
 
-        const mappedTypes = types.map(t => {
-          const normalized = normalizeTicketTypeFromApi({
-            valid_for_days: t.valid_for_days,
-            valid_for_slots: t.valid_for_slots,
-            slot_quotas: t.slot_quotas,
-            quota: t.quota,
-          });
-          const variants = t.access_variants && t.access_variants.length > 0
-            ? t.access_variants.map((v: TicketTypeAccessVariant) => ({
-                visibility_mode: v.visibility_mode,
-                access_code: v.access_code || null,
-                allowed_affiliates: v.allowed_affiliates || null,
-                price_override: v.price_override != null ? v.price_override.toString() : null,
-                discount_percent: v.discount_percent != null ? v.discount_percent.toString() : null,
-                quota: v.quota != null ? v.quota.toString() : null,
-                is_active: (v as any).is_active !== false,
-              }))
-            : [{
-                visibility_mode: (t.visibility_mode || 'public') as 'public' | 'code' | 'affiliate' | 'hidden',
-                access_code: t.access_code || null,
-                allowed_affiliates: t.allowed_affiliates || null,
-                price_override: null,
-                discount_percent: null,
-                quota: null,
-                is_active: true,
-              }];
-          return {
-            id: t.id,
-            name: t.name,
-            price: t.price.toString(),
-            quota: t.quota.toString(),
-            isNew: false,
-            description: t.description || '',
-            visibility_mode: t.visibility_mode || 'public',
-            access_code: t.access_code || null,
-            allowed_affiliates: t.allowed_affiliates || null,
-            access_variants: variants,
-            is_active: t.is_active !== undefined ? t.is_active : true,
-            availability_mode: t.availability_mode || 'always',
-            available_start_at: t.available_start_at ? new Date(t.available_start_at) : null,
-            available_end_at: t.available_end_at ? new Date(t.available_end_at) : null,
-            valid_for_days: (t.valid_for_days as ValidForDays) || 'day_1',
-            valid_for_slots: normalized.selectedSlots,
-            is_all_access: normalized.isAllAccess,
-            slot_quotas: Object.keys(normalized.slotQuotas).length > 0
-              ? normalized.slotQuotas
-              : t.slot_quotas
-                ? Object.fromEntries(
-                    Object.entries(t.slot_quotas).map(([k, v]) => [k, String(v)])
-                  ) as Partial<Record<TimeSlotKey, string>>
-                : undefined,
-            remaining_count: t.remaining_count,
-            show_remaining_count: t.show_remaining_count !== undefined ? t.show_remaining_count : true,
-            threshold_to_show: t.threshold_to_show !== undefined ? t.threshold_to_show : null,
-          };
-        });
+        const mappedTypes = mapTicketTypesFromApi(types);
 
         setTicketTypes(mappedTypes);
 
@@ -1339,6 +1412,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         errors.push(
           ...validateScheduledAvailability(tt, index, effectiveEventEnd)
         );
+        errors.push(
+          ...validateAccessVariants(tt, index)
+        );
       });
     }
     
@@ -1709,6 +1785,16 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           setCollabEnabled(loaded.length > 0 ? true : collabEnabled);
           setPartnersReloadToken((n) => n + 1);
         }
+      }
+
+      if (isEditMode && id) {
+        const [types, soldCounts] = await Promise.all([
+          getTicketTypes(id, true, true),
+          getEventSlotSoldCounts(id).catch(() => ({} as EventSlotSoldCounts)),
+        ]);
+        setExistingTicketTypes(types);
+        setSlotSoldCounts(soldCounts);
+        setTicketTypes(mapTicketTypesFromApi(types));
       }
 
       toast({ 
@@ -3175,25 +3261,37 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   name: effectiveOrgName,
                   slug: effectiveOrgSlug ?? undefined,
                 }}
-                ticketTypes={ticketTypes.map((tt, index) => ({
-                  id: tt.id || `preview-${index}`,
-                  event_id: eventId || generateUUID(),
-                  name: tt.name.trim() || `Ticket Type ${index + 1}`,
-                  price: (tt.price || '').trim() === '' ? 0 : (parseFloat(tt.price) || 0),
-                  quota: isQuotaUnlimited(tt.quota) ? 999999 : parseInt(tt.quota) || 0,
-                  description: (tt.description || '').trim() || null,
-                  visibility_mode: tt.visibility_mode || 'public',
-                  access_code: tt.access_code || null,
-                  allowed_affiliates: tt.allowed_affiliates || null,
-                  is_active: tt.is_active !== undefined ? tt.is_active : true,
-                  availability_mode: tt.availability_mode || 'always',
-                  available_start_at: tt.available_start_at ? tt.available_start_at.toISOString() : null,
-                  available_end_at: tt.available_end_at ? tt.available_end_at.toISOString() : null,
-                  valid_for_days: tt.valid_for_days || 'day_1',
-                  metadata: {},
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                }))}
+                ticketTypes={ticketTypes.map((tt, index) => {
+                  const previewTicketId = tt.id || `preview-${index}`;
+                  const previewEventId = eventId || generateUUID();
+                  return {
+                    id: previewTicketId,
+                    event_id: previewEventId,
+                    name: tt.name.trim() || `Ticket Type ${index + 1}`,
+                    price: (tt.price || '').trim() === '' ? 0 : (parseFloat(tt.price) || 0),
+                    quota: isQuotaUnlimited(tt.quota) ? 999999 : parseInt(tt.quota) || 0,
+                    description: (tt.description || '').trim() || null,
+                    visibility_mode: tt.visibility_mode || 'public',
+                    access_code: tt.access_code || null,
+                    allowed_affiliates: tt.allowed_affiliates || null,
+                    access_variants: mapAccessVariantsForPreview(
+                      tt.access_variants,
+                      previewTicketId,
+                      tt
+                    ),
+                    is_active: tt.is_active !== undefined ? tt.is_active : true,
+                    availability_mode: tt.availability_mode || 'always',
+                    available_start_at: tt.available_start_at ? tt.available_start_at.toISOString() : null,
+                    available_end_at: tt.available_end_at ? tt.available_end_at.toISOString() : null,
+                    valid_for_days: tt.valid_for_days || 'day_1',
+                    valid_for_slots: tt.valid_for_slots && tt.valid_for_slots.length > 0
+                      ? tt.valid_for_slots
+                      : null,
+                    metadata: {},
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  };
+                })}
                 mode="preview"
               />
             ) : (

@@ -578,7 +578,14 @@ async function syncTicketTypeAccessVariants(
   variants: TicketTypeAccessVariantInput[]
 ): Promise<void> {
   // Delete existing variants
-  await supabase.from('ticket_type_access_variants').delete().eq('ticket_type_id', ticketTypeId);
+  const { error: deleteError } = await supabase
+    .from('ticket_type_access_variants')
+    .delete()
+    .eq('ticket_type_id', ticketTypeId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message || 'Failed to delete access variants');
+  }
 
   // Pick primary variant for legacy fallback: prefer public so ticket shows without code when variants fail to load
   const primary =
@@ -591,7 +598,14 @@ async function syncTicketTypeAccessVariants(
     access_code: primary?.visibility_mode === 'code' ? (primary.access_code || null) : null,
     allowed_affiliates: primary?.visibility_mode === 'affiliate' ? (primary.allowed_affiliates || null) : null,
   };
-  await supabase.from('ticket_types').update(legacyUpdate).eq('id', ticketTypeId);
+  const { error: legacyError } = await supabase
+    .from('ticket_types')
+    .update(legacyUpdate)
+    .eq('id', ticketTypeId);
+
+  if (legacyError) {
+    throw new Error(legacyError.message || 'Failed to update ticket type visibility fields');
+  }
 
   if (variants.length === 0) return;
 
