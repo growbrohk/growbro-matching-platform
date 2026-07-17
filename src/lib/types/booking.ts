@@ -42,6 +42,8 @@ export interface BookingDraft {
   lines: BookingDraftLine[];
   addonLines?: BookingDraftAddonLine[];
   attendees?: AttendeeInfo[]; // Per-ticket attendee information
+  /** ISO timestamp when the draft was last saved (for staleness detection) */
+  savedAt?: string;
 }
 
 export interface ContactInfo {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { getPublicEventBySlugs, getTicketTypes, getOrgBySlug } from '@/lib/api/events';
@@ -39,6 +39,15 @@ export default function PublicEventPage() {
       }
     }
   }, [tidParam]);
+
+  const refreshTicketTypes = useCallback(async (eventId: string) => {
+    try {
+      const types = await getTicketTypes(eventId, true, true);
+      setTicketTypes(types);
+    } catch (error) {
+      console.error('[PublicEventPage] Failed to refresh ticket types:', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!orgSlug || !eventSlug) {
@@ -96,6 +105,20 @@ export default function PublicEventPage() {
       cancelled = true;
     };
   }, [orgSlug, eventSlug]);
+
+  // Refresh ticket types when the tab regains focus (picks up host edits without full page reload)
+  useEffect(() => {
+    if (!event?.id) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshTicketTypes(event.id);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [event?.id, refreshTicketTypes]);
 
 
   if (loading) {

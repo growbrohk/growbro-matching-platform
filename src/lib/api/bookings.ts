@@ -5,6 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { BookingDraft, AttendeeInfo, ContactInfo } from '@/lib/types/booking';
+import { clearBookingDraft } from '@/lib/types/booking';
 
 export interface CreateBookingResponse {
   orderId: string;
@@ -252,7 +253,15 @@ export async function createBooking(
 
   if (error) {
     console.error('Error creating booking:', error);
-    throw new Error(error.message || 'Failed to create booking');
+    const msg = error.message || '';
+    if (
+      msg.includes('Variant not found or does not belong to ticket type') ||
+      msg.includes('Ticket pricing option is unavailable')
+    ) {
+      clearBookingDraft();
+      throw new Error('Ticket pricing has changed. Please go back and select your tickets again.');
+    }
+    throw new Error(msg || 'Failed to create booking');
   }
 
   if (!orderId) {

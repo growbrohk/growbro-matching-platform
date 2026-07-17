@@ -37,7 +37,7 @@ import {
   saveBookingDraft,
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
-import { getEvent } from '@/lib/api/events';
+import { getEvent, getTicketTypes } from '@/lib/api/events';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
@@ -55,6 +55,7 @@ import {
 } from '@/lib/utils/event-addon-stock';
 import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
+import { revalidateBookingDraftVariants } from '@/lib/utils/booking-draft-validation';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { ContactInfoCard } from '@/components/booking/ContactInfoCard';
@@ -404,9 +405,34 @@ export default function CompleteBookingPage() {
         }
       }
     };
+
+    const revalidateDraftVariants = async () => {
+      if (!draft?.eventId) return;
+      try {
+        const ticketTypes = await getTicketTypes(draft.eventId, true, true);
+        const { draft: validatedDraft, changed, message } = revalidateBookingDraftVariants(
+          draft,
+          ticketTypes
+        );
+        if (changed) {
+          setBookingDraft(validatedDraft);
+          saveBookingDraft(validatedDraft);
+          if (message) {
+            toast({
+              title: 'Tickets updated',
+              description: message,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to revalidate booking draft variants:', err);
+      }
+    };
+
     fetchEvent();
     fetchAddons();
-  }, [navigate]);
+    revalidateDraftVariants();
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (!event?.org_id) return;

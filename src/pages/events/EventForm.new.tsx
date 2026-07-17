@@ -105,6 +105,7 @@ type EventFormProps = {
 };
 
 interface AccessVariantForm {
+  id?: string;
   visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
@@ -206,6 +207,7 @@ const DEFAULT_ACCESS_VARIANT_FORM: AccessVariantForm = {
 function mapAccessVariantsFromApi(t: TicketType): AccessVariantForm[] {
   if (t.access_variants && t.access_variants.length > 0) {
     return t.access_variants.map((v: TicketTypeAccessVariant) => ({
+      id: v.id,
       visibility_mode: v.visibility_mode,
       access_code: v.access_code || null,
       allowed_affiliates: v.allowed_affiliates || null,
@@ -1557,6 +1559,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
             : (tt.access_variants || [])
           ).map((v) => ({
+            id: v.id,
             visibility_mode: v.visibility_mode,
             access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
@@ -1724,6 +1727,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
             : (tt.access_variants || [])
           ).map((v) => ({
+            id: v.id,
             visibility_mode: v.visibility_mode,
             access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
             allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,

@@ -658,6 +658,7 @@ export default function PublicEventForm({
       dateLabel,
       currency: 'HKD',
       lines,
+      savedAt: new Date().toISOString(),
     };
 
     // Save to localStorage

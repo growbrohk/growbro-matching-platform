@@ -87,6 +87,8 @@ export interface UpdateEventData extends Partial<Omit<CreateEventData, 'org_id'>
 }
 
 export interface TicketTypeAccessVariantInput {
+  /** Existing row id — preserved on edit so in-flight bookings and order history keep attribution */
+  id?: string;
   visibility_mode: 'public' | 'code' | 'affiliate' | 'hidden';
   access_code?: string | null;
   allowed_affiliates?: string[] | null;
@@ -569,29 +571,57 @@ export async function deleteTicketType(ticketTypeId: string): Promise<void> {
   }
 }
 
+function variantInputToRow(ticketTypeId: string, v: TicketTypeAccessVariantInput) {
+  return {
+    ticket_type_id: ticketTypeId,
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ?? null,
+    discount_percent: v.discount_percent ?? null,
+    quota: v.quota ?? null,
+    is_active: v.is_active !== false,
+  };
+}
+
+/** Stable key for matching variants when id is absent (new form rows). */
+function variantStableKey(v: Pick<TicketTypeAccessVariantInput, 'visibility_mode' | 'access_code' | 'allowed_affiliates'>): string {
+  if (v.visibility_mode === 'code') {
+    return `code:${(v.access_code ?? '').trim().toLowerCase()}`;
+  }
+  if (v.visibility_mode === 'affiliate') {
+    const affiliates = [...(v.allowed_affiliates ?? [])].sort().join(',');
+    return `affiliate:${affiliates}`;
+  }
+  return v.visibility_mode;
+}
+
 /**
- * Sync access variants for a ticket type. Replaces all existing variants with the provided list.
+ * Sync access variants for a ticket type via diff/upsert (preserves UUIDs).
+ * Removed variants are soft-deleted (is_active=false) to keep order attribution intact.
  * Also updates ticket_types.visibility_mode, access_code, allowed_affiliates for legacy fallback.
  */
 async function syncTicketTypeAccessVariants(
   ticketTypeId: string,
   variants: TicketTypeAccessVariantInput[]
 ): Promise<void> {
-  // Delete existing variants
-  const { error: deleteError } = await supabase
+  const { data: existingRows, error: fetchError } = await supabase
     .from('ticket_type_access_variants')
-    .delete()
+    .select('id, visibility_mode, access_code, allowed_affiliates')
     .eq('ticket_type_id', ticketTypeId);
 
-  if (deleteError) {
-    throw new Error(deleteError.message || 'Failed to delete access variants');
+  if (fetchError) {
+    throw new Error(fetchError.message || 'Failed to fetch access variants');
   }
+
+  const existing = existingRows ?? [];
+  const matchedExistingIds = new Set<string>();
 
   // Pick primary variant for legacy fallback: prefer public so ticket shows without code when variants fail to load
   const primary =
-    variants.find((v) => v.visibility_mode === 'public') ||
-    variants.find((v) => v.visibility_mode === 'code') ||
-    variants.find((v) => v.visibility_mode === 'affiliate') ||
+    variants.find((v) => v.visibility_mode === 'public' && v.is_active !== false) ||
+    variants.find((v) => v.visibility_mode === 'code' && v.is_active !== false) ||
+    variants.find((v) => v.visibility_mode === 'affiliate' && v.is_active !== false) ||
     variants[0];
   const legacyUpdate: Record<string, unknown> = {
     visibility_mode: primary?.visibility_mode ?? 'public',
@@ -607,23 +637,64 @@ async function syncTicketTypeAccessVariants(
     throw new Error(legacyError.message || 'Failed to update ticket type visibility fields');
   }
 
-  if (variants.length === 0) return;
+  for (const incoming of variants) {
+    const row = variantInputToRow(ticketTypeId, incoming);
+    let existingId: string | undefined;
 
-  const rows = variants.map((v) => ({
-    ticket_type_id: ticketTypeId,
-    visibility_mode: v.visibility_mode,
-    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
-    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
-    price_override: v.price_override ?? null,
-    discount_percent: v.discount_percent ?? null,
-    quota: v.quota ?? null,
-    is_active: v.is_active !== false,
-  }));
+    if (incoming.id) {
+      const byId = existing.find((e) => e.id === incoming.id);
+      if (byId) {
+        existingId = byId.id;
+      }
+    }
 
-  const { error } = await supabase.from('ticket_type_access_variants').insert(rows);
+    if (!existingId) {
+      const key = variantStableKey(incoming);
+      const byKey = existing.find(
+        (e) => !matchedExistingIds.has(e.id) && variantStableKey(e) === key
+      );
+      if (byKey) {
+        existingId = byKey.id;
+      }
+    }
 
-  if (error) {
-    throw new Error(error.message || 'Failed to sync access variants');
+    if (existingId) {
+      matchedExistingIds.add(existingId);
+      const { error: updateError } = await supabase
+        .from('ticket_type_access_variants')
+        .update(row)
+        .eq('id', existingId)
+        .eq('ticket_type_id', ticketTypeId);
+
+      if (updateError) {
+        throw new Error(updateError.message || 'Failed to update access variant');
+      }
+    } else {
+      const { error: insertError } = await supabase
+        .from('ticket_type_access_variants')
+        .insert(row);
+
+      if (insertError) {
+        throw new Error(insertError.message || 'Failed to insert access variant');
+      }
+    }
+  }
+
+  // Soft-delete variants removed from the form (preserve rows for order_items FK attribution)
+  const toDeactivate = existing.filter((e) => !matchedExistingIds.has(e.id));
+  if (toDeactivate.length > 0) {
+    const { error: deactivateError } = await supabase
+      .from('ticket_type_access_variants')
+      .update({ is_active: false })
+      .in(
+        'id',
+        toDeactivate.map((e) => e.id)
+      )
+      .eq('ticket_type_id', ticketTypeId);
+
+    if (deactivateError) {
+      throw new Error(deactivateError.message || 'Failed to deactivate removed access variants');
+    }
   }
 }
 
