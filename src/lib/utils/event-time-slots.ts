@@ -394,6 +394,47 @@ export function formatSlotDateTimeByKey(
   return formatSlotRange(event.start_at, event.end_at);
 }
 
+/**
+ * Format event date/time for an order summary, using purchased ticket slots when available.
+ */
+export function formatOrderEventDateTime(
+  event: EventTimeSlotFields,
+  tickets: Array<{ time_slot?: string | null }>,
+  orderItems?: Array<{ ticket_type?: { valid_for_days?: ValidForDays | string | null } | null }>
+): string {
+  const ticketSlots = tickets
+    .map((t) => t.time_slot)
+    .filter((s): s is TimeSlotKey => !!s && /^day_[1-4]$/.test(s));
+  const uniqueSlots = [...new Set(ticketSlots)].sort();
+
+  if (uniqueSlots.length > 0) {
+    return uniqueSlots
+      .map((key) => formatSlotDateTimeByKey(event, key))
+      .join('; ');
+  }
+
+  const items = orderItems ?? [];
+  if (items.length === 0) {
+    if (event.start_at && event.end_at) {
+      return formatSlotRange(event.start_at, event.end_at);
+    }
+    return 'TBA';
+  }
+
+  const uniqueValidFor = [...new Set(
+    items.map((oi) => oi.ticket_type?.valid_for_days || 'day_1')
+  )];
+  if (uniqueValidFor.length === 1) {
+    return formatTicketTypeDateTimeFromEvent(event, { valid_for_days: uniqueValidFor[0] });
+  }
+  return uniqueValidFor
+    .map((vf) => {
+      const formatted = formatTicketTypeDateTimeFromEvent(event, { valid_for_days: vf });
+      return `${getValidForDaysLabel(vf)}: ${formatted}`;
+    })
+    .join('; ');
+}
+
 /** Short label for a purchased slot key, e.g. "Time Slot 2". */
 export function formatPurchasedTimeSlotShortLabel(
   timeSlot: TimeSlotKey | string | null | undefined

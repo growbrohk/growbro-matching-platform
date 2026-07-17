@@ -20,8 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
-import { formatTicketTypeDateTime, formatEventDate, formatEventTime } from '@/lib/utils/datetime';
-import { getValidForDaysLabel } from '@/lib/utils/event-time-slots';
+import { formatOrderEventDateTime } from '@/lib/utils/event-time-slots';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
 import { Loader2 } from 'lucide-react';
@@ -380,27 +379,7 @@ export default function PaymentPage() {
     selectedPaymentMethod === 'stripe' && stripeFeeBearer === 'user' && stripeCheckout.serviceFee > 0;
   const displayAmount = showStripeFee ? stripeCheckout.grandTotal : subtotal;
 
-  // Format date/time based on ticket types in order (not both days)
-  const formatOrderDateTime = () => {
-    const items = order.order_items || [];
-    if (items.length === 0) {
-      return event.start_at && event.end_at
-        ? `${formatEventDate(event.start_at)} ${formatEventTime(event.start_at, event.end_at)}`
-        : 'TBA';
-    }
-    const uniqueValidFor = [...new Set(
-      items.map((oi) => oi.ticket_type?.valid_for_days || 'day_1')
-    )];
-    if (uniqueValidFor.length === 1) {
-      return formatTicketTypeDateTime(event, { valid_for_days: uniqueValidFor[0] });
-    }
-    return uniqueValidFor
-      .map((vf) => {
-        const formatted = formatTicketTypeDateTime(event, { valid_for_days: vf });
-        return `${getValidForDaysLabel(vf)}: ${formatted}`;
-      })
-      .join('; ');
-  };
+  const orderDateTime = formatOrderEventDateTime(event, order.tickets ?? [], order.order_items);
 
   // Determine available payment methods
   const availablePaymentMethods: PaymentMethod[] = [];
@@ -446,7 +425,7 @@ export default function PaymentPage() {
                   {event.title}
                 </p>
                 <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>
-                  {formatOrderDateTime()}
+                  {orderDateTime}
                 </p>
                 {event.location_text && (
                   <p className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>

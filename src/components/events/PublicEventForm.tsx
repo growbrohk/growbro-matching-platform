@@ -635,15 +635,20 @@ export default function PublicEventForm({
       return;
     }
 
-    // Compute dateLabel from selected ticket types
+    // Compute dateLabel from purchased slot when pick-one, else from ticket type valid_for_days
     let dateLabel: string;
-    const uniqueValidFor = [...new Set(
-      lines.map((l) => visibleTicketTypes.find((t) => t.id === l.ticketTypeId)?.valid_for_days || 'day_1')
-    )];
-    if (uniqueValidFor.length === 1) {
-      dateLabel = formatDateForBooking(getSlotStartAt(event, uniqueValidFor[0]));
+    const pickOneLineSlot = lines.find((l) => l.timeSlot)?.timeSlot;
+    if (pickOneLineSlot) {
+      dateLabel = formatDateForBooking(getSlotStartAt(event, pickOneLineSlot));
     } else {
-      dateLabel = formatDateForBooking(event.start_at);
+      const uniqueValidFor = [...new Set(
+        lines.map((l) => visibleTicketTypes.find((t) => t.id === l.ticketTypeId)?.valid_for_days || 'day_1')
+      )];
+      if (uniqueValidFor.length === 1) {
+        dateLabel = formatDateForBooking(getSlotStartAt(event, uniqueValidFor[0]));
+      } else {
+        dateLabel = formatDateForBooking(event.start_at);
+      }
     }
 
     // Create booking draft
