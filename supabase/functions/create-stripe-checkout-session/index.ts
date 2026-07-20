@@ -56,6 +56,7 @@ serve(async (req) => {
 
     let order: Record<string, unknown>;
     let orderItems: Array<{ quantity: number; unit_price: number; ticket_type?: { name?: string }; product_name?: string; variant_label?: string }>;
+    let orderAddonItems: Array<{ quantity: number; unit_price: number; label?: string; variant_label?: string }> = [];
     let successUrl: string;
     let cancelUrl: string;
     let enableStripe = false;
@@ -66,6 +67,7 @@ serve(async (req) => {
       const event = eventRpcData.event;
       order = eventRpcData.order;
       orderItems = eventRpcData.order_items || [];
+      orderAddonItems = eventRpcData.order_addon_items || [];
       enableStripe = !!event.enable_stripe;
       stripeFeeBearer = event.stripe_fee_bearer === "user" ? "user" : "host";
       successUrl = `${origin}/booking/success/${order_id}`;
@@ -109,10 +111,6 @@ serve(async (req) => {
       throw new Error("Stripe is not enabled for this order");
     }
 
-    if (orderItems.length === 0) {
-      throw new Error("Order has no items");
-    }
-
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-11-20.acacia" });
     logStep("Stripe initialized");
 
@@ -153,6 +151,22 @@ serve(async (req) => {
           quantity: 1,
         });
       }
+    }
+
+    const addonLineItems = orderAddonItems.map((addon) => ({
+      price_data: {
+        currency,
+        product_data: {
+          name: `${addon.label || "Add-on"}${addon.variant_label ? ` (${addon.variant_label})` : ""}`,
+        },
+        unit_amount: Math.round(Number(addon.unit_price) * 100),
+      },
+      quantity: addon.quantity,
+    }));
+    lineItems.push(...addonLineItems);
+
+    if (lineItems.length === 0) {
+      throw new Error("Order has no items");
     }
 
     const lineTotalCents = lineItems.reduce((sum, li) => {
