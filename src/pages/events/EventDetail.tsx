@@ -296,7 +296,7 @@ export default function EventDetail() {
 
         {allowedTabs.has('tickets') && event && (
           <TabsContent value="tickets" className="mt-0">
-            <EventTicketsTab eventId={id!} event={event} />
+            <EventTicketsTab eventId={id!} event={event} isHost={isHost} />
           </TabsContent>
         )}
 

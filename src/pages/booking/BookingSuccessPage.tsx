@@ -407,7 +407,7 @@ export default function BookingSuccessPage() {
                           ) : null}
                           {/* Always show total from tickets count (source of truth) */}
                           <p className="font-semibold mt-2 pt-2 border-t" style={{ fontFamily: "'Inter Tight', sans-serif" }}>
-                            Total: {order.tickets.length} ticket(s)
+                            Total: {order.tickets.filter((t) => !t.refunded_at).length} ticket(s)
                           </p>
                         </>
                       ) : (

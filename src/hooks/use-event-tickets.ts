@@ -5,6 +5,7 @@ import type { TimeSlotKey } from '@/lib/utils/event-time-slots';
 export interface EventTicketRow {
   id: string;
   status: string;
+  refunded_at: string | null;
   name: string; // Combined first_name + last_name from ticket or order
   phone: string | null;
   email: string | null;
@@ -87,6 +88,7 @@ export function useEventTickets(eventId: string | undefined) {
         .select(`
           id,
           status,
+          refunded_at,
           scanned_at,
           first_name,
           last_name,
@@ -225,6 +227,7 @@ export function useEventTickets(eventId: string | undefined) {
         return {
           id: ticket.id,
           status: ticket.status || 'valid',
+          refunded_at: (ticket as { refunded_at?: string | null }).refunded_at ?? null,
           name,
           phone,
           email,

@@ -42,6 +42,7 @@ export interface TicketCardProps {
   currency?: string;
   className?: string;
   captureMode?: boolean;
+  isRefunded?: boolean;
 }
 
 function formatAddonLine(addon: TicketCardAddon): string {
@@ -78,6 +79,7 @@ export default function TicketCard({
   currency = 'HKD',
   className = '',
   captureMode = false,
+  isRefunded = false,
 }: TicketCardProps) {
   const formattedDateTime = dateTimeFormatted ?? formatTicketDateTime(dateTime);
   const formattedPrice = formatPrice(price, currency);
@@ -107,7 +109,9 @@ export default function TicketCard({
           THIS IS YOUR TICKET
         </h1>
         <p className="text-sm text-white/80 text-center mt-2">
-          Please show it on your phone when you arrive at the venue
+          {isRefunded
+            ? 'This ticket has been refunded and is no longer valid for entry'
+            : 'Please show it on your phone when you arrive at the venue'}
         </p>
       </div>
 
@@ -135,9 +139,20 @@ export default function TicketCard({
 
         {/* QR (make it bigger like reference) */}
         <div className="flex justify-center px-10 pb-6">
-          <div className="p-3 bg-white border-2 border-black rounded-2xl">
-            <QRCodeSVG value={qrValue} size={520} level="M" includeMargin={false} />
-          </div>
+          {isRefunded ? (
+            <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-300 rounded-2xl w-full max-w-[520px] min-h-[520px]">
+              <p className="text-2xl font-black text-destructive uppercase tracking-wide text-center">
+                Refunded
+              </p>
+              <p className="text-sm text-muted-foreground text-center mt-3 max-w-xs">
+                This ticket is no longer valid. Contact the organizer if you have questions.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 bg-white border-2 border-black rounded-2xl">
+              <QRCodeSVG value={qrValue} size={520} level="M" includeMargin={false} />
+            </div>
+          )}
         </div>
 
         {/* Event info */}

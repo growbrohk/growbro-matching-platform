@@ -263,6 +263,7 @@ export default function SuccessfulBookingPage() {
                         quantity: a.quantity,
                       }))}
                       currency={order.currency || 'HKD'}
+                      isRefunded={!!ticket.refunded_at}
                     />
                   </TicketCardPreview>
                 </div>

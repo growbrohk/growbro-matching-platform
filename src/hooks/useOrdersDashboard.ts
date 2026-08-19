@@ -1,5 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  fetchOrderEffectiveRevenueMap,
+  getEffectiveOrderAmount,
+  isEventOrderCountedAsActive,
+} from '@/lib/api/order-effective-revenue';
 import { useAuth } from '@/contexts/AuthContext';
 import type { PartnerOrderRowAccess } from '@/lib/collab-order-access';
 import { fetchPartnerVisibleOrdersInRange, fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
@@ -249,6 +254,8 @@ export function useOrdersDashboard(
           carrier_tracking_number: order.carrier_tracking_number ?? null,
         }));
 
+      const effectiveRevenueMap = await fetchOrderEffectiveRevenueMap(rawOrders.map((o) => o.id));
+
       // Helper function to check if order is pending or confirmed
       const isPendingOrConfirmed = (order: any) => {
         const isPending = order.payment_status === 'submitted' || order.fulfillment_status === 'pending_confirmation';
@@ -393,20 +400,24 @@ export function useOrdersDashboard(
         };
       });
 
-      // Calculate revenue: SUM(total_amount) for paid/confirmed orders
+      // Calculate revenue: SUM effective_amount for paid/confirmed orders
       const revenueTotal = orders
         .filter(
           (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
         )
-        .reduce((sum, o) => sum + o.total_amount, 0);
+        .reduce((sum, o) => sum + getEffectiveOrderAmount(o, effectiveRevenueMap), 0);
 
       // Counts
-      const ordersCountSubmittedPaid = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid') for dashboard stats
+      const ordersCountSubmittedPaid = orders.filter(
+        (o) => isAllTabOrder(o) && isEventOrderCountedAsActive(o, effectiveRevenueMap),
+      ).length;
       const pendingCountSubmitted = orders.filter((o) => o.payment_status === 'submitted').length;
       const completedCount = orders.filter(
         (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
       ).length;
-      const allCount = orders.filter(isAllTabOrder).length; // Count orders with payment_status IN ('submitted','paid')
+      const allCount = orders.filter(
+        (o) => isAllTabOrder(o) && isEventOrderCountedAsActive(o, effectiveRevenueMap),
+      ).length;
 
       // Top 3 pending orders for dashboard
       const pendingOrders = orders

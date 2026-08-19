@@ -24,6 +24,7 @@ const TICKET_LOOKUP_SELECT = `
   id,
   qr_code,
   status,
+  refunded_at,
   scanned_at,
   first_name,
   last_name,
@@ -582,6 +583,21 @@ export function EventScanTab({
       }
     }
 
+    if (ticket.refunded_at) {
+      return {
+        ticketId: ticket.id as string,
+        name,
+        phone,
+        email,
+        ticketType: ticketTypeName,
+        addons,
+        remark,
+        canRedeem: false,
+        errorMessage: 'Ticket refunded',
+        validEnd,
+      };
+    }
+
     if (ticket.status === 'scanned') {
       return {
         ticketId: ticket.id as string,
@@ -661,6 +677,7 @@ export function EventScanTab({
         .update(payload)
         .eq('id', ticketId)
         .eq('status', 'valid')
+        .is('refunded_at', null)
         .select('id');
 
       if (updateError) throw updateError;

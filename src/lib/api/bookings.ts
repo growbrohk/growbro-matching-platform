@@ -418,6 +418,7 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       time_slot: ticket.time_slot ?? null,
       qr_code: ticket.qr_code || '', // Ensure qr_code is always a string
       status: ticket.status,
+      refunded_at: ticket.refunded_at ?? null,
       first_name: ticket.first_name,
       last_name: ticket.last_name,
       email: ticket.email,

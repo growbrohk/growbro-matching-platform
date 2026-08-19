@@ -6,6 +6,12 @@ import {
 } from '@/lib/collab-order-access';
 import { enrichOrdersWithDisplayFields } from '@/lib/api/dashboard-order-enrichment';
 import {
+  fetchOrderEffectiveRevenueMap,
+  getEffectiveOrderAmount,
+  isEventOrderCountedAsActive,
+  type OrderEffectiveRevenueRow,
+} from '@/lib/api/order-effective-revenue';
+import {
   getDateRange,
   isPendingShippingActionable,
   type Order,
@@ -75,11 +81,16 @@ function isAllTabOrder(order: RawOrderRow): boolean {
   return order.payment_status === 'submitted' || order.payment_status === 'paid';
 }
 
-function computeStatsFromOrders(orders: RawOrderRow[]) {
+function computeStatsFromOrders(
+  orders: RawOrderRow[],
+  effectiveMap: Map<string, OrderEffectiveRevenueRow>,
+) {
   const revenueTotal = orders
     .filter((o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed')
-    .reduce((sum, o) => sum + o.total_amount, 0);
-  const ordersCountSubmittedPaid = orders.filter(isAllTabOrder).length;
+    .reduce((sum, o) => sum + getEffectiveOrderAmount(o, effectiveMap), 0);
+  const ordersCountSubmittedPaid = orders.filter(
+    (o) => isAllTabOrder(o) && isEventOrderCountedAsActive(o, effectiveMap),
+  ).length;
   const pendingCountSubmitted = orders.filter((o) => o.payment_status === 'submitted').length;
   const pendingShippingCount = orders.filter((o) => isPendingShippingActionable(o as Order)).length;
   return { revenueTotal, ordersCountSubmittedPaid, pendingCountSubmitted, pendingShippingCount };
@@ -345,7 +356,8 @@ export async function fetchDashboardSummary(
       return toRawOrder(row, accessMap.get(id));
     });
 
-    const partnerStats = computeStatsFromOrders(partnerRaw);
+    const partnerEffectiveMap = await fetchOrderEffectiveRevenueMap(partnerRaw.map((o) => o.id));
+    const partnerStats = computeStatsFromOrders(partnerRaw, partnerEffectiveMap);
     revenueTotal += partnerStats.revenueTotal;
     ordersCountSubmittedPaid += partnerStats.ordersCountSubmittedPaid;
     pendingCountSubmitted += partnerStats.pendingCountSubmitted;

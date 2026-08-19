@@ -34,8 +34,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-
-const isCheckedIn = (status: string) => status === 'scanned';
+import {
+  getTicketDisplayStatus,
+  getTicketDisplayStatusLabel,
+  getTicketDisplayStatusSearchLabel,
+  getTicketDisplayStatusSortRank,
+  getTicketEditSelectValue,
+  type TicketStatusFilter,
+} from '@/lib/utils/ticket-display-status';
 
 type SortKey = 'status' | 'name' | 'ticketType' | 'ticketPrice';
 type ColumnKey = 'status' | 'name' | 'phone' | 'email' | 'ticketType' | 'timeSlot' | 'ticketPrice' | 'access' | 'remark' | 'addons';
@@ -83,7 +89,14 @@ function isSortKey(key: string): key is SortKey {
   return key === 'status' || key === 'name' || key === 'ticketType' || key === 'ticketPrice';
 }
 
-type Draft = { status?: 'valid' | 'scanned'; name?: string; remark?: string };
+type Draft = { editStatus?: TicketStatusFilter; name?: string; remark?: string };
+
+const VALID_STATUS_FILTERS: TicketStatusFilter[] = ['valid', 'scanned', 'refunded'];
+
+function normalizeStoredStatusFilters(raw: unknown): TicketStatusFilter[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is TicketStatusFilter => VALID_STATUS_FILTERS.includes(v as TicketStatusFilter));
+}
 
 type DefaultSortOption = {
   label: string;
@@ -99,13 +112,21 @@ const DEFAULT_SORT_OPTIONS: DefaultSortOption[] = [
 
 const columnHelper = createColumnHelper<EventTicketRow>();
 
-export function EventTicketsTab({ eventId, event }: { eventId: string; event: Event }) {
+export function EventTicketsTab({
+  eventId,
+  event,
+  isHost = true,
+}: {
+  eventId: string;
+  event: Event;
+  isHost?: boolean;
+}) {
   const multiSlot = hasMultipleTimeSlots(event);
   const defaultVisibleColumns = useMemo(() => getDefaultVisibleColumns(multiSlot), [multiSlot]);
   const { data: tickets, isLoading, refetch } = useEventTickets(eventId);
   const { toast } = useToast();
   const [query, setQuery] = useState('');
-  const [selectedStatuses, setSelectedStatuses] = useState<Array<'valid' | 'scanned'>>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<TicketStatusFilter[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [visibleColumns, setVisibleColumns] = useState<ColumnKey[]>(() => getDefaultVisibleColumns(multiSlot));
@@ -170,7 +191,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
       const storedStatuses = localStorage.getItem(storageKeys.selectedStatuses);
       if (storedStatuses) {
         try {
-          const parsed = JSON.parse(storedStatuses) as Array<'valid' | 'scanned'>;
+          const parsed = normalizeStoredStatusFilters(JSON.parse(storedStatuses));
           setSelectedStatuses(parsed);
         } catch (e) {
           // Invalid JSON
@@ -257,7 +278,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
     const draft = draftById[ticket.id];
     if (!draft) return false;
 
-    const originalStatus = ticket.status as 'valid' | 'scanned';
+    const originalEditStatus = getTicketEditSelectValue(ticket);
     const originalName = (ticket.name?.trim() || '-');
     const originalRemark = ticket.remark || '';
 
@@ -265,7 +286,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
     const normalizeRemark = (remark: string) => (remark || '');
 
     return (
-      (draft.status !== undefined && draft.status !== originalStatus) ||
+      (draft.editStatus !== undefined && draft.editStatus !== originalEditStatus) ||
       (draft.name !== undefined && normalizeName(draft.name) !== normalizeName(originalName)) ||
       (draft.remark !== undefined && normalizeRemark(draft.remark) !== normalizeRemark(originalRemark))
     );
@@ -289,14 +310,33 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
     [event],
   );
 
-  const filteredTickets = useMemo(() => {
+  const statusFilteredTickets = useMemo(() => {
     if (!tickets) return [];
 
-    // Step 1: Apply search
-    let result = tickets;
+    const wantRefunded = selectedStatuses.includes('refunded');
+    const checkInFilters = selectedStatuses.filter(
+      (s): s is 'valid' | 'scanned' => s === 'valid' || s === 'scanned',
+    );
+
+    return tickets.filter((ticket) => {
+      const isRefunded = !!ticket.refunded_at;
+      if (isRefunded) {
+        if (!wantRefunded) return false;
+        if (checkInFilters.length === 0) return true;
+        return checkInFilters.includes(ticket.status as 'valid' | 'scanned');
+      }
+      if (checkInFilters.length === 0) return true;
+      return checkInFilters.includes(ticket.status as 'valid' | 'scanned');
+    });
+  }, [tickets, selectedStatuses]);
+
+  const filteredTickets = useMemo(() => {
+    if (!statusFilteredTickets.length && !tickets?.length) return [];
+
+    let result = statusFilteredTickets;
     if (query.trim()) {
       const searchLower = query.toLowerCase();
-      result = tickets.filter((ticket) => {
+      result = statusFilteredTickets.filter((ticket) => {
         const matchesName = ticket.name?.toLowerCase().includes(searchLower) || false;
         const matchesPhone = ticket.phone?.toLowerCase().includes(searchLower) || false;
         const matchesEmail = ticket.email?.toLowerCase().includes(searchLower) || false;
@@ -305,7 +345,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
         const matchesAddons = ticket.addons?.toLowerCase().includes(searchLower) || false;
         const matchesAccess = ticket.accessLabel?.toLowerCase().includes(searchLower) || false;
         const matchesAccessTooltip = ticket.accessTooltip?.toLowerCase().includes(searchLower) || false;
-        const statusLabel = isCheckedIn(ticket.status) ? 'checked in' : 'pending';
+        const statusLabel = getTicketDisplayStatusSearchLabel(getTicketDisplayStatus(ticket));
         const matchesStatus = statusLabel.includes(searchLower);
         const matchesTicketPrice =
           String(ticket.ticketUnitPrice).toLowerCase().includes(searchLower) ||
@@ -315,22 +355,25 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
       });
     }
 
-    // Step 2: Apply status filter
-    if (selectedStatuses.length > 0) {
-      result = result.filter(ticket => selectedStatuses.includes(ticket.status as 'valid' | 'scanned'));
-    }
-
-    // Step 3: Apply ticket type filter
     if (selectedTypes.length > 0) {
       result = result.filter(ticket => selectedTypes.includes(ticket.ticketType));
     }
 
     return result;
-  }, [tickets, query, selectedStatuses, selectedTypes, getTimeSlotLabel]);
+  }, [statusFilteredTickets, tickets, query, selectedTypes, getTimeSlotLabel]);
 
-  const getStatusText = (status: string) => {
-    if (isCheckedIn(status)) {
+  const activeTicketCount = useMemo(() => {
+    if (!tickets) return 0;
+    return tickets.filter((t) => !t.refunded_at).length;
+  }, [tickets]);
+
+  const getStatusText = (ticket: EventTicketRow) => {
+    const displayStatus = getTicketDisplayStatus(ticket);
+    if (displayStatus === 'checkedIn') {
       return <span className="text-green-700">Checked In</span>;
+    }
+    if (displayStatus === 'refunded') {
+      return <span className="text-destructive">Refunded</span>;
     }
     return <span className="text-muted-foreground">Pending</span>;
   };
@@ -388,8 +431,8 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
           const draft = draftById[ticket.id];
           if (!draft) return null;
 
-          const payload: any = {};
-          const originalStatus = ticket.status as 'valid' | 'scanned';
+          const payload: Record<string, unknown> = {};
+          const originalEditStatus = getTicketEditSelectValue(ticket);
           const originalName = getFullName(ticket);
           const normalizedOriginalName = originalName === '-' ? '' : originalName;
           const originalRemark = ticket.remark || '';
@@ -417,21 +460,28 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
             payload.remark = draft.remark || null;
           }
 
-          if (draft.status !== undefined && draft.status !== originalStatus) {
-            if (draft.status === 'scanned') {
-              payload.status = 'scanned';
-              payload.scanned_at = new Date().toISOString();
-              payload.scanned_by = userId;
-            } else if (draft.status === 'valid') {
-              payload.status = 'valid';
-              payload.scanned_at = null;
-              payload.scanned_by = null;
+          if (draft.editStatus !== undefined && draft.editStatus !== originalEditStatus) {
+            if (draft.editStatus === 'refunded') {
+              payload.refunded_at = new Date().toISOString();
+            } else {
+              if (originalEditStatus === 'refunded') {
+                payload.refunded_at = null;
+              }
+              if (draft.editStatus === 'scanned') {
+                payload.status = 'scanned';
+                payload.scanned_at = new Date().toISOString();
+                payload.scanned_by = userId;
+              } else if (draft.editStatus === 'valid') {
+                payload.status = 'valid';
+                payload.scanned_at = null;
+                payload.scanned_by = null;
+              }
             }
           }
 
-          return { id: ticket.id, payload };
+          return Object.keys(payload).length > 0 ? { id: ticket.id, payload } : null;
         })
-        .filter((u): u is { id: string; payload: any } => u !== null);
+        .filter((u): u is { id: string; payload: Record<string, unknown> } => u !== null);
 
       const results = await Promise.all(
         updates.map(u => supabase.from('tickets').update(u.payload).eq('id', u.id))
@@ -493,7 +543,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
     const rows = filteredTickets.map(ticket => {
       return visibleOrderedColumns.map(col => {
         if (col === 'status') {
-          return escapeCSV(isCheckedIn(ticket.status) ? 'Checked In' : 'Pending');
+          return escapeCSV(getTicketDisplayStatusLabel(getTicketDisplayStatus(ticket)));
         }
         if (col === 'addons') {
           return escapeCSV(ticket.addons || '');
@@ -535,16 +585,16 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
       header: 'Status',
       cell: ({ row, table }) => {
         const ticket = row.original;
-        const meta = table.options.meta as { draftById: Record<string, Draft>; editMode: boolean } | undefined;
+        const meta = table.options.meta as { draftById: Record<string, Draft>; editMode: boolean; isHost: boolean } | undefined;
         if (meta?.editMode) {
-          const draftStatus = meta.draftById[ticket.id]?.status ?? (ticket.status as 'valid' | 'scanned');
+          const draftStatus = meta.draftById[ticket.id]?.editStatus ?? getTicketEditSelectValue(ticket);
           return (
             <Select
               value={draftStatus}
-              onValueChange={(value: 'valid' | 'scanned') => {
+              onValueChange={(value: TicketStatusFilter) => {
                 setDraftById(prev => ({
                   ...prev,
-                  [ticket.id]: { ...prev[ticket.id], status: value },
+                  [ticket.id]: { ...prev[ticket.id], editStatus: value },
                 }));
               }}
             >
@@ -554,17 +604,18 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
               <SelectContent>
                 <SelectItem value="valid">Pending</SelectItem>
                 <SelectItem value="scanned">Checked In</SelectItem>
+                {meta.isHost && <SelectItem value="refunded">Refunded</SelectItem>}
               </SelectContent>
             </Select>
           );
         }
-        return getStatusText(ticket.status);
+        return getStatusText(ticket);
       },
       enableSorting: true,
       sortingFn: (rowA, rowB) => {
-        const aStatus = rowA.original.status === 'scanned' ? 1 : 0;
-        const bStatus = rowB.original.status === 'scanned' ? 1 : 0;
-        if (aStatus !== bStatus) return aStatus - bStatus;
+        const aRank = getTicketDisplayStatusSortRank(getTicketDisplayStatus(rowA.original));
+        const bRank = getTicketDisplayStatusSortRank(getTicketDisplayStatus(rowB.original));
+        if (aRank !== bRank) return aRank - bRank;
         const aName = (rowA.original.name || '').toLowerCase();
         const bName = (rowB.original.name || '').toLowerCase();
         return aName.localeCompare(bName);
@@ -778,7 +829,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
       maxSize: 300,
       enableResizing: true,
     }),
-  ], [event]);
+  ], [event, isHost]);
 
   const safeVisibleColumns = useMemo(() => {
     if (!visibleColumns || visibleColumns.length === 0) return defaultVisibleColumns;
@@ -803,6 +854,7 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
       draftById,
       editMode,
       setDraftById,
+      isHost,
     },
     state: {
       sorting,
@@ -907,6 +959,19 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
                     >
                       <Checkbox checked={selectedStatuses.includes('scanned')} />
                       <label className="text-sm cursor-pointer">Checked In</label>
+                    </div>
+                    <div
+                      className="flex items-center space-x-2 cursor-pointer"
+                      onClick={() => {
+                        setSelectedStatuses(prev =>
+                          prev.includes('refunded')
+                            ? prev.filter(s => s !== 'refunded')
+                            : [...prev, 'refunded']
+                        );
+                      }}
+                    >
+                      <Checkbox checked={selectedStatuses.includes('refunded')} />
+                      <label className="text-sm cursor-pointer">Refunded</label>
                     </div>
                   </div>
                 </div>
@@ -1107,11 +1172,11 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
         </div>
       </div>
 
-      {tickets && tickets.length > 0 && (
+      {tickets && (activeTicketCount > 0 || selectedStatuses.includes('refunded')) && (
         <div className="text-xs text-muted-foreground mt-1">
-          {filteredTickets.length === tickets.length
+          {filteredTickets.length === statusFilteredTickets.length
             ? `${filteredTickets.length} ${filteredTickets.length === 1 ? 'ticket' : 'tickets'}`
-            : `${filteredTickets.length} / ${tickets.length} ${tickets.length === 1 ? 'ticket' : 'tickets'}`}
+            : `${filteredTickets.length} / ${statusFilteredTickets.length} ${statusFilteredTickets.length === 1 ? 'ticket' : 'tickets'}`}
         </div>
       )}
 
@@ -1120,6 +1185,8 @@ export function EventTicketsTab({ eventId, event }: { eventId: string; event: Ev
           <p className="text-sm text-muted-foreground">
             {!tickets || tickets.length === 0
               ? 'No tickets have been sold for this event yet.'
+              : statusFilteredTickets.length === 0 && !selectedStatuses.includes('refunded')
+              ? 'No active tickets. Enable the Refunded filter to view refunded tickets.'
               : `No results for '${query}'`}
           </p>
         </div>

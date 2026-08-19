@@ -1553,10 +1553,14 @@ export type Database = {
           order_item_id: string
           phone: string | null
           qr_code: string
+          refunded_at: string | null
+          refunded_by: string | null
+          remark: string | null
           scanned_at: string | null
           scanned_by: string | null
           status: string
           ticket_type_id: string
+          time_slot: string | null
         }
         Insert: {
           created_at?: string
@@ -1568,10 +1572,14 @@ export type Database = {
           order_item_id: string
           phone?: string | null
           qr_code: string
+          refunded_at?: string | null
+          refunded_by?: string | null
+          remark?: string | null
           scanned_at?: string | null
           scanned_by?: string | null
           status?: string
           ticket_type_id: string
+          time_slot?: string | null
         }
         Update: {
           created_at?: string
@@ -1583,10 +1591,14 @@ export type Database = {
           order_item_id?: string
           phone?: string | null
           qr_code?: string
+          refunded_at?: string | null
+          refunded_by?: string | null
+          remark?: string | null
           scanned_at?: string | null
           scanned_by?: string | null
           status?: string
           ticket_type_id?: string
+          time_slot?: string | null
         }
         Relationships: [
           {
@@ -1879,6 +1891,22 @@ export type Database = {
       }
     }
     Views: {
+      order_effective_revenue: {
+        Row: {
+          order_id: string
+          effective_amount: number
+          active_tickets_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       host_order_cards: {
         Row: {
           buyer_first_name: string | null
