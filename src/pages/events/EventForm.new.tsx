@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -41,14 +41,12 @@ import {
   updateEvent, 
   getEvent, 
   deleteEvent,
-  createTicketType, 
-  updateTicketType, 
-  deleteTicketType, 
   getTicketTypes,
   getEventSlotSoldCounts,
+  persistEventTicketTypes,
   type CreateEventData,
-  type CreateTicketTypeData,
   type EventSlotSoldCounts,
+  type EventTicketTypeBulkMutation,
 } from '@/lib/api/events';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
@@ -269,6 +267,107 @@ function mapTicketTypesFromApi(types: TicketType[]): TicketTypeForm[] {
   });
 }
 
+type TicketTypeMutationPayload = EventTicketTypeBulkMutation;
+
+function buildTicketTypeMutationFromForm(
+  tt: TicketTypeForm,
+  effectiveEventEndDate: Date,
+  hasMultipleTimeSlots: boolean,
+  savedEventId: string
+): TicketTypeMutationPayload {
+  const ticketMetadata = (tt as { metadata?: Record<string, unknown> }).metadata || {};
+  let finalMetadata = { ...ticketMetadata };
+
+  if (ticketMetadata.sales_end_at) {
+    const salesEndAt = new Date(ticketMetadata.sales_end_at as string);
+    if (salesEndAt > effectiveEventEndDate) {
+      finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
+    }
+  }
+
+  const salesEndAtField = (tt as { sales_end_at?: string }).sales_end_at;
+  if (salesEndAtField) {
+    const salesEndAt = new Date(salesEndAtField);
+    if (salesEndAt > effectiveEventEndDate) {
+      finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
+    }
+  }
+
+  const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
+    tt,
+    effectiveEventEndDate
+  );
+
+  const usesPickOneSlots = hasMultipleTimeSlots && !tt.is_all_access;
+  const accessVariants = (usesPickOneSlots
+    ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
+    : (tt.access_variants || [])
+  ).map((v) => ({
+    id: v.id,
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ? parseFloat(v.price_override) : null,
+    discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+    quota: v.quota ? parseInt(v.quota, 10) : null,
+    is_active: v.is_active !== false,
+  }));
+
+  const slotSave = hasMultipleTimeSlots
+    ? buildTicketTypeSlotSavePayload({
+        isAllAccess: !!tt.is_all_access,
+        selectedSlots: tt.valid_for_slots || [],
+        slotQuotas: tt.slot_quotas || {},
+        aggregateQuota: parseInt(tt.quota || '0', 10) || 1,
+      })
+    : {
+        valid_for_days: (tt.valid_for_days || 'day_1') as ValidForDays,
+        valid_for_slots: null,
+        slot_quotas: null,
+        quota: parseInt(tt.quota || '0', 10) || 1,
+      };
+
+  const priceStr = (tt.price || '').trim();
+  const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
+
+  const commonFields = {
+    name: tt.name.trim(),
+    price: ticketPrice,
+    quota: slotSave.quota,
+    slot_quotas: slotSave.slot_quotas ?? undefined,
+    valid_for_slots: slotSave.valid_for_slots,
+    metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
+    access_variants: accessVariants.length > 0 ? accessVariants : undefined,
+    is_active: tt.is_active !== undefined ? tt.is_active : true,
+    availability_mode: availabilityMode,
+    available_start_at: availableStartAt,
+    available_end_at: availableEndAt,
+    valid_for_days: slotSave.valid_for_days,
+    show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
+    threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
+    description: (tt.description || '').trim() || null,
+  };
+
+  if (tt.id && !tt.isNew) {
+    return {
+      kind: 'update',
+      data: {
+        id: tt.id,
+        ...commonFields,
+        slot_quotas: slotSave.slot_quotas,
+      },
+    };
+  }
+
+  return {
+    kind: 'create',
+    data: {
+      event_id: savedEventId,
+      ...commonFields,
+    },
+  };
+}
+
 function mapAccessVariantsForPreview(
   variants: AccessVariantForm[] | undefined,
   ticketTypeId: string,
@@ -446,6 +545,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const isEditMode = !!id;
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+  const saveGenerationRef = useRef(0);
 
   // Event fields
   const [title, setTitle] = useState('');
@@ -1499,23 +1599,17 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         const updatedEvent = await updateEvent({ id, ...eventData });
         savedEventId = id;
         setEventId(id);
-        
-        // Fetch updated event to get slug
-        const refreshedEvent = await getEvent(id);
-        if (refreshedEvent) {
-          resolvedSlug = (refreshedEvent as any).slug || eventSlug;
+
+        const updatedSlug = (updatedEvent as Event & { slug?: string }).slug;
+        if (updatedSlug) {
+          resolvedSlug = updatedSlug;
           setEventSlug(resolvedSlug);
         }
 
-        // Handle ticket types: delete removed ones, update existing, create new
+        // Handle ticket types: delete removed ones, update existing in parallel, create new sequentially
         const currentIds = ticketTypes.filter(tt => tt.id).map(tt => tt.id!);
         const toDelete = existingTicketTypes.filter(tt => !currentIds.includes(tt.id));
-        
-        for (const tt of toDelete) {
-          await deleteTicketType(tt.id);
-        }
 
-        // Update or create ticket types
         const effectiveEventEndDate = getEffectiveEventEndDate({
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
@@ -1526,110 +1620,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           day_4_start_at: day4StartAt?.toISOString() ?? null,
           day_4_end_at: day4EndAt?.toISOString() ?? null,
         });
-        for (const tt of ticketTypes) {
-          // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
-          const ticketMetadata = (tt as any).metadata || {};
-          let finalMetadata = { ...ticketMetadata };
-          
-          // If sales_end_at exists and is after event.end_at, cap it to event.end_at
-          if (ticketMetadata.sales_end_at) {
-            const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > effectiveEventEndDate) {
-              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
-            }
-          }
-          
-          // Also check if sales_end_at is a direct field (for future schema changes)
-          const salesEndAtField = (tt as any).sales_end_at;
-          if (salesEndAtField) {
-            const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > effectiveEventEndDate) {
-              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
-            }
-          }
 
-          // Process availability fields
-          const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
-            tt,
-            effectiveEventEndDate
-          );
-
-          const usesPickOneSlots = hasMultipleTimeSlots && !tt.is_all_access;
-          const accessVariants = (usesPickOneSlots
-            ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
-            : (tt.access_variants || [])
-          ).map((v) => ({
-            id: v.id,
-            visibility_mode: v.visibility_mode,
-            access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
-            allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
-            price_override: v.price_override ? parseFloat(v.price_override) : null,
-            discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
-            quota: v.quota ? parseInt(v.quota, 10) : null,
-            is_active: v.is_active !== false,
-          }));
-
-          const slotSave = hasMultipleTimeSlots
-            ? buildTicketTypeSlotSavePayload({
-                isAllAccess: !!tt.is_all_access,
-                selectedSlots: tt.valid_for_slots || [],
-                slotQuotas: tt.slot_quotas || {},
-                aggregateQuota: parseInt(tt.quota || '0', 10) || 1,
-              })
-            : {
-                valid_for_days: (tt.valid_for_days || 'day_1') as ValidForDays,
-                valid_for_slots: null,
-                slot_quotas: null,
-                quota: parseInt(tt.quota || '0', 10) || 1,
-              };
-          const ticketQuota = slotSave.quota;
-
-          if (tt.id && !tt.isNew) {
-            // Update existing
-            const priceStr = (tt.price || '').trim();
-            const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
-            await updateTicketType({
-              id: tt.id,
-              name: tt.name.trim(),
-              price: ticketPrice,
-              quota: ticketQuota,
-              slot_quotas: slotSave.slot_quotas,
-              valid_for_slots: slotSave.valid_for_slots,
-              metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-              access_variants: accessVariants.length > 0 ? accessVariants : undefined,
-              is_active: tt.is_active !== undefined ? tt.is_active : true,
-              availability_mode: availabilityMode,
-              available_start_at: availableStartAt,
-              available_end_at: availableEndAt,
-              valid_for_days: slotSave.valid_for_days,
-              show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
-              threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
-              description: (tt.description || '').trim() || null,
-            });
-          } else {
-            // Create new
-            const priceStr = (tt.price || '').trim();
-            const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
-            await createTicketType({
-              event_id: savedEventId,
-              name: tt.name.trim(),
-              price: ticketPrice,
-              quota: ticketQuota,
-              slot_quotas: slotSave.slot_quotas ?? undefined,
-              valid_for_slots: slotSave.valid_for_slots,
-              metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-              access_variants: accessVariants.length > 0 ? accessVariants : undefined,
-              is_active: tt.is_active !== undefined ? tt.is_active : true,
-              availability_mode: availabilityMode,
-              available_start_at: availableStartAt,
-              available_end_at: availableEndAt,
-              valid_for_days: slotSave.valid_for_days,
-              show_remaining_count: tt.show_remaining_count !== undefined ? tt.show_remaining_count : true,
-              threshold_to_show: tt.threshold_to_show !== undefined ? tt.threshold_to_show : null,
-              description: (tt.description || '').trim() || null,
-            });
-          }
-        }
+        const mutations = ticketTypes.map((tt) =>
+          buildTicketTypeMutationFromForm(tt, effectiveEventEndDate, hasMultipleTimeSlots, savedEventId)
+        );
+        await persistEventTicketTypes(
+          savedEventId,
+          toDelete.map((tt) => tt.id),
+          mutations
+        );
       } else {
         // Create new event
         const newEvent = await createEvent(eventData);
@@ -1683,7 +1682,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           }
         }
 
-        // Create ticket types
+        // Create ticket types (sequential to preserve created_at ordering)
         const effectiveEventEndDate = getEffectiveEventEndDate({
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
@@ -1694,82 +1693,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
           day_4_start_at: day4StartAt?.toISOString() ?? null,
           day_4_end_at: day4EndAt?.toISOString() ?? null,
         });
-        for (const tt of ticketTypes) {
-          // Check if ticket has sales_end_at in metadata and auto-cap it to event.end_at if needed
-          const ticketMetadata = (tt as any).metadata || {};
-          let finalMetadata = { ...ticketMetadata };
-          
-          // If sales_end_at exists and is after event.end_at, cap it to event.end_at
-          if (ticketMetadata.sales_end_at) {
-            const salesEndAt = new Date(ticketMetadata.sales_end_at);
-            if (salesEndAt > effectiveEventEndDate) {
-              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
-            }
-          }
-          
-          // Also check if sales_end_at is a direct field (for future schema changes)
-          const salesEndAtField = (tt as any).sales_end_at;
-          if (salesEndAtField) {
-            const salesEndAt = new Date(salesEndAtField);
-            if (salesEndAt > effectiveEventEndDate) {
-              finalMetadata.sales_end_at = effectiveEventEndDate.toISOString();
-            }
-          }
-
-          // Process availability fields
-          const { availabilityMode, availableStartAt, availableEndAt } = processTicketAvailability(
-            tt,
-            effectiveEventEndDate
-          );
-
-          const usesPickOneCreate = hasMultipleTimeSlots && !tt.is_all_access;
-          const accessVariantsCreate = (usesPickOneCreate
-            ? (tt.access_variants || []).map((v) => ({ ...v, quota: null }))
-            : (tt.access_variants || [])
-          ).map((v) => ({
-            id: v.id,
-            visibility_mode: v.visibility_mode,
-            access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
-            allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
-            price_override: v.price_override ? parseFloat(v.price_override) : null,
-            discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
-            quota: v.quota ? parseInt(v.quota, 10) : null,
-            is_active: v.is_active !== false,
-          }));
-
-          const slotSaveCreate = hasMultipleTimeSlots
-            ? buildTicketTypeSlotSavePayload({
-                isAllAccess: !!tt.is_all_access,
-                selectedSlots: tt.valid_for_slots || [],
-                slotQuotas: tt.slot_quotas || {},
-                aggregateQuota: parseInt(tt.quota || '0', 10) || 1,
-              })
-            : {
-                valid_for_days: (tt.valid_for_days || 'day_1') as ValidForDays,
-                valid_for_slots: null,
-                slot_quotas: null,
-                quota: parseInt(tt.quota || '0', 10) || 1,
-              };
-
-          const priceStr = (tt.price || '').trim();
-          const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
-          await createTicketType({
-            event_id: savedEventId,
-            name: tt.name.trim(),
-            price: ticketPrice,
-            quota: slotSaveCreate.quota,
-            slot_quotas: slotSaveCreate.slot_quotas ?? undefined,
-            valid_for_slots: slotSaveCreate.valid_for_slots,
-            metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-            access_variants: accessVariantsCreate.length > 0 ? accessVariantsCreate : undefined,
-            is_active: tt.is_active !== undefined ? tt.is_active : true,
-            availability_mode: availabilityMode,
-            available_start_at: availableStartAt,
-            available_end_at: availableEndAt,
-            valid_for_days: slotSaveCreate.valid_for_days,
-            description: (tt.description || '').trim() || null,
-          });
-        }
+        const createMutations = ticketTypes.map((tt) =>
+          buildTicketTypeMutationFromForm(tt, effectiveEventEndDate, hasMultipleTimeSlots, savedEventId)
+        );
+        await persistEventTicketTypes(savedEventId, [], createMutations);
       }
 
       if (!collabEditorContext && effectiveOrgId) {
@@ -1792,33 +1719,42 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       }
 
       if (isEditMode && id) {
-        const [types, soldCounts] = await Promise.all([
-          getTicketTypes(id, true, true),
-          getEventSlotSoldCounts(id).catch(() => ({} as EventSlotSoldCounts)),
-        ]);
-        setExistingTicketTypes(types);
-        setSlotSoldCounts(soldCounts);
-        setTicketTypes(mapTicketTypesFromApi(types));
-      }
-
-      toast({ 
-        title: 'Success', 
-        description: isEditMode ? 'Event updated successfully' : 'Event created successfully' 
-      });
-      // If editing, stay on the same page (EventDetail will handle navigation)
-      if (isEditMode && id) {
+        const refreshGeneration = ++saveGenerationRef.current;
+        setSaving(false);
+        toast({
+          title: 'Success',
+          description: 'Event updated successfully',
+        });
         navigate(`/app/events/${id}?tab=edit`);
+        void (async () => {
+          try {
+            const [types, soldCounts] = await Promise.all([
+              getTicketTypes(id, true, true),
+              getEventSlotSoldCounts(id).catch(() => ({} as EventSlotSoldCounts)),
+            ]);
+            if (saveGenerationRef.current !== refreshGeneration) return;
+            setExistingTicketTypes(types);
+            setSlotSoldCounts(soldCounts);
+            setTicketTypes(mapTicketTypesFromApi(types));
+          } catch (refreshErr) {
+            console.warn('[EventForm] post-save ticket type refresh failed', refreshErr);
+          }
+        })();
       } else {
+        setSaving(false);
+        toast({
+          title: 'Success',
+          description: 'Event created successfully',
+        });
         navigate('/app/catalog?tab=events');
       }
     } catch (error: any) {
-      toast({ 
-        title: 'Error', 
-        description: error.message || 'Failed to save event', 
-        variant: 'destructive' 
-      });
-    } finally {
       setSaving(false);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save event',
+        variant: 'destructive',
+      });
     }
   };
 

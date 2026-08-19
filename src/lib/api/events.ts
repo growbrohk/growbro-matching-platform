@@ -135,6 +135,110 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
 }
 
+/** When fetchResult is false, skip post-sync row/variant refetches (saves round trips when caller ignores return value). */
+export type TicketTypeMutationOptions = {
+  fetchResult?: boolean;
+};
+
+export type EventTicketTypeBulkMutation =
+  | { kind: 'update'; data: UpdateTicketTypeData }
+  | { kind: 'create'; data: CreateTicketTypeData };
+
+function ticketTypeMutationToRpcPayload(mutation: EventTicketTypeBulkMutation): Record<string, unknown> {
+  if (mutation.kind === 'update') {
+    const { id, access_variants, metadata, slot_quotas, valid_for_slots, ...rest } = mutation.data;
+    return {
+      id,
+      ...rest,
+      metadata: metadata ?? null,
+      slot_quotas: slot_quotas ?? null,
+      valid_for_slots: valid_for_slots ?? null,
+      access_variants: access_variants?.map((v) => ({
+        id: v.id ?? null,
+        visibility_mode: v.visibility_mode,
+        access_code: v.access_code ?? null,
+        allowed_affiliates: v.allowed_affiliates ?? null,
+        price_override: v.price_override ?? null,
+        discount_percent: v.discount_percent ?? null,
+        quota: v.quota ?? null,
+        is_active: v.is_active !== false,
+      })) ?? null,
+    };
+  }
+
+  const { access_variants, metadata, slot_quotas, valid_for_slots, event_id: _eventId, ...rest } = mutation.data;
+  return {
+    ...rest,
+    metadata: metadata ?? null,
+    slot_quotas: slot_quotas ?? null,
+    valid_for_slots: valid_for_slots ?? null,
+    access_variants: access_variants?.map((v) => ({
+      id: v.id ?? null,
+      visibility_mode: v.visibility_mode,
+      access_code: v.access_code ?? null,
+      allowed_affiliates: v.allowed_affiliates ?? null,
+      price_override: v.price_override ?? null,
+      discount_percent: v.discount_percent ?? null,
+      quota: v.quota ?? null,
+      is_active: v.is_active !== false,
+    })) ?? null,
+  };
+}
+
+/**
+ * Atomically delete and upsert ticket types (+ access variants) for an event in one RPC.
+ * Falls back to caller-side parallel saves if the RPC is unavailable.
+ */
+export async function saveEventTicketTypesBulk(
+  eventId: string,
+  deleteIds: string[],
+  mutations: EventTicketTypeBulkMutation[]
+): Promise<void> {
+  const upserts = mutations.map(ticketTypeMutationToRpcPayload);
+
+  const { error } = await supabase.rpc('save_event_ticket_types_bulk', {
+    p_event_id: eventId,
+    p_delete_ids: deleteIds.length > 0 ? deleteIds : null,
+    p_upserts: upserts,
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to bulk save event ticket types');
+  }
+}
+
+async function persistTicketTypeMutationsSequential(
+  mutations: EventTicketTypeBulkMutation[]
+): Promise<void> {
+  const updates = mutations.filter((m): m is { kind: 'update'; data: UpdateTicketTypeData } => m.kind === 'update');
+  const creates = mutations.filter((m): m is { kind: 'create'; data: CreateTicketTypeData } => m.kind === 'create');
+
+  await Promise.all(
+    updates.map((m) => updateTicketType(m.data, { fetchResult: false }))
+  );
+
+  for (const m of creates) {
+    await createTicketType(m.data, { fetchResult: false });
+  }
+}
+
+/**
+ * Save ticket type mutations, preferring bulk RPC when eventId is known.
+ */
+export async function persistEventTicketTypes(
+  eventId: string,
+  deleteIds: string[],
+  mutations: EventTicketTypeBulkMutation[]
+): Promise<void> {
+  try {
+    await saveEventTicketTypesBulk(eventId, deleteIds, mutations);
+  } catch (bulkErr) {
+    console.warn('[events] bulk ticket type save failed, falling back to parallel saves', bulkErr);
+    await Promise.all(deleteIds.map((ticketTypeId) => deleteTicketType(ticketTypeId)));
+    await persistTicketTypeMutationsSequential(mutations);
+  }
+}
+
 /**
  * Create a new event using the RPC function
  */
@@ -417,7 +521,12 @@ export async function getEvent(eventId: string): Promise<Event | null> {
 /**
  * Create a ticket type using the RPC function
  */
-export async function createTicketType(data: CreateTicketTypeData): Promise<TicketType> {
+export async function createTicketType(
+  data: CreateTicketTypeData,
+  options: TicketTypeMutationOptions = {}
+): Promise<TicketType> {
+  const fetchResult = options.fetchResult !== false;
+
   const { data: ticketTypeId, error } = await supabase.rpc('create_ticket_type', {
     p_event_id: data.event_id,
     p_name: data.name,
@@ -429,15 +538,8 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
     throw new Error(error.message || 'Failed to create ticket type');
   }
 
-  // Fetch the created ticket type
-  const { data: ticketType, error: fetchError } = await supabase
-    .from('ticket_types')
-    .select('*')
-    .eq('id', ticketTypeId)
-    .single();
-
-  if (fetchError) {
-    throw new Error(fetchError.message || 'Failed to fetch created ticket type');
+  if (!ticketTypeId) {
+    throw new Error('Failed to create ticket type');
   }
 
   // Update metadata and visibility fields if provided
@@ -511,6 +613,10 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
     ]);
   }
 
+  if (!fetchResult) {
+    return { id: ticketTypeId } as TicketType;
+  }
+
   const { data: updatedTicketType, error: finalError } = await supabase
     .from('ticket_types')
     .select('*')
@@ -533,7 +639,11 @@ export async function createTicketType(data: CreateTicketTypeData): Promise<Tick
 /**
  * Update an existing ticket type
  */
-export async function updateTicketType(data: UpdateTicketTypeData): Promise<TicketType> {
+export async function updateTicketType(
+  data: UpdateTicketTypeData,
+  options: TicketTypeMutationOptions = {}
+): Promise<TicketType> {
+  const fetchResult = options.fetchResult !== false;
   const { id, access_variants, ...updateData } = data;
 
   const { data: ticketType, error } = await supabase
@@ -551,7 +661,11 @@ export async function updateTicketType(data: UpdateTicketTypeData): Promise<Tick
 
   if (access_variants !== undefined) {
     await syncTicketTypeAccessVariants(id, access_variants);
-    result.access_variants = (await getTicketTypeAccessVariants([id])).filter((v) => v.ticket_type_id === id);
+    if (fetchResult) {
+      result.access_variants = (await getTicketTypeAccessVariants([id])).filter(
+        (v) => v.ticket_type_id === id
+      );
+    }
   }
 
   return result;
