@@ -603,7 +603,6 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [collabEnabled, setCollabEnabled] = useState(false);
   const [eventPartners, setEventPartners] = useState<EventPartnerDraft[]>([]);
   const [partnersReloadToken, setPartnersReloadToken] = useState(0);
-  const [partnersHydrated, setPartnersHydrated] = useState(false);
 
   // Progressive disclosure states
   const [showTicketTypesSection, setShowTicketTypesSection] = useState(false);
@@ -1700,8 +1699,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       }
 
       if (!collabEditorContext && effectiveOrgId) {
-        const skipDisableWipe = !collabEnabled && isEditMode && !partnersHydrated;
-        if (!skipDisableWipe) {
+        const hasActivePartners = eventPartners.some((p) => !p.deleted);
+        const shouldSyncPartners = collabEnabled || hasActivePartners;
+        if (shouldSyncPartners) {
           await syncEventPartners({
             eventId: savedEventId,
             eventTitle: title.trim(),
@@ -1728,10 +1728,11 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         navigate(`/app/events/${id}?tab=edit`);
         void (async () => {
           try {
-            const [types, soldCounts] = await Promise.all([
-              getTicketTypes(id, true, true),
-              getEventSlotSoldCounts(id).catch(() => ({} as EventSlotSoldCounts)),
-            ]);
+            const typesPromise = getTicketTypes(id, false, true);
+            const soldCountsPromise = hasMultipleTimeSlots
+              ? getEventSlotSoldCounts(id).catch(() => ({} as EventSlotSoldCounts))
+              : Promise.resolve({} as EventSlotSoldCounts);
+            const [types, soldCounts] = await Promise.all([typesPromise, soldCountsPromise]);
             if (saveGenerationRef.current !== refreshGeneration) return;
             setExistingTicketTypes(types);
             setSlotSoldCounts(soldCounts);
@@ -2993,7 +2994,6 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               partners={eventPartners}
               onPartnersChange={setEventPartners}
               reloadToken={partnersReloadToken}
-              onHydrated={() => setPartnersHydrated(true)}
             />
             <Separator />
           </>

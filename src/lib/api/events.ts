@@ -144,98 +144,30 @@ export type EventTicketTypeBulkMutation =
   | { kind: 'update'; data: UpdateTicketTypeData }
   | { kind: 'create'; data: CreateTicketTypeData };
 
-function ticketTypeMutationToRpcPayload(mutation: EventTicketTypeBulkMutation): Record<string, unknown> {
-  if (mutation.kind === 'update') {
-    const { id, access_variants, metadata, slot_quotas, valid_for_slots, ...rest } = mutation.data;
-    return {
-      id,
-      ...rest,
-      metadata: metadata ?? null,
-      slot_quotas: slot_quotas ?? null,
-      valid_for_slots: valid_for_slots ?? null,
-      access_variants: access_variants?.map((v) => ({
-        id: v.id ?? null,
-        visibility_mode: v.visibility_mode,
-        access_code: v.access_code ?? null,
-        allowed_affiliates: v.allowed_affiliates ?? null,
-        price_override: v.price_override ?? null,
-        discount_percent: v.discount_percent ?? null,
-        quota: v.quota ?? null,
-        is_active: v.is_active !== false,
-      })) ?? null,
-    };
-  }
-
-  const { access_variants, metadata, slot_quotas, valid_for_slots, event_id: _eventId, ...rest } = mutation.data;
-  return {
-    ...rest,
-    metadata: metadata ?? null,
-    slot_quotas: slot_quotas ?? null,
-    valid_for_slots: valid_for_slots ?? null,
-    access_variants: access_variants?.map((v) => ({
-      id: v.id ?? null,
-      visibility_mode: v.visibility_mode,
-      access_code: v.access_code ?? null,
-      allowed_affiliates: v.allowed_affiliates ?? null,
-      price_override: v.price_override ?? null,
-      discount_percent: v.discount_percent ?? null,
-      quota: v.quota ?? null,
-      is_active: v.is_active !== false,
-    })) ?? null,
-  };
-}
-
 /**
- * Atomically delete and upsert ticket types (+ access variants) for an event in one RPC.
- * Falls back to caller-side parallel saves if the RPC is unavailable.
+ * Save ticket type mutations via parallel client-side writes.
+ * Deletes and updates run in parallel; creates run sequentially to preserve created_at order.
  */
-export async function saveEventTicketTypesBulk(
-  eventId: string,
+export async function persistEventTicketTypes(
+  _eventId: string,
   deleteIds: string[],
-  mutations: EventTicketTypeBulkMutation[]
-): Promise<void> {
-  const upserts = mutations.map(ticketTypeMutationToRpcPayload);
-
-  const { error } = await supabase.rpc('save_event_ticket_types_bulk', {
-    p_event_id: eventId,
-    p_delete_ids: deleteIds.length > 0 ? deleteIds : null,
-    p_upserts: upserts,
-  });
-
-  if (error) {
-    throw new Error(error.message || 'Failed to bulk save event ticket types');
-  }
-}
-
-async function persistTicketTypeMutationsSequential(
   mutations: EventTicketTypeBulkMutation[]
 ): Promise<void> {
   const updates = mutations.filter((m): m is { kind: 'update'; data: UpdateTicketTypeData } => m.kind === 'update');
   const creates = mutations.filter((m): m is { kind: 'create'; data: CreateTicketTypeData } => m.kind === 'create');
 
-  await Promise.all(
-    updates.map((m) => updateTicketType(m.data, { fetchResult: false }))
-  );
+  if (deleteIds.length > 0) {
+    await Promise.all(deleteIds.map((ticketTypeId) => deleteTicketType(ticketTypeId)));
+  }
+
+  if (updates.length > 0) {
+    await Promise.all(
+      updates.map((m) => updateTicketType(m.data, { fetchResult: false }))
+    );
+  }
 
   for (const m of creates) {
     await createTicketType(m.data, { fetchResult: false });
-  }
-}
-
-/**
- * Save ticket type mutations, preferring bulk RPC when eventId is known.
- */
-export async function persistEventTicketTypes(
-  eventId: string,
-  deleteIds: string[],
-  mutations: EventTicketTypeBulkMutation[]
-): Promise<void> {
-  try {
-    await saveEventTicketTypesBulk(eventId, deleteIds, mutations);
-  } catch (bulkErr) {
-    console.warn('[events] bulk ticket type save failed, falling back to parallel saves', bulkErr);
-    await Promise.all(deleteIds.map((ticketTypeId) => deleteTicketType(ticketTypeId)));
-    await persistTicketTypeMutationsSequential(mutations);
   }
 }
 
