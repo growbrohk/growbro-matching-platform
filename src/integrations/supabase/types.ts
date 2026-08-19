@@ -2189,6 +2189,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_event_tickets_bulk: {
+        Args: {
+          p_event_id: string
+          p_updates: Json
+        }
+        Returns: Json
+      }
       set_order_carrier_tracking: {
         Args: { p_carrier_tracking_number?: string; p_order_id: string }
         Returns: boolean

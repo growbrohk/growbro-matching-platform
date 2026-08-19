@@ -91,6 +91,64 @@ function isSortKey(key: string): key is SortKey {
 
 type Draft = { editStatus?: TicketStatusFilter; name?: string; remark?: string };
 
+type TicketBulkUpdateItem = { id: string } & Record<string, unknown>;
+
+function buildTicketUpdatePayload(
+  ticket: EventTicketRow,
+  draft: Draft,
+  userId: string | null,
+): Record<string, unknown> | null {
+  const payload: Record<string, unknown> = {};
+  const originalEditStatus = getTicketEditSelectValue(ticket);
+  const originalName = ticket.name?.trim() || '-';
+  const normalizedOriginalName = originalName === '-' ? '' : originalName;
+  const originalRemark = ticket.remark || '';
+
+  if (draft.name !== undefined) {
+    const normalizedDraftName = draft.name.trim();
+    if (normalizedDraftName !== normalizedOriginalName) {
+      if (normalizedDraftName) {
+        const nameParts = normalizedDraftName.split(/\s+/);
+        if (nameParts.length === 1) {
+          payload.first_name = nameParts[0];
+          payload.last_name = null;
+        } else {
+          payload.first_name = nameParts[0];
+          payload.last_name = nameParts.slice(1).join(' ');
+        }
+      } else {
+        payload.first_name = null;
+        payload.last_name = null;
+      }
+    }
+  }
+
+  if (draft.remark !== undefined && draft.remark !== originalRemark) {
+    payload.remark = draft.remark || null;
+  }
+
+  if (draft.editStatus !== undefined && draft.editStatus !== originalEditStatus) {
+    if (draft.editStatus === 'refunded') {
+      payload.refunded_at = new Date().toISOString();
+    } else {
+      if (originalEditStatus === 'refunded') {
+        payload.refunded_at = null;
+      }
+      if (draft.editStatus === 'scanned') {
+        payload.status = 'scanned';
+        payload.scanned_at = new Date().toISOString();
+        payload.scanned_by = userId;
+      } else if (draft.editStatus === 'valid') {
+        payload.status = 'valid';
+        payload.scanned_at = null;
+        payload.scanned_by = null;
+      }
+    }
+  }
+
+  return Object.keys(payload).length > 0 ? payload : null;
+}
+
 const VALID_STATUS_FILTERS: TicketStatusFilter[] = ['valid', 'scanned', 'refunded'];
 
 function normalizeStoredStatusFilters(raw: unknown): TicketStatusFilter[] {
@@ -277,19 +335,7 @@ export function EventTicketsTab({
   const hasChanges = useCallback((ticket: EventTicketRow): boolean => {
     const draft = draftById[ticket.id];
     if (!draft) return false;
-
-    const originalEditStatus = getTicketEditSelectValue(ticket);
-    const originalName = (ticket.name?.trim() || '-');
-    const originalRemark = ticket.remark || '';
-
-    const normalizeName = (name: string) => (name.trim() || '-');
-    const normalizeRemark = (remark: string) => (remark || '');
-
-    return (
-      (draft.editStatus !== undefined && draft.editStatus !== originalEditStatus) ||
-      (draft.name !== undefined && normalizeName(draft.name) !== normalizeName(originalName)) ||
-      (draft.remark !== undefined && normalizeRemark(draft.remark) !== normalizeRemark(originalRemark))
-    );
+    return buildTicketUpdatePayload(ticket, draft, null) !== null;
   }, [draftById]);
 
   const editedCount = useMemo(() => {
@@ -425,85 +471,48 @@ export function EventTicketsTab({
         throw new Error('No tickets available');
       }
 
-      const updates = tickets
-        .filter(hasChanges)
-        .map(ticket => {
+      const updates: TicketBulkUpdateItem[] = tickets
+        .map((ticket) => {
           const draft = draftById[ticket.id];
           if (!draft) return null;
-
-          const payload: Record<string, unknown> = {};
-          const originalEditStatus = getTicketEditSelectValue(ticket);
-          const originalName = getFullName(ticket);
-          const normalizedOriginalName = originalName === '-' ? '' : originalName;
-          const originalRemark = ticket.remark || '';
-
-          if (draft.name !== undefined) {
-            const normalizedDraftName = draft.name.trim();
-            if (normalizedDraftName !== normalizedOriginalName) {
-              if (normalizedDraftName) {
-                const nameParts = normalizedDraftName.split(/\s+/);
-                if (nameParts.length === 1) {
-                  payload.first_name = nameParts[0];
-                  payload.last_name = null;
-                } else {
-                  payload.first_name = nameParts[0];
-                  payload.last_name = nameParts.slice(1).join(' ');
-                }
-              } else {
-                payload.first_name = null;
-                payload.last_name = null;
-              }
-            }
-          }
-
-          if (draft.remark !== undefined && draft.remark !== originalRemark) {
-            payload.remark = draft.remark || null;
-          }
-
-          if (draft.editStatus !== undefined && draft.editStatus !== originalEditStatus) {
-            if (draft.editStatus === 'refunded') {
-              payload.refunded_at = new Date().toISOString();
-            } else {
-              if (originalEditStatus === 'refunded') {
-                payload.refunded_at = null;
-              }
-              if (draft.editStatus === 'scanned') {
-                payload.status = 'scanned';
-                payload.scanned_at = new Date().toISOString();
-                payload.scanned_by = userId;
-              } else if (draft.editStatus === 'valid') {
-                payload.status = 'valid';
-                payload.scanned_at = null;
-                payload.scanned_by = null;
-              }
-            }
-          }
-
-          return Object.keys(payload).length > 0 ? { id: ticket.id, payload } : null;
+          const payload = buildTicketUpdatePayload(ticket, draft, userId);
+          if (!payload) return null;
+          return { id: ticket.id, ...payload };
         })
-        .filter((u): u is { id: string; payload: Record<string, unknown> } => u !== null);
+        .filter((u): u is TicketBulkUpdateItem => u !== null);
 
-      const results = await Promise.all(
-        updates.map(u => supabase.from('tickets').update(u.payload).eq('id', u.id))
-      );
+      const { data, error } = await supabase.rpc('update_event_tickets_bulk', {
+        p_event_id: eventId,
+        p_updates: updates,
+      });
 
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        throw new Error(`Failed to save ${errors.length} ticket(s)`);
+      if (error) {
+        throw error;
       }
+
+      const updatedCount =
+        data && typeof data === 'object' && 'updated' in data && typeof data.updated === 'number'
+          ? data.updated
+          : updates.length;
 
       toast({
         title: 'Success',
-        description: `Saved ${editedCount} ticket(s)`,
+        description: `Saved ${updatedCount} ticket(s)`,
       });
 
       setDraftById({});
       setEditMode(false);
       await refetch();
     } catch (error) {
+      const message =
+        error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Failed to save tickets';
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to save tickets',
+        description: message,
         variant: 'destructive',
       });
     } finally {
