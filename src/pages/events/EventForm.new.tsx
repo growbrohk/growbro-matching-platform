@@ -269,11 +269,121 @@ function mapTicketTypesFromApi(types: TicketType[]): TicketTypeForm[] {
 
 type TicketTypeMutationPayload = EventTicketTypeBulkMutation;
 
+type ComparableVariantFields = {
+  visibility_mode: AccessVariantForm['visibility_mode'];
+  access_code: string | null;
+  allowed_affiliates: string[] | null;
+  price_override: number | null;
+  discount_percent: number | null;
+  quota: number | null;
+  is_active: boolean;
+};
+
+function normalizeFormVariant(
+  v: AccessVariantForm,
+  usesPickOneSlots: boolean
+): ComparableVariantFields {
+  return {
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ? parseFloat(v.price_override) : null,
+    discount_percent: v.discount_percent ? parseFloat(v.discount_percent) : null,
+    quota: usesPickOneSlots ? null : (v.quota ? parseInt(v.quota, 10) : null),
+    is_active: v.is_active !== false,
+  };
+}
+
+function normalizeDbVariant(v: TicketTypeAccessVariant): ComparableVariantFields {
+  return {
+    visibility_mode: v.visibility_mode,
+    access_code: v.visibility_mode === 'code' ? (v.access_code || null) : null,
+    allowed_affiliates: v.visibility_mode === 'affiliate' ? (v.allowed_affiliates || null) : null,
+    price_override: v.price_override ?? null,
+    discount_percent: v.discount_percent ?? null,
+    quota: v.quota ?? null,
+    is_active: v.is_active !== false,
+  };
+}
+
+function variantFieldsEqual(a: ComparableVariantFields, b: ComparableVariantFields): boolean {
+  const affiliatesEqual =
+    [...(a.allowed_affiliates ?? [])].sort().join(',') ===
+    [...(b.allowed_affiliates ?? [])].sort().join(',');
+  return (
+    a.visibility_mode === b.visibility_mode &&
+    a.access_code === b.access_code &&
+    affiliatesEqual &&
+    a.price_override === b.price_override &&
+    a.discount_percent === b.discount_percent &&
+    a.quota === b.quota &&
+    a.is_active === b.is_active
+  );
+}
+
+function getActiveExistingVariants(existing: TicketType): TicketTypeAccessVariant[] {
+  if (existing.access_variants && existing.access_variants.length > 0) {
+    return existing.access_variants.filter((v) => v.is_active !== false);
+  }
+  return [{
+    id: existing.id,
+    ticket_type_id: existing.id,
+    visibility_mode: (existing.visibility_mode || 'public') as TicketTypeAccessVariant['visibility_mode'],
+    access_code: existing.access_code ?? null,
+    allowed_affiliates: existing.allowed_affiliates ?? null,
+    price_override: null,
+    discount_percent: null,
+    quota: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  }];
+}
+
+function accessVariantsUnchanged(
+  formVariants: AccessVariantForm[],
+  existing: TicketType | undefined,
+  usesPickOneSlots: boolean
+): boolean {
+  if (!existing) return false;
+
+  const formList = formVariants.length > 0 ? formVariants : [DEFAULT_ACCESS_VARIANT_FORM];
+  const hasVariantRows = !!(existing.access_variants && existing.access_variants.length > 0);
+  const activeExisting = getActiveExistingVariants(existing);
+
+  // Legacy ticket types may have no variant rows — compare against ticket_types fields
+  if (!hasVariantRows && formList.length === 1 && !formList[0].id) {
+    return variantFieldsEqual(
+      normalizeFormVariant(formList[0], usesPickOneSlots),
+      normalizeDbVariant(activeExisting[0])
+    );
+  }
+
+  if (formList.length !== activeExisting.length) return false;
+
+  for (const formV of formList) {
+    if (!formV.id) return false;
+
+    const dbV = activeExisting.find((e) => e.id === formV.id);
+    if (!dbV) return false;
+
+    if (!variantFieldsEqual(
+      normalizeFormVariant(formV, usesPickOneSlots),
+      normalizeDbVariant(dbV)
+    )) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function buildTicketTypeMutationFromForm(
   tt: TicketTypeForm,
   effectiveEventEndDate: Date,
   hasMultipleTimeSlots: boolean,
-  savedEventId: string
+  savedEventId: string,
+  existingTicketType?: TicketType
 ): TicketTypeMutationPayload {
   const ticketMetadata = (tt as { metadata?: Record<string, unknown> }).metadata || {};
   let finalMetadata = { ...ticketMetadata };
@@ -330,6 +440,11 @@ function buildTicketTypeMutationFromForm(
   const priceStr = (tt.price || '').trim();
   const ticketPrice = priceStr === '' ? 0 : parseFloat(priceStr);
 
+  const variantsUnchanged =
+    tt.id && !tt.isNew && existingTicketType
+      ? accessVariantsUnchanged(tt.access_variants || [], existingTicketType, usesPickOneSlots)
+      : false;
+
   const commonFields = {
     name: tt.name.trim(),
     price: ticketPrice,
@@ -337,7 +452,7 @@ function buildTicketTypeMutationFromForm(
     slot_quotas: slotSave.slot_quotas ?? undefined,
     valid_for_slots: slotSave.valid_for_slots,
     metadata: Object.keys(finalMetadata).length > 0 ? finalMetadata : undefined,
-    access_variants: accessVariants.length > 0 ? accessVariants : undefined,
+    access_variants: !variantsUnchanged && accessVariants.length > 0 ? accessVariants : undefined,
     is_active: tt.is_active !== undefined ? tt.is_active : true,
     availability_mode: availabilityMode,
     available_start_at: availableStartAt,
@@ -1621,7 +1736,13 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         });
 
         const mutations = ticketTypes.map((tt) =>
-          buildTicketTypeMutationFromForm(tt, effectiveEventEndDate, hasMultipleTimeSlots, savedEventId)
+          buildTicketTypeMutationFromForm(
+            tt,
+            effectiveEventEndDate,
+            hasMultipleTimeSlots,
+            savedEventId,
+            existingTicketTypes.find((e) => e.id === tt.id)
+          )
         );
         await persistEventTicketTypes(
           savedEventId,

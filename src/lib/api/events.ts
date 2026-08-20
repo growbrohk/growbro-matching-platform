@@ -519,6 +519,10 @@ export async function createTicketType(
     updateFields.description = data.description;
   }
 
+  if (data.access_variants !== undefined && data.access_variants.length > 0) {
+    Object.assign(updateFields, legacyFieldsFromPrimaryVariant(pickPrimaryAccessVariant(data.access_variants)));
+  }
+
   if (Object.keys(updateFields).length > 0) {
     const { error: updateError } = await supabase
       .from('ticket_types')
@@ -578,9 +582,14 @@ export async function updateTicketType(
   const fetchResult = options.fetchResult !== false;
   const { id, access_variants, ...updateData } = data;
 
+  const fieldsToUpdate = { ...updateData };
+  if (access_variants !== undefined) {
+    Object.assign(fieldsToUpdate, legacyFieldsFromPrimaryVariant(pickPrimaryAccessVariant(access_variants)));
+  }
+
   const { data: ticketType, error } = await supabase
     .from('ticket_types')
-    .update(updateData)
+    .update(fieldsToUpdate)
     .eq('id', id)
     .select()
     .single();
@@ -630,6 +639,62 @@ function variantInputToRow(ticketTypeId: string, v: TicketTypeAccessVariantInput
   };
 }
 
+type ExistingVariantRow = Pick<
+  TicketTypeAccessVariant,
+  | 'id'
+  | 'visibility_mode'
+  | 'access_code'
+  | 'allowed_affiliates'
+  | 'price_override'
+  | 'discount_percent'
+  | 'quota'
+  | 'is_active'
+>;
+
+function pickPrimaryAccessVariant(
+  variants: TicketTypeAccessVariantInput[]
+): TicketTypeAccessVariantInput | undefined {
+  return (
+    variants.find((v) => v.visibility_mode === 'public' && v.is_active !== false) ||
+    variants.find((v) => v.visibility_mode === 'code' && v.is_active !== false) ||
+    variants.find((v) => v.visibility_mode === 'affiliate' && v.is_active !== false) ||
+    variants[0]
+  );
+}
+
+function legacyFieldsFromPrimaryVariant(
+  primary: TicketTypeAccessVariantInput | undefined
+): Pick<CreateTicketTypeData, 'visibility_mode' | 'access_code' | 'allowed_affiliates'> {
+  return {
+    visibility_mode: primary?.visibility_mode ?? 'public',
+    access_code: primary?.visibility_mode === 'code' ? (primary.access_code || null) : null,
+    allowed_affiliates:
+      primary?.visibility_mode === 'affiliate' ? (primary.allowed_affiliates || null) : null,
+  };
+}
+
+function affiliatesEqual(
+  a: string[] | null | undefined,
+  b: string[] | null | undefined
+): boolean {
+  return [...(a ?? [])].sort().join(',') === [...(b ?? [])].sort().join(',');
+}
+
+function variantRowEquals(
+  existing: ExistingVariantRow,
+  row: ReturnType<typeof variantInputToRow>
+): boolean {
+  return (
+    existing.visibility_mode === row.visibility_mode &&
+    (existing.access_code ?? null) === (row.access_code ?? null) &&
+    affiliatesEqual(existing.allowed_affiliates, row.allowed_affiliates) &&
+    (existing.price_override ?? null) === (row.price_override ?? null) &&
+    (existing.discount_percent ?? null) === (row.discount_percent ?? null) &&
+    (existing.quota ?? null) === (row.quota ?? null) &&
+    (existing.is_active !== false) === row.is_active
+  );
+}
+
 /** Stable key for matching variants when id is absent (new form rows). */
 function variantStableKey(v: Pick<TicketTypeAccessVariantInput, 'visibility_mode' | 'access_code' | 'allowed_affiliates'>): string {
   if (v.visibility_mode === 'code') {
@@ -645,7 +710,7 @@ function variantStableKey(v: Pick<TicketTypeAccessVariantInput, 'visibility_mode
 /**
  * Sync access variants for a ticket type via diff/upsert (preserves UUIDs).
  * Removed variants are soft-deleted (is_active=false) to keep order attribution intact.
- * Also updates ticket_types.visibility_mode, access_code, allowed_affiliates for legacy fallback.
+ * Legacy ticket_types visibility fields are updated by createTicketType/updateTicketType callers.
  */
 async function syncTicketTypeAccessVariants(
   ticketTypeId: string,
@@ -653,44 +718,28 @@ async function syncTicketTypeAccessVariants(
 ): Promise<void> {
   const { data: existingRows, error: fetchError } = await supabase
     .from('ticket_type_access_variants')
-    .select('id, visibility_mode, access_code, allowed_affiliates')
+    .select(
+      'id, visibility_mode, access_code, allowed_affiliates, price_override, discount_percent, quota, is_active'
+    )
     .eq('ticket_type_id', ticketTypeId);
 
   if (fetchError) {
     throw new Error(fetchError.message || 'Failed to fetch access variants');
   }
 
-  const existing = existingRows ?? [];
+  const existing = (existingRows ?? []) as ExistingVariantRow[];
   const matchedExistingIds = new Set<string>();
-
-  // Pick primary variant for legacy fallback: prefer public so ticket shows without code when variants fail to load
-  const primary =
-    variants.find((v) => v.visibility_mode === 'public' && v.is_active !== false) ||
-    variants.find((v) => v.visibility_mode === 'code' && v.is_active !== false) ||
-    variants.find((v) => v.visibility_mode === 'affiliate' && v.is_active !== false) ||
-    variants[0];
-  const legacyUpdate: Record<string, unknown> = {
-    visibility_mode: primary?.visibility_mode ?? 'public',
-    access_code: primary?.visibility_mode === 'code' ? (primary.access_code || null) : null,
-    allowed_affiliates: primary?.visibility_mode === 'affiliate' ? (primary.allowed_affiliates || null) : null,
-  };
-  const { error: legacyError } = await supabase
-    .from('ticket_types')
-    .update(legacyUpdate)
-    .eq('id', ticketTypeId);
-
-  if (legacyError) {
-    throw new Error(legacyError.message || 'Failed to update ticket type visibility fields');
-  }
 
   for (const incoming of variants) {
     const row = variantInputToRow(ticketTypeId, incoming);
     let existingId: string | undefined;
+    let existingRow: ExistingVariantRow | undefined;
 
     if (incoming.id) {
       const byId = existing.find((e) => e.id === incoming.id);
       if (byId) {
         existingId = byId.id;
+        existingRow = byId;
       }
     }
 
@@ -701,11 +750,16 @@ async function syncTicketTypeAccessVariants(
       );
       if (byKey) {
         existingId = byKey.id;
+        existingRow = byKey;
       }
     }
 
-    if (existingId) {
+    if (existingId && existingRow) {
       matchedExistingIds.add(existingId);
+      if (variantRowEquals(existingRow, row)) {
+        continue;
+      }
+
       const { error: updateError } = await supabase
         .from('ticket_type_access_variants')
         .update(row)
@@ -727,7 +781,9 @@ async function syncTicketTypeAccessVariants(
   }
 
   // Soft-delete variants removed from the form (preserve rows for order_items FK attribution)
-  const toDeactivate = existing.filter((e) => !matchedExistingIds.has(e.id));
+  const toDeactivate = existing.filter(
+    (e) => !matchedExistingIds.has(e.id) && e.is_active !== false
+  );
   if (toDeactivate.length > 0) {
     const { error: deactivateError } = await supabase
       .from('ticket_type_access_variants')
