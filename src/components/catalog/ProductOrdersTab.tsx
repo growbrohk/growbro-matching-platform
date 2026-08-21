@@ -3,9 +3,11 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
+  getPaginationRowModel,
   createColumnHelper,
   flexRender,
   type ColumnSizingState,
+  type PaginationState,
   type SortingState,
   type VisibilityState,
 } from '@tanstack/react-table';
@@ -26,6 +28,7 @@ import {
 } from '@/hooks/useProductOrdersTable';
 import { formatMoney } from '@/hooks/useOrdersDashboard';
 import { HostOrderDetailDialog } from '@/components/orders/HostOrderDetailDialog';
+import { ProductSearchCombobox } from '@/components/catalog/ProductSearchCombobox';
 import {
   formatCommissionRateLabel,
   isPartnerColumnKey,
@@ -43,6 +46,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 type StaticColumnKey =
   | 'status'
@@ -307,10 +317,19 @@ interface ProductOrdersTabProps {
   enabled?: boolean;
 }
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+
 export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   const [range, setRange] = useState<ProductOrdersRangeKey>('30d');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const { data: rows = [], isLoading } = useProductOrdersTable(range, { enabled });
+  const { data: rows = [], isLoading, isFetching, isError, error, refetch } = useProductOrdersTable(
+    range,
+    {
+      enabled,
+    }
+  );
+
+  const isInitialLoad = isLoading && rows.length === 0;
 
   const partnerColumns = useMemo(() => buildPartnerColumnsFromRows(rows), [rows]);
   const partnerColumnKeys = useMemo(
@@ -318,11 +337,14 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     [partnerColumns]
   );
 
+  const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
   const [selectedPaymentStatuses, setSelectedPaymentStatuses] = useState<string[]>([]);
   const [selectedSources, setSelectedSources] = useState<ProductOrderSource[]>([]);
   const [shippedFilter, setShippedFilter] = useState<'all' | 'shipped' | 'not_shipped'>('all');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [columnOrder, setColumnOrder] = useState<string[]>([...DEFAULT_STATIC_COLUMNS]);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([...DEFAULT_STATIC_COLUMNS]);
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
@@ -336,6 +358,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       columnOrder: 'productOrders:columnOrder',
       selectedPaymentStatuses: 'productOrders:selectedPaymentStatuses',
       selectedSources: 'productOrders:selectedSources',
+      selectedProductId: 'productOrders:selectedProductId',
       shippedFilter: 'productOrders:shippedFilter',
       sort: 'productOrders:sort',
       defaultSort: 'productOrders:defaultSort',
@@ -344,6 +367,15 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     }),
     []
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(queryInput), 200);
+    return () => clearTimeout(timer);
+  }, [queryInput]);
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [query, selectedProductId, selectedPaymentStatuses, selectedSources, shippedFilter, range]);
 
   useEffect(() => {
     const storedRemember = localStorage.getItem(storageKeys.remember);
@@ -399,6 +431,11 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
         }
       }
 
+      const storedProductId = localStorage.getItem(storageKeys.selectedProductId);
+      if (storedProductId) {
+        setSelectedProductId(storedProductId);
+      }
+
       const storedShipped = localStorage.getItem(storageKeys.shippedFilter);
       if (storedShipped === 'shipped' || storedShipped === 'not_shipped' || storedShipped === 'all') {
         setShippedFilter(storedShipped);
@@ -447,6 +484,11 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     localStorage.setItem(storageKeys.columnSizing, JSON.stringify(columnSizing));
     localStorage.setItem(storageKeys.selectedPaymentStatuses, JSON.stringify(selectedPaymentStatuses));
     localStorage.setItem(storageKeys.selectedSources, JSON.stringify(selectedSources));
+    if (selectedProductId) {
+      localStorage.setItem(storageKeys.selectedProductId, selectedProductId);
+    } else {
+      localStorage.removeItem(storageKeys.selectedProductId);
+    }
     localStorage.setItem(storageKeys.shippedFilter, shippedFilter);
     localStorage.setItem(storageKeys.defaultSort, defaultSort);
     localStorage.setItem(storageKeys.range, range);
@@ -463,6 +505,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     columnSizing,
     selectedPaymentStatuses,
     selectedSources,
+    selectedProductId,
     shippedFilter,
     sorting,
     defaultSort,
@@ -472,6 +515,10 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
 
   const filteredRows = useMemo(() => {
     let result = rows;
+
+    if (selectedProductId) {
+      result = result.filter((row) => (row.productIds ?? []).includes(selectedProductId));
+    }
 
     if (query.trim()) {
       const searchLower = query.toLowerCase();
@@ -538,7 +585,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     }
 
     return result;
-  }, [rows, query, selectedPaymentStatuses, selectedSources, shippedFilter]);
+  }, [rows, query, selectedProductId, selectedPaymentStatuses, selectedSources, shippedFilter]);
 
   const footerTotals = useMemo(() => {
     let qtyTotal = 0;
@@ -564,12 +611,14 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
   const hasActiveFilters =
     selectedPaymentStatuses.length > 0 ||
     selectedSources.length > 0 ||
-    shippedFilter !== 'all';
+    shippedFilter !== 'all' ||
+    !!selectedProductId;
 
   const handleClearFilters = () => {
     setSelectedPaymentStatuses([]);
     setSelectedSources([]);
     setShippedFilter('all');
+    setSelectedProductId(undefined);
   };
 
   const handleToggleColumn = (column: string) => {
@@ -965,15 +1014,25 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       columnVisibility,
       columnOrder: safeColumnOrder,
       columnSizing,
+      pagination,
     },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     columnResizeMode: 'onChange',
     enableColumnResizing: true,
     getRowId: (row) => row.rowId,
   });
+
+  const pageCount = table.getPageCount();
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageSize = table.getState().pagination.pageSize;
+  const totalFiltered = filteredRows.length;
+  const pageStart = totalFiltered === 0 ? 0 : pageIndex * pageSize + 1;
+  const pageEnd = Math.min((pageIndex + 1) * pageSize, totalFiltered);
 
   const isResizing = table.getState().columnSizingInfo?.isResizingColumn;
 
@@ -988,7 +1047,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     }
   }, [isResizing]);
 
-  if (isLoading) {
+  if (isInitialLoad) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin" style={{ color: '#0E7A3A' }} />
@@ -996,8 +1055,61 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
     );
   }
 
+  if (isError && rows.length === 0) {
+    return (
+      <div className="w-full space-y-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 bg-gray-200 rounded-full p-1 flex-nowrap">
+            {RANGE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setRange(opt.key)}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                  range === opt.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="w-full border border-border bg-background py-8 px-4 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Failed to load orders{error instanceof Error && error.message ? `: ${error.message}` : ''}.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-3 px-4 py-4">
+      {isFetching && rows.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Updating orders…
+        </div>
+      )}
+
+      {isError && rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-muted-foreground">
+          <span>
+            Failed to refresh
+            {error instanceof Error && error.message ? `: ${error.message}` : ''}.
+          </span>
+          <Button variant="outline" size="sm" className="h-7" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1 bg-gray-200 rounded-full p-1 flex-nowrap">
           {RANGE_OPTIONS.map((opt) => (
@@ -1016,6 +1128,10 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
             </button>
           ))}
         </div>
+        <ProductSearchCombobox
+          value={selectedProductId}
+          onValueChange={setSelectedProductId}
+        />
       </div>
 
       <div className="flex items-center gap-2">
@@ -1023,8 +1139,8 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search orders..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
             className="pl-9 h-8"
           />
         </div>
@@ -1221,6 +1337,7 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
                         localStorage.removeItem(storageKeys.columnSizing);
                         localStorage.removeItem(storageKeys.selectedPaymentStatuses);
                         localStorage.removeItem(storageKeys.selectedSources);
+                        localStorage.removeItem(storageKeys.selectedProductId);
                         localStorage.removeItem(storageKeys.shippedFilter);
                         localStorage.removeItem(storageKeys.sort);
                         localStorage.removeItem(storageKeys.defaultSort);
@@ -1256,10 +1373,39 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
       </div>
 
       {rows.length > 0 && (
-        <div className="text-xs text-muted-foreground">
-          {filteredRows.length === rows.length
-            ? `${filteredRows.length} ${filteredRows.length === 1 ? 'order' : 'orders'}`
-            : `${filteredRows.length} / ${rows.length} orders`}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground">
+            {filteredRows.length === rows.length
+              ? `${filteredRows.length} ${filteredRows.length === 1 ? 'order' : 'orders'}`
+              : `${filteredRows.length} / ${rows.length} orders`}
+            {totalFiltered > 0 && pageCount > 1 && (
+              <span className="ml-2">
+                · Showing {pageStart}–{pageEnd}
+              </span>
+            )}
+          </div>
+          {totalFiltered > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Rows per page</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPagination({ pageIndex: 0, pageSize: Number(value) });
+                }}
+              >
+                <SelectTrigger className="h-7 w-[70px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       )}
 
@@ -1268,7 +1414,9 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
           <p className="text-sm text-muted-foreground">
             {rows.length === 0
               ? 'No product orders in this date range.'
-              : `No results for "${query}"`}
+              : query.trim() || selectedProductId
+                ? 'No orders match your filters.'
+                : 'No orders match your filters.'}
           </p>
         </div>
       ) : (
@@ -1433,6 +1581,44 @@ export function ProductOrdersTab({ enabled = true }: ProductOrdersTabProps) {
             </TableFooter>
           </Table>
         </div>
+      )}
+
+      {pageCount > 1 && (
+        <Pagination className="justify-end mx-0 w-auto">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (table.getCanPreviousPage()) table.previousPage();
+                }}
+                className={cn('h-8', !table.getCanPreviousPage() && 'pointer-events-none opacity-50')}
+              />
+            </PaginationItem>
+            <PaginationItem>
+              <span className="px-2 text-xs text-muted-foreground tabular-nums">
+                Page {pageIndex + 1} of {pageCount}
+              </span>
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (table.getCanNextPage()) table.nextPage();
+                }}
+                className={cn('h-8', !table.getCanNextPage() && 'pointer-events-none opacity-50')}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {range === 'all' && !selectedProductId && rows.length > 2000 && (
+        <p className="text-xs text-muted-foreground">
+          Large order history — pick a product above to filter, or use pages to browse.
+        </p>
       )}
 
       <HostOrderDetailDialog

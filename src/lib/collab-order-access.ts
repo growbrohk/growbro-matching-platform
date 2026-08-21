@@ -1,4 +1,103 @@
 import { supabase } from '@/integrations/supabase/client';
+import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+import { applyAbortSignal, mapChunked } from '@/lib/supabase-chunked-in';
+
+/** Bulk-fetch product IDs per order from order_items metadata (replaces per-order N+1). */
+async function fetchOrderProductIdsMap(
+  orderIds: string[],
+  signal?: AbortSignal
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  if (orderIds.length === 0) return result;
+
+  const items = await mapChunked(orderIds, async (chunk) => {
+    const { data, error } = await applyAbortSignal(
+      supabase.from('order_items').select('order_id, metadata').in('order_id', chunk),
+      signal
+    );
+    if (error) throw error;
+    return data || [];
+  });
+
+  for (const item of items) {
+    const oid = item.order_id as string;
+    const pid = (item.metadata as { product_id?: string } | undefined)?.product_id;
+    if (!pid) continue;
+    if (!result.has(oid)) result.set(oid, new Set());
+    result.get(oid)!.add(pid);
+  }
+  return result;
+}
+
+type RawAddonLine = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  subtotal: number;
+  label: string | null;
+  variant_label: string | null;
+  shipped_at: string | null;
+  carrier_tracking_number: string | null;
+};
+
+/** Bulk-fetch add-on lines for many orders and products at once. */
+async function fetchAddonLinesByOrderIdsAndProducts(
+  orderIds: string[],
+  productIds: string[],
+  signal?: AbortSignal
+): Promise<Map<string, RawAddonLine[]>> {
+  const result = new Map<string, RawAddonLine[]>();
+  if (orderIds.length === 0 || productIds.length === 0) return result;
+
+  const lines = await mapChunked(orderIds, async (chunk) => {
+    const { data, error } = await applyAbortSignal(
+      supabase
+        .from('order_addon_items')
+        .select(
+          'id, order_id, product_id, quantity, subtotal, label, variant_label, shipped_at, carrier_tracking_number'
+        )
+        .in('order_id', chunk)
+        .in('product_id', productIds),
+      signal
+    );
+    if (error) throw error;
+    return (data || []) as RawAddonLine[];
+  });
+
+  for (const line of lines) {
+    const oid = line.order_id;
+    if (!result.has(oid)) result.set(oid, []);
+    result.get(oid)!.push(line);
+  }
+  return result;
+}
+
+async function fetchAddonLinesByOrderIds(
+  orderIds: string[],
+  productId: string,
+  signal?: AbortSignal
+): Promise<Map<string, RawAddonLine[]>> {
+  return fetchAddonLinesByOrderIdsAndProducts(orderIds, [productId], signal);
+}
+
+function groupLinksByHost(links: PartnerPipelineLinkRow[]): Map<string, PartnerPipelineLinkRow[]> {
+  const map = new Map<string, PartnerPipelineLinkRow[]>();
+  for (const link of links) {
+    const hostId = link.host_org_id;
+    if (!map.has(hostId)) map.set(hostId, []);
+    map.get(hostId)!.push(link);
+  }
+  return map;
+}
+
+function orderHasProduct(
+  productIdsByOrder: Map<string, Set<string>>,
+  orderId: string,
+  productId: string
+): boolean {
+  return productIdsByOrder.get(orderId)?.has(productId) ?? false;
+}
 
 export interface PartnerOrderRowAccess {
   isPartnerRow: true;
@@ -169,23 +268,20 @@ export async function fetchPartnerVisibleOrdersInRange(
         .eq('host_org_id', link.host_org_id)
         .eq('order_type', 'product')
         .gte('created_at', startISO)
-        .lte('created_at', endISO);
+        .lte('created_at', endISO)
+        .order('created_at', { ascending: false })
+        .limit(DEFAULT_LIST_LIMIT);
       if (pErr) {
         console.error('fetchPartnerVisibleOrdersInRange: product orders', pErr);
         continue;
       }
       const pid = link.product_id;
-      for (const row of (prodOrders || []) as Record<string, unknown>[]) {
+      const prodOrderRows = (prodOrders || []) as Record<string, unknown>[];
+      const prodOrderIds = prodOrderRows.map((row) => row.id as string);
+      const productIdsByOrder = await fetchOrderProductIdsMap(prodOrderIds);
+      for (const row of prodOrderRows) {
         const oid = row.id as string;
-        const { data: line } = await supabase
-          .from('order_items')
-          .select('metadata')
-          .eq('order_id', oid)
-          .limit(8);
-        const hasProduct = (line || []).some(
-          (it: { metadata?: { product_id?: string } }) => (it.metadata?.product_id as string | undefined) === pid
-        );
-        if (!hasProduct) continue;
+        if (!orderHasProduct(productIdsByOrder, oid, pid)) continue;
         orderMap.set(oid, row);
         mergeAccess(accessMap, oid, link);
       }
@@ -255,21 +351,24 @@ export type HostPartnerLinkForTable = {
  */
 export async function fetchPartnerVisibleProductOrdersForTable(
   orgId: string,
-  opts: { startISO?: string | null; endISO?: string | null } = {}
+  opts: { startISO?: string | null; endISO?: string | null; signal?: AbortSignal } = {}
 ): Promise<PartnerProductOrdersTableFetch> {
   const accessMap: PartnerAccessMap = new Map();
   const partnerLinkIds = new Set<string>();
-  const { startISO, endISO } = opts;
+  const { startISO, endISO, signal } = opts;
   const applyDateFilter = Boolean(startISO && endISO);
 
-  const { data: links, error } = await supabase
-    .from('tracking_links' as never)
-    .select(
-      'id, type, host_org_id, event_id, product_id, collab_sales_scope, collab_partner_role, collab_can_view_order_details, collab_can_mark_shipped, status, affiliate_org_id, commission_rate, commission_basis'
-    )
-    .eq('affiliate_org_id', orgId)
-    .in('type', ['affiliate', 'collab'])
-    .eq('status', 'active');
+  const { data: links, error } = await applyAbortSignal(
+    supabase
+      .from('tracking_links' as never)
+      .select(
+        'id, type, host_org_id, event_id, product_id, collab_sales_scope, collab_partner_role, collab_can_view_order_details, collab_can_mark_shipped, status, affiliate_org_id, commission_rate, commission_basis'
+      )
+      .eq('affiliate_org_id', orgId)
+      .in('type', ['affiliate', 'collab'])
+      .eq('status', 'active'),
+    signal
+  );
 
   if (error) {
     console.error('fetchPartnerVisibleProductOrdersForTable: tracking_links', error);
@@ -332,7 +431,7 @@ export async function fetchPartnerVisibleProductOrdersForTable(
 
     attrQuery = applyOrderFilters(attrQuery) as typeof attrQuery;
 
-    const { data: attrOrders, error: oErr } = await attrQuery;
+    const { data: attrOrders, error: oErr } = await applyAbortSignal(attrQuery, signal);
     if (oErr) {
       console.error('fetchPartnerVisibleProductOrdersForTable: attributed orders', oErr);
     } else {
@@ -348,39 +447,44 @@ export async function fetchPartnerVisibleProductOrdersForTable(
     }
   }
 
-  for (const link of linkList.filter(
+  const allForResourceProductLinks = linkList.filter(
     (l) => l.type === 'collab' && l.collab_sales_scope === 'all_for_resource' && l.product_id
-  )) {
-    let prodQuery = supabase
-      .from('orders')
-      .select(PRODUCT_ORDERS_TABLE_SELECT)
-      .eq('host_org_id', link.host_org_id);
+  );
 
-    prodQuery = applyOrderFilters(prodQuery) as typeof prodQuery;
+  await Promise.all(
+    Array.from(groupLinksByHost(allForResourceProductLinks).entries()).map(
+      async ([hostOrgId, hostLinks]) => {
+        let prodQuery = supabase
+          .from('orders')
+          .select(PRODUCT_ORDERS_TABLE_SELECT)
+          .eq('host_org_id', hostOrgId)
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_LIST_LIMIT);
 
-    const { data: prodOrders, error: pErr } = await prodQuery;
-    if (pErr) {
-      console.error('fetchPartnerVisibleProductOrdersForTable: product orders', pErr);
-      continue;
-    }
+        prodQuery = applyOrderFilters(prodQuery) as typeof prodQuery;
 
-    const pid = link.product_id!;
-    for (const row of (prodOrders || []) as Record<string, unknown>[]) {
-      const oid = row.id as string;
-      const { data: line } = await supabase
-        .from('order_items')
-        .select('metadata')
-        .eq('order_id', oid)
-        .limit(8);
-      const hasProduct = (line || []).some(
-        (it: { metadata?: { product_id?: string } }) =>
-          (it.metadata?.product_id as string | undefined) === pid
-      );
-      if (!hasProduct) continue;
-      orderMap.set(oid, row);
-      mergeAccess(accessMap, oid, link);
-    }
-  }
+        const { data: prodOrders, error: pErr } = await applyAbortSignal(prodQuery, signal);
+        if (pErr) {
+          console.error('fetchPartnerVisibleProductOrdersForTable: product orders', pErr);
+          throw pErr;
+        }
+
+        const prodOrderRows = (prodOrders || []) as Record<string, unknown>[];
+        const prodOrderIds = prodOrderRows.map((row) => row.id as string);
+        const productIdsByOrder = await fetchOrderProductIdsMap(prodOrderIds, signal);
+
+        for (const link of hostLinks) {
+          const pid = link.product_id!;
+          for (const row of prodOrderRows) {
+            const oid = row.id as string;
+            if (!orderHasProduct(productIdsByOrder, oid, pid)) continue;
+            orderMap.set(oid, row);
+            mergeAccess(accessMap, oid, link);
+          }
+        }
+      }
+    )
+  );
 
   const productLinksWithId = linkList.filter((l) => l.product_id);
   if (productLinksWithId.length > 0) {
@@ -392,10 +496,12 @@ export async function fetchPartnerVisibleProductOrdersForTable(
       return q;
     };
 
-    for (const link of productLinksWithId) {
-      const pid = link.product_id!;
+    const attributedProductLinks = productLinksWithId.filter(linkIsAttributedOnly);
 
-      if (linkIsAttributedOnly(link)) {
+    await Promise.all(
+      attributedProductLinks.map(async (link) => {
+        const pid = link.product_id!;
+
         let attrQuery = supabase
           .from('orders')
           .select(
@@ -405,86 +511,104 @@ export async function fetchPartnerVisibleProductOrdersForTable(
 
         attrQuery = applyEventOrderFilters(attrQuery) as typeof attrQuery;
 
-        const { data: attrEventOrders, error: aeErr } = await attrQuery;
+        const { data: attrEventOrders, error: aeErr } = await applyAbortSignal(attrQuery, signal);
         if (aeErr) {
           console.error('fetchPartnerVisibleProductOrdersForTable: attributed event orders', aeErr);
-          continue;
+          throw aeErr;
         }
 
-        for (const row of (attrEventOrders || []) as Record<string, unknown>[]) {
-          const oid = row.id as string;
-          const { data: addonLines } = await supabase
-            .from('order_addon_items')
-            .select(
-              'id, order_id, product_id, quantity, subtotal, label, variant_label, shipped_at, carrier_tracking_number'
-            )
-            .eq('order_id', oid)
-            .eq('product_id', pid);
+        const attrEventOrderRows = (attrEventOrders || []) as Record<string, unknown>[];
+        const attrEventOrderIds = attrEventOrderRows.map((row) => row.id as string);
+        const addonLinesByOrder = await fetchAddonLinesByOrderIds(attrEventOrderIds, pid, signal);
 
-          for (const line of (addonLines || []) as Record<string, unknown>[]) {
-            const lineId = line.id as string;
+        for (const row of attrEventOrderRows) {
+          const oid = row.id as string;
+          const addonLines = addonLinesByOrder.get(oid) ?? [];
+
+          for (const line of addonLines) {
+            const lineId = line.id;
             addonItemMap.set(lineId, {
               id: lineId,
               order_id: oid,
               product_id: pid,
-              quantity: line.quantity as number,
+              quantity: line.quantity,
               subtotal: Number(line.subtotal) || 0,
-              label: (line.label as string | null) ?? null,
-              variant_label: (line.variant_label as string | null) ?? null,
-              shipped_at: (line.shipped_at as string | null) ?? null,
-              carrier_tracking_number: (line.carrier_tracking_number as string | null) ?? null,
+              label: line.label,
+              variant_label: line.variant_label,
+              shipped_at: line.shipped_at,
+              carrier_tracking_number: line.carrier_tracking_number,
               orders: row,
             });
             mergeAddonAccess(addonItemAccessMap, lineId, link);
           }
         }
-      }
+      })
+    );
 
-      if (link.type === 'collab' && link.collab_sales_scope === 'all_for_resource') {
-        let evOrdersQuery = supabase
-          .from('orders')
-          .select(
-            'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata, host_org_id'
-          )
-          .eq('host_org_id', link.host_org_id);
+    const allForResourceAddonLinks = productLinksWithId.filter(
+      (l) => l.type === 'collab' && l.collab_sales_scope === 'all_for_resource'
+    );
 
-        evOrdersQuery = applyEventOrderFilters(evOrdersQuery) as typeof evOrdersQuery;
-
-        const { data: evOrders, error: evErr } = await evOrdersQuery;
-        if (evErr) {
-          console.error('fetchPartnerVisibleProductOrdersForTable: event orders for addon', evErr);
-          continue;
-        }
-
-        for (const row of (evOrders || []) as Record<string, unknown>[]) {
-          const oid = row.id as string;
-          const { data: addonLines } = await supabase
-            .from('order_addon_items')
+    await Promise.all(
+      Array.from(groupLinksByHost(allForResourceAddonLinks).entries()).map(
+        async ([hostOrgId, hostLinks]) => {
+          let evOrdersQuery = supabase
+            .from('orders')
             .select(
-              'id, order_id, product_id, quantity, subtotal, label, variant_label, shipped_at, carrier_tracking_number'
+              'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata, host_org_id'
             )
-            .eq('order_id', oid)
-            .eq('product_id', pid);
+            .eq('host_org_id', hostOrgId)
+            .order('created_at', { ascending: false })
+            .limit(DEFAULT_LIST_LIMIT);
 
-          for (const line of (addonLines || []) as Record<string, unknown>[]) {
-            const lineId = line.id as string;
-            addonItemMap.set(lineId, {
-              id: lineId,
-              order_id: oid,
-              product_id: pid,
-              quantity: line.quantity as number,
-              subtotal: Number(line.subtotal) || 0,
-              label: (line.label as string | null) ?? null,
-              variant_label: (line.variant_label as string | null) ?? null,
-              shipped_at: (line.shipped_at as string | null) ?? null,
-              carrier_tracking_number: (line.carrier_tracking_number as string | null) ?? null,
-              orders: row,
-            });
-            mergeAddonAccess(addonItemAccessMap, lineId, link);
+          evOrdersQuery = applyEventOrderFilters(evOrdersQuery) as typeof evOrdersQuery;
+
+          const { data: evOrders, error: evErr } = await applyAbortSignal(evOrdersQuery, signal);
+          if (evErr) {
+            console.error('fetchPartnerVisibleProductOrdersForTable: event orders for addon', evErr);
+            throw evErr;
+          }
+
+          const evOrderRows = (evOrders || []) as Record<string, unknown>[];
+          const evOrderIds = evOrderRows.map((row) => row.id as string);
+          const productIds = [
+            ...new Set(hostLinks.map((l) => l.product_id).filter(Boolean)),
+          ] as string[];
+          const addonLinesByOrder = await fetchAddonLinesByOrderIdsAndProducts(
+            evOrderIds,
+            productIds,
+            signal
+          );
+
+          for (const link of hostLinks) {
+            const pid = link.product_id!;
+            for (const row of evOrderRows) {
+              const oid = row.id as string;
+              const addonLines = (addonLinesByOrder.get(oid) ?? []).filter(
+                (line) => line.product_id === pid
+              );
+
+              for (const line of addonLines) {
+                const lineId = line.id;
+                addonItemMap.set(lineId, {
+                  id: lineId,
+                  order_id: oid,
+                  product_id: pid,
+                  quantity: line.quantity,
+                  subtotal: Number(line.subtotal) || 0,
+                  label: line.label,
+                  variant_label: line.variant_label,
+                  shipped_at: line.shipped_at,
+                  carrier_tracking_number: line.carrier_tracking_number,
+                  orders: row,
+                });
+                mergeAddonAccess(addonItemAccessMap, lineId, link);
+              }
+            }
           }
         }
-      }
-    }
+      )
+    );
   }
 
   return {

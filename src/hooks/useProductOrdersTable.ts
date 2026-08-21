@@ -14,6 +14,7 @@ import {
   type PartnerCommissionLine,
 } from '@/lib/productOrderPartnerCommission';
 import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+import { applyAbortSignal, mapChunked, withQueryTimeout } from '@/lib/supabase-chunked-in';
 
 export type { PartnerCommissionLine };
 
@@ -52,6 +53,8 @@ export interface ProductOrderTableRow {
   shippedAt: string | null;
   displayStatus: string;
   partnerCommissions: PartnerCommissionLine[];
+  /** Product IDs in this order/line (for per-item filtering). */
+  productIds: string[];
 }
 
 function buildBuyerName(first: string | null, last: string | null): string {
@@ -117,6 +120,17 @@ function maskPartnerPii<T extends string | null>(value: T): T {
   return (value ? '—' : value) as T;
 }
 
+function collectProductIdsFromOrderItems(
+  orderItems: Array<{ metadata?: Record<string, unknown> }>
+): string[] {
+  const ids = new Set<string>();
+  for (const item of orderItems) {
+    const pid = item.metadata?.product_id as string | undefined;
+    if (pid) ids.add(pid);
+  }
+  return Array.from(ids);
+}
+
 function paymentFieldsFromOrder(
   order: Record<string, unknown>,
   amount: number
@@ -147,6 +161,53 @@ const ORDER_SELECT = `
   metadata
 `;
 
+function createStageTimer() {
+  const start = performance.now();
+  let last = start;
+  return (stage: string) => {
+    const now = performance.now();
+    if (import.meta.env.DEV) {
+      console.debug(
+        `[product-orders-table] ${stage}: ${Math.round(now - last)}ms (total ${Math.round(now - start)}ms)`
+      );
+    }
+    last = now;
+  };
+}
+
+async function fetchEventOrderIdsForEvents(
+  eventIds: string[],
+  opts: {
+    applyDateFilter: boolean;
+    startISO: string | null;
+    endISO: string | null;
+    signal?: AbortSignal;
+  }
+): Promise<string[]> {
+  if (eventIds.length === 0) return [];
+
+  const rows = await mapChunked(eventIds, async (chunk) => {
+    let q = supabase
+      .from('orders')
+      .select('id, created_at')
+      .in('event_id', chunk)
+      .in('payment_status', ['submitted', 'paid']);
+
+    if (opts.applyDateFilter && opts.startISO && opts.endISO) {
+      q = q.gte('created_at', opts.startISO).lte('created_at', opts.endISO);
+    }
+
+    const { data, error } = await applyAbortSignal(q, opts.signal);
+    if (error) throw error;
+    return (data || []) as Array<{ id: string; created_at: string }>;
+  });
+
+  rows.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  return rows.slice(0, DEFAULT_LIST_LIMIT).map((row) => row.id);
+}
+
 export function useProductOrdersTable(
   rangeKey: ProductOrdersRangeKey = '30d',
   options?: { enabled?: boolean }
@@ -156,48 +217,63 @@ export function useProductOrdersTable(
 
   return useQuery({
     queryKey: ['product-orders-table', currentOrg?.id, rangeKey],
-    queryFn: async (): Promise<ProductOrderTableRow[]> => {
+    retry: 1,
+    placeholderData: (previousData) => previousData,
+    queryFn: async ({ signal }): Promise<ProductOrderTableRow[]> => {
       if (!currentOrg) return [];
 
-      const applyDateFilter = rangeKey !== 'all';
-      const startISO = applyDateFilter ? getDateRange(rangeKey).start.toISOString() : null;
-      const endISO = applyDateFilter ? getDateRange(rangeKey).end.toISOString() : null;
+      return withQueryTimeout(
+        (async () => {
+          const mark = createStageTimer();
 
-      let productOrdersQuery = supabase
-        .from('orders')
-        .select(ORDER_SELECT)
-        .eq('order_type', 'product')
-        .eq('host_org_id', currentOrg.id)
-        .in('payment_status', ['submitted', 'paid']);
+          const applyDateFilter = rangeKey !== 'all';
+          const startISO = applyDateFilter ? getDateRange(rangeKey).start.toISOString() : null;
+          const endISO = applyDateFilter ? getDateRange(rangeKey).end.toISOString() : null;
 
-      if (applyDateFilter && startISO && endISO) {
-        productOrdersQuery = productOrdersQuery
-          .gte('created_at', startISO)
-          .lte('created_at', endISO);
-      }
+          let productOrdersQuery = supabase
+            .from('orders')
+            .select(ORDER_SELECT)
+            .eq('order_type', 'product')
+            .eq('host_org_id', currentOrg.id)
+            .in('payment_status', ['submitted', 'paid']);
 
-      const [
-        { data: productOrdersData, error: productError },
-        { data: hostLinks, error: linksError },
-        partnerFetch,
-      ] = await Promise.all([
-        productOrdersQuery.order('created_at', { ascending: false }).limit(DEFAULT_LIST_LIMIT),
-        supabase
-          .from('tracking_links')
-          .select(
-            'id, affiliate_org_id, commission_rate, commission_basis, type, collab_sales_scope, product_id, status'
-          )
-          .eq('host_org_id', currentOrg.id)
-          .eq('status', 'active')
-          .in('type', ['affiliate', 'collab']),
-        fetchPartnerVisibleProductOrdersForTable(currentOrg.id, {
-          startISO,
-          endISO,
-        }),
-      ]);
+          if (applyDateFilter && startISO && endISO) {
+            productOrdersQuery = productOrdersQuery
+              .gte('created_at', startISO)
+              .lte('created_at', endISO);
+          }
 
-      if (productError) throw productError;
-      if (linksError) throw linksError;
+          const [
+            { data: productOrdersData, error: productError },
+            { data: hostLinks, error: linksError },
+            partnerFetch,
+          ] = await Promise.all([
+            applyAbortSignal(
+              productOrdersQuery.order('created_at', { ascending: false }).limit(DEFAULT_LIST_LIMIT),
+              signal
+            ),
+            applyAbortSignal(
+              supabase
+                .from('tracking_links')
+                .select(
+                  'id, affiliate_org_id, commission_rate, commission_basis, type, collab_sales_scope, product_id, status'
+                )
+                .eq('host_org_id', currentOrg.id)
+                .eq('status', 'active')
+                .in('type', ['affiliate', 'collab']),
+              signal
+            ),
+            fetchPartnerVisibleProductOrdersForTable(currentOrg.id, {
+              startISO,
+              endISO,
+              signal,
+            }),
+          ]);
+
+          mark('initial parallel fetch');
+
+          if (productError) throw productError;
+          if (linksError) throw linksError;
 
       const linkList = (hostLinks || []) as HostPartnerLink[];
       const linksById = buildLinksById(linkList);
@@ -214,29 +290,49 @@ export function useProductOrdersTable(
           ...partnerLinkList.map((l) => l.affiliate_org_id).filter(Boolean),
         ]),
       ] as string[];
-      const orgNameMap = new Map<string, string>();
-      if (affiliateOrgIds.length > 0) {
-        const { data: orgsData } = await supabase
-          .from('orgs')
-          .select('id, name')
-          .in('id', affiliateOrgIds);
-        (orgsData || []).forEach((o: { id: string; name: string }) => {
-          orgNameMap.set(o.id, o.name);
-        });
-      }
-      orgNameMap.set(currentOrg.id, currentOrg.name);
 
-      const { data: orgEvents } = await supabase
-        .from('events')
-        .select('id, title')
-        .eq('org_id', currentOrg.id);
+      const orgsPromise =
+        affiliateOrgIds.length > 0
+          ? applyAbortSignal(
+              supabase.from('orgs').select('id, name').in('id', affiliateOrgIds),
+              signal
+            )
+          : Promise.resolve({ data: [] as { id: string; name: string }[], error: null });
+
+      const eventsPromise = applyAbortSignal(
+        supabase
+          .from('events')
+          .select('id, title')
+          .eq('org_id', currentOrg.id)
+          .limit(DEFAULT_LIST_LIMIT),
+        signal
+      );
+
+      const hostProductOrderIds = (productOrdersData || []).map((o: { id: string }) => o.id);
+      const partnerProductOrderIds = partnerFetch.orderRows.map((o) => o.id as string);
+      const allProductOrderIds = [
+        ...new Set([...hostProductOrderIds, ...partnerProductOrderIds]),
+      ];
+
+      const [{ data: orgsData }, { data: orgEvents }] = await Promise.all([
+        orgsPromise,
+        eventsPromise,
+      ]);
+
+      mark('orgs and events');
+
+      const orgNameMap = new Map<string, string>();
+      (orgsData || []).forEach((o: { id: string; name: string }) => {
+        orgNameMap.set(o.id, o.name);
+      });
+      orgNameMap.set(currentOrg.id, currentOrg.name);
 
       const eventIds = (orgEvents || []).map((e: { id: string }) => e.id);
       const eventTitleMap = new Map(
         (orgEvents || []).map((e: { id: string; title: string }) => [e.id, e.title])
       );
 
-      let addonItemsRaw: Array<{
+      type AddonItemRaw = {
         id: string;
         order_id: string;
         quantity: number;
@@ -247,32 +343,20 @@ export function useProductOrdersTable(
         shipped_at: string | null;
         carrier_tracking_number: string | null;
         orders: Record<string, unknown>;
-      }> = [];
+      };
 
-      if (eventIds.length > 0) {
-        let eventOrdersQuery = supabase
-          .from('orders')
-          .select('id')
-          .in('event_id', eventIds)
-          .in('payment_status', ['submitted', 'paid']);
+      const fetchHostAddonItems = async (): Promise<AddonItemRaw[]> => {
+        if (eventIds.length === 0) return [];
 
-        if (applyDateFilter && startISO && endISO) {
-          eventOrdersQuery = eventOrdersQuery
-            .gte('created_at', startISO)
-            .lte('created_at', endISO);
-        }
+        const eventOrderIds = await fetchEventOrderIdsForEvents(eventIds, {
+          applyDateFilter,
+          startISO,
+          endISO,
+          signal,
+        });
+        if (eventOrderIds.length === 0) return [];
 
-        const { data: eventOrders, error: eventOrdersError } = await eventOrdersQuery;
-
-        if (eventOrdersError) throw eventOrdersError;
-
-        const eventOrderIds = (eventOrders || []).map((o: { id: string }) => o.id);
-
-        if (eventOrderIds.length > 0) {
-          const { data: addonData, error: addonError } = await supabase
-            .from('order_addon_items')
-            .select(
-              `
+        const addonSelect = `
               id,
               order_id,
               quantity,
@@ -298,33 +382,38 @@ export function useProductOrdersTable(
                 tracking_link_id,
                 metadata
               )
-            `
-            )
-            .in('order_id', eventOrderIds);
+            `;
 
+        return mapChunked(eventOrderIds, async (chunk) => {
+          const { data: addonData, error: addonError } = await applyAbortSignal(
+            supabase.from('order_addon_items').select(addonSelect).in('order_id', chunk),
+            signal
+          );
           if (addonError) throw addonError;
-          addonItemsRaw = (addonData || []) as typeof addonItemsRaw;
-        }
-      }
+          return (addonData || []) as AddonItemRaw[];
+        });
+      };
 
-      const hostProductOrderIds = (productOrdersData || []).map((o: { id: string }) => o.id);
-      const partnerProductOrderIds = partnerFetch.orderRows.map((o) => o.id as string);
-      const allProductOrderIds = [
-        ...new Set([...hostProductOrderIds, ...partnerProductOrderIds]),
-      ];
+      const fetchOrderItemsMap = async (): Promise<
+        Map<string, Array<{ quantity: number; metadata?: Record<string, unknown> }>>
+      > => {
+        const orderItemsMap = new Map<
+          string,
+          Array<{ quantity: number; metadata?: Record<string, unknown> }>
+        >();
 
-      const orderItemsMap = new Map<
-        string,
-        Array<{ quantity: number; metadata?: Record<string, unknown> }>
-      >();
+        if (allProductOrderIds.length === 0) return orderItemsMap;
 
-      if (allProductOrderIds.length > 0) {
-        const { data: orderItemsData } = await supabase
-          .from('order_items')
-          .select('order_id, quantity, metadata')
-          .in('order_id', allProductOrderIds);
+        const items = await mapChunked(allProductOrderIds, async (chunk) => {
+          const { data: orderItemsData, error: orderItemsError } = await applyAbortSignal(
+            supabase.from('order_items').select('order_id, quantity, metadata').in('order_id', chunk),
+            signal
+          );
+          if (orderItemsError) throw orderItemsError;
+          return orderItemsData || [];
+        });
 
-        (orderItemsData || []).forEach(
+        items.forEach(
           (item: { order_id: string; quantity: number; metadata?: Record<string, unknown> }) => {
             if (!orderItemsMap.has(item.order_id)) {
               orderItemsMap.set(item.order_id, []);
@@ -335,7 +424,15 @@ export function useProductOrdersTable(
             });
           }
         );
-      }
+        return orderItemsMap;
+      };
+
+      const [addonItemsRaw, orderItemsMap] = await Promise.all([
+        fetchHostAddonItems(),
+        fetchOrderItemsMap(),
+      ]);
+
+      mark('addons and order_items');
 
       const productIds = new Set<string>();
       orderItemsMap.forEach((items) => {
@@ -360,16 +457,22 @@ export function useProductOrdersTable(
       const productsMap = new Map<string, { title: string }>();
       const productCostMap = new Map<string, number>();
       if (productIds.size > 0) {
-        const { data: productsData } = await supabase
-          .from('products')
-          .select('id, title, cost')
-          .in('id', Array.from(productIds));
+        const productsData = await mapChunked(Array.from(productIds), async (chunk) => {
+          const { data, error } = await applyAbortSignal(
+            supabase.from('products').select('id, title, cost').in('id', chunk),
+            signal
+          );
+          if (error) throw error;
+          return data || [];
+        });
 
-        (productsData || []).forEach((p: { id: string; title: string; cost: number | null }) => {
+        productsData.forEach((p: { id: string; title: string; cost: number | null }) => {
           productsMap.set(p.id, { title: p.title });
           if (p.cost != null) productCostMap.set(p.id, Number(p.cost));
         });
       }
+
+      mark('products');
 
       const hostCommissionContext = {
         linksById,
@@ -433,6 +536,7 @@ export function useProductOrdersTable(
             shippedAt,
             displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
             partnerCommissions,
+            productIds: collectProductIdsFromOrderItems(orderItems),
           };
         }
       );
@@ -494,6 +598,7 @@ export function useProductOrdersTable(
             shippedAt,
             displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
             partnerCommissions,
+            productIds: collectProductIdsFromOrderItems(orderItems),
           };
         });
 
@@ -546,6 +651,7 @@ export function useProductOrdersTable(
           shippedAt,
           displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
           partnerCommissions,
+          productIds: item.product_id ? [item.product_id] : [],
         };
       });
 
@@ -558,11 +664,15 @@ export function useProductOrdersTable(
       ] as string[];
 
       if (partnerAddonEventIds.length > 0) {
-        const { data: partnerEvents } = await supabase
-          .from('events')
-          .select('id, title')
-          .in('id', partnerAddonEventIds);
-        (partnerEvents || []).forEach((e: { id: string; title: string }) => {
+        const partnerEvents = await mapChunked(partnerAddonEventIds, async (chunk) => {
+          const { data, error } = await applyAbortSignal(
+            supabase.from('events').select('id, title').in('id', chunk),
+            signal
+          );
+          if (error) throw error;
+          return data || [];
+        });
+        partnerEvents.forEach((e: { id: string; title: string }) => {
           if (!eventTitleMap.has(e.id)) eventTitleMap.set(e.id, e.title);
         });
       }
@@ -628,6 +738,7 @@ export function useProductOrdersTable(
             shippedAt,
             displayStatus: deriveDisplayStatus(payment.paymentStatus, shippedAt, fulfillmentStatus),
             partnerCommissions,
+            productIds: item.product_id ? [item.product_id] : [],
           };
         });
 
@@ -635,7 +746,11 @@ export function useProductOrdersTable(
       merged.sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
+      mark('row mapping complete');
       return merged;
+        })(),
+        signal
+      );
     },
     enabled: enabled && !!currentOrg,
   });
