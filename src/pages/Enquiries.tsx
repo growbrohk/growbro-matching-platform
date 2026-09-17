@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Mail, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -6,402 +6,157 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from 
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { getBookingRequestsForSpaces } from '@/lib/api/poster-spaces';
-import {
-  ENQUIRIES_FEED_FETCH_LIMIT,
-  ENQUIRIES_PAGE_SIZE,
-} from '@/lib/constants/query-limits';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import EnquiryCard from '@/components/enquiries/EnquiryCard';
-import MessageEnquiryRow, { type MessageEnquiryRowData } from '@/components/enquiries/MessageEnquiryRow';
-import HostEnquiryOrderCard, { type HostOrderCardData } from '@/components/host/HostEnquiryOrderCard';
+import MessageEnquiryRow from '@/components/enquiries/MessageEnquiryRow';
+import HostEnquiryOrderCard from '@/components/host/HostEnquiryOrderCard';
 import AffiliateRequestCard from '@/components/enquiries/AffiliateRequestCard';
 import { useUnreadEnquiriesCount } from '@/hooks/use-unread-enquiries-count';
 import { usePendingConnectionsCount } from '@/hooks/use-pending-connections-count';
 import ConnectRequestsPreviewCard from '@/components/connections/ConnectRequestsPreviewCard';
+import { useEnquiriesFeed, enquiriesFeedQueryKey } from '@/hooks/use-enquiries-feed';
+import {
+  applyRequesterOrgMap,
+  fetchRequesterOrgMap,
+  filterEnquiriesForTab,
+  type AffiliateRequestRow,
+  type EnquiriesFilterType,
+  type EnquiryItem,
+} from '@/lib/api/enquiries-feed';
 
-type FilterType = 'all' | 'requests' | 'messages' | 'sales_orders' | 'archived';
-
-/** Columns required by HostEnquiryOrderCard / enquiry list (avoids select *) */
-const HOST_ORDER_CARD_COLUMNS =
-  'order_id,order_no,fulfillment_status,confirmed_at,updated_at,payment_method,receipt_url,metadata,buyer_first_name,buyer_last_name,buyer_phone,total_amount,currency,event_id,event_title,event_start_at,event_location_text,event_cover_image_url,org_id,tickets_count';
-
-export interface EnquiryItem {
-  id: string;
-  type: 'request' | 'message' | 'sales_order' | 'system';
-  status?: 'pending' | 'waiting_confirmation' | 'confirmed' | 'archived' | string;
-  brand?: { name: string; slug?: string; logoUrl?: string; category?: string; location?: string };
-  item?: { name: string; thumbnailUrl?: string; type?: 'event' | 'product' | 'space' };
-  period?: { start?: string | Date; end?: string | Date };
-  previewText?: string;
-  date: string | Date;
-  unread?: boolean;
-  channel?: 'POS' | 'Website' | string;
-  productType?: string;
-  spaceType?: string;
-}
-
-interface AffiliateRequestRow {
-  id: string;
-  tracking_link_id: string;
-  host_org_id: string;
-  affiliate_org_id: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  created_at: string;
-  tracking_link: {
-    slug: string;
-    label: string | null;
-    destination_url: string;
-    commission_rate: number;
-    start_date: string;
-    end_date: string;
-  };
-  host_org: {
-    name: string;
-    slug?: string;
-  };
-}
+export type { EnquiryItem };
 
 export default function Enquiries() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { currentOrg } = useAuth();
   const { refetch: refetchUnreadCount } = useUnreadEnquiriesCount();
-  const { data: pendingConnectionsData } = usePendingConnectionsCount();
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [filter, setFilter] = useState<EnquiriesFilterType>('sales_orders');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  const [enquiries, setEnquiries] = useState<EnquiryItem[]>([]);
-  const [messageEnquiries, setMessageEnquiries] = useState<MessageEnquiryRowData[]>([]);
-  const [hostOrders, setHostOrders] = useState<HostOrderCardData[]>([]);
-  const [affiliateRequests, setAffiliateRequests] = useState<AffiliateRequestRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(ENQUIRIES_PAGE_SIZE);
+  const [enrichedEnquiries, setEnrichedEnquiries] = useState<EnquiryItem[] | null>(null);
 
-  const fetchEnquiries = useCallback(async (options?: { isCancelled?: () => boolean }) => {
-    if (!currentOrg) return;
-    setLoading(true);
-    try {
-      const allEnquiries: EnquiryItem[] = [];
+  const showConnectPreview = filter === 'all' || filter === 'requests';
+  const { data: pendingConnectionsData } = usePendingConnectionsCount({
+    enabled: showConnectPreview,
+  });
 
-      const { data: spaces } = await supabase
-        .from('poster_spaces')
-        .select('id, title, photos, category')
-        .eq('org_id', currentOrg.id);
+  const {
+    data: feedPages,
+    isLoading: loading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useEnquiriesFeed(filter, {
+    onMarkSeenComplete: () => {
+      void refetchUnreadCount();
+    },
+  });
 
-      const spaceList = spaces ?? [];
-      const spaceIds = spaceList.map((s) => s.id);
-      const spaceById = new Map(spaceList.map((s) => [s.id, s] as const));
+  const merged = useMemo(() => {
+    if (!feedPages?.pages.length) {
+      return {
+        enquiries: [] as EnquiryItem[],
+        hostOrders: [],
+        messageEnquiries: [],
+        affiliateRequests: [] as AffiliateRequestRow[],
+        bookings: [],
+        requesterUserIds: [] as string[],
+      };
+    }
 
-      const [bookingRows, ordersResult, inboxResult, affiliateResult] = await Promise.all([
-        spaceIds.length === 0 ? Promise.resolve([]) : getBookingRequestsForSpaces(spaceIds),
-        supabase
-          .from('host_order_cards')
-          .select(HOST_ORDER_CARD_COLUMNS)
-          .eq('org_id', currentOrg.id)
-          .order('updated_at', { ascending: false })
-          .limit(ENQUIRIES_FEED_FETCH_LIMIT),
-        supabase.rpc('get_conversation_inbox', {
-          p_org_id: currentOrg.id,
-          p_limit: ENQUIRIES_FEED_FETCH_LIMIT,
-        }),
-        supabase
-          .from('affiliate_requests')
-          .select(`
-          id,
-          tracking_link_id,
-          host_org_id,
-          affiliate_org_id,
-          status,
-          created_at,
-          tracking_links!inner(
-            slug,
-            label,
-            destination_url,
-            commission_rate,
-            start_date,
-            end_date
-          ),
-          orgs!affiliate_requests_host_org_id_fkey(
-            name,
-            slug
-          )
-        `)
-          .eq('affiliate_org_id', currentOrg.id)
-          .order('created_at', { ascending: false })
-          .limit(ENQUIRIES_FEED_FETCH_LIMIT),
-      ]);
+    const hostOrdersById = new Map();
+    const messageById = new Map();
+    const affiliateById = new Map();
+    const enquiries: EnquiryItem[] = [];
+    const bookings: (typeof feedPages.pages)[0]['bookings'] = [];
+    const requesterUserIds = new Set<string>();
 
-      const allRequests: Array<{ request: any; space: any }> = [];
-      for (const request of bookingRows) {
-        const space = spaceById.get(request.poster_space_id);
-        if (!space) continue;
-        allRequests.push({ request, space });
+    for (const page of feedPages.pages) {
+      for (const order of page.hostOrders) {
+        hostOrdersById.set(order.order_id, order);
       }
-
-      const requesterUserIds = allRequests
-        .map((r) => r.request.requester_user_id)
-        .filter(Boolean) as string[];
-
-      const requesterOrgMap = new Map<string, any>();
-      if (requesterUserIds.length > 0) {
-        const { data: orgMembers } = await supabase
-          .from('org_members')
-          .select('user_id, org_id, orgs(name, slug, org_profiles(logo_url, category, location))')
-          .in('user_id', requesterUserIds);
-
-        if (orgMembers) {
-          for (const member of orgMembers) {
-            const orgData = member.orgs as any;
-            const profileData = Array.isArray(orgData?.org_profiles)
-              ? orgData.org_profiles[0]
-              : orgData?.org_profiles;
-
-            if (!requesterOrgMap.has(member.user_id)) {
-              requesterOrgMap.set(member.user_id, {
-                name: orgData?.name,
-                slug: orgData?.slug,
-                logoUrl: profileData?.logo_url,
-                category: profileData?.category,
-                location: profileData?.location,
-              });
-            }
-          }
-        }
+      for (const msg of page.messageEnquiries) {
+        messageById.set(msg.conversation_id, msg);
       }
-
-      const unreadRequestIds = allRequests
-        .filter(({ request }) => !request.host_seen_at)
-        .map(({ request }) => request.id);
-
-      for (const { request, space } of allRequests) {
-        const requesterOrg = request.requester_user_id
-          ? requesterOrgMap.get(request.requester_user_id)
-          : null;
-
-        allEnquiries.push({
-          id: request.id,
-          type: 'request',
-          status:
-            request.status === 'pending'
-              ? 'pending'
-              : request.status === 'approved'
-                ? 'confirmed'
-                : 'archived',
-          brand: {
-            name: request.requester_name || requesterOrg?.name || 'Unknown',
-            slug: requesterOrg?.slug,
-            logoUrl: requesterOrg?.logoUrl,
-            category: requesterOrg?.category,
-            location: requesterOrg?.location,
-          },
-          item: {
-            name: space.title || 'Space',
-            thumbnailUrl: Array.isArray(space.photos) && space.photos.length > 0 ? space.photos[0] : undefined,
-            type: 'space',
-          },
-          period: {
-            start: request.requested_start_date,
-            end: request.computed_end_date,
-          },
-          previewText: request.message || undefined,
-          date: request.created_at,
-          unread: request.status === 'pending',
-        });
+      for (const aff of page.affiliateRequests) {
+        affiliateById.set(aff.id, aff);
       }
-
-      const { data: hostOrderCards, error: ordersError } = ordersResult;
-      if (ordersError) {
-        console.error('Error fetching host orders:', ordersError);
-      } else if (hostOrderCards) {
-        setHostOrders(hostOrderCards as HostOrderCardData[]);
-
-        for (const order of hostOrderCards) {
-          const isProductOrder = !order.event_id;
-          allEnquiries.push({
-            id: order.order_id,
-            type: 'sales_order',
-            status:
-              order.fulfillment_status === 'confirmed'
-                ? 'confirmed'
-                : order.fulfillment_status === 'pending_confirmation'
-                  ? 'waiting_confirmation'
-                  : 'archived',
-            brand: {
-              name: isProductOrder ? 'Product Order' : 'Event Order',
-            },
-            item: {
-              name: order.event_title || (isProductOrder ? 'Product' : 'Event'),
-              thumbnailUrl: order.event_cover_image_url || undefined,
-              type: isProductOrder ? 'product' : 'event',
-            },
-            previewText: `Order ${order.order_no || order.order_id.slice(0, 8)}`,
-            date: order.updated_at,
-            unread: order.fulfillment_status === 'pending_confirmation',
-            channel: 'Website',
-            productType: isProductOrder ? 'product' : 'ticket',
-          });
-        }
-      }
-
-      const { data: inboxData, error: inboxError } = inboxResult;
-      if (!inboxError && inboxData) {
-        setMessageEnquiries(inboxData as MessageEnquiryRowData[]);
-
-        for (const inboxRow of inboxData) {
-          allEnquiries.push({
-            id: inboxRow.conversation_id,
-            type: 'message',
-            status: 'pending',
-            brand: {
-              name: inboxRow.other_org_name,
-              logoUrl: inboxRow.other_org_logo_url || undefined,
-            },
-            item: {
-              name: 'Message',
-              type: 'message',
-            },
-            previewText: inboxRow.last_message_body,
-            date: inboxRow.last_message_at,
-            unread: inboxRow.unread_count > 0,
-          });
-        }
-      }
-
-      const { data: affiliateRequestsData, error: affiliateError } = affiliateResult;
-      if (affiliateError) {
-        console.error('Error fetching affiliate requests:', affiliateError);
-      } else if (affiliateRequestsData) {
-        const transformedRequests = affiliateRequestsData.map((req: any) => ({
-          id: req.id,
-          tracking_link_id: req.tracking_link_id,
-          host_org_id: req.host_org_id,
-          affiliate_org_id: req.affiliate_org_id,
-          status: req.status as 'pending' | 'accepted' | 'rejected',
-          created_at: req.created_at,
-          tracking_link: req.tracking_links,
-          host_org: Array.isArray(req.orgs) ? req.orgs[0] : req.orgs,
-        })) as AffiliateRequestRow[];
-        setAffiliateRequests(transformedRequests);
-
-        for (const req of transformedRequests) {
-          if (req.status === 'pending') {
-            allEnquiries.push({
-              id: req.id,
-              type: 'request',
-              status: 'pending',
-              brand: {
-                name: req.host_org.name,
-                slug: req.host_org.slug,
-              },
-              item: {
-                name: req.tracking_link.label || req.tracking_link.destination_url,
-                type: 'event',
-              },
-              period: {
-                start: req.tracking_link.start_date,
-                end: req.tracking_link.end_date,
-              },
-              previewText: `Commission: ${(req.tracking_link.commission_rate * 100).toFixed(1)}%`,
-              date: req.created_at,
-              unread: req.status === 'pending',
-            });
-          }
-        }
-      }
-
-      allEnquiries.sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return dateB - dateA;
-      });
-
-      if (options?.isCancelled?.()) return;
-
-      setEnquiries(allEnquiries);
-      setVisibleCount(ENQUIRIES_PAGE_SIZE);
-
-      if (unreadRequestIds.length > 0 && !options?.isCancelled?.()) {
-        void supabase
-          .from('poster_space_booking_requests')
-          .update({ host_seen_at: new Date().toISOString() })
-          .in('id', unreadRequestIds)
-          .then(({ error }) => {
-            if (error) console.error('Error marking booking requests seen:', error);
-            else void refetchUnreadCount();
-          });
-      }
-    } catch (error) {
-      console.error('Error fetching enquiries:', error);
-    } finally {
-      if (!options?.isCancelled?.()) {
-        setLoading(false);
+      enquiries.push(...page.enquiries);
+      bookings.push(...page.bookings);
+      for (const id of page.requesterUserIds) {
+        requesterUserIds.add(id);
       }
     }
-  }, [currentOrg, refetchUnreadCount]);
 
-  const handleEnquiriesRefresh = useCallback(() => {
-    void fetchEnquiries();
-  }, [fetchEnquiries]);
+    const sorted = [...enquiries].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    return {
+      enquiries: sorted,
+      hostOrders: [...hostOrdersById.values()],
+      messageEnquiries: [...messageById.values()],
+      affiliateRequests: [...affiliateById.values()],
+      bookings,
+      requesterUserIds: [...requesterUserIds],
+    };
+  }, [feedPages]);
 
   useEffect(() => {
-    if (!currentOrg) return;
+    setEnrichedEnquiries(null);
+    const userIds = merged.requesterUserIds;
+    if (userIds.length === 0) {
+      setEnrichedEnquiries(merged.enquiries);
+      return;
+    }
 
     let cancelled = false;
-    void fetchEnquiries({ isCancelled: () => cancelled });
+    queueMicrotask(() => {
+      void fetchRequesterOrgMap(userIds).then((map) => {
+        if (cancelled) return;
+        setEnrichedEnquiries(
+          applyRequesterOrgMap(merged.enquiries, merged.bookings, map)
+        );
+      });
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [currentOrg, fetchEnquiries]);
+  }, [merged.enquiries, merged.bookings, merged.requesterUserIds.join(',')]);
 
-  useEffect(() => {
-    setVisibleCount(ENQUIRIES_PAGE_SIZE);
-  }, [filter]);
+  const displayEnquiries = enrichedEnquiries ?? merged.enquiries;
 
   const filteredEnquiries = useMemo(
-    () =>
-      enquiries.filter((enquiry) => {
-        if (filter === 'all') {
-          return enquiry.status !== 'archived';
-        }
-        if (filter === 'archived') {
-          return enquiry.status === 'archived';
-        }
-        if (filter === 'requests') {
-          return enquiry.type === 'request' && enquiry.status !== 'archived';
-        }
-        if (filter === 'messages') {
-          return enquiry.type === 'message' && enquiry.status !== 'archived';
-        }
-        if (filter === 'sales_orders') {
-          return enquiry.type === 'sales_order' && enquiry.status !== 'archived';
-        }
-        return true;
-      }),
-    [enquiries, filter]
-  );
-
-  const visibleEnquiries = useMemo(
-    () => filteredEnquiries.slice(0, visibleCount),
-    [filteredEnquiries, visibleCount]
+    () => filterEnquiriesForTab(displayEnquiries, filter),
+    [displayEnquiries, filter]
   );
 
   const hostOrdersById = useMemo(
-    () => new Map(hostOrders.map((order) => [order.order_id, order])),
-    [hostOrders]
+    () => new Map(merged.hostOrders.map((order) => [order.order_id, order])),
+    [merged.hostOrders]
   );
 
   const messageEnquiriesById = useMemo(
-    () => new Map(messageEnquiries.map((row) => [row.conversation_id, row])),
-    [messageEnquiries]
+    () => new Map(merged.messageEnquiries.map((row) => [row.conversation_id, row])),
+    [merged.messageEnquiries]
   );
 
   const affiliateRequestsById = useMemo(
-    () => new Map(affiliateRequests.map((req) => [req.id, req])),
-    [affiliateRequests]
+    () => new Map(merged.affiliateRequests.map((req) => [req.id, req])),
+    [merged.affiliateRequests]
   );
 
-  const hasMoreEnquiries = visibleCount < filteredEnquiries.length;
+  const handleEnquiriesRefresh = useCallback(() => {
+    void refetch();
+    if (currentOrg?.id) {
+      void queryClient.invalidateQueries({
+        queryKey: enquiriesFeedQueryKey(currentOrg.id, filter),
+      });
+    }
+  }, [refetch, queryClient, currentOrg?.id, filter]);
 
   const getEmptyStateMessage = () => {
     switch (filter) {
@@ -462,9 +217,19 @@ export default function Enquiries() {
     return <EnquiryCard key={enquiry.id} enquiry={enquiry} />;
   };
 
+  const filterLabel =
+    filter === 'all'
+      ? 'All'
+      : filter === 'requests'
+        ? 'Requests'
+        : filter === 'messages'
+          ? 'Messages'
+          : filter === 'sales_orders'
+            ? 'Sales Orders'
+            : 'Archived';
+
   return (
     <div className="max-w-7xl space-y-6 md:space-y-8">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -480,54 +245,65 @@ export default function Enquiries() {
           </p>
         </div>
 
-        {/* Filter Button */}
-        <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
-          <DrawerTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-full"
-              style={{ borderColor: 'rgba(14,122,58,0.2)' }}
-            >
-              <SlidersHorizontal className="h-5 w-5" style={{ color: '#0E7A3A' }} />
-            </Button>
-          </DrawerTrigger>
-          <DrawerContent>
-            <DrawerHeader>
-              <DrawerTitle>Filter Enquiries</DrawerTitle>
-            </DrawerHeader>
-            <div className="p-4">
-              <RadioGroup value={filter} onValueChange={(value) => { setFilter(value as FilterType); setFilterDrawerOpen(false); }}>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="all" id="all" />
-                    <Label htmlFor="all" className="cursor-pointer flex-1">All</Label>
+        <div className="flex items-center gap-2">
+          {filter !== 'all' && (
+            <span className="text-xs font-medium hidden sm:inline" style={{ color: 'rgba(15,31,23,0.6)' }}>
+              {filterLabel}
+            </span>
+          )}
+          <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
+            <DrawerTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 rounded-full"
+                style={{ borderColor: 'rgba(14,122,58,0.2)' }}
+              >
+                <SlidersHorizontal className="h-5 w-5" style={{ color: '#0E7A3A' }} />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent>
+              <DrawerHeader>
+                <DrawerTitle>Filter Enquiries</DrawerTitle>
+              </DrawerHeader>
+              <div className="p-4">
+                <RadioGroup
+                  value={filter}
+                  onValueChange={(value) => {
+                    setFilter(value as EnquiriesFilterType);
+                    setFilterDrawerOpen(false);
+                  }}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="all" id="all" />
+                      <Label htmlFor="all" className="cursor-pointer flex-1">All</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="requests" id="requests" />
+                      <Label htmlFor="requests" className="cursor-pointer flex-1">Requests</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="messages" id="messages" />
+                      <Label htmlFor="messages" className="cursor-pointer flex-1">Messages</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="sales_orders" id="sales_orders" />
+                      <Label htmlFor="sales_orders" className="cursor-pointer flex-1">Sales Orders</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="archived" id="archived" />
+                      <Label htmlFor="archived" className="cursor-pointer flex-1">Archived</Label>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="requests" id="requests" />
-                    <Label htmlFor="requests" className="cursor-pointer flex-1">Requests</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="messages" id="messages" />
-                    <Label htmlFor="messages" className="cursor-pointer flex-1">Messages</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="sales_orders" id="sales_orders" />
-                    <Label htmlFor="sales_orders" className="cursor-pointer flex-1">Sales Orders</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="archived" id="archived" />
-                    <Label htmlFor="archived" className="cursor-pointer flex-1">Archived</Label>
-                  </div>
-                </div>
-              </RadioGroup>
-            </div>
-          </DrawerContent>
-        </Drawer>
+                </RadioGroup>
+              </div>
+            </DrawerContent>
+          </Drawer>
+        </div>
       </div>
 
-      {/* Connect Requests Card */}
-      {pendingConnectionsData && (
+      {showConnectPreview && pendingConnectionsData && (
         <ConnectRequestsPreviewCard
           pendingCount={pendingConnectionsData.count}
           connections={pendingConnectionsData.connections}
@@ -535,7 +311,6 @@ export default function Enquiries() {
         />
       )}
 
-      {/* Enquiries List */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-sm" style={{ color: 'rgba(15,31,23,0.72)' }}>Loading enquiries...</div>
@@ -564,20 +339,21 @@ export default function Enquiries() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {visibleEnquiries.map((enquiry) => renderEnquiryRow(enquiry))}
+          {filteredEnquiries.map((enquiry) => renderEnquiryRow(enquiry))}
 
-          {hasMoreEnquiries && (
+          {hasNextPage && (
             <div className="flex flex-col items-center gap-2 pt-2">
               <p className="text-xs" style={{ color: 'rgba(15,31,23,0.6)' }}>
-                Showing {visibleEnquiries.length} of {filteredEnquiries.length}
+                Showing {filteredEnquiries.length} enquiries
               </p>
               <Button
                 variant="outline"
                 className="rounded-full"
                 style={{ borderColor: 'rgba(14,122,58,0.2)' }}
-                onClick={() => setVisibleCount((count) => count + ENQUIRIES_PAGE_SIZE)}
+                disabled={isFetchingNextPage}
+                onClick={() => void fetchNextPage()}
               >
-                Load more
+                {isFetchingNextPage ? 'Loading...' : 'Load more'}
               </Button>
             </div>
           )}

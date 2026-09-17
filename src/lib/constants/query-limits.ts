@@ -9,3 +9,6 @@ export const ENQUIRIES_FEED_FETCH_LIMIT = 100;
 
 /** Enquiry list rows shown per page before Load more. */
 export const ENQUIRIES_PAGE_SIZE = 30;
+
+/** Rows fetched per Enquiries feed page (initial load and each Load more). */
+export const ENQUIRIES_INITIAL_FETCH = ENQUIRIES_PAGE_SIZE;

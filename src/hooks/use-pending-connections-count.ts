@@ -11,8 +11,9 @@ export interface PendingConnection {
   requested_at: string;
 }
 
-export function usePendingConnectionsCount() {
+export function usePendingConnectionsCount(options?: { enabled?: boolean }) {
   const { currentOrg } = useAuth();
+  const enabled = options?.enabled !== false && !!currentOrg;
 
   return useQuery({
     queryKey: ['pending-connections-count', currentOrg?.id],
@@ -34,7 +35,7 @@ export function usePendingConnectionsCount() {
         connections: (data || []) as PendingConnection[],
       };
     },
-    enabled: !!currentOrg,
+    enabled,
     refetchOnWindowFocus: true,
   });
 }

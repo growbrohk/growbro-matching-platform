@@ -55,6 +55,7 @@ export async function invalidateOrderQueries(
     queryClient.invalidateQueries({ queryKey: ['orders-dashboard'] }),
     queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
     queryClient.invalidateQueries({ queryKey: ['product-orders-table'] }),
+    queryClient.invalidateQueries({ queryKey: ['enquiries-feed'] }),
   ];
 
   if (orderId) {

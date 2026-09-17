@@ -407,6 +407,57 @@ export async function getBookingRequestsForSpaces(
   return (data || []) as PosterSpaceBookingRequest[];
 }
 
+export interface BookingRequestWithSpace {
+  request: PosterSpaceBookingRequest;
+  space: { id: string; title: string; photos: string[]; category: string };
+}
+
+/**
+ * Booking requests for an org in one query (spaces embedded via FK).
+ */
+export async function getBookingRequestsForOrg(
+  orgId: string,
+  range: { from: number; to: number }
+): Promise<BookingRequestWithSpace[]> {
+  const { data, error } = await supabase
+    .from('poster_space_booking_requests')
+    .select(`${BOOKING_REQUEST_LIST_SELECT}, poster_spaces!inner(id, title, photos, category)`)
+    .eq('poster_spaces.org_id', orgId)
+    .order('created_at', { ascending: false })
+    .range(range.from, range.to);
+
+  if (error) {
+    console.error('Error fetching booking requests for org:', error);
+    throw error;
+  }
+
+  const rows = data ?? [];
+  return rows.map((row) => {
+    const { poster_spaces: spaceEmbed, ...requestFields } = row as Record<string, unknown>;
+    const spaceRaw = Array.isArray(spaceEmbed) ? spaceEmbed[0] : spaceEmbed;
+    const space = spaceRaw as { id: string; title: string; photos: string[]; category: string };
+    return {
+      request: requestFields as PosterSpaceBookingRequest,
+      space,
+    };
+  });
+}
+
+/** Mark booking requests as seen by the host (clears unread badge for bookings). */
+export async function markBookingRequestsSeen(requestIds: string[]): Promise<void> {
+  if (requestIds.length === 0) return;
+
+  const { error } = await supabase
+    .from('poster_space_booking_requests')
+    .update({ host_seen_at: new Date().toISOString() })
+    .in('id', requestIds);
+
+  if (error) {
+    console.error('Error marking booking requests seen:', error);
+    throw error;
+  }
+}
+
 /**
  * Update booking request status
  */

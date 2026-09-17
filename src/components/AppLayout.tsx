@@ -64,7 +64,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { count: unreadCount } = useUnreadEnquiriesCount();
+  const onEnquiryRoutes =
+    location.pathname.startsWith('/app/enquiries') ||
+    location.pathname.startsWith('/app/messages');
+  const { count: unreadCount } = useUnreadEnquiriesCount({
+    refetchInterval: onEnquiryRoutes ? 60_000 : false,
+  });
 
   const handleSignOut = async () => {
     await signOut();
