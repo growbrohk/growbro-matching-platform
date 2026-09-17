@@ -1,0 +1,34 @@
+-- Enquiries Phase 2 verification (run as org member in SQL editor or psql)
+--
+-- Step 0 - profile legacy view read (optional):
+-- EXPLAIN (ANALYZE, BUFFERS)
+-- SELECT order_id, updated_at FROM host_order_cards
+-- WHERE org_id = '<org-uuid>'
+-- ORDER BY updated_at DESC
+-- LIMIT 30;
+--
+-- EXPLAIN (ANALYZE, BUFFERS)
+-- SELECT * FROM public.get_host_order_list('<org-uuid>', 30, NULL, NULL);
+--
+-- Parity: RPC first page should match view for same order_ids
+-- WITH rpc AS (
+--   SELECT * FROM public.get_host_order_list('<org-uuid>', 30, NULL, NULL)
+-- ),
+-- view_rows AS (
+--   SELECT * FROM host_order_cards
+--   WHERE org_id = '<org-uuid>'
+--   ORDER BY updated_at DESC, order_id DESC
+--   LIMIT 30
+-- )
+-- SELECT v.order_id,
+--        v.tickets_count = r.tickets_count AS tickets_match,
+--        v.event_title = r.event_title AS title_match
+-- FROM view_rows v
+-- JOIN rpc r ON r.order_id = v.order_id;
+--
+-- Keyset: note last row cursor, fetch next page
+-- SELECT * FROM public.get_host_order_list(
+--   '<org-uuid>', 30, '<cursor_updated_at>', '<cursor_order_id>'
+-- );
+
+SELECT 'get_host_order_list and get_conversation_inbox(uuid,int,int) migrations applied' AS note;

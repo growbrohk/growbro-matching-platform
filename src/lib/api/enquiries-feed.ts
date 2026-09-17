@@ -1,8 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import {
-  ENQUIRIES_FEED_FETCH_LIMIT,
-  ENQUIRIES_INITIAL_FETCH,
-} from '@/lib/constants/query-limits';
+import { ENQUIRIES_INITIAL_FETCH } from '@/lib/constants/query-limits';
 import {
   getBookingRequestsForOrg,
   markBookingRequestsSeen,
@@ -62,8 +59,21 @@ export interface RequesterOrgProfile {
   location?: string;
 }
 
-const HOST_ORDER_CARD_COLUMNS =
-  'order_id,order_no,fulfillment_status,confirmed_at,updated_at,payment_method,receipt_url,metadata,buyer_first_name,buyer_last_name,buyer_phone,total_amount,currency,event_id,event_title,event_start_at,event_location_text,event_cover_image_url,org_id,tickets_count';
+export type HostOrdersCursor = { updatedAt: string; orderId: string } | null;
+
+export type EnquiriesPageParam = {
+  ordersCursor: HostOrdersCursor;
+  bookingsOffset: number;
+  affiliatesOffset: number;
+  inboxOffset: number;
+};
+
+export const INITIAL_ENQUIRIES_PAGE_PARAM: EnquiriesPageParam = {
+  ordersCursor: null,
+  bookingsOffset: 0,
+  affiliatesOffset: 0,
+  inboxOffset: 0,
+};
 
 const AFFILIATE_SELECT = `
   id,
@@ -86,9 +96,8 @@ const AFFILIATE_SELECT = `
   )
 `;
 
-function pageRange(pageIndex: number): { from: number; to: number } {
-  const from = pageIndex * ENQUIRIES_INITIAL_FETCH;
-  return { from, to: from + ENQUIRIES_INITIAL_FETCH - 1 };
+function offsetRange(offset: number): { from: number; to: number } {
+  return { from: offset, to: offset + ENQUIRIES_INITIAL_FETCH - 1 };
 }
 
 function sortEnquiries(items: EnquiryItem[]): EnquiryItem[] {
@@ -225,18 +234,19 @@ export interface EnquiriesFeedPageResult {
   unreadRequestIds: string[];
   requesterUserIds: string[];
   hasMore: boolean;
+  nextPageParam: EnquiriesPageParam;
 }
 
 async function fetchHostOrdersPage(
   orgId: string,
-  range: { from: number; to: number }
+  cursor: HostOrdersCursor
 ): Promise<{ orders: HostOrderCardData[]; hasMore: boolean }> {
-  const { data, error } = await supabase
-    .from('host_order_cards')
-    .select(HOST_ORDER_CARD_COLUMNS)
-    .eq('org_id', orgId)
-    .order('updated_at', { ascending: false })
-    .range(range.from, range.to);
+  const { data, error } = await supabase.rpc('get_host_order_list', {
+    p_org_id: orgId,
+    p_limit: ENQUIRIES_INITIAL_FETCH,
+    p_cursor_updated_at: cursor?.updatedAt ?? null,
+    p_cursor_order_id: cursor?.orderId ?? null,
+  });
 
   if (error) {
     console.error('Error fetching host orders:', error);
@@ -249,15 +259,12 @@ async function fetchHostOrdersPage(
 
 async function fetchInboxPage(
   orgId: string,
-  pageIndex: number
+  offset: number
 ): Promise<{ rows: MessageEnquiryRowData[]; hasMore: boolean }> {
-  const limit = Math.min(
-    (pageIndex + 1) * ENQUIRIES_INITIAL_FETCH,
-    ENQUIRIES_FEED_FETCH_LIMIT
-  );
   const { data, error } = await supabase.rpc('get_conversation_inbox', {
     p_org_id: orgId,
-    p_limit: limit,
+    p_limit: ENQUIRIES_INITIAL_FETCH,
+    p_offset: offset,
   });
 
   if (error) {
@@ -266,10 +273,7 @@ async function fetchInboxPage(
   }
 
   const rows = (data ?? []) as MessageEnquiryRowData[];
-  const prevLimit = pageIndex * ENQUIRIES_INITIAL_FETCH;
-  const newRows = rows.slice(prevLimit);
-  const hasMore = rows.length >= limit && limit < ENQUIRIES_FEED_FETCH_LIMIT;
-  return { rows: pageIndex === 0 ? rows : newRows, hasMore };
+  return { rows, hasMore: rows.length === ENQUIRIES_INITIAL_FETCH };
 }
 
 async function fetchAffiliatesPage(
@@ -367,12 +371,44 @@ export function applyRequesterOrgMap(
 
 export { markBookingRequestsSeen };
 
+function buildNextPageParam(
+  pageParam: EnquiriesPageParam,
+  opts: {
+    ordersHasMore: boolean;
+    orders: HostOrderCardData[];
+    bookingsHasMore: boolean;
+    affiliatesHasMore: boolean;
+    inboxHasMore: boolean;
+  }
+): EnquiriesPageParam {
+  const next: EnquiriesPageParam = { ...pageParam };
+
+  if (opts.orders.length > 0) {
+    const last = opts.orders[opts.orders.length - 1];
+    next.ordersCursor = { updatedAt: last.updated_at, orderId: last.order_id };
+  }
+
+  if (opts.bookingsHasMore) {
+    next.bookingsOffset = pageParam.bookingsOffset + ENQUIRIES_INITIAL_FETCH;
+  }
+  if (opts.affiliatesHasMore) {
+    next.affiliatesOffset = pageParam.affiliatesOffset + ENQUIRIES_INITIAL_FETCH;
+  }
+  if (opts.inboxHasMore) {
+    next.inboxOffset = pageParam.inboxOffset + ENQUIRIES_INITIAL_FETCH;
+  }
+
+  return next;
+}
+
 export async function fetchEnquiriesFeedPage(
   orgId: string,
   filter: EnquiriesFilterType,
-  pageIndex: number
+  pageParam: EnquiriesPageParam
 ): Promise<EnquiriesFeedPageResult> {
-  const range = pageRange(pageIndex);
+  const bookingsRange = offsetRange(pageParam.bookingsOffset);
+  const affiliatesRange = offsetRange(pageParam.affiliatesOffset);
+
   const enquiries: EnquiryItem[] = [];
   let hostOrders: HostOrderCardData[] = [];
   let messageEnquiries: MessageEnquiryRowData[] = [];
@@ -380,7 +416,11 @@ export async function fetchEnquiriesFeedPage(
   let bookings: BookingRequestWithSpace[] = [];
   let unreadRequestIds: string[] = [];
   let requesterUserIds: string[] = [];
-  let hasMore = false;
+
+  let ordersHasMore = false;
+  let bookingsHasMore = false;
+  let affiliatesHasMore = false;
+  let inboxHasMore = false;
 
   const includeBookings =
     filter === 'all' || filter === 'requests' || filter === 'archived';
@@ -389,10 +429,11 @@ export async function fetchEnquiriesFeedPage(
   const includeAffiliates = filter === 'all' || filter === 'requests';
 
   if (filter === 'sales_orders') {
-    const { orders, hasMore: ordersHasMore } = await fetchHostOrdersPage(orgId, range);
+    const { orders, hasMore } = await fetchHostOrdersPage(orgId, pageParam.ordersCursor);
     hostOrders = orders;
+    ordersHasMore = hasMore;
     enquiries.push(...orders.map(mapOrderToEnquiry));
-    hasMore = ordersHasMore;
+    const hasMorePage = ordersHasMore;
     return {
       enquiries: sortEnquiries(enquiries),
       hostOrders,
@@ -401,15 +442,22 @@ export async function fetchEnquiriesFeedPage(
       bookings,
       unreadRequestIds,
       requesterUserIds,
-      hasMore,
+      hasMore: hasMorePage,
+      nextPageParam: buildNextPageParam(pageParam, {
+        ordersHasMore,
+        orders,
+        bookingsHasMore: false,
+        affiliatesHasMore: false,
+        inboxHasMore: false,
+      }),
     };
   }
 
   if (filter === 'messages') {
-    const { rows, hasMore: inboxHasMore } = await fetchInboxPage(orgId, pageIndex);
+    const { rows, hasMore } = await fetchInboxPage(orgId, pageParam.inboxOffset);
     messageEnquiries = rows;
+    inboxHasMore = hasMore;
     enquiries.push(...rows.map(mapInboxToEnquiry));
-    hasMore = inboxHasMore;
     return {
       enquiries: sortEnquiries(enquiries),
       hostOrders,
@@ -418,7 +466,14 @@ export async function fetchEnquiriesFeedPage(
       bookings,
       unreadRequestIds,
       requesterUserIds,
-      hasMore,
+      hasMore: inboxHasMore,
+      nextPageParam: buildNextPageParam(pageParam, {
+        ordersHasMore: false,
+        orders: [],
+        bookingsHasMore: false,
+        affiliatesHasMore: false,
+        inboxHasMore,
+      }),
     };
   }
 
@@ -426,8 +481,8 @@ export async function fetchEnquiriesFeedPage(
 
   if (includeBookings) {
     tasks.push(
-      fetchBookingsPage(orgId, range).then(({ bookings: pageBookings, hasMore: bookingsHasMore }) => {
-        hasMore = hasMore || bookingsHasMore;
+      fetchBookingsPage(orgId, bookingsRange).then(({ bookings: pageBookings, hasMore }) => {
+        bookingsHasMore = hasMore;
         bookings = pageBookings;
         unreadRequestIds = pageBookings
           .filter(({ request }) => !request.host_seen_at)
@@ -444,8 +499,8 @@ export async function fetchEnquiriesFeedPage(
 
   if (includeOrders) {
     tasks.push(
-      fetchHostOrdersPage(orgId, range).then(({ orders, hasMore: ordersHasMore }) => {
-        hasMore = hasMore || ordersHasMore;
+      fetchHostOrdersPage(orgId, pageParam.ordersCursor).then(({ orders, hasMore }) => {
+        ordersHasMore = hasMore;
         hostOrders = orders;
         enquiries.push(...orders.map(mapOrderToEnquiry));
       })
@@ -454,8 +509,8 @@ export async function fetchEnquiriesFeedPage(
 
   if (includeInbox) {
     tasks.push(
-      fetchInboxPage(orgId, pageIndex).then(({ rows, hasMore: inboxHasMore }) => {
-        hasMore = hasMore || inboxHasMore;
+      fetchInboxPage(orgId, pageParam.inboxOffset).then(({ rows, hasMore }) => {
+        inboxHasMore = hasMore;
         messageEnquiries = rows;
         enquiries.push(...rows.map(mapInboxToEnquiry));
       })
@@ -464,8 +519,8 @@ export async function fetchEnquiriesFeedPage(
 
   if (includeAffiliates) {
     tasks.push(
-      fetchAffiliatesPage(orgId, range).then(({ affiliates, hasMore: affHasMore }) => {
-        hasMore = hasMore || affHasMore;
+      fetchAffiliatesPage(orgId, affiliatesRange).then(({ affiliates, hasMore }) => {
+        affiliatesHasMore = hasMore;
         affiliateRequests = affiliates;
         for (const req of affiliates) {
           const item = mapAffiliateToEnquiry(req);
@@ -477,6 +532,9 @@ export async function fetchEnquiriesFeedPage(
 
   await Promise.all(tasks);
 
+  const hasMore =
+    ordersHasMore || bookingsHasMore || affiliatesHasMore || inboxHasMore;
+
   return {
     enquiries: sortEnquiries(enquiries),
     hostOrders,
@@ -486,6 +544,13 @@ export async function fetchEnquiriesFeedPage(
     unreadRequestIds,
     requesterUserIds,
     hasMore,
+    nextPageParam: buildNextPageParam(pageParam, {
+      ordersHasMore,
+      orders: hostOrders,
+      bookingsHasMore,
+      affiliatesHasMore,
+      inboxHasMore,
+    }),
   };
 }
 

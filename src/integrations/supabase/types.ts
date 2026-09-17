@@ -2098,7 +2098,7 @@ export type Database = {
         }[]
       }
       get_conversation_inbox: {
-        Args: { p_org_id: string; p_limit?: number }
+        Args: { p_org_id: string; p_limit?: number; p_offset?: number }
         Returns: {
           conversation_id: string
           last_message_at: string
@@ -2107,6 +2107,36 @@ export type Database = {
           other_org_logo_url: string
           other_org_name: string
           unread_count: number
+        }[]
+      }
+      get_host_order_list: {
+        Args: {
+          p_org_id: string
+          p_limit?: number
+          p_cursor_updated_at?: string | null
+          p_cursor_order_id?: string | null
+        }
+        Returns: {
+          order_id: string
+          order_no: string | null
+          fulfillment_status: string
+          confirmed_at: string | null
+          updated_at: string
+          payment_method: string | null
+          receipt_url: string | null
+          metadata: Json | null
+          buyer_first_name: string | null
+          buyer_last_name: string | null
+          buyer_phone: string | null
+          total_amount: number
+          currency: string | null
+          event_id: string | null
+          event_title: string
+          event_start_at: string | null
+          event_location_text: string | null
+          event_cover_image_url: string | null
+          org_id: string
+          tickets_count: number
         }[]
       }
       collab_can_mark_order_shipped: { Args: { p_order_id: string }; Returns: boolean }

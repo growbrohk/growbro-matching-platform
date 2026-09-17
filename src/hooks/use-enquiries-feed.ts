@@ -2,9 +2,11 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   fetchEnquiriesFeedPage,
+  INITIAL_ENQUIRIES_PAGE_PARAM,
   markBookingRequestsSeen,
   shouldMarkBookingsSeen,
   type EnquiriesFilterType,
+  type EnquiriesPageParam,
 } from '@/lib/api/enquiries-feed';
 
 export function enquiriesFeedQueryKey(orgId: string | undefined, filter: EnquiriesFilterType) {
@@ -21,7 +23,8 @@ export function useEnquiriesFeed(
   return useInfiniteQuery({
     queryKey: enquiriesFeedQueryKey(orgId, filter),
     queryFn: async ({ pageParam }) => {
-      const page = await fetchEnquiriesFeedPage(orgId!, filter, pageParam);
+      const param = pageParam as EnquiriesPageParam;
+      const page = await fetchEnquiriesFeedPage(orgId!, filter, param);
 
       if (shouldMarkBookingsSeen(filter) && page.unreadRequestIds.length > 0) {
         queueMicrotask(() => {
@@ -33,9 +36,9 @@ export function useEnquiriesFeed(
 
       return page;
     },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, allPages) =>
-      lastPage.hasMore ? allPages.length : undefined,
+    initialPageParam: INITIAL_ENQUIRIES_PAGE_PARAM,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.nextPageParam : undefined,
     enabled: !!orgId,
     staleTime: 60_000,
   });
