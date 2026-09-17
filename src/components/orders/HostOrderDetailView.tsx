@@ -471,11 +471,16 @@ function EventDetailBody({
   );
 }
 
+export type HostOrderNavigationState = {
+  hostOrderKind?: 'product' | 'event';
+};
+
 export interface HostOrderDetailContentProps {
   orderId: string;
+  preferKind?: 'product' | 'event';
 }
 
-export function HostOrderDetailContent({ orderId }: HostOrderDetailContentProps) {
+export function HostOrderDetailContent({ orderId, preferKind }: HostOrderDetailContentProps) {
   const { currentOrg } = useAuth();
 
   const [showProofDialog, setShowProofDialog] = useState(false);
@@ -484,7 +489,7 @@ export function HostOrderDetailContent({ orderId }: HostOrderDetailContentProps)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['host-order-detail', orderId, currentOrg?.id],
-    queryFn: () => fetchHostOrderDetail(orderId),
+    queryFn: () => fetchHostOrderDetail(orderId, { preferKind }),
     enabled: !!orderId && !!currentOrg,
   });
 
@@ -695,7 +700,10 @@ export function HostOrderDetailView({ orderId, listSearch }: HostOrderDetailView
         Order details
       </h1>
 
-      <HostOrderDetailContent orderId={orderId} />
+      <HostOrderDetailContent
+        orderId={orderId}
+        preferKind={(location.state as HostOrderNavigationState | null)?.hostOrderKind}
+      />
     </div>
   );
 }

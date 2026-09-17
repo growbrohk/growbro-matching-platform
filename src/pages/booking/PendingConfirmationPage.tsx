@@ -15,12 +15,13 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
+import { readBookingOrderFromNavigationState } from '@/lib/booking/order-navigation-state';
 import { formatEventTimeSlotsDisplayText } from '@/lib/utils/event-time-slots';
 import { Clock, ExternalLink, FileText, AlertCircle } from 'lucide-react';
 
@@ -56,6 +57,7 @@ function formatSubmittedAt(submittedAt: string | null): string {
 export default function PendingConfirmationPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [order, setOrder] = useState<OrderWithEvent | null>(null);
@@ -71,7 +73,8 @@ export default function PendingConfirmationPage() {
 
     const fetchOrder = async () => {
       try {
-        const orderData = await getOrderWithEvent(orderId);
+        const cached = readBookingOrderFromNavigationState(location.state, orderId);
+        const orderData = cached ?? (await getOrderWithEvent(orderId));
         
         if (!orderData) {
           setError('Order not found');
@@ -117,7 +120,7 @@ export default function PendingConfirmationPage() {
     };
 
     fetchOrder();
-  }, [orderId, navigate]);
+  }, [orderId, navigate, location.state]);
 
   // Show skeleton while loading
   if (loading) {

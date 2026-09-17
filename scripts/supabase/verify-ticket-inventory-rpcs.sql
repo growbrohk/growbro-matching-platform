@@ -1,0 +1,15 @@
+-- Run against a database with representative event data (multi-slot types, variants, refunds).
+-- 1) Confirm the partial index is used for inventory counts:
+-- EXPLAIN (ANALYZE, BUFFERS)
+-- SELECT COUNT(*) FROM tickets t
+-- JOIN orders o ON o.id = t.order_id
+-- JOIN ticket_types tt ON tt.id = t.ticket_type_id
+-- WHERE tt.event_id = '<event-uuid>'
+--   AND t.refunded_at IS NULL
+--   AND t.status IN ('valid', 'scanned')
+--   AND o.payment_status IN ('paid', 'submitted');
+--
+-- 2) Compare RPC output before/after migration on the same event (should match row-for-row):
+-- SELECT * FROM get_ticket_types_with_remaining('<event-uuid>');
+-- SELECT * FROM get_variant_remaining_counts('<event-uuid>');
+-- SELECT get_event_slot_sold_counts('<event-uuid>');

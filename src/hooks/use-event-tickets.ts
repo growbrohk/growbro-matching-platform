@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TimeSlotKey } from '@/lib/utils/event-time-slots';
 
@@ -74,9 +74,36 @@ function buildAccessRow(
   return { accessLabel: modeDisplayName(mode) };
 }
 
+export function eventTicketsQueryKey(eventId: string) {
+  return ['event-tickets', eventId] as const;
+}
+
+/** Patch a single row after scan check-in instead of refetching the full event list. */
+export function patchEventTicketScanned(
+  queryClient: QueryClient,
+  eventId: string,
+  ticketId: string,
+  scannedAt: string,
+  remark?: string | null
+) {
+  queryClient.setQueryData<EventTicketRow[]>(eventTicketsQueryKey(eventId), (rows) => {
+    if (!rows) return rows;
+    return rows.map((row) =>
+      row.id === ticketId
+        ? {
+            ...row,
+            status: 'scanned',
+            scanned_at: scannedAt,
+            ...(remark !== undefined ? { remark: remark ?? '' } : {}),
+          }
+        : row
+    );
+  });
+}
+
 export function useEventTickets(eventId: string | undefined) {
   return useQuery({
-    queryKey: ['event-tickets', eventId],
+    queryKey: eventTicketsQueryKey(eventId ?? ''),
     queryFn: async () => {
       if (!eventId) return [];
 

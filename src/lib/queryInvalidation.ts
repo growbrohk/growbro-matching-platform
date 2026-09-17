@@ -67,8 +67,6 @@ export async function invalidateOrderQueries(
 
   if (eventId) {
     tasks.push(queryClient.invalidateQueries({ queryKey: ['event-tickets', eventId] }));
-  } else {
-    tasks.push(queryClient.invalidateQueries({ queryKey: ['event-tickets'] }));
   }
 
   await Promise.all(tasks);

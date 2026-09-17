@@ -3,7 +3,9 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useEventTickets } from '@/hooks/use-event-tickets';
+import { patchEventTicketScanned, useEventTickets } from '@/hooks/use-event-tickets';
+import { lookupTicketForScan, scanTicketByQrCode } from '@/lib/api/event-scan';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -20,52 +22,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { getValidEndTimestamp, type EventTimeSlotFields } from '@/lib/utils/event-time-slots';
 
-const TICKET_LOOKUP_SELECT = `
-  id,
-  qr_code,
-  status,
-  refunded_at,
-  scanned_at,
-  first_name,
-  last_name,
-  email,
-  phone,
-  remark,
-  order_id,
-  time_slot,
-  order:orders!inner(
-    id,
-    event_id,
-    buyer_first_name,
-    buyer_last_name,
-    buyer_email,
-    buyer_phone,
-    metadata,
-    order_addon_items(
-      order_id,
-      ticket_id,
-      label,
-      variant_label,
-      quantity
-    )
-  ),
-  ticket_type:ticket_types(
-    name,
-    valid_for_days
-  )
-`;
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidUuid(value: string): boolean {
-  return UUID_REGEX.test(value);
-}
-
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 type ScanConfirmState = {
   ticketId: string;
+  qrCode: string;
   name: string;
   phone: string | null;
   email: string | null;
@@ -266,7 +227,8 @@ export function EventScanTab({
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrReaderRef = useRef<HTMLDivElement>(null);
   const isProcessingRef = useRef(false);
-  const { refetch } = useEventTickets(eventId);
+  useEventTickets(eventId);
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -480,49 +442,11 @@ export function EventScanTab({
     return payload.trim() || null;
   };
 
-  const fetchTicketByIdentifier = async (identifier: string) => {
-    let ticket: Record<string, unknown> | null = null;
-    let fetchError: { message: string } | null = null;
-
-    const { data: ticketByQr, error: errorByQr } = await supabase
-      .from('tickets')
-      .select(TICKET_LOOKUP_SELECT)
-      .eq('qr_code', identifier)
-      .maybeSingle();
-
-    if (ticketByQr) {
-      ticket = ticketByQr as Record<string, unknown>;
-    } else if (errorByQr) {
-      console.warn('Error querying by qr_code:', errorByQr);
-    }
-
-    if (!ticket && isValidUuid(identifier)) {
-      const { data: ticketById, error: errorById } = await supabase
-        .from('tickets')
-        .select(TICKET_LOOKUP_SELECT)
-        .eq('id', identifier)
-        .maybeSingle();
-
-      if (errorById) {
-        fetchError = errorById;
-      } else if (ticketById) {
-        ticket = ticketById as Record<string, unknown>;
-      }
-    }
-
-    if (fetchError) {
-      throw new Error(`Failed to lookup ticket: ${fetchError.message}`);
-    }
-
+  const lookupTicket = async (identifier: string): Promise<ScanConfirmState> => {
+    const ticket = await lookupTicketForScan(eventId, identifier);
     if (!ticket) {
       throw new Error('Ticket not found');
     }
-
-    return ticket;
-  };
-
-  const lookupTicket = async (identifier: string): Promise<ScanConfirmState> => {
-    const ticket = await fetchTicketByIdentifier(identifier);
 
     const order = ticket.order as {
       id: string;
@@ -536,8 +460,9 @@ export function EventScanTab({
     };
     const ticketType = ticket.ticket_type as { name?: string; valid_for_days?: string } | null;
 
-    if (order.event_id !== eventId) {
-      throw new Error('Ticket does not belong to this event');
+    const qrCode = (ticket.qr_code as string | null) ?? '';
+    if (!qrCode) {
+      throw new Error('Ticket is missing a QR code');
     }
 
     const name = buildAttendeeName({
@@ -570,6 +495,7 @@ export function EventScanTab({
       if (now > validEnd + FIVE_MINUTES_MS) {
         return {
           ticketId: ticket.id as string,
+          qrCode,
           name,
           phone,
           email,
@@ -586,6 +512,7 @@ export function EventScanTab({
     if (ticket.refunded_at) {
       return {
         ticketId: ticket.id as string,
+        qrCode,
         name,
         phone,
         email,
@@ -601,6 +528,7 @@ export function EventScanTab({
     if (ticket.status === 'scanned') {
       return {
         ticketId: ticket.id as string,
+        qrCode,
         name,
         phone,
         email,
@@ -615,6 +543,7 @@ export function EventScanTab({
 
     return {
       ticketId: ticket.id as string,
+      qrCode,
       name,
       phone,
       email,
@@ -629,7 +558,7 @@ export function EventScanTab({
   const confirmCheckIn = async () => {
     if (!confirmData || !confirmData.canRedeem || confirmLoading) return;
 
-    const { ticketId, name, ticketType, validEnd, remark: originalRemark } = confirmData;
+    const { ticketId, qrCode, name, ticketType, validEnd, remark: originalRemark } = confirmData;
     const remarkChanged = confirmRemark !== originalRemark;
     const remarkValue = confirmRemark;
 
@@ -660,31 +589,29 @@ export function EventScanTab({
 
     setConfirmLoading(true);
 
-    const payload: Record<string, unknown> = {
-      status: 'scanned',
-      scanned_at: new Date().toISOString(),
-      scanned_by: user.id,
-    };
-    if (remarkChanged) {
-      payload.remark = remarkValue || null;
-    }
-
     closeConfirmDialog();
 
     try {
-      const { data: updated, error: updateError } = await supabase
-        .from('tickets')
-        .update(payload)
-        .eq('id', ticketId)
-        .eq('status', 'valid')
-        .is('refunded_at', null)
-        .select('id');
+      await scanTicketByQrCode(qrCode);
 
-      if (updateError) throw updateError;
-
-      if (!updated || updated.length === 0) {
-        throw new Error('Ticket was already checked in.');
+      if (remarkChanged) {
+        const { error: remarkError } = await supabase
+          .from('tickets')
+          .update({ remark: remarkValue || null })
+          .eq('id', ticketId);
+        if (remarkError) {
+          console.warn('Check-in succeeded but remark update failed:', remarkError);
+        }
       }
+
+      const scannedAt = new Date().toISOString();
+      patchEventTicketScanned(
+        queryClient,
+        eventId,
+        ticketId,
+        scannedAt,
+        remarkChanged ? remarkValue || null : undefined
+      );
 
       setLastScanResult({
         success: true,
@@ -697,8 +624,6 @@ export function EventScanTab({
         title: 'Success',
         description: `${name} (${ticketType}) checked in successfully!`,
       });
-
-      void refetch();
     } catch (error: unknown) {
       console.error('Error confirming check-in:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to check in ticket';

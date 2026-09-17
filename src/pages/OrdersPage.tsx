@@ -153,7 +153,14 @@ export default function OrdersPage() {
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
                 priceLabel={formatMoney(order.total_amount)}
-                onDetails={() => navigate(`/app/orders/${order.id}${listSearch}`)}
+                onDetails={() =>
+                  navigate(`/app/orders/${order.id}${listSearch}`, {
+                    state: {
+                      hostOrderKind:
+                        order.order_type === 'product' ? ('product' as const) : ('event' as const),
+                    },
+                  })
+                }
                 onConfirm={() => {
                   void invalidateOrderQueries(queryClient, order.id, order.event_id ?? null);
                 }}

@@ -8,12 +8,13 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
+import { readBookingOrderFromNavigationState } from '@/lib/booking/order-navigation-state';
 import { getBookingRoute } from '@/lib/utils/booking-route';
 import { formatTicketTypeDateTime } from '@/lib/utils/datetime';
 import {
@@ -34,6 +35,7 @@ const BRAND = {
 export default function SuccessfulBookingPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   const [order, setOrder] = useState<OrderWithEvent | null>(null);
@@ -48,7 +50,8 @@ export default function SuccessfulBookingPage() {
 
     const fetchOrder = async () => {
       try {
-        const orderData = await getOrderWithEvent(orderId);
+        const cached = readBookingOrderFromNavigationState(location.state, orderId);
+        const orderData = cached ?? (await getOrderWithEvent(orderId));
 
         if (!orderData) {
           toast({
@@ -122,7 +125,7 @@ export default function SuccessfulBookingPage() {
     };
 
     fetchOrder();
-  }, [orderId, navigate, toast]);
+  }, [orderId, navigate, toast, location.state]);
 
   const handleDownloadPDF = () => {
     window.print();

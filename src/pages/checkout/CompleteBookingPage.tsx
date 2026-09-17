@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,7 +38,9 @@ import {
   saveBookingDraft,
 } from '@/lib/types/booking';
 import { formatEventDate } from '@/lib/utils/datetime';
-import { getEvent, getTicketTypes } from '@/lib/api/events';
+import { getEvent } from '@/lib/api/events';
+import { fetchPublicTicketTypes } from '@/hooks/use-public-ticket-types';
+import { bookingOrderNavigationState } from '@/lib/booking/order-navigation-state';
 import { getVariantConfig } from '@/lib/api/variant-config';
 import { getEventAddonsForCheckout, type EventAddonForCheckout } from '@/lib/api/event-addons';
 import HierarchicalVariantSelectGroup from '@/components/products/HierarchicalVariantSelectGroup';
@@ -53,7 +56,7 @@ import {
   computeAddonStockOrderError,
   getAddonDisplayPrices,
 } from '@/lib/utils/event-addon-stock';
-import { createBooking, confirmFreeOrder, getOrderWithEvent } from '@/lib/api/bookings';
+import { createBooking, getOrderWithEvent } from '@/lib/api/bookings';
 import { clearBookingDraft } from '@/lib/types/booking';
 import { revalidateBookingDraftVariants } from '@/lib/utils/booking-draft-validation';
 import { useToast } from '@/hooks/use-toast';
@@ -287,6 +290,7 @@ function AddonQuantityAndCta({
 
 export default function CompleteBookingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { eventId } = useParams<{ eventId: string }>();
   const { toast } = useToast();
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
@@ -409,7 +413,7 @@ export default function CompleteBookingPage() {
     const revalidateDraftVariants = async () => {
       if (!draft?.eventId) return;
       try {
-        const ticketTypes = await getTicketTypes(draft.eventId, true, true);
+        const ticketTypes = await fetchPublicTicketTypes(queryClient, draft.eventId);
         const { draft: validatedDraft, changed, message } = revalidateBookingDraftVariants(
           draft,
           ticketTypes
@@ -432,7 +436,7 @@ export default function CompleteBookingPage() {
     fetchEvent();
     fetchAddons();
     revalidateDraftVariants();
-  }, [navigate, toast]);
+  }, [navigate, toast, queryClient]);
 
   useEffect(() => {
     if (!event?.org_id) return;
@@ -2280,32 +2284,24 @@ export default function CompleteBookingPage() {
                   
                   // For free tickets (server-computed total_amount = 0): navigate to success
                   if (serverTotalAmount <= 0) {
-                    // RPC function already sets paid_at, confirmed_at, payment_method='free', 
-                    // and fulfillment_status='confirmed' for free orders.
-                    // This call is a safety net (idempotent - won't update if already confirmed)
-                    try {
-                      const updatedOrder = await confirmFreeOrder(result.orderId);
-                      
-                      console.debug('[booking-route]', {
-                        orderId: result.orderId,
-                        amount_total: updatedOrder.total_amount,
-                        payment_status: updatedOrder.payment_status,
-                        fulfillment_status: updatedOrder.fulfillment_status,
-                        payment_method: updatedOrder.payment_method,
-                        route: 'success',
-                      });
-                    } catch (error: any) {
-                      console.error('Error confirming free order:', error);
-                      // Continue anyway - RPC should have set it correctly
-                    }
+                    console.debug('[booking-route]', {
+                      orderId: result.orderId,
+                      amount_total: order.total_amount,
+                      payment_status: order.payment_status,
+                      fulfillment_status: order.fulfillment_status,
+                      payment_method: order.payment_method,
+                      route: 'success',
+                    });
 
                     toast({
                       title: 'Booking created successfully',
                       description: 'Your free ticket has been confirmed!',
                     });
-                    navigate(`/booking/success/${result.orderId}`, { replace: true });
+                    navigate(`/booking/success/${result.orderId}`, {
+                      replace: true,
+                      state: bookingOrderNavigationState(order),
+                    });
                   } else {
-                    // Paid ticket - go to payment page
                     console.debug('[booking-route]', {
                       orderId: result.orderId,
                       amount_total: serverTotalAmount,
@@ -2316,7 +2312,10 @@ export default function CompleteBookingPage() {
                       title: 'Booking created successfully',
                       description: 'Redirecting to payment...',
                     });
-                    navigate(`/booking/payment/${result.orderId}`, { replace: true });
+                    navigate(`/booking/payment/${result.orderId}`, {
+                      replace: true,
+                      state: bookingOrderNavigationState(order),
+                    });
                   }
                 } catch (error: any) {
                   console.error('Error creating booking:', error);

@@ -13,12 +13,13 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
+import { readBookingOrderFromNavigationState, bookingOrderNavigationState } from '@/lib/booking/order-navigation-state';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatOrderEventDateTime } from '@/lib/utils/event-time-slots';
 import { getBookingRoute } from '@/lib/utils/booking-route';
@@ -39,6 +40,7 @@ const BRAND = {
 export default function PaymentPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [order, setOrder] = useState<OrderWithEvent | null>(null);
@@ -57,7 +59,8 @@ export default function PaymentPage() {
 
     const fetchOrder = async () => {
       try {
-        const orderData = await getOrderWithEvent(orderId);
+        const cached = readBookingOrderFromNavigationState(location.state, orderId);
+        const orderData = cached ?? (await getOrderWithEvent(orderId));
         
         if (!orderData) {
           toast({
@@ -119,7 +122,7 @@ export default function PaymentPage() {
     };
 
     fetchOrder();
-  }, [orderId, navigate, toast]);
+  }, [orderId, navigate, toast, location.state]);
 
   const selectMethod = (method: PaymentMethod | null) => {
     if (selectedPaymentMethod !== method) {
@@ -321,7 +324,10 @@ export default function PaymentPage() {
       // - submitted_at set
       // - payment_method set
       // Navigate to PendingConfirmationPage (replace:true)
-      navigate(`/booking/pending/${orderId}`, { replace: true });
+      navigate(`/booking/pending/${orderId}`, {
+        replace: true,
+        state: bookingOrderNavigationState(updatedOrder),
+      });
     } catch (error: any) {
       console.error('Error submitting payment:', error);
       

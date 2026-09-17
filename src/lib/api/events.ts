@@ -950,13 +950,20 @@ export async function getOrgBySlug(orgSlug: string) {
  * Used for public event pages
  */
 export async function getPublicEventBySlugs(orgSlug: string, eventSlug: string): Promise<Event | null> {
-  // First, get the org by slug
+  const result = await getPublicEventAndOrgBySlugs(orgSlug, eventSlug);
+  return result?.event ?? null;
+}
+
+/** Single org fetch for public event pages (avoids duplicate getOrgBySlug). */
+export async function getPublicEventAndOrgBySlugs(
+  orgSlug: string,
+  eventSlug: string
+): Promise<{ event: Event; org: NonNullable<Awaited<ReturnType<typeof getOrgBySlug>>> } | null> {
   const org = await getOrgBySlug(orgSlug);
   if (!org) {
     return null;
   }
 
-  // Then, get the published event by org_id and slug
   const { data, error } = await supabase
     .from('events')
     .select('*')
@@ -972,6 +979,6 @@ export async function getPublicEventBySlugs(orgSlug: string, eventSlug: string):
     throw new Error(error.message || 'Failed to fetch event');
   }
 
-  return data as Event;
+  return { event: data as Event, org };
 }
 

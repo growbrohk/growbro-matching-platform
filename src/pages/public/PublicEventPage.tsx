@@ -1,24 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { getPublicEventBySlugs, getTicketTypes, getOrgBySlug } from '@/lib/api/events';
+import { getPublicEventAndOrgBySlugs } from '@/lib/api/events';
 import type { Event, TicketType } from '@/lib/types';
 import PublicEventForm from '@/components/events/PublicEventForm';
+import {
+  fetchPublicTicketTypes,
+  usePublicTicketTypes,
+} from '@/hooks/use-public-ticket-types';
+
+const VISIBILITY_REFRESH_MIN_MS = 30_000;
 
 export default function PublicEventPage() {
   const { orgSlug, eventSlug } = useParams<{ orgSlug: string; eventSlug: string }>();
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
   const [org, setOrg] = useState<any>(null);
-  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
-  
-  // Get query params
+  const lastVisibilityRefreshRef = useRef(0);
+
   const codeParam = searchParams.get('code');
   const refParam = searchParams.get('ref');
   const tidParam = searchParams.get('tid');
 
-  // Reserved org slugs that should not be used (align with PublicProfile / PublicProductPage)
+  const { data: ticketTypesFromQuery = [] } = usePublicTicketTypes(event?.id, Boolean(event?.id));
+
   const RESERVED_ORG_SLUGS = [
     'app', 'login', 'events', 'admin', 'api', 'auth', 'onboarding',
     'book', 'r', 'space', 'profile', 't', 'o', 'booking', 'org',
@@ -26,28 +34,35 @@ export default function PublicEventPage() {
     'settings', 'account', 'products', 'catalog', 'notifications', 'checkout',
   ];
 
-  // Capture tracking_link_id (tid) from URL and store in localStorage
   useEffect(() => {
     if (tidParam) {
-      // Validate tid is a valid UUID before storing
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (uuidRegex.test(tidParam)) {
         localStorage.setItem('tracking_link_id', tidParam);
-        console.log('[PublicEventPage] Captured tracking_link_id:', tidParam);
-      } else {
-        console.warn('[PublicEventPage] Invalid tid parameter format, ignoring:', tidParam);
       }
     }
   }, [tidParam]);
 
-  const refreshTicketTypes = useCallback(async (eventId: string) => {
-    try {
-      const types = await getTicketTypes(eventId, true, true);
-      setTicketTypes(types);
-    } catch (error) {
-      console.error('[PublicEventPage] Failed to refresh ticket types:', error);
-    }
-  }, []);
+  const refreshTicketTypes = useCallback(
+    async (eventId: string, typesHint?: TicketType[]) => {
+      const shouldRefresh =
+        typesHint?.some((t) => t.show_remaining_count) ?? true;
+      if (!shouldRefresh) return;
+
+      const now = Date.now();
+      if (now - lastVisibilityRefreshRef.current < VISIBILITY_REFRESH_MIN_MS) {
+        return;
+      }
+      lastVisibilityRefreshRef.current = now;
+
+      try {
+        await fetchPublicTicketTypes(queryClient, eventId);
+      } catch (error) {
+        console.error('[PublicEventPage] Failed to refresh ticket types:', error);
+      }
+    },
+    [queryClient]
+  );
 
   useEffect(() => {
     if (!orgSlug || !eventSlug) {
@@ -55,7 +70,6 @@ export default function PublicEventPage() {
       return;
     }
 
-    // Block reserved org slugs
     if (RESERVED_ORG_SLUGS.includes(orgSlug.toLowerCase())) {
       setLoading(false);
       return;
@@ -67,26 +81,18 @@ export default function PublicEventPage() {
       try {
         setLoading(true);
 
-        const eventData = await getPublicEventBySlugs(orgSlug, eventSlug);
+        const result = await getPublicEventAndOrgBySlugs(orgSlug, eventSlug);
 
         if (cancelled) return;
 
-        if (!eventData || eventData.status !== 'published') {
+        if (!result || result.event.status !== 'published') {
           setEvent(null);
+          setOrg(null);
           return;
         }
 
-        setEvent(eventData);
-
-        const [orgData, types] = await Promise.all([
-          getOrgBySlug(orgSlug),
-          getTicketTypes(eventData.id, true, true),
-        ]);
-
-        if (cancelled) return;
-
-        setOrg(orgData);
-        setTicketTypes(types);
+        setEvent(result.event);
+        setOrg(result.org);
       } catch (error) {
         console.error('Error fetching event:', error);
         if (!cancelled) {
@@ -106,20 +112,18 @@ export default function PublicEventPage() {
     };
   }, [orgSlug, eventSlug]);
 
-  // Refresh ticket types when the tab regains focus (picks up host edits without full page reload)
   useEffect(() => {
     if (!event?.id) return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void refreshTicketTypes(event.id);
+        void refreshTicketTypes(event.id, ticketTypesFromQuery);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [event?.id, refreshTicketTypes]);
-
+  }, [event?.id, refreshTicketTypes, ticketTypesFromQuery]);
 
   if (loading) {
     return (
@@ -129,7 +133,6 @@ export default function PublicEventPage() {
     );
   }
 
-  // Not found state
   if (!event || !org) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
@@ -149,11 +152,10 @@ export default function PublicEventPage() {
     <PublicEventForm
       event={event}
       org={org}
-      ticketTypes={ticketTypes}
+      ticketTypes={ticketTypesFromQuery}
       mode="public"
       codeParam={codeParam}
       refParam={refParam}
     />
   );
 }
-
