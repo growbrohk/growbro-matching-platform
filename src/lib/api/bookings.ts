@@ -261,6 +261,12 @@ export async function createBooking(
       clearBookingDraft();
       throw new Error('Ticket pricing has changed. Please go back and select your tickets again.');
     }
+    if (msg.includes('Ticket sales are not open')) {
+      throw new Error("Sales haven't started yet.");
+    }
+    if (msg.includes('Ticket sales have closed')) {
+      throw new Error('Sales have closed.');
+    }
     throw new Error(msg || 'Failed to create booking');
   }
 

@@ -2179,6 +2179,7 @@ export type Database = {
           requested_at: string
         }[]
       }
+      get_server_time: { Args: never; Returns: string }
       get_tag_product_count: { Args: { tag_id_param: string }; Returns: number }
       get_unread_enquiries_count: {
         Args: { p_org_id: string }

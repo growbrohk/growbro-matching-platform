@@ -33,6 +33,7 @@ import {
   BookingDraft,
   saveBookingDraft,
 } from '@/lib/types/booking';
+import { useServerNow } from '@/hooks/use-server-now';
 
 interface Org {
   id: string;
@@ -60,6 +61,7 @@ export default function PublicEventForm({
   initialSelections = {},
 }: PublicEventFormProps) {
   const navigate = useNavigate();
+  const nowMs = useServerNow();
   const [selections, setSelections] = useState<Record<string, number>>(initialSelections);
   const [showContinueDialog, setShowContinueDialog] = useState(false);
   const multiSlotEvent = hasMultipleTimeSlots(event);
@@ -123,9 +125,9 @@ export default function PublicEventForm({
     });
   }, [ticketTypes, initialSelections]);
 
-  // Check if a ticket type is available for purchase
-  // Memoized to prevent unnecessary recalculations
-  // Added 5-minute safety margin to prevent clock drift issues
+  // Check if a ticket type is available for purchase.
+  // Start is exact against the database clock. A 5-minute grace applies only after
+  // the sales end and the event end, so a slightly fast clock cannot open sales early.
   const isTicketAvailable = useCallback((tt: TicketType): { available: boolean; reason?: string } => {
     if (!event) return { available: false, reason: 'Event not found' };
 
@@ -134,9 +136,7 @@ export default function PublicEventForm({
       return { available: false, reason: 'Not on sale' };
     }
 
-    // Use UTC time for consistent comparisons (database dates are UTC)
-    const now = new Date();
-    const nowTime = now.getTime();
+    const nowTime = nowMs;
     
     // Parse UTC date strings correctly - ensure they're parsed as UTC
     // Handle both ISO strings and ensure proper UTC parsing
@@ -179,13 +179,9 @@ export default function PublicEventForm({
         return { available: false, reason: 'Sales not scheduled' };
       }
       
-      // Check start time: if set and we're before it (with safety margin), not available yet
-      if (availableStartAt) {
-        const startTime = availableStartAt.getTime();
-        // Add safety margin: if we're within 5 minutes before start, still allow
-        if (nowTime < (startTime - FIVE_MINUTES_MS)) {
-          return { available: false, reason: 'Sales not started' };
-        }
+      // Sales stay closed until the saved start instant. No early window.
+      if (availableStartAt && nowTime < availableStartAt.getTime()) {
+        return { available: false, reason: 'Sales not started' };
       }
       
       // Check end time: effective end = min(available_end_at, ticket's valid window end)
@@ -204,7 +200,7 @@ export default function PublicEventForm({
 
     // Fallback: if unknown mode, treat as unavailable
     return { available: false, reason: 'Unknown availability mode' };
-  }, [event]);
+  }, [event, nowMs]);
 
   // Resolve matching variant and effective price for a ticket type
   const resolveVariantAndPrice = useCallback((tt: TicketType): { variant: TicketTypeAccessVariant | null; effectivePrice: number; discountPercent: number | null } | null => {
@@ -378,6 +374,11 @@ export default function PublicEventForm({
     });
   }, [codeParam, refParam, ticketTypes, getTicketVisibility, event]);
 
+  // The availability callback changes every second with the server clock.
+  // Keep the latest copy in a ref so the minute reset below is not restarted each tick.
+  const isTicketAvailableRef = useRef(isTicketAvailable);
+  isTicketAvailableRef.current = isTicketAvailable;
+
   // Only reset unavailable tickets periodically - do NOT reset on dependency changes
   // This effect sets up a periodic check but does NOT run immediately
   useEffect(() => {
@@ -405,7 +406,7 @@ export default function PublicEventForm({
           // Only check availability for visible tickets
           // Only reset if ticket was previously selected (> 0) and NOW becomes unavailable
           if (isVisible) {
-            const availability = isTicketAvailable(tt);
+            const availability = isTicketAvailableRef.current(tt);
             const currentQty = prev[tt.id] || 0;
             // Only reset if ticket was selected and is now unavailable
             // Double-check: ensure availability_mode exists or defaults correctly
@@ -433,7 +434,7 @@ export default function PublicEventForm({
     const interval = setInterval(checkAndResetUnavailable, 60000);
     
     return () => clearInterval(interval);
-  }, [event, ticketTypes, codeParam, refParam, isTicketAvailable, getTicketVisibility]);
+  }, [event, ticketTypes, codeParam, refParam, getTicketVisibility]);
 
   const updateQuantity = (ticketTypeId: string, quantity: number, maxRemaining?: number) => {
     console.log(`🟢 [PublicEventForm] updateQuantity called: ticketTypeId=${ticketTypeId}, quantity=${quantity}`);
