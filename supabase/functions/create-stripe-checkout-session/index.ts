@@ -1,18 +1,23 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import {
+  formatStripeFeeLabel,
+  fromStripeMinorUnits,
+  getStripeFee,
+  roundMoney,
+  toStripeMinorUnits,
+} from "./stripeCurrency.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const STRIPE_FEE_RATE = 0.034;
-const STRIPE_FEE_FIXED = 2.35;
-
-function computeStripeProcessingFee(orderAmount: number): number {
+function computeStripeProcessingFee(orderAmount: number, currency: string): number {
+  const { rate, fixed } = getStripeFee(currency);
   const total = Number(orderAmount) || 0;
-  return Math.round((total * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100;
+  return roundMoney(total * rate + fixed, currency);
 }
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
@@ -114,7 +119,7 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-11-20.acacia" });
     logStep("Stripe initialized");
 
-    // Build line items - Stripe uses smallest currency unit (cents for HKD)
+    // Stripe unit_amount is the currency's minor unit (cents for HKD, yen for JPY).
     const currency = ((order.currency as string) || "hkd").toLowerCase();
     const lineItems = orderItems.map((item) => {
       const name = item.ticket_type?.name || item.product_name || "Item";
@@ -125,7 +130,7 @@ serve(async (req) => {
           product_data: {
             name: `${name}${variantLabel}`,
           },
-          unit_amount: Math.round(Number(item.unit_price) * 100),
+          unit_amount: toStripeMinorUnits(Number(item.unit_price), currency),
         },
         quantity: item.quantity,
       };
@@ -146,7 +151,7 @@ serve(async (req) => {
           price_data: {
             currency,
             product_data: { name: shippingLabel },
-            unit_amount: Math.round(shippingFee * 100),
+            unit_amount: toStripeMinorUnits(shippingFee, currency),
           },
           quantity: 1,
         });
@@ -159,7 +164,7 @@ serve(async (req) => {
         product_data: {
           name: `${addon.label || "Add-on"}${addon.variant_label ? ` (${addon.variant_label})` : ""}`,
         },
-        unit_amount: Math.round(Number(addon.unit_price) * 100),
+        unit_amount: toStripeMinorUnits(Number(addon.unit_price), currency),
       },
       quantity: addon.quantity,
     }));
@@ -169,36 +174,33 @@ serve(async (req) => {
       throw new Error("Order has no items");
     }
 
-    const lineTotalCents = lineItems.reduce((sum, li) => {
+    const lineTotalMinor = lineItems.reduce((sum, li) => {
       return sum + li.price_data.unit_amount * li.quantity;
     }, 0);
 
     let stripeServiceFee = 0;
     if (stripeFeeBearer === "user") {
-      const subtotalAmount = lineTotalCents / 100;
-      stripeServiceFee = computeStripeProcessingFee(subtotalAmount);
+      const subtotalAmount = fromStripeMinorUnits(lineTotalMinor, currency);
+      stripeServiceFee = computeStripeProcessingFee(subtotalAmount, currency);
       if (stripeServiceFee > 0) {
         lineItems.push({
           price_data: {
             currency,
             product_data: {
-              name: "Credit card service charge (3.4% + HK$2.35)",
+              name: `Credit card service charge (${formatStripeFeeLabel(currency)})`,
             },
-            unit_amount: Math.round(stripeServiceFee * 100),
+            unit_amount: toStripeMinorUnits(stripeServiceFee, currency),
           },
           quantity: 1,
         });
       }
     }
 
-    const checkoutTotalCents = lineItems.reduce((sum, li) => {
-      return sum + li.price_data.unit_amount * li.quantity;
-    }, 0);
-    const orderTotalCents = Math.round(totalAmount * 100);
-    if (stripeFeeBearer === "host" && lineTotalCents !== orderTotalCents) {
+    const orderTotalMinor = toStripeMinorUnits(totalAmount, currency);
+    if (stripeFeeBearer === "host" && lineTotalMinor !== orderTotalMinor) {
       logStep("Line items total mismatch order.total_amount", {
-        lineTotalCents,
-        orderTotalCents,
+        lineTotalMinor,
+        orderTotalMinor,
       });
     }
 

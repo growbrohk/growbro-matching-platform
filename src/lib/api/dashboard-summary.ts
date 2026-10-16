@@ -17,9 +17,11 @@ import {
   type Order,
   type RangeKey,
 } from '@/hooks/useOrdersDashboard';
+import { addMoneyAmount, mergeMoneyTotals } from '@/lib/currency';
 
 export interface DashboardSummaryData {
   revenueTotal: number;
+  revenueByCurrency: Record<string, number>;
   ordersCountSubmittedPaid: number;
   pendingCountSubmitted: number;
   pendingShippingCount: number;
@@ -31,6 +33,7 @@ const ORDER_SELECT = `
   id,
   created_at,
   total_amount,
+  currency,
   payment_status,
   fulfillment_status,
   receipt_url,
@@ -46,6 +49,7 @@ type RawOrderRow = {
   id: string;
   created_at: string;
   total_amount: number;
+  currency?: string | null;
   payment_status: string;
   fulfillment_status: string | null;
   receipt_url: string | null;
@@ -64,6 +68,7 @@ function toRawOrder(row: Record<string, unknown>, partnerRowAccess?: PartnerOrde
     id: row.id as string,
     created_at: row.created_at as string,
     total_amount: Number(row.total_amount) || 0,
+    currency: (row.currency as string | null) ?? 'HKD',
     payment_status: (row.payment_status as string) || 'unpaid',
     fulfillment_status: (row.fulfillment_status as string | null) ?? null,
     receipt_url: (row.receipt_url as string | null) ?? null,
@@ -85,15 +90,18 @@ function computeStatsFromOrders(
   orders: RawOrderRow[],
   effectiveMap: Map<string, OrderEffectiveRevenueRow>,
 ) {
-  const revenueTotal = orders
-    .filter((o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed')
-    .reduce((sum, o) => sum + getEffectiveOrderAmount(o, effectiveMap), 0);
+  const counted = orders.filter((o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed');
+  const revenueByCurrency: Record<string, number> = {};
+  for (const order of counted) {
+    addMoneyAmount(revenueByCurrency, order.currency, getEffectiveOrderAmount(order, effectiveMap));
+  }
+  const revenueTotal = counted.reduce((sum, o) => sum + getEffectiveOrderAmount(o, effectiveMap), 0);
   const ordersCountSubmittedPaid = orders.filter(
     (o) => isAllTabOrder(o) && isEventOrderCountedAsActive(o, effectiveMap),
   ).length;
   const pendingCountSubmitted = orders.filter((o) => o.payment_status === 'submitted').length;
   const pendingShippingCount = orders.filter((o) => isPendingShippingActionable(o as Order)).length;
-  return { revenueTotal, ordersCountSubmittedPaid, pendingCountSubmitted, pendingShippingCount };
+  return { revenueTotal, revenueByCurrency, ordersCountSubmittedPaid, pendingCountSubmitted, pendingShippingCount };
 }
 
 async function fetchHostPendingTop3(
@@ -336,6 +344,20 @@ export async function fetchDashboardSummary(
       : Promise.resolve(null),
   ]);
 
+  const revenueByCurrency: Record<string, number> = {};
+  const { data: currencyRows, error: currencyError } = await (supabase.rpc as any)(
+    'get_dashboard_revenue_by_currency',
+    { p_org_id: orgId, p_start: startISO, p_end: endISO },
+  );
+  if (currencyError) {
+    console.error('get_dashboard_revenue_by_currency:', currencyError);
+    addMoneyAmount(revenueByCurrency, 'HKD', Number(hostStats.revenue_total) || 0);
+  } else {
+    for (const row of (currencyRows || []) as Array<{ currency: string; revenue: number }>) {
+      addMoneyAmount(revenueByCurrency, row.currency, Number(row.revenue) || 0);
+    }
+  }
+
   let revenueTotal = Number(hostStats.revenue_total) || 0;
   let ordersCountSubmittedPaid = Number(hostStats.orders_count_submitted_paid) || 0;
   let pendingCountSubmitted = Number(hostStats.pending_count_submitted) || 0;
@@ -359,6 +381,7 @@ export async function fetchDashboardSummary(
     const partnerEffectiveMap = await fetchOrderEffectiveRevenueMap(partnerRaw.map((o) => o.id));
     const partnerStats = computeStatsFromOrders(partnerRaw, partnerEffectiveMap);
     revenueTotal += partnerStats.revenueTotal;
+    mergeMoneyTotals(revenueByCurrency, partnerStats.revenueByCurrency);
     ordersCountSubmittedPaid += partnerStats.ordersCountSubmittedPaid;
     pendingCountSubmitted += partnerStats.pendingCountSubmitted;
 
@@ -439,6 +462,7 @@ export async function fetchDashboardSummary(
 
   return {
     revenueTotal,
+    revenueByCurrency,
     ordersCountSubmittedPaid,
     pendingCountSubmitted,
     pendingShippingCount,

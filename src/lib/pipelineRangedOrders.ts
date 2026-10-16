@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getDateRange, type RangeKey } from '@/hooks/useOrdersDashboard';
 import { orderCommissionableAmount } from '@/lib/orderCommission';
+import { addMoneyAmount } from '@/lib/currency';
 
 const LINK_ID_CHUNK = 80;
 const PAGE_SIZE = 1000;
@@ -9,10 +10,18 @@ export type PipelineOrderAggregate = {
   ordersCount: number;
   grossRevenue: number;
   commissionableRevenue: number;
+  grossByCurrency: Record<string, number>;
+  commissionableByCurrency: Record<string, number>;
 };
 
 function emptyAggregate(): PipelineOrderAggregate {
-  return { ordersCount: 0, grossRevenue: 0, commissionableRevenue: 0 };
+  return {
+    ordersCount: 0,
+    grossRevenue: 0,
+    commissionableRevenue: 0,
+    grossByCurrency: {},
+    commissionableByCurrency: {},
+  };
 }
 
 /**
@@ -39,7 +48,7 @@ export async function fetchRangedPipelineOrderAggregates(
     for (;;) {
       const { data, error } = await supabase
         .from('orders')
-        .select('id, tracking_link_id, total_amount, metadata, payment_method')
+        .select('id, tracking_link_id, total_amount, currency, metadata, payment_method')
         .in('tracking_link_id', chunk)
         .eq('payment_status', 'paid')
         .gte('created_at', startISO)
@@ -99,19 +108,23 @@ export async function fetchRangedPipelineOrderAggregates(
         const basis = linkBasisMap?.get(linkId) === 'profit' ? 'profit' : 'revenue';
         const total = Number(row.total_amount) || 0;
         const items = itemsByOrder.get(row.id as string) || [];
+        const currency = (row.currency as string | null) || 'HKD';
         const commissionable = orderCommissionableAmount(
           total,
           row.metadata,
           items,
           productCostMap,
           basis,
-          row.payment_method as string | null
+          row.payment_method as string | null,
+          currency
         );
 
         const cur = result.get(linkId) || emptyAggregate();
         cur.ordersCount += 1;
         cur.grossRevenue += total;
         cur.commissionableRevenue += commissionable;
+        addMoneyAmount(cur.grossByCurrency, currency, total);
+        addMoneyAmount(cur.commissionableByCurrency, currency, commissionable);
         result.set(linkId, cur);
       }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { formatMoney, RangeKey } from '@/hooks/useOrdersDashboard';
+import { RangeKey } from '@/hooks/useOrdersDashboard';
+import { formatMoney, formatMoneyTotals } from '@/lib/currency';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useDashboardPipelineStats } from '@/hooks/useDashboardPipelineStats';
 import { Card, CardContent } from '@/components/ui/card';
@@ -61,13 +62,6 @@ function OrderListSkeleton() {
 /**
  * Format money as HKD currency
  */
-function formatHKD(amount: number): string {
-  const rounded = Math.round(amount * 100) / 100;
-  if (rounded % 1 === 0) {
-    return `$${rounded.toLocaleString()}`;
-  }
-  return `$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function DashboardPendingShippingRow({
   name,
@@ -191,7 +185,7 @@ export default function DashboardPage() {
   }, [dispatchTarget, pendingShippingOrdersSnapshot]);
 
   const {
-    revenueTotal = 0,
+    revenueByCurrency = {},
     ordersCountSubmittedPaid = 0,
     pendingCountSubmitted = 0,
     pendingOrders = [],
@@ -201,7 +195,9 @@ export default function DashboardPage() {
 
   const channelsCount = pipelineStats?.channelsCount ?? 0;
   const collabCount = pipelineStats?.collabCount ?? 0;
-  const pipelineRevenueTotal = pipelineStats?.pipelineRevenueTotal ?? 0;
+  const pipelineRevenueByCurrency = pipelineStats?.pipelineRevenueByCurrency ?? {};
+  const revenueLabel = formatMoneyTotals(revenueByCurrency);
+  const pipelineRevenueLabel = formatMoneyTotals(pipelineRevenueByCurrency);
 
   const rangeOptions: { key: RangeKey; label: string }[] = [
     { key: 'today', label: 'today' },
@@ -278,13 +274,13 @@ export default function DashboardPage() {
               <CardContent className="min-w-0 p-6">
                 <div
                   className="min-w-0 mb-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin]"
-                  title={formatMoney(revenueTotal)}
+                  title={revenueLabel}
                 >
                   <div
                     className="whitespace-nowrap font-bold tabular-nums leading-tight text-[clamp(1.125rem,11cqw,2.25rem)]"
                     style={{ color: '#0F1F17' }}
                   >
-                    {formatMoney(revenueTotal)}
+                    {revenueLabel}
                   </div>
                 </div>
                 <div className="text-sm font-medium" style={{ color: '#0F1F17' }}>
@@ -390,9 +386,9 @@ export default function DashboardPage() {
                 <div
                   className="text-2xl font-bold mb-1 tabular-nums truncate pr-7"
                   style={{ color: '#0F1F17' }}
-                  title={formatHKD(pipelineRevenueTotal)}
+                  title={pipelineRevenueLabel}
                 >
-                  {formatHKD(pipelineRevenueTotal)}
+                  {pipelineRevenueLabel}
                 </div>
                 <div className="text-xs font-medium" style={{ color: '#0F1F17' }}>
                   revenue
@@ -455,7 +451,7 @@ export default function DashboardPage() {
                 name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
-                priceLabel={formatMoney(order.total_amount)}
+                priceLabel={formatMoney(order.total_amount, order.currency)}
                 onDetails={() =>
                   navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
                 }
@@ -505,7 +501,7 @@ export default function DashboardPage() {
                 name={order.displayName || `Order ${order.order_no || order.id.slice(0, 6)}`}
                 createdAtLabel={timestamp}
                 imageUrl={order.previewImageUrl}
-                priceLabel={formatMoney(order.total_amount)}
+                priceLabel={formatMoney(order.total_amount, order.currency)}
                 onDetails={() =>
                   navigate(`/app/orders/${order.id}`, { state: { ordersBackTo: '/app/dashboard' } })
                 }

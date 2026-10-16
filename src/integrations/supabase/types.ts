@@ -414,6 +414,7 @@ export type Database = {
           day_4_end_at: string | null
           day_4_start_at: string | null
           description: string | null
+          currency: string
           enable_fps: boolean | null
           enable_payme: boolean | null
           enable_stripe: boolean | null
@@ -438,6 +439,7 @@ export type Database = {
         Insert: {
           collect_attendee_info?: string | null
           created_at?: string
+          currency?: string
           day_2_end_at?: string | null
           day_2_start_at?: string | null
           day_3_end_at?: string | null
@@ -469,6 +471,7 @@ export type Database = {
         Update: {
           collect_attendee_info?: string | null
           created_at?: string
+          currency?: string
           day_2_end_at?: string | null
           day_2_start_at?: string | null
           day_3_end_at?: string | null

@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+import { normalizeCurrency } from '@/lib/currency';
 
 const EVENT_LIST_SELECT =
   'id, org_id, venue_org_id, title, description, start_at, end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at';
@@ -78,6 +79,8 @@ export interface CreateEventData {
   payme_link?: string | null;
   fps_link?: string | null;
   stripe_fee_bearer?: 'host' | 'user' | null;
+  /** ISO 4217 currency ticket prices are charged in. Defaults to HKD. */
+  currency?: string | null;
   slot_capacities?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
   metadata?: Record<string, any>;
 }
@@ -237,6 +240,9 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   if (data.stripe_fee_bearer !== undefined) {
     updateFields.stripe_fee_bearer = data.stripe_fee_bearer;
   }
+  if (data.currency !== undefined && data.currency !== null) {
+    updateFields.currency = data.currency;
+  }
   if (data.metadata !== undefined && data.metadata !== null) {
     updateFields.metadata = data.metadata;
   }
@@ -320,6 +326,31 @@ export async function updateEvent(data: UpdateEventData): Promise<Event> {
   const { id, ...rest } = data;
   const updateData = { ...rest } as Record<string, unknown>;
   delete updateData.org_id;
+
+  if (typeof updateData.currency === 'string') {
+    const nextCurrency = normalizeCurrency(updateData.currency);
+    updateData.currency = nextCurrency;
+    const { count, error: countError } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', id);
+    if (countError) {
+      throw new Error(countError.message || 'Failed to check existing orders');
+    }
+    if ((count ?? 0) > 0) {
+      const { data: existing, error: existingError } = await supabase
+        .from('events')
+        .select('currency')
+        .eq('id', id)
+        .single();
+      if (existingError) {
+        throw new Error(existingError.message || 'Failed to load event currency');
+      }
+      if (normalizeCurrency(existing?.currency) !== nextCurrency) {
+        throw new Error('Currency cannot be changed after this event has orders');
+      }
+    }
+  }
 
   const { data: event, error } = await supabase
     .from('events')

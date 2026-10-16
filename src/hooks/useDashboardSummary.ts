@@ -16,6 +16,7 @@ export function useDashboardSummary(
       if (!currentOrg) {
         return {
           revenueTotal: 0,
+          revenueByCurrency: {},
           ordersCountSubmittedPaid: 0,
           pendingCountSubmitted: 0,
           pendingShippingCount: 0,

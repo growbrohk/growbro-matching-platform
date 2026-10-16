@@ -15,6 +15,7 @@ import {
   formatStripeFeeLabel,
   type StripeFeeBearer,
 } from '@/lib/orderCommission';
+import { formatMoney } from '@/lib/currency';
 
 const BRAND = {
   green: '#0E7A3A',
@@ -52,14 +53,11 @@ export function PaymentMethodSelector({
     onSelect(method);
   };
 
-  const formatPrice = (amount: number): string => {
-    const prefix = currency === 'HKD' ? 'HK$' : currency;
-    return `${prefix} ${amount.toFixed(2)}`;
-  };
+  const formatPrice = (amount: number): string => formatMoney(amount, currency);
 
   const stripeCheckout =
     stripeFeeBearer === 'user'
-      ? computeStripeCheckoutTotal(orderSubtotal, 'user')
+      ? computeStripeCheckoutTotal(orderSubtotal, 'user', currency)
       : null;
 
   if (availableMethods.length === 0) {
@@ -213,7 +211,7 @@ export function PaymentMethodSelector({
                             <span className="font-medium" style={{ fontFamily: "'Inter Tight', sans-serif" }}>Credit Card</span>
                             {stripeFeeBearer === 'user' && (
                               <span className="text-xs text-muted-foreground">
-                                With service charge ({formatStripeFeeLabel()})
+                                With service charge ({formatStripeFeeLabel(currency)})
                               </span>
                             )}
                           </div>

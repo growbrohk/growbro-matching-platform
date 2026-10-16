@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { formatShortEventDate } from '@/lib/utils/datetime';
+import { formatMoney } from '@/lib/currency';
 
 export interface BrandEventCardItem {
   id: string;
@@ -8,15 +9,7 @@ export interface BrandEventCardItem {
   imageUrl: string | null;
   dateStrings?: string[];
   priceFrom?: number | null;
-}
-
-function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('en-HK', {
-    style: 'currency',
-    currency: 'HKD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  currency?: string | null;
 }
 
 interface BrandEventCardProps {
@@ -58,7 +51,7 @@ export default function BrandEventCard({
           className="absolute top-2 right-2 lg:top-3 lg:right-3 px-2 py-1 lg:px-3 lg:py-1.5 rounded-md text-xs lg:text-sm font-medium"
           style={{ backgroundColor: accentColor, color: 'white' }}
         >
-          {event.priceFrom === 0 ? 'Free' : `From ${formatPrice(event.priceFrom)}`}
+          {event.priceFrom === 0 ? 'Free' : `From ${formatMoney(event.priceFrom, event.currency || 'HKD')}`}
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 p-4 lg:p-5 bg-gradient-to-t from-black/70 to-transparent space-y-1">

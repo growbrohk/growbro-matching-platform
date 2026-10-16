@@ -31,6 +31,7 @@ import ProductForm from '@/pages/dashboard/products/ProductForm';
 interface EventAddonsSectionProps {
   eventId: string;
   orgId: string;
+  currency?: string | null;
 }
 
 const EVENT_ADDON_PRICING_DEBOUNCE_MS = 400;
@@ -39,11 +40,13 @@ function EventAddonEventPricing({
   addonId,
   priceOverride,
   discountPercent,
+  currencyCode,
   onSaved,
 }: {
   addonId: string;
   priceOverride: number | null;
   discountPercent: number | null;
+  currencyCode: string;
   onSaved: () => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -90,7 +93,7 @@ function EventAddonEventPricing({
       </Label>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <span className="text-xs text-muted-foreground">New price (HK$)</span>
+          <span className="text-xs text-muted-foreground">New price ({currencyCode})</span>
           <Input
             type="number"
             step="0.01"
@@ -147,7 +150,8 @@ function EventAddonEventPricing({
   );
 }
 
-export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) {
+export function EventAddonsSection({ eventId, orgId, currency }: EventAddonsSectionProps) {
+  const currencyCode = (currency || 'HKD').trim().toUpperCase() || 'HKD';
   const { toast } = useToast();
   const [addons, setAddons] = useState<
     Array<{
@@ -404,6 +408,7 @@ export function EventAddonsSection({ eventId, orgId }: EventAddonsSectionProps) 
                       addonId={addon.id}
                       priceOverride={addon.price_override}
                       discountPercent={addon.discount_percent}
+                      currencyCode={currencyCode}
                       onSaved={loadAddons}
                     />
                   </div>

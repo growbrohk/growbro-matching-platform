@@ -28,6 +28,7 @@ import { Loader2 } from 'lucide-react';
 import { PaymentMethodSelector, type PaymentMethod } from '@/components/booking/PaymentMethodSelector';
 import { supabase } from '@/integrations/supabase/client';
 import { computeStripeCheckoutTotal, formatStripeFeeLabel } from '@/lib/orderCommission';
+import { formatMoney } from '@/lib/currency';
 
 const BRAND = {
   green: "#0E7A3A",
@@ -357,9 +358,7 @@ export default function PaymentPage() {
     }
   };
 
-  const formatPrice = (amount: number, currency: string = 'HKD'): string => {
-    return `${currency === 'HKD' ? 'HK$' : currency} ${amount.toFixed(2)}`;
-  };
+  const formatPrice = (amount: number, currency: string = 'HKD'): string => formatMoney(amount, currency);
 
   if (loading) {
     return (
@@ -380,7 +379,7 @@ export default function PaymentPage() {
   const subtotal = Number(order.total_amount);
   const currency = order.currency || 'HKD';
   const stripeFeeBearer = event.stripe_fee_bearer === 'user' ? 'user' : 'host';
-  const stripeCheckout = computeStripeCheckoutTotal(subtotal, stripeFeeBearer);
+  const stripeCheckout = computeStripeCheckoutTotal(subtotal, stripeFeeBearer, currency);
   const showStripeFee =
     selectedPaymentMethod === 'stripe' && stripeFeeBearer === 'user' && stripeCheckout.serviceFee > 0;
   const displayAmount = showStripeFee ? stripeCheckout.grandTotal : subtotal;
@@ -414,7 +413,7 @@ export default function PaymentPage() {
           </h2>
           {showStripeFee ? (
             <div className="text-sm space-y-1" style={{ color: 'rgba(15,31,23,0.6)' }}>
-              <p>Subtotal {formatPrice(subtotal, currency)} + service fee {formatPrice(stripeCheckout.serviceFee, currency)} ({formatStripeFeeLabel()})</p>
+              <p>Subtotal {formatPrice(subtotal, currency)} + service fee {formatPrice(stripeCheckout.serviceFee, currency)} ({formatStripeFeeLabel(currency)})</p>
               <p>Total amount</p>
             </div>
           ) : (

@@ -25,17 +25,7 @@ import { QrCodeModal } from '@/components/channels/QrCodeModal';
 import { PipelineRow } from '@/hooks/usePipelineRows';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-
-/**
- * Format money as HKD currency
- */
-function formatHKD(amount: number): string {
-  const rounded = Math.round(amount * 100) / 100;
-  if (rounded % 1 === 0) {
-    return `HK$${rounded.toLocaleString()}`;
-  }
-  return `HK$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+import { formatMoneyTotals } from '@/lib/currency';
 
 type RoleTab = 'host' | 'collab';
 type StatusTab = 'active' | 'payment_pending' | 'paid' | 'inactive';
@@ -258,7 +248,7 @@ export default function PipelineRevenuePage() {
                     <TableRow key={pipeline.tracking_link_id}>
                       <TableCell style={{ color: '#0F1F17' }}>{pipeline.label}</TableCell>
                       <TableCell style={{ color: '#0F1F17' }}>
-                        {formatHKD(pipeline.revenue)}
+                        {formatMoneyTotals(pipeline.revenueByCurrency)}
                       </TableCell>
                       <TableCell style={{ color: '#0F1F17' }}>
                         {pipeline.orders.toLocaleString()}

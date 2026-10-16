@@ -28,17 +28,7 @@ import { PipelineRow } from '@/hooks/usePipelineRows';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { invalidatePipelineQueries } from '@/lib/queryInvalidation';
-
-/**
- * Format money as HKD currency
- */
-function formatHKD(amount: number): string {
-  const rounded = Math.round(amount * 100) / 100;
-  if (rounded % 1 === 0) {
-    return `HK$${rounded.toLocaleString()}`;
-  }
-  return `HK$${rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+import { formatMoneyTotals } from '@/lib/currency';
 
 /**
  * Normalize URL for display in group headers
@@ -537,7 +527,7 @@ export default function PipelinePage() {
                         {expandedDestKeys.has(destGroup.destinationKey) && destGroup.pipelines.map((pipeline) => (
                           <TableRow key={pipeline.tracking_link_id}>
                             <TableCell style={{ color: '#0F1F17' }}>{pipeline.label}</TableCell>
-                            <TableCell style={{ color: '#0F1F17' }}>{formatHKD(pipeline.revenue)}</TableCell>
+                            <TableCell style={{ color: '#0F1F17' }}>{formatMoneyTotals(pipeline.revenueByCurrency)}</TableCell>
                             <TableCell style={{ color: '#0F1F17' }}>{pipeline.orders.toLocaleString()}</TableCell>
                             <TableCell style={{ color: '#0F1F17' }}>{pipeline.clicks.toLocaleString()}</TableCell>
                             <TableCell>

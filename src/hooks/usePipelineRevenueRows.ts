@@ -7,6 +7,7 @@ import {
 } from '@/lib/api/pipeline-fetch-helpers';
 import { fetchRangedPipelineOrderAggregates } from '@/lib/pipelineRangedOrders';
 import type { RangeKey } from '@/hooks/useOrdersDashboard';
+import { primaryMoneyAmount, scaleMoneyTotals } from '@/lib/currency';
 import { PipelineRow } from './usePipelineRows';
 
 export interface UsePipelineRevenueRowsOptions {
@@ -135,22 +136,19 @@ export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePip
       const aggregates = await fetchRangedPipelineOrderAggregates(linkIds, rangeKey, linkBasisMap);
 
       const ordersMap = new Map<string, number>();
-      const revenueMap = new Map<string, number>();
+      const revenueMap = new Map<string, Record<string, number>>();
       links.forEach((link: any) => {
         const agg = aggregates.get(link.id) || {
           ordersCount: 0,
           grossRevenue: 0,
           commissionableRevenue: 0,
+          grossByCurrency: {},
+          commissionableByCurrency: {},
         };
         const rate = link.commission_rate != null ? Number(link.commission_rate) : 0;
-        const base = agg.commissionableRevenue;
-        const hostRevenue = base * (1 - rate);
-        const affiliateRevenue = base * rate;
+        const factor = mode === 'host' ? 1 - rate : rate;
         ordersMap.set(link.id, agg.ordersCount);
-        revenueMap.set(
-          link.id,
-          mode === 'host' ? hostRevenue : affiliateRevenue
-        );
+        revenueMap.set(link.id, scaleMoneyTotals(agg.commissionableByCurrency, factor));
       });
 
       // Build pipeline rows and filter by revenue > 0
@@ -162,7 +160,8 @@ export function usePipelineRevenueRows({ mode, orgId, rangeKey, status }: UsePip
           type: link.type,
           clicks: clicksMap.get(link.id) || 0,
           orders: ordersMap.get(link.id) || 0,
-          revenue: revenueMap.get(link.id) || 0,
+          revenue: primaryMoneyAmount(revenueMap.get(link.id)),
+          revenueByCurrency: revenueMap.get(link.id) || {},
           destination_url: link.destination_url,
           destination_type: link.destination_type,
           event_id: link.event_id,

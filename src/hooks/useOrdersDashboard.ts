@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { PartnerOrderRowAccess } from '@/lib/collab-order-access';
 import { fetchPartnerVisibleOrdersInRange, fetchPartnerVisibleProductOrdersForTable } from '@/lib/collab-order-access';
 import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
+import { addMoneyAmount } from '@/lib/currency';
 
 export type RangeKey = 'today' | '7d' | '30d' | '90d';
 
@@ -16,6 +17,7 @@ export interface Order {
   id: string;
   created_at: string;
   total_amount: number;
+  currency?: string | null;
   payment_status: string;
   fulfillment_status: string | null;
   receipt_url: string | null;
@@ -35,6 +37,7 @@ export interface Order {
 
 export interface OrdersDashboardData {
   revenueTotal: number;
+  revenueByCurrency: Record<string, number>;
   ordersCount: number; // Legacy - same as ordersCountSubmittedPaid
   ordersCountSubmittedPaid: number; // Count orders where payment_status IN ('submitted','paid') within selected range
   pendingCountSubmitted: number; // Count orders where payment_status='submitted' within selected range
@@ -128,6 +131,7 @@ export function useOrdersDashboard(
       if (!currentOrg) {
         return {
           revenueTotal: 0,
+          revenueByCurrency: {},
           ordersCount: 0,
           ordersCountSubmittedPaid: 0,
           pendingCountSubmitted: 0,
@@ -163,6 +167,7 @@ export function useOrdersDashboard(
           id,
           created_at,
           total_amount,
+          currency,
           payment_status,
           fulfillment_status,
           receipt_url,
@@ -191,6 +196,7 @@ export function useOrdersDashboard(
             id,
             created_at,
             total_amount,
+            currency,
             payment_status,
             fulfillment_status,
             receipt_url,
@@ -401,11 +407,21 @@ export function useOrdersDashboard(
       });
 
       // Calculate revenue: SUM effective_amount for paid/confirmed orders
-      const revenueTotal = orders
-        .filter(
-          (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
-        )
-        .reduce((sum, o) => sum + getEffectiveOrderAmount(o, effectiveRevenueMap), 0);
+      const revenueOrders = orders.filter(
+        (o) => o.payment_status === 'paid' || o.fulfillment_status === 'confirmed'
+      );
+      const revenueByCurrency: Record<string, number> = {};
+      for (const order of revenueOrders) {
+        addMoneyAmount(
+          revenueByCurrency,
+          order.currency,
+          getEffectiveOrderAmount(order, effectiveRevenueMap),
+        );
+      }
+      const revenueTotal = revenueOrders.reduce(
+        (sum, o) => sum + getEffectiveOrderAmount(o, effectiveRevenueMap),
+        0,
+      );
 
       // Counts
       const ordersCountSubmittedPaid = orders.filter(
@@ -614,6 +630,7 @@ export function useOrdersDashboard(
 
       return {
         revenueTotal,
+        revenueByCurrency,
         ordersCount: ordersCountSubmittedPaid, // Legacy support
         ordersCountSubmittedPaid,
         pendingCountSubmitted,

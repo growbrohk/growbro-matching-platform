@@ -2,11 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchRangedPipelineOrderAggregates } from '@/lib/pipelineRangedOrders';
 import type { RangeKey } from '@/hooks/useOrdersDashboard';
+import { mergeMoneyTotals, primaryMoneyAmount, scaleMoneyTotals } from '@/lib/currency';
 
 export interface DashboardPipelineStats {
   channelsCount: number;
   collabCount: number;
   pipelineRevenueTotal: number;
+  pipelineRevenueByCurrency: Record<string, number>;
 }
 
 type TrackingLinkRow = {
@@ -18,32 +20,19 @@ type TrackingLinkRow = {
   affiliate_org_id: string | null;
 };
 
-function sumHostRevenue(
+function addShare(
+  into: Record<string, number>,
   links: TrackingLinkRow[],
-  aggregates: Map<string, { commissionableRevenue: number }>
-): number {
-  let total = 0;
+  aggregates: Map<string, { commissionableByCurrency?: Record<string, number> }>,
+  kind: 'host' | 'affiliate',
+): void {
   for (const link of links) {
     const agg = aggregates.get(link.id);
-    if (!agg) continue;
+    if (!agg?.commissionableByCurrency) continue;
     const rate = link.commission_rate != null ? Number(link.commission_rate) : 0;
-    total += agg.commissionableRevenue * (1 - rate);
+    const factor = kind === 'host' ? 1 - rate : rate;
+    mergeMoneyTotals(into, scaleMoneyTotals(agg.commissionableByCurrency, factor));
   }
-  return total;
-}
-
-function sumAffiliateRevenue(
-  links: TrackingLinkRow[],
-  aggregates: Map<string, { commissionableRevenue: number }>
-): number {
-  let total = 0;
-  for (const link of links) {
-    const agg = aggregates.get(link.id);
-    if (!agg) continue;
-    const rate = link.commission_rate != null ? Number(link.commission_rate) : 0;
-    total += agg.commissionableRevenue * rate;
-  }
-  return total;
 }
 
 /**
@@ -60,7 +49,7 @@ export function useDashboardPipelineStats(
     queryKey: ['dashboard-pipeline-stats', orgId, rangeKey],
     queryFn: async (): Promise<DashboardPipelineStats> => {
       if (!orgId) {
-        return { channelsCount: 0, collabCount: 0, pipelineRevenueTotal: 0 };
+        return { channelsCount: 0, collabCount: 0, pipelineRevenueTotal: 0, pipelineRevenueByCurrency: {} };
       }
 
       const [hostRes, collabRes] = await Promise.all([
@@ -108,11 +97,12 @@ export function useDashboardPipelineStats(
         fetchRangedPipelineOrderAggregates(collabLinkIds, rangeKey, collabBasisMap),
       ]);
 
-      const pipelineRevenueTotal =
-        sumHostRevenue(hostLinks, hostAggregates) +
-        sumAffiliateRevenue(collabLinks, collabAggregates);
+      const pipelineRevenueByCurrency: Record<string, number> = {};
+      addShare(pipelineRevenueByCurrency, hostLinks, hostAggregates, 'host');
+      addShare(pipelineRevenueByCurrency, collabLinks, collabAggregates, 'affiliate');
+      const pipelineRevenueTotal = primaryMoneyAmount(pipelineRevenueByCurrency);
 
-      return { channelsCount, collabCount, pipelineRevenueTotal };
+      return { channelsCount, collabCount, pipelineRevenueTotal, pipelineRevenueByCurrency };
     },
     enabled,
   });

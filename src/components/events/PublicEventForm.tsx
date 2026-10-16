@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
+import { formatMoney, normalizeCurrency } from '@/lib/currency';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -67,6 +68,8 @@ export default function PublicEventForm({
   const multiSlotEvent = hasMultipleTimeSlots(event);
   const configuredTimeSlots = useMemo(() => getConfiguredTimeSlots(event), [event]);
   const timeSlotsList = useMemo(() => formatEventTimeSlotsList(event), [event]);
+  const eventCurrency = normalizeCurrency(event.currency);
+  const formatPrice = (amount: number) => formatMoney(amount, eventCurrency);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotKey | null>(null);
 
   const handleSelectTimeSlot = (slotKey: TimeSlotKey) => {
@@ -519,15 +522,15 @@ export default function PublicEventForm({
             <div className="flex items-center gap-3 mt-1 flex-wrap">
               {showDiscount ? (
                 <>
-                  <span className="text-sm text-muted-foreground line-through">${tt.price.toFixed(2)}</span>
-                  <span className="text-base font-medium" style={{ color: '#0E7A3A' }}>${effectivePrice.toFixed(2)}</span>
+                  <span className="text-sm text-muted-foreground line-through">{formatPrice(tt.price)}</span>
+                  <span className="text-base font-medium" style={{ color: '#0E7A3A' }}>{formatPrice(effectivePrice)}</span>
                   <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(14,122,58,0.15)', color: '#0E7A3A' }}>
                     {discountPercent}% off
                   </span>
                 </>
               ) : (
                 <span className="text-base font-medium" style={{ color: '#0F1F17' }}>
-                  ${effectivePrice.toFixed(2)}
+                  {formatPrice(effectivePrice)}
                 </span>
               )}
               {(() => {
@@ -657,7 +660,7 @@ export default function PublicEventForm({
       eventId: event.id,
       eventTitle: event.title,
       dateLabel,
-      currency: 'HKD',
+      currency: eventCurrency,
       lines,
       savedAt: new Date().toISOString(),
     };
@@ -862,7 +865,7 @@ export default function PublicEventForm({
                   Subtotal
                 </span>
                 <span className="text-base font-semibold" style={{ color: '#0F1F17' }}>
-                  ${subtotal.toFixed(2)}
+                  {formatPrice(subtotal)}
                 </span>
               </div>
               {mode === 'preview' ? (
@@ -921,13 +924,13 @@ export default function PublicEventForm({
                       {tt.name} × {selections[tt.id]}
                     </span>
                     <span className="text-sm font-medium">
-                      ${(effectivePrice * (selections[tt.id] || 0)).toFixed(2)}
+                      {formatPrice(effectivePrice * (selections[tt.id] || 0))}
                     </span>
                   </div>
                 ))}
               <div className="pt-4 border-t flex justify-between items-center font-semibold">
                 <span>Total</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{formatPrice(subtotal)}</span>
               </div>
               <div className="pt-4">
                 <p className="text-sm text-muted-foreground text-center">

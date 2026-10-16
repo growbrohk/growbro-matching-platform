@@ -188,6 +188,8 @@ export interface Event {
   payme_link?: string | null;
   fps_link?: string | null;
   stripe_fee_bearer?: 'host' | 'user' | null;
+  /** ISO 4217 currency ticket prices are charged in. Defaults to HKD. */
+  currency?: string | null;
   /** Per time slot venue capacity (day_1..day_4). Shared pool across ticket types. */
   slot_capacities?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
   metadata: Record<string, any>;

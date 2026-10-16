@@ -177,6 +177,7 @@ const ORDER_SELECT = `
   id,
   created_at,
   total_amount,
+  currency,
   payment_status,
   fulfillment_status,
   receipt_url,
@@ -300,6 +301,7 @@ const PRODUCT_ORDERS_TABLE_SELECT = `
   buyer_email,
   buyer_phone,
   total_amount,
+  currency,
   payment_status,
   payment_method,
   fulfillment_status,
@@ -505,7 +507,7 @@ export async function fetchPartnerVisibleProductOrdersForTable(
         let attrQuery = supabase
           .from('orders')
           .select(
-            'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata'
+            'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, currency, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata'
           )
           .eq('tracking_link_id', link.id);
 
@@ -555,7 +557,7 @@ export async function fetchPartnerVisibleProductOrdersForTable(
           let evOrdersQuery = supabase
             .from('orders')
             .select(
-              'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata, host_org_id'
+              'id, created_at, order_no, buyer_first_name, buyer_last_name, buyer_email, buyer_phone, total_amount, currency, payment_status, payment_method, fulfillment_status, tracking_link_id, event_id, metadata, host_org_id'
             )
             .eq('host_org_id', hostOrgId)
             .order('created_at', { ascending: false })

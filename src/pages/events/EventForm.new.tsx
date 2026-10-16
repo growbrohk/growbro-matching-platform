@@ -56,6 +56,12 @@ import EventDescription from '@/components/events/EventDescription';
 import EventMediaBlock from '@/components/events/EventMediaBlock';
 import PublicEventForm from '@/components/events/PublicEventForm';
 import { EventAddonsSection } from '@/components/events/EventAddonsSection';
+import { CurrencyPicker } from '@/components/events/CurrencyPicker';
+import {
+  NON_HKD_STRIPE_FEE_EXPLANATION,
+  formatStripeFeeLabel,
+  normalizeCurrency,
+} from '@/lib/currency';
 import { EventCollabSection } from '@/components/events/EventCollabSection';
 import {
   validateEventPartners,
@@ -694,6 +700,8 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [paymeLink, setPaymeLink] = useState<string>('');
   const [fpsLink, setFpsLink] = useState<string>('');
   const [stripeFeeBearer, setStripeFeeBearer] = useState<'host' | 'user'>('host');
+  const [currency, setCurrency] = useState<string>('HKD');
+  const [currencyLocked, setCurrencyLocked] = useState(false);
   const [paymentDefaultsLoaded, setPaymentDefaultsLoaded] = useState(false);
 
   // Event Ticket Terms & Conditions (editable, preset with default)
@@ -794,6 +802,12 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setPaymeLink(event.payme_link || '');
         setFpsLink(event.fps_link || '');
         setStripeFeeBearer(event.stripe_fee_bearer === 'user' ? 'user' : 'host');
+        setCurrency(normalizeCurrency(event.currency));
+        const { count: orderCount } = await supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', event.id);
+        setCurrencyLocked((orderCount ?? 0) > 0);
 
         // Load T&C and full metadata (for merge on save)
         const metadata = (event as any).metadata || {};
@@ -1699,6 +1713,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         payme_link: paymeLink.trim() || null,
         fps_link: fpsLink.trim() || null,
         stripe_fee_bearer: enableStripe ? stripeFeeBearer : 'host',
+        currency: normalizeCurrency(currency),
         slot_capacities: slotCapacitiesPayload,
         metadata: mergeEventMetadata(),
       };
@@ -2424,6 +2439,23 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             )}
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="event-currency" className="text-xs md:text-sm font-medium">
+              Currency
+            </Label>
+            <CurrencyPicker
+              id="event-currency"
+              value={currency}
+              onChange={setCurrency}
+              disabled={currencyLocked}
+            />
+            <p className="text-xs text-muted-foreground">
+              {currencyLocked
+                ? 'Currency is locked because this event already has orders.'
+                : 'Ticket prices are charged in this currency. Defaults to HKD.'}
+            </p>
+          </div>
+
           <div className="space-y-4">
             {/* Stripe */}
             <div className="border rounded-lg p-4" style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}>
@@ -2447,9 +2479,12 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               </div>
               {enableStripe && (
                 <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                  <Label className="text-xs md:text-sm font-medium">Credit card service charge (3.4% + HK$2.35)</Label>
+                  <Label className="text-xs md:text-sm font-medium">
+                    Credit card service charge ({formatStripeFeeLabel(currency)})
+                  </Label>
                   <p className="text-xs text-muted-foreground">
                     Applies to Stripe card payments only.
+                    {normalizeCurrency(currency) !== 'HKD' ? ` ${NON_HKD_STRIPE_FEE_EXPLANATION}` : ''}
                   </p>
                   <RadioGroup
                     value={stripeFeeBearer}
@@ -2484,6 +2519,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Customers upload PayMe receipt after payment
+                      {normalizeCurrency(currency) !== 'HKD' ? ' PayMe is a Hong Kong payment method.' : ''}
                     </p>
                   </div>
                 </div>
@@ -2521,6 +2557,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Customers upload FPS receipt/screenshot after payment
+                      {normalizeCurrency(currency) !== 'HKD' ? ' FPS is a Hong Kong payment method.' : ''}
                     </p>
                   </div>
                 </div>
@@ -2698,7 +2735,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor={`ticket-price-${index}`} className="text-xs md:text-sm font-medium">
-                          Price ($)
+                          Price ({normalizeCurrency(currency)})
                         </Label>
                         <Input
                           id={`ticket-price-${index}`}
@@ -3123,7 +3160,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         {/* Section 3b: Add-ons (shown when event exists) */}
         {eventId && currentOrg && !collabEditorContext && (
           <>
-            <EventAddonsSection eventId={eventId} orgId={currentOrg.id} />
+            <EventAddonsSection eventId={eventId} orgId={currentOrg.id} currency={currency} />
             <Separator />
           </>
         )}

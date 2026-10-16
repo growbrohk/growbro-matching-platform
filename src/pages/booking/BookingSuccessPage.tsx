@@ -9,6 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getOrderWithEvent, type OrderWithEvent } from '@/lib/api/bookings';
+import { formatMoney } from '@/lib/currency';
 import { submitManualPayment } from '@/lib/payments/submitManualPayment';
 import { formatOrderEventDateTime } from '@/lib/utils/event-time-slots';
 import { CreditCard, Smartphone, QrCode, ChevronDown, Loader2, ExternalLink, ChevronUp } from 'lucide-react';
@@ -284,9 +285,7 @@ export default function BookingSuccessPage() {
     return 'Select payment method';
   };
 
-  const formatPrice = (amount: number, currency: string = 'HKD'): string => {
-    return `${currency === 'HKD' ? 'HK$' : currency} ${amount.toFixed(2)}`;
-  };
+  const formatPrice = (amount: number, currency: string = 'HKD'): string => formatMoney(amount, currency);
 
   if (loading) {
     return (

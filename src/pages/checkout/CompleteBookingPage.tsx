@@ -66,6 +66,7 @@ import {
   DEFAULT_EVENT_TICKET_TERMS,
   DEFAULT_MARKETING_OPT_IN_LABEL,
 } from '@/lib/constants/eventTicketTerms';
+import { formatMoney } from '@/lib/currency';
 
 function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
   const raw = addon.gallery_urls;
@@ -78,26 +79,20 @@ function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
   });
 }
 
-function formatAddonHkd(amount: number): string {
-  return new Intl.NumberFormat('en-HK', {
-    style: 'currency',
-    currency: 'HKD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function AddonPriceDisplay({
   list,
   effective,
   isDiscounted,
+  currency = 'HKD',
   size = 'pdp',
 }: {
   list: number;
   effective: number;
   isDiscounted: boolean;
+  currency?: string;
   size?: 'pdp' | 'compact';
 }) {
+  const formatAddonPrice = (amount: number) => formatMoney(amount, currency);
   const cls = size === 'pdp' ? 'text-xl md:text-2xl font-semibold' : 'text-lg font-semibold';
   if (effective <= 0) {
     return (
@@ -109,18 +104,18 @@ function AddonPriceDisplay({
   if (isDiscounted) {
     return (
       <div className="flex flex-col items-end sm:items-start gap-0.5 text-right sm:text-left">
-        <span className="text-sm text-muted-foreground line-through" aria-label={`List price ${formatAddonHkd(list)}`}>
-          {formatAddonHkd(list)}
+        <span className="text-sm text-muted-foreground line-through" aria-label={`List price ${formatAddonPrice(list)}`}>
+          {formatAddonPrice(list)}
         </span>
         <p className={cls} style={{ color: '#0E7A3A' }}>
-          {formatAddonHkd(effective)}
+          {formatAddonPrice(effective)}
         </p>
       </div>
     );
   }
   return (
     <p className={cls} style={{ color: '#0E7A3A' }}>
-      {formatAddonHkd(effective)}
+      {formatAddonPrice(effective)}
     </p>
   );
 }
@@ -744,13 +739,8 @@ export default function CompleteBookingPage() {
   const subtotal = ticketSubtotal; // Used in Price Summary Sheet
 
   // Format currency
-  const formatCurrency = (amount: number): string => {
-    const currency = bookingDraft?.currency || 'HKD';
-    if (currency === 'HKD') {
-      return `HK$ ${amount.toFixed(1)}`;
-    }
-    return `${currency} ${amount.toFixed(2)}`;
-  };
+  const formatCurrency = (amount: number): string => formatMoney(amount, bookingDraft?.currency || 'HKD');
+  const checkoutCurrency = bookingDraft?.currency || 'HKD';
 
   if (!bookingDraft) {
     return (
@@ -916,6 +906,7 @@ export default function CompleteBookingPage() {
                           list={apList}
                           effective={apEff}
                           isDiscounted={apDisc}
+                          currency={checkoutCurrency}
                           size="pdp"
                         />
                       }
@@ -1306,6 +1297,7 @@ export default function CompleteBookingPage() {
                                           list={apList}
                                           effective={apEff}
                                           isDiscounted={apDisc}
+                                          currency={checkoutCurrency}
                                           size="compact"
                                         />
                                       }
@@ -1806,6 +1798,7 @@ export default function CompleteBookingPage() {
                                       list={apListB}
                                       effective={apEffB}
                                       isDiscounted={apDiscB}
+                                      currency={checkoutCurrency}
                                       size="compact"
                                     />
                                   }

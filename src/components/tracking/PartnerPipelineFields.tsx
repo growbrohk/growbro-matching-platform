@@ -204,8 +204,9 @@ export function PartnerPipelineFields({
         </Select>
         <p className="text-xs text-muted-foreground">
           Profit uses the product&apos;s unit cost and shipping fee on each order. Stripe payment
-          processing fees (3.4% + $2.35) are also deducted when the order was paid via Stripe. Cost
-          is set on the product form.
+          processing fees (3.4% + HK$2.35 for HKD, or 5.9% plus a converted fixed fee for other
+          currencies) are also deducted when the order was paid via Stripe. Cost is set on the
+          product form.
         </p>
       </div>
 

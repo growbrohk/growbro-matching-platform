@@ -1,3 +1,7 @@
+import { formatStripeFeeLabel, getStripeFee, roundMoney } from '@/lib/currency';
+
+export { formatStripeFeeLabel, getStripeFee };
+
 export function shippingFeeFromMetadata(metadata: unknown): number {
   if (!metadata || typeof metadata !== 'object') return 0;
   const fee = (metadata as Record<string, unknown>).shipping_fee;
@@ -11,7 +15,8 @@ export function orderCommissionableAmount(
   orderItems: Array<{ quantity: number; metadata: unknown }>,
   productCostMap: Map<string, number>,
   basis: 'revenue' | 'profit',
-  paymentMethod?: string | null
+  paymentMethod?: string | null,
+  currency?: string | null
 ): number {
   const total = Number(totalAmount) || 0;
   if (basis !== 'profit') return total;
@@ -25,7 +30,7 @@ export function orderCommissionableAmount(
       lineCost += (productCostMap.get(pid) || 0) * (Number(item.quantity) || 0);
     }
   }
-  const paymentFee = computePaymentProcessingFee(paymentMethod, total);
+  const paymentFee = computePaymentProcessingFee(paymentMethod, total, currency);
   return Math.max(0, total - shipping - lineCost - paymentFee);
 }
 
@@ -37,7 +42,8 @@ export function addonLineCommissionableAmount(
   productCostMap: Map<string, number>,
   basis: 'revenue' | 'profit',
   paymentMethod?: string | null,
-  parentOrderTotal?: number
+  parentOrderTotal?: number,
+  currency?: string | null
 ): number {
   const lineTotal = Number(subtotal) || 0;
   if (basis !== 'profit') return lineTotal;
@@ -45,7 +51,7 @@ export function addonLineCommissionableAmount(
   const parentTotal = Number(parentOrderTotal) || 0;
   let allocatedFee = 0;
   if (parentTotal > 0) {
-    const orderFee = computePaymentProcessingFee(paymentMethod, parentTotal);
+    const orderFee = computePaymentProcessingFee(paymentMethod, parentTotal, currency);
     allocatedFee = (lineTotal / parentTotal) * orderFee;
   }
 
@@ -95,36 +101,32 @@ export function addonLineCost(
   return (productCostMap.get(productId) || 0) * (Number(quantity) || 0);
 }
 
-export const STRIPE_FEE_RATE = 0.034;
-export const STRIPE_FEE_FIXED = 2.35;
-
 export type StripeFeeBearer = 'host' | 'user';
 
-export function computeStripeProcessingFee(orderAmount: number): number {
+export function computeStripeProcessingFee(orderAmount: number, currency = 'HKD'): number {
+  const { rate, fixed } = getStripeFee(currency);
   const total = Number(orderAmount) || 0;
-  return Math.round((total * STRIPE_FEE_RATE + STRIPE_FEE_FIXED) * 100) / 100;
+  return roundMoney(total * rate + fixed, currency);
 }
 
 export function computeStripeCheckoutTotal(
   subtotal: number,
-  bearer: StripeFeeBearer | null | undefined
+  bearer: StripeFeeBearer | null | undefined,
+  currency = 'HKD'
 ): { subtotal: number; serviceFee: number; grandTotal: number } {
   const base = Number(subtotal) || 0;
-  const serviceFee = bearer === 'user' ? computeStripeProcessingFee(base) : 0;
-  const grandTotal = Math.round((base + serviceFee) * 100) / 100;
+  const serviceFee = bearer === 'user' ? computeStripeProcessingFee(base, currency) : 0;
+  const grandTotal = roundMoney(base + serviceFee, currency);
   return { subtotal: base, serviceFee, grandTotal };
-}
-
-export function formatStripeFeeLabel(): string {
-  return `3.4% + HK$${STRIPE_FEE_FIXED.toFixed(2)}`;
 }
 
 export function computePaymentProcessingFee(
   paymentMethod: string | null | undefined,
-  orderAmount: number
+  orderAmount: number,
+  currency = 'HKD'
 ): number {
   if (paymentMethod?.toLowerCase() === 'stripe') {
-    return computeStripeProcessingFee(orderAmount);
+    return computeStripeProcessingFee(orderAmount, currency);
   }
   return 0;
 }

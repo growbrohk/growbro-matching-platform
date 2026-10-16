@@ -15,6 +15,7 @@
  */
 
 import { QRCodeSVG } from 'qrcode.react';
+import { formatMoney } from '@/lib/currency';
 import { formatTicketDateTime } from '@/lib/utils/datetime';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -52,16 +53,7 @@ function formatAddonLine(addon: TicketCardAddon): string {
 
 function formatPrice(price: number, currency: string = 'HKD'): string {
   if (!price || price === 0) return 'FREE';
-
-  const currencySymbols: Record<string, string> = {
-    HKD: 'HK$',
-    USD: '$',
-    GBP: '£',
-    EUR: '€',
-  };
-
-  const symbol = currencySymbols[currency.toUpperCase()] || currency;
-  return `${symbol}${price.toFixed(0)}`;
+  return formatMoney(price, currency);
 }
 
 export default function TicketCard({

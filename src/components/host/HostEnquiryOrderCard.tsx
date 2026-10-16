@@ -11,6 +11,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { formatMoney } from '@/lib/currency';
 
 export interface HostOrderCardData {
   order_id: string;
@@ -47,16 +48,7 @@ interface HostEnquiryOrderCardProps {
  */
 function formatAmount(amount: number, currency: string = 'HKD'): string {
   if (!amount || amount === 0) return 'FREE';
-
-  const currencySymbols: Record<string, string> = {
-    HKD: 'HK$',
-    USD: '$',
-    GBP: '£',
-    EUR: '€',
-  };
-
-  const symbol = currencySymbols[currency.toUpperCase()] || currency;
-  return `${symbol}${amount.toFixed(0)}`;
+  return formatMoney(amount, currency);
 }
 
 /**

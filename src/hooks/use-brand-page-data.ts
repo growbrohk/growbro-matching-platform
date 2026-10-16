@@ -10,6 +10,7 @@ export interface BrandEvent {
   orgSlug: string | null;
   dateStrings: string[];
   priceFrom: number | null;
+  currency: string | null;
 }
 
 export interface BrandProduct {
@@ -79,7 +80,7 @@ export function useBrandPageData(
 
         let eventsQuery = supabase
           .from('events')
-          .select('id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata')
+          .select('id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata, currency')
           .eq('org_id', orgId)
           .eq('status', 'published');
 
@@ -158,7 +159,7 @@ export function useBrandPageData(
           const { data: extraEvents } = await supabase
             .from('events')
             .select(
-              'id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata',
+              'id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata, currency',
             )
             .in('id', ids)
             .eq('status', 'published');
@@ -275,6 +276,7 @@ export function useBrandPageData(
               orgSlug: rowSlug ?? orgSlug,
               dateStrings,
               priceFrom: minPriceByEvent[e.id] ?? null,
+              currency: (e as { currency?: string | null }).currency || 'HKD',
             };
           })
         );
