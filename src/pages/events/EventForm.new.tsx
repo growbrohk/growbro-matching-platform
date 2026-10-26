@@ -120,6 +120,8 @@ interface AccessVariantForm {
 }
 
 interface TicketTypeForm {
+  /** Form-only identity for React keys. Never sent to the database. */
+  clientKey: string;
   id?: string;
   name: string;
   price: string;
@@ -242,6 +244,7 @@ function mapTicketTypesFromApi(types: TicketType[]): TicketTypeForm[] {
     });
     const variants = mapAccessVariantsFromApi(t);
     return {
+      clientKey: t.id,
       id: t.id,
       name: t.name,
       price: t.price.toString(),
@@ -1006,6 +1009,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
   const addTicketType = () => {
     setTicketTypes([...ticketTypes, {
+      clientKey: crypto.randomUUID(),
       name: '',
       price: '',
       quota: '',
@@ -1028,15 +1032,33 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     setShowTicketTypesSection(true);
   };
 
-  const removeTicketType = (index: number) => {
+  const removeTicketType = async (index: number) => {
     const ticketType = ticketTypes[index];
+    if (!ticketType) return;
+
     if (ticketType.id && !ticketType.isNew) {
-      // Mark for deletion (we'll handle this on save)
-      deleteTicketType(ticketType.id).catch(err => {
-        console.error('Failed to delete ticket type:', err);
-      });
+      const { count, error } = await supabase
+        .from('order_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('ticket_type_id', ticketType.id);
+      if (error || (count ?? 0) > 0) {
+        toast({
+          title: 'Cannot delete ticket type',
+          description: error
+            ? 'Could not check existing orders. Please try again.'
+            : 'This ticket type already has orders. Turn off "On sale" to stop selling it instead.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
-    setTicketTypes(ticketTypes.filter((_, i) => i !== index));
+
+    const key = ticketType.clientKey;
+    setTicketTypes((prev) =>
+      key
+        ? prev.filter((t) => t.clientKey !== key)
+        : prev.filter((_, i) => i !== index)
+    );
   };
 
   const updateSlotQuota = (ticketIndex: number, slotKey: TimeSlotKey, value: string) => {
@@ -2612,7 +2634,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
               <div className="space-y-4">
                 {ticketTypes.map((tt, index) => (
                   <div 
-                    key={index} 
+                    key={tt.clientKey} 
                     className="border rounded-lg p-6 space-y-4" 
                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.5)' }}
                   >
