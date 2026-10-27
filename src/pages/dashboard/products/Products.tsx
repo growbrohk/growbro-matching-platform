@@ -12,7 +12,7 @@ import { Loader2, ArrowLeft, ShoppingCart } from 'lucide-react';
 import { getCategories, type ProductCategory } from '@/lib/api/categories-and-tags';
 import { getProducts } from '@/lib/api/products';
 import { getVariantConfig } from '@/lib/api/variant-config';
-import { getVariantOptionValue } from '@/lib/utils/variant-parser';
+import { getVariantOptionValue, sortVariantsByDisplayOrder } from '@/lib/utils/variant-parser';
 import type { Product } from '@/lib/types';
 import { ProductsToolbar } from '@/components/catalog/ProductsToolbar';
 import { BulkDialogs } from '@/components/catalog/BulkDialogs';
@@ -253,7 +253,10 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
           allInventoryItems = (inventoryResult.data || []) as InventoryItem[];
         }
         
-        // Build products with details
+        // Build products with details. Variants stay in created_at order from the
+        // query; display order follows Rank 1 / Rank 2 and saved value orders.
+        const variantRankOrder = [variantConfigData.rank1, variantConfigData.rank2].filter(Boolean);
+        const variantValueOrders = variantConfigData.value_orders ?? {};
         const productsWithDetails = productsData.map((product) => {
           const productVariants = allVariants.filter(v => v.product_id === product.id);
           const variantIds = productVariants.map(v => v.id);
@@ -261,7 +264,7 @@ export default function Products({ isEmbeddedInCatalog = false, selectedSubtab: 
           
           return {
             ...product,
-            variants: productVariants,
+            variants: sortVariantsByDisplayOrder(productVariants, variantRankOrder, variantValueOrders),
             inventoryItems: productInventory,
           };
         });

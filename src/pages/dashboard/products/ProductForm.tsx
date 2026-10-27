@@ -51,6 +51,7 @@ import {
   getVariantOptionValue,
   orderVariantValuesForDisplay,
   sortVariantOptionNames,
+  sortVariantsByDisplayOrder,
 } from '@/lib/utils/variant-parser';
 import {
   validateProductPartners,
@@ -691,24 +692,30 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
               sig: signatureFromVariantName(row.name || ''),
         }));
         
+        let orderedVariants = variantsList;
         if (variantsList.length > 0) {
-          setVariants(variantsList);
-
           if (v.length > 1) {
             const config = variantConfig ?? (await getVariantConfig(currentOrg.id));
             if (!variantConfig) setVariantConfig(config);
+            const rankOrder = [config.rank1, config.rank2].filter(Boolean);
+            orderedVariants = sortVariantsByDisplayOrder(
+              variantsList,
+              rankOrder,
+              config.value_orders ?? {},
+            );
             const extracted = extractVariantOptionsFromNames(
-              v.map((row: { name?: string }) => row.name || ''),
-              [config.rank1, config.rank2].filter(Boolean),
+              orderedVariants.map((row) => row.name),
+              rankOrder,
               config.value_orders ?? {},
             );
             setVariantOptionsDraft(extracted);
             setVariantOptionsApplied(JSON.parse(JSON.stringify(extracted)));
           }
+          setVariants(orderedVariants);
         }
         
         // Load warehouses
-        await loadWarehouses(variantsList);
+        await loadWarehouses(orderedVariants);
 
         if (p.type === 'physical') {
           try {

@@ -225,11 +225,11 @@ export function sortVariantOptionValues(values: string[], optionName: string): s
       if (ia !== null && ib !== null) return ia - ib;
       if (ia !== null) return -1;
       if (ib !== null) return 1;
-      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
     });
     return copy;
   }
-  copy.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  copy.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
   return copy;
 }
 
@@ -265,6 +265,54 @@ export function orderVariantValuesForDisplay(
   const remainder = unique.filter((u) => !used.has(u));
   const remainderSorted = sortVariantOptionValues(remainder, optionName);
   return [...ordered, ...remainderSorted];
+}
+
+/**
+ * Sort variant rows by option rank (Rank 1, then Rank 2, then other options)
+ * and each option's saved value order. Values missing from the saved order
+ * follow the numeric / apparel / alphabetical fallback. Full ties keep the
+ * input order. Returns a new array.
+ */
+export function sortVariantsByDisplayOrder<T extends { name: string }>(
+  variants: T[],
+  rankOrder: string[] = [],
+  valueOrders: Record<string, string[]> = {},
+): T[] {
+  if (variants.length < 2) return [...variants];
+
+  const names = variants.map((v) => v.name);
+  const hierarchy = getVariantHierarchy(names, rankOrder);
+  if (hierarchy.length === 0) return [...variants];
+
+  const indexByOption = new Map<string, Map<string, number>>();
+  for (const opt of hierarchy) {
+    const values: string[] = [];
+    const seen = new Set<string>();
+    for (const name of names) {
+      const value = getVariantOptionValue(name, opt);
+      if (value && !seen.has(value)) {
+        seen.add(value);
+        values.push(value);
+      }
+    }
+    const ordered = orderVariantValuesForDisplay(values, opt, valueOrders[opt]);
+    const index = new Map<string, number>();
+    ordered.forEach((value, i) => index.set(value, i));
+    indexByOption.set(opt, index);
+  }
+
+  const missing = Number.MAX_SAFE_INTEGER;
+  return [...variants].sort((a, b) => {
+    for (const opt of hierarchy) {
+      const index = indexByOption.get(opt);
+      const va = getVariantOptionValue(a.name, opt);
+      const vb = getVariantOptionValue(b.name, opt);
+      const ia = va != null && index?.has(va) ? index.get(va)! : missing;
+      const ib = vb != null && index?.has(vb) ? index.get(vb)! : missing;
+      if (ia !== ib) return ia - ib;
+    }
+    return 0;
+  });
 }
 
 /**
