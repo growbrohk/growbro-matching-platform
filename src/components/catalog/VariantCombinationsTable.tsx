@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { NumberCellInput } from '@/components/catalog/NumberCellInput';
 
 type ProductVariant = {
   id: string;
@@ -117,58 +118,6 @@ export function VariantCombinationsTable({
               ? pendingEdits[priceKey].price!
               : (variant.price ?? basePrice ?? 0);
             
-            const handleStockChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-              if (!setPendingEdits || !selectedWarehouseId) return;
-              
-              const inputValue = e.target.value;
-              // Allow empty string while typing, convert to 0 for storage
-              if (inputValue === '') {
-                setPendingEdits(prev => ({
-                  ...prev,
-                  [stockKey]: {
-                    ...prev[stockKey],
-                    stock: 0,
-                  },
-                }));
-              } else {
-                const value = parseFloat(inputValue);
-                const numValue = isNaN(value) ? 0 : Math.max(0, value);
-                setPendingEdits(prev => ({
-                  ...prev,
-                  [stockKey]: {
-                    ...prev[stockKey],
-                    stock: numValue,
-                  },
-                }));
-              }
-            };
-
-            const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-              if (!setPendingEdits) return;
-              
-              const inputValue = e.target.value;
-              // Allow empty string while typing, convert to 0 for storage
-              if (inputValue === '') {
-                setPendingEdits(prev => ({
-                  ...prev,
-                  [priceKey]: {
-                    ...prev[priceKey],
-                    price: 0,
-                  },
-                }));
-              } else {
-                const value = parseFloat(inputValue);
-                const numValue = isNaN(value) ? 0 : Math.max(0, value);
-                setPendingEdits(prev => ({
-                  ...prev,
-                  [priceKey]: {
-                    ...prev[priceKey],
-                    price: numValue,
-                  },
-                }));
-              }
-            };
-
             const handleRestockChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               if (!setRestockEdits) return;
               
@@ -220,11 +169,19 @@ export function VariantCombinationsTable({
                 </td>
                 <td className="p-0 border w-[48px]">
                   {isCorrectionMode && selectedWarehouseId ? (
-                    <Input
-                      type="number"
-                      min="0"
+                    <NumberCellInput
+                      min={0}
                       value={pendingEdits[stockKey]?.stock !== undefined ? pendingEdits[stockKey].stock! : stock}
-                      onChange={handleStockChange}
+                      onValueChange={(next) => {
+                        if (!setPendingEdits) return;
+                        setPendingEdits((prev) => ({
+                          ...prev,
+                          [stockKey]: {
+                            ...prev[stockKey],
+                            stock: next,
+                          },
+                        }));
+                      }}
                       onFocus={onBeginEditing}
                       onClick={onBeginEditing}
                       className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
@@ -262,12 +219,20 @@ export function VariantCombinationsTable({
                 )}
                 <td className="p-0 border w-[56px]">
                   {isCorrectionMode && !isTransferMode ? (
-                    <Input
-                      type="number"
-                      min="0"
+                    <NumberCellInput
+                      min={0}
                       step="0.01"
                       value={pendingEdits[priceKey]?.price !== undefined ? pendingEdits[priceKey].price! : price}
-                      onChange={handlePriceChange}
+                      onValueChange={(next) => {
+                        if (!setPendingEdits) return;
+                        setPendingEdits((prev) => ({
+                          ...prev,
+                          [priceKey]: {
+                            ...prev[priceKey],
+                            price: next,
+                          },
+                        }));
+                      }}
                       onFocus={onBeginEditing}
                       onClick={onBeginEditing}
                       className="h-6 px-1 py-0 text-xs border-0 rounded-none focus-visible:ring-1 focus-visible:ring-offset-0"
