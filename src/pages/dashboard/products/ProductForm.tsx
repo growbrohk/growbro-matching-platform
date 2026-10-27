@@ -2578,25 +2578,25 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
 
                     {/* Excel-style table */}
                     <div className="border border-border rounded overflow-x-auto">
-                      <table className="w-full border-collapse table-fixed">
+                      <table className="w-max min-w-full border-collapse">
                         <thead>
                           <tr className="bg-muted/50 border-t">
-                            <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[88px]">Variant</th>
-                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground">Stock</th>
-                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground">Price</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px]">Variant</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-12">Stock</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-left text-muted-foreground w-14">Price</th>
                             <th className="sticky top-0 z-10 bg-muted/50 p-0 border text-[11px] w-[96px]">SKU</th>
-                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-center text-muted-foreground">Active</th>
+                            <th className="sticky top-0 z-10 bg-muted/50 p-0 text-[11px] font-medium border text-center text-muted-foreground w-10">Active</th>
                           </tr>
                         </thead>
                         <tbody>
                           {variants.map((v, idx) => (
                             <tr key={v.id ?? idx} className="border-t hover:bg-muted/30 even:bg-muted/10">
-                              <td className="p-0 border w-[88px]">
-                                <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                              <td className="p-0 border">
+                                <span className="block px-1 py-0 text-xs leading-tight whitespace-nowrap">
                                   {v.name}
                                 </span>
                               </td>
-                              <td className="p-0 border w-[48px]">
+                              <td className="p-0 border w-12">
                                 <input
                                   type="number"
                                   placeholder="0"
@@ -2606,7 +2606,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                                   min="0"
                                 />
                               </td>
-                              <td className="p-0 border w-[56px]">
+                              <td className="p-0 border w-14">
                                 <input
                                   type="text"
                                   placeholder="0.00"
@@ -2624,7 +2624,7 @@ export default function ProductForm(props?: ProductFormEmbeddedProps) {
                                   className="w-full bg-transparent border-0 rounded-none px-1 py-0 text-xs leading-tight outline-none focus:ring-1 focus:ring-primary/40"
                                 />
                               </td>
-                              <td className="p-0 border w-[40px]">
+                              <td className="p-0 border w-10">
                                 <div className="flex items-center justify-center scale-90">
                                   <Switch
                                     checked={v.active}
