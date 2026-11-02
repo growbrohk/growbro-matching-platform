@@ -49,10 +49,13 @@ import { collectProductPhotoUrls } from '@/lib/utils/product-media';
 import { ProductMerchandiseLayout } from '@/components/products/ProductMerchandiseLayout';
 import {
   addonEnforcesStock,
+  availableForAttendee,
   resolvedVariantId,
   stockRemainingForVariant,
   maxQtyPrimary,
   maxQtyPerTicketAttendee,
+  neededQtyForAddon,
+  perTicketAddonStockState,
   computeAddonStockOrderError,
   getAddonDisplayPrices,
 } from '@/lib/utils/event-addon-stock';
@@ -128,6 +131,8 @@ function EventAddonVariantSelect({
   variantValueOrders,
   disabled,
   compact,
+  getAvailable,
+  neededQty = 1,
 }: {
   addon: EventAddonForCheckout;
   selectedVariantId: string | undefined;
@@ -136,20 +141,36 @@ function EventAddonVariantSelect({
   variantValueOrders: Record<string, string[]>;
   disabled: boolean;
   compact?: boolean;
+  /** Null means stock is not enforced. Otherwise units left for this picker. */
+  getAvailable: (variantId: string) => number | null;
+  /** Disable an option when available stock is below this (fixed qty, or 1). */
+  neededQty?: number;
 }) {
   const variantRows = useMemo(
     () => addon.variants.map((v) => ({ id: v.id, name: v.name, price: v.price })),
     [addon.variants],
   );
 
-  const isValueDisabled = (optionName: string, value: string, prefix: Record<string, string>) => {
-    if (!addonEnforcesStock(addon)) return false;
-    const candidates = addon.variants.filter(
+  const matchingVariants = (optionName: string, value: string, prefix: Record<string, string>) =>
+    addon.variants.filter(
       (v) =>
         getVariantOptionValue(v.name, optionName) === value &&
         Object.entries(prefix).every(([k, pv]) => getVariantOptionValue(v.name, k) === pv),
     );
-    return candidates.length > 0 && candidates.every((v) => (v.stock_remaining ?? 0) <= 0);
+
+  const isShort = (available: number | null) => available !== null && available < neededQty;
+
+  const isValueDisabled = (optionName: string, value: string, prefix: Record<string, string>) => {
+    const candidates = matchingVariants(optionName, value, prefix);
+    return candidates.length > 0 && candidates.every((v) => isShort(getAvailable(v.id)));
+  };
+
+  const stockSuffix = (available: number | null) => {
+    if (available === null) return null;
+    if (available < neededQty) {
+      return <span className="text-destructive"> (Out of stock)</span>;
+    }
+    return <span className="text-muted-foreground"> ({available} left)</span>;
   };
 
   /** Promote Version before Size when both exist (org rank may list Size first). */
@@ -176,18 +197,24 @@ function EventAddonVariantSelect({
       flatContentClassName="max-h-60 max-w-[90vw] !overflow-auto"
       flatViewportClassName="min-w-[min(20rem,90vw)] w-max"
       isValueDisabled={isValueDisabled}
-      flatItemDisabled={(v) => addonEnforcesStock(addon) && (v.stock_remaining ?? 0) <= 0}
+      hierarchicalItemSuffix={(optionName, value, prefix) => {
+        const candidates = matchingVariants(optionName, value, prefix);
+        if (candidates.length === 0) return null;
+        const amounts = candidates.map((v) => getAvailable(v.id));
+        if (amounts.some((amount) => amount === null)) return null;
+        const total = amounts.reduce((sum, amount) => sum + (amount ?? 0), 0);
+        const allShort = amounts.every((amount) => (amount ?? 0) < neededQty);
+        if (allShort || total <= 0) {
+          return <span className="text-destructive"> (Out of stock)</span>;
+        }
+        return <span className="text-muted-foreground"> ({total} left)</span>;
+      }}
+      flatItemDisabled={(v) => isShort(getAvailable(v.id))}
       flatItemSuffix={(v) => (
         <>
           {' '}
           – HK$ {v.price.toFixed(0)}
-          {addonEnforcesStock(addon) ? (
-            (v.stock_remaining ?? 0) <= 0 ? (
-              <span className="text-destructive"> (Out of stock)</span>
-            ) : (
-              <span className="text-muted-foreground"> ({v.stock_remaining} left)</span>
-            )
-          ) : null}
+          {stockSuffix(getAvailable(v.id))}
         </>
       )}
     />
@@ -507,10 +534,15 @@ export default function CompleteBookingPage() {
         attendees.forEach((_, idx) => {
           eventAddons.forEach((addon) => {
             if (addon.variants.length <= 1) return;
-            const firstId = addon.variants[0]?.id;
-            if (!firstId) return;
             const cur = next[idx]?.[addon.product_id];
             if (cur?.variantId) return;
+            const needed = neededQtyForAddon(addon);
+            const firstAvailable = addon.variants.find((v) => {
+              const available = availableForAttendee(addon, v.id, idx, next);
+              return available === null || available >= needed;
+            });
+            const firstId = firstAvailable?.id ?? addon.variants[0]?.id;
+            if (!firstId) return;
             next[idx] = {
               ...(next[idx] ?? {}),
               [addon.product_id]: {
@@ -934,6 +966,8 @@ export default function CompleteBookingPage() {
                             variantRankOrder={addonVariantRankOrder}
                             variantValueOrders={addonVariantValueOrders}
                             disabled={allVariantsOos}
+                            getAvailable={(variantId) => stockRemainingForVariant(addon, variantId)}
+                            neededQty={neededQtyForAddon(addon)}
                             onVariantChange={(id) => {
                               if (id == null) {
                                 setAddonSelections((prev) => {
@@ -1242,19 +1276,12 @@ export default function CompleteBookingPage() {
                                 const hasVariants = addon.variants.length > 1;
                                 const enforced = addonEnforcesStock(addon);
                                 const vid = resolvedVariantId(addon, sel);
-                                const allVariantsOos =
-                                  enforced && hasVariants && addon.variants.every((v) => (v.stock_remaining ?? 0) <= 0);
-                                const stock =
-                                  hasVariants && !sel.variantId
-                                    ? null
-                                    : stockRemainingForVariant(addon, sel.variantId ?? vid);
-                                const outOfStock =
-                                  allVariantsOos ||
-                                  (enforced &&
-                                    !hasVariants &&
-                                    (stockRemainingForVariant(addon, vid) ?? 0) <= 0) ||
-                                  (enforced && hasVariants && !!sel.variantId && (stock ?? 0) <= 0);
-                                const maxQ = maxQtyPerTicketAttendee(addon, sel, index, addonSelectionsByAttendee);
+                                const { allVariantsOos, outOfStock, maxQ } = perTicketAddonStockState(
+                                  addon,
+                                  sel,
+                                  index,
+                                  addonSelectionsByAttendee
+                                );
                                 const fixedQty = addon.fixed_quantity ?? 0;
                                 const maxQForFixed = enforced
                                   ? maxQtyPerTicketAttendee(
@@ -1331,6 +1358,15 @@ export default function CompleteBookingPage() {
                                             variantValueOrders={addonVariantValueOrders}
                                             disabled={allVariantsOos}
                                             compact
+                                            getAvailable={(variantId) =>
+                                              availableForAttendee(
+                                                addon,
+                                                variantId,
+                                                index,
+                                                addonSelectionsByAttendee
+                                              )
+                                            }
+                                            neededQty={neededQtyForAddon(addon)}
                                             onVariantChange={(id) => {
                                               if (id == null) {
                                                 setAddonSelectionsByAttendee((prev) => {
@@ -1743,19 +1779,12 @@ export default function CompleteBookingPage() {
                             const hasVariants = addon.variants.length > 1;
                             const enforced = addonEnforcesStock(addon);
                             const vid = resolvedVariantId(addon, sel);
-                            const allVariantsOos =
-                              enforced && hasVariants && addon.variants.every((v) => (v.stock_remaining ?? 0) <= 0);
-                            const stock =
-                              hasVariants && !sel.variantId
-                                ? null
-                                : stockRemainingForVariant(addon, sel.variantId ?? vid);
-                            const outOfStock =
-                              allVariantsOos ||
-                              (enforced &&
-                                !hasVariants &&
-                                (stockRemainingForVariant(addon, vid) ?? 0) <= 0) ||
-                              (enforced && hasVariants && !!sel.variantId && (stock ?? 0) <= 0);
-                            const maxQ = maxQtyPerTicketAttendee(addon, sel, index, addonSelectionsByAttendee);
+                            const { allVariantsOos, outOfStock, maxQ } = perTicketAddonStockState(
+                              addon,
+                              sel,
+                              index,
+                              addonSelectionsByAttendee
+                            );
                             const fixedQty = addon.fixed_quantity ?? 0;
                             const maxQForFixed = enforced
                               ? maxQtyPerTicketAttendee(
@@ -1832,6 +1861,15 @@ export default function CompleteBookingPage() {
                                         variantValueOrders={addonVariantValueOrders}
                                         disabled={allVariantsOos}
                                         compact
+                                        getAvailable={(variantId) =>
+                                          availableForAttendee(
+                                            addon,
+                                            variantId,
+                                            index,
+                                            addonSelectionsByAttendee
+                                          )
+                                        }
+                                        neededQty={neededQtyForAddon(addon)}
                                         onVariantChange={(id) => {
                                           if (id == null) {
                                             setAddonSelectionsByAttendee((prev) => {

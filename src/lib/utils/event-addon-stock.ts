@@ -56,16 +56,28 @@ export function maxQtyPrimary(
   return Math.max(0, s);
 }
 
-export function maxQtyPerTicketAttendee(
+/** Units this ticket must be able to take. Fixed add-ons need the full fixed quantity. */
+export function neededQtyForAddon(addon: EventAddonForCheckout): number {
+  const fixed = addon.fixed_quantity;
+  if (fixed != null && fixed > 0) return fixed;
+  return 1;
+}
+
+/**
+ * Stock left for this attendee after other tickets' committed qty.
+ * Null when this add-on does not enforce stock. Own qty is not subtracted.
+ */
+export function availableForAttendee(
   addon: EventAddonForCheckout,
-  sel: { variantId?: string; qty: number },
+  variantId: string | undefined,
   attendeeIndex: number,
   byAttendee: Record<number, Record<string, { variantId?: string; qty: number }>>
-): number {
-  const s = stockRemainingForVariant(addon, resolvedVariantId(addon, sel));
-  if (s === null) return 9999;
-  const vid = resolvedVariantId(addon, sel);
+): number | null {
+  if (!addonEnforcesStock(addon)) return null;
+  const vid = variantId ?? addon.variants[0]?.id;
   if (!vid) return 0;
+  const row = addon.variants.find((v) => v.id === vid);
+  const stock = row?.stock_remaining ?? 0;
   let others = 0;
   for (const [k, selections] of Object.entries(byAttendee)) {
     const idx = parseInt(k, 10);
@@ -74,7 +86,53 @@ export function maxQtyPerTicketAttendee(
     if (!o || o.qty <= 0) continue;
     if (resolvedVariantId(addon, o) === vid) others += o.qty;
   }
-  return Math.max(0, s - others);
+  return Math.max(0, stock - others);
+}
+
+export function maxQtyPerTicketAttendee(
+  addon: EventAddonForCheckout,
+  sel: { variantId?: string; qty: number },
+  attendeeIndex: number,
+  byAttendee: Record<number, Record<string, { variantId?: string; qty: number }>>
+): number {
+  const available = availableForAttendee(
+    addon,
+    resolvedVariantId(addon, sel),
+    attendeeIndex,
+    byAttendee
+  );
+  if (available === null) return 9999;
+  return available;
+}
+
+/** Shared out-of-stock flags for one attendee's add-on, using stock left after other tickets. */
+export function perTicketAddonStockState(
+  addon: EventAddonForCheckout,
+  sel: { variantId?: string; qty: number },
+  attendeeIndex: number,
+  byAttendee: Record<number, Record<string, { variantId?: string; qty: number }>>
+): { allVariantsOos: boolean; outOfStock: boolean; maxQ: number } {
+  const hasVariants = addon.variants.length > 1;
+  const enforced = addonEnforcesStock(addon);
+  const needed = neededQtyForAddon(addon);
+  const vid = resolvedVariantId(addon, sel);
+  const maxQ = maxQtyPerTicketAttendee(addon, sel, attendeeIndex, byAttendee);
+
+  const isShort = (variantId: string | undefined) => {
+    if (!enforced) return false;
+    const available = availableForAttendee(addon, variantId, attendeeIndex, byAttendee);
+    return (available ?? 0) < needed;
+  };
+
+  const allVariantsOos =
+    enforced && hasVariants && addon.variants.every((v) => isShort(v.id));
+
+  const outOfStock =
+    allVariantsOos ||
+    (enforced && !hasVariants && isShort(vid)) ||
+    (enforced && hasVariants && !!sel.variantId && isShort(sel.variantId));
+
+  return { allVariantsOos, outOfStock, maxQ };
 }
 
 export function computeAddonStockOrderError(
