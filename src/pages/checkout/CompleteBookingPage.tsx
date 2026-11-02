@@ -71,6 +71,33 @@ import {
 } from '@/lib/constants/eventTicketTerms';
 import { formatMoney } from '@/lib/currency';
 
+type CheckoutValidationError = {
+  section: string;
+  sectionId: string;
+  message: string;
+};
+
+function isValidEmailAddress(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/** Labels for empty or invalid contact/attendee fields, in form order. */
+function missingPersonFieldLabels(info: {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+}): string[] {
+  const missing: string[] = [];
+  if (info.firstName.trim() === '') missing.push('first name');
+  if (info.lastName.trim() === '') missing.push('last name');
+  if (info.phone.trim() === '') missing.push('phone');
+  const email = info.email.trim();
+  if (email === '') missing.push('email');
+  else if (!isValidEmailAddress(email)) missing.push('valid email');
+  return missing;
+}
+
 function attendeeFieldsBlank(attendee: AttendeeInfo): boolean {
   return (
     (attendee.firstName ?? '').trim() === '' &&
@@ -352,6 +379,8 @@ export default function CompleteBookingPage() {
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [showPriceSheet, setShowPriceSheet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** Turned on by the first failed payment tap, then kept in sync with the form. */
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const [tcAccepted, setTcAccepted] = useState(true);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [eventAddons, setEventAddons] = useState<EventAddonForCheckout[]>([]);
@@ -614,71 +643,9 @@ export default function CompleteBookingPage() {
     }
   }, [eventAddons, event?.id, event?.collect_attendee_info, attendees.length]);
 
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  // Validate contact info
-  const isContactValid = (): boolean => {
-    return (
-      contactInfo.firstName.trim() !== '' &&
-      contactInfo.lastName.trim() !== '' &&
-      contactInfo.phone.trim() !== '' &&
-      isValidEmail(contactInfo.email)
-    );
-  };
-
   // Contact info validation (used for both FREE route and Per-Ticket mode)
   // In Per-Ticket mode, Contact info is used as Order Contact (buyer_email)
-
-  // Validate attendees (for per-ticket collection)
-  const areAttendeesValid = (): boolean => {
-    if (!event || event.collect_attendee_info !== 'per_ticket') {
-      return true; // Not required for primary-only mode
-    }
-    
-    return attendees.every(
-      (attendee) =>
-        attendee.firstName.trim() !== '' &&
-        attendee.lastName.trim() !== '' &&
-        attendee.phone.trim() !== '' &&
-        isValidEmail(attendee.email)
-    );
-  };
-
-  // Validate required add-ons: must have selection (variant or qty > 0)
-  // Primary mode: check addonSelections. Per-ticket: each attendee must have each required addon.
-  const areRequiredAddonsValid = (): boolean => {
-    const required = eventAddons.filter((a) => a.is_required);
-    if (required.length === 0) return true;
-
-    for (const addon of required) {
-      if (
-        addon.show_remaining_stock &&
-        !addon.variants.some((v) => (v.stock_remaining ?? 0) > 0)
-      ) {
-        return false;
-      }
-    }
-
-    if (event?.collect_attendee_info === 'per_ticket') {
-      return attendees.every((_, idx) =>
-        required.every((addon) => {
-          const sel = addonSelectionsByAttendee[idx]?.[addon.product_id];
-          if (!sel) return false;
-          if (addon.variants.length > 1) return !!sel.variantId && sel.qty > 0;
-          return sel.qty > 0;
-        })
-      );
-    }
-    return required.every((addon) => {
-      const sel = addonSelections[addon.product_id];
-      if (!sel) return false;
-      if (addon.variants.length > 1) return !!sel.variantId && sel.qty > 0;
-      return sel.qty > 0;
-    });
-  };
+  const isContactValid = (): boolean => missingPersonFieldLabels(contactInfo).length === 0;
 
   const addonStockOrderError = useMemo(
     () =>
@@ -696,16 +663,105 @@ export default function CompleteBookingPage() {
     ((event as { metadata?: Record<string, unknown> } | null)?.metadata?.marketing_opt_in_label as string | undefined)?.trim() ||
     DEFAULT_MARKETING_OPT_IN_LABEL;
 
-  // Check if form is valid (contact/attendees + T&C + required add-ons)
-  const isFormValid = (): boolean => {
-    if (!tcAccepted) return false;
-    if (addonStockOrderError) return false;
-    if (!areRequiredAddonsValid()) return false;
-    if (event?.collect_attendee_info === 'per_ticket') {
-      return areAttendeesValid() && isContactValid();
+  // Missing checkout info, in page order. The first item is the scroll target.
+  const getCheckoutValidationErrors = (): CheckoutValidationError[] => {
+    const errors: CheckoutValidationError[] = [];
+    const perTicket = event?.collect_attendee_info === 'per_ticket';
+    const requiredAddons = eventAddons.filter((addon) => addon.is_required);
+    const addonUnavailable = (addon: EventAddonForCheckout) =>
+      !!addon.show_remaining_stock &&
+      !addon.variants.some((variant) => (variant.stock_remaining ?? 0) > 0);
+    const addonProblem = (
+      addon: EventAddonForCheckout,
+      sel: { variantId?: string; qty: number } | undefined
+    ): string | null => {
+      if (addonUnavailable(addon)) return `${addon.product_title} is unavailable`;
+      const missing =
+        !sel || (addon.variants.length > 1 ? !sel.variantId || sel.qty <= 0 : sel.qty <= 0);
+      return missing ? `Select ${addon.product_title}` : null;
+    };
+    const addonSectionId = attendees.length > 0 ? 'checkout-attendee-0' : 'checkout-contact';
+
+    if (!perTicket) {
+      const problems = requiredAddons
+        .map((addon) => addonProblem(addon, addonSelections[addon.product_id]))
+        .filter((problem): problem is string => problem != null);
+      if (problems.length > 0) {
+        errors.push({
+          section: 'Add-ons',
+          sectionId: 'checkout-addons',
+          message: `Add-ons: ${problems.join(', ')}`,
+        });
+      }
+      if (addonStockOrderError) {
+        errors.push({
+          section: 'Add-ons',
+          sectionId: 'checkout-addons',
+          message: addonStockOrderError,
+        });
+      }
     }
-    return isContactValid();
+
+    const contactMissing = missingPersonFieldLabels(contactInfo);
+    if (contactMissing.length > 0) {
+      errors.push({
+        section: 'Contact info',
+        sectionId: 'checkout-contact',
+        message: `Contact info: ${contactMissing.join(', ')}`,
+      });
+    }
+
+    if (perTicket) {
+      const unavailable = requiredAddons.filter(addonUnavailable);
+      if (unavailable.length > 0) {
+        errors.push({
+          section: 'Add-ons',
+          sectionId: addonSectionId,
+          message: `Add-ons: ${unavailable.map((addon) => `${addon.product_title} is unavailable`).join(', ')}`,
+        });
+      }
+
+      attendees.forEach((attendee, index) => {
+        const parts: string[] = [];
+        if (!useContactAsAttendee.has(index)) {
+          parts.push(...missingPersonFieldLabels(attendee));
+        }
+        for (const addon of requiredAddons) {
+          if (addonUnavailable(addon)) continue;
+          const problem = addonProblem(addon, addonSelectionsByAttendee[index]?.[addon.product_id]);
+          if (problem) parts.push(problem);
+        }
+        if (parts.length > 0) {
+          errors.push({
+            section: `Attendee ${index + 1}`,
+            sectionId: `checkout-attendee-${index}`,
+            message: `Attendee ${index + 1}: ${parts.join(', ')}`,
+          });
+        }
+      });
+
+      if (addonStockOrderError) {
+        errors.push({
+          section: 'Add-ons',
+          sectionId: addonSectionId,
+          message: addonStockOrderError,
+        });
+      }
+    }
+
+    if (!tcAccepted) {
+      errors.push({
+        section: 'Terms',
+        sectionId: 'checkout-terms',
+        message: 'Agree to the Event Ticket Terms & Conditions',
+      });
+    }
+
+    return errors;
   };
+
+  const validationErrors = getCheckoutValidationErrors();
+  const isFormValid = validationErrors.length === 0;
 
 
   // Handle contact info update
@@ -821,7 +877,7 @@ export default function CompleteBookingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className={`min-h-screen bg-background ${showValidationErrors && validationErrors.length > 0 ? 'pb-48' : 'pb-24'}`}>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background border-b" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-4">
@@ -918,7 +974,7 @@ export default function CompleteBookingPage() {
 
         {/* Add-ons Section (primary mode only; per-ticket shows add-ons inside each attendee card) */}
         {eventAddons.length > 0 && event?.collect_attendee_info !== 'per_ticket' && (
-          <div className="space-y-4">
+          <div id="checkout-addons" className="space-y-4 scroll-mt-24">
             <div className="flex items-center gap-2">
               <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
               <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
@@ -1190,7 +1246,10 @@ export default function CompleteBookingPage() {
         )}
 
         {/* Contact Info / Attendee Info Section */}
-        <div className="space-y-4">
+        <div
+          id={event?.collect_attendee_info === 'per_ticket' ? undefined : 'checkout-contact'}
+          className="space-y-4 scroll-mt-24"
+        >
           <div className="flex items-center gap-2">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
             <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
@@ -1207,7 +1266,7 @@ export default function CompleteBookingPage() {
             /* Per-Ticket Mode: Contact Info (expanded) + Attendee Forms with per-card checkboxes */
             <div className="space-y-4">
               {/* Contact Info Section - always expanded */}
-              <div className="space-y-3">
+              <div id="checkout-contact" className="space-y-3 scroll-mt-24">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
                   <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
@@ -1263,7 +1322,8 @@ export default function CompleteBookingPage() {
                       onOpenChange={setAttendee1Expanded}
                     >
                       <Card
-                        className="border rounded-2xl"
+                        id={`checkout-attendee-${index}`}
+                        className="border rounded-2xl scroll-mt-24"
                         style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
                       >
                         <CardHeader className="pb-3">
@@ -1719,7 +1779,8 @@ export default function CompleteBookingPage() {
                 return (
                   <Card
                     key={index}
-                    className="border rounded-2xl"
+                    id={`checkout-attendee-${index}`}
+                    className="border rounded-2xl scroll-mt-24"
                     style={{ borderColor: 'rgba(14,122,58,0.14)', backgroundColor: 'rgba(251,248,244,0.9)' }}
                   >
                     <CardHeader className="pb-3">
@@ -2178,7 +2239,7 @@ export default function CompleteBookingPage() {
         </div>
 
         {/* Terms & Conditions Section */}
-        <div className="space-y-4">
+        <div id="checkout-terms" className="space-y-4 scroll-mt-24">
           <div className="flex items-center gap-2">
             <div className="w-1 h-6 rounded" style={{ backgroundColor: '#0E7A3A' }} />
             <h3 className="text-base font-semibold" style={{ color: '#0F1F17' }}>
@@ -2246,8 +2307,13 @@ export default function CompleteBookingPage() {
       {/* Bottom Sticky Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t z-20" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-2">
-          {addonStockOrderError && (
-            <p className="text-sm text-destructive">{addonStockOrderError}</p>
+          {showValidationErrors && validationErrors.length > 0 && (
+            <div className="text-sm text-destructive space-y-1" role="alert">
+              {validationErrors.slice(0, 3).map((error) => (
+                <p key={`${error.sectionId}:${error.message}`}>{error.message}</p>
+              ))}
+              {validationErrors.length > 3 && <p>+{validationErrors.length - 3} more</p>}
+            </div>
           )}
           <div className="flex items-center justify-between">
             <div>
@@ -2268,7 +2334,23 @@ export default function CompleteBookingPage() {
             <Button
               type="button"
               onClick={async () => {
-                if (!bookingDraft || !isFormValid()) return;
+                if (!bookingDraft) return;
+                if (!isFormValid) {
+                  setShowValidationErrors(true);
+                  const targetId = validationErrors[0]?.sectionId;
+                  if (targetId === 'checkout-attendee-0') {
+                    setAttendee1Expanded(true);
+                  }
+                  if (targetId) {
+                    window.setTimeout(() => {
+                      document.getElementById(targetId)?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                      });
+                    }, 80);
+                  }
+                  return;
+                }
 
                 setIsSubmitting(true);
                 try {
@@ -2395,7 +2477,7 @@ export default function CompleteBookingPage() {
                   setIsSubmitting(false);
                 }
               }}
-              disabled={!isFormValid() || isSubmitting}
+              disabled={isSubmitting}
               className="px-8 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Processing...' : total === 0 ? 'Finish booking' : 'Go to payment'}
