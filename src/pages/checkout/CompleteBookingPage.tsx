@@ -71,6 +71,27 @@ import {
 } from '@/lib/constants/eventTicketTerms';
 import { formatMoney } from '@/lib/currency';
 
+function attendeeFieldsBlank(attendee: AttendeeInfo): boolean {
+  return (
+    (attendee.firstName ?? '').trim() === '' &&
+    (attendee.lastName ?? '').trim() === '' &&
+    (attendee.phone ?? '').trim() === '' &&
+    (attendee.email ?? '').trim() === ''
+  );
+}
+
+/** True when attendee 1 is unfilled, or every field matches the saved contact. No contact matches only a blank attendee. */
+function sameAsContact(attendee: AttendeeInfo, contact: ContactInfo | null): boolean {
+  if (!contact) return attendeeFieldsBlank(attendee);
+  if (attendeeFieldsBlank(attendee)) return true;
+  return (
+    (attendee.firstName ?? '').trim() === (contact.firstName ?? '').trim() &&
+    (attendee.lastName ?? '').trim() === (contact.lastName ?? '').trim() &&
+    (attendee.phone ?? '').trim() === (contact.phone ?? '').trim() &&
+    (attendee.email ?? '').trim().toLowerCase() === (contact.email ?? '').trim().toLowerCase()
+  );
+}
+
 function getAddonProductPhotos(addon: EventAddonForCheckout): string[] {
   const raw = addon.gallery_urls;
   const gUrls = Array.isArray(raw)
@@ -395,10 +416,25 @@ export default function CompleteBookingPage() {
                 }
               });
               
-              // Load saved attendees if available
+              // Load saved attendees if available. Pretick Attendee 1 unless they differ from the contact.
               if (draft.attendees && draft.attendees.length === totalTickets) {
-                setAttendees(draft.attendees);
-                setUseContactAsAttendee(new Set()); // No preset when loading from draft
+                const restored = [...draft.attendees];
+                const attendee1 = restored[0];
+                const useContact = attendee1 ? sameAsContact(attendee1, savedContact) : false;
+                if (useContact && attendee1 && savedContact && attendeeFieldsBlank(attendee1)) {
+                  restored[0] = {
+                    ...attendee1,
+                    firstName: savedContact.firstName,
+                    lastName: savedContact.lastName,
+                    email: savedContact.email,
+                    phone: savedContact.phone,
+                  };
+                }
+                setAttendees(restored);
+                setUseContactAsAttendee(useContact ? new Set([0]) : new Set());
+                if (!useContact && attendee1) {
+                  setAttendee1Expanded(true);
+                }
               } else {
                 // Fresh init: preset Attendee 1 to use contact info, sync from contact
                 if (initialAttendees.length > 0 && savedContact) {
