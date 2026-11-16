@@ -75,17 +75,54 @@ Deno.serve(async (req) => {
       return new Response('Organization not found', { status: 404 });
     }
 
-    // Fetch event (metadata used for OG image dimensions)
-    const { data: event, error: eventError } = await supabase
-      .from('events')
-      .select(
-        'id, title, description, slug, instagram_preview_image_url, og_preview_image_url, metadata, status, updated_at'
-      )
-      .eq('org_id', org.id)
-      .eq('slug', eventSlug)
-      .single();
+    const eventSelect =
+      'id, title, description, slug, instagram_preview_image_url, og_preview_image_url, metadata, status, updated_at';
+    const slugPattern = escapeIlikeExact(eventSlug);
 
-    if (eventError || !event) {
+    // Fetch event (metadata used for OG image dimensions). Match slug case-insensitively.
+    const { data: eventRows, error: eventError } = await supabase
+      .from('events')
+      .select(eventSelect)
+      .eq('org_id', org.id)
+      .ilike('slug', slugPattern)
+      .limit(1);
+
+    if (eventError) {
+      console.error('[share-event] event lookup', eventError);
+      return new Response('Event not found', { status: 404 });
+    }
+
+    let event = eventRows?.[0] ?? null;
+
+    if (!event) {
+      const { data: historyRows, error: historyError } = await supabase
+        .from('event_slug_history')
+        .select('event_id')
+        .eq('org_id', org.id)
+        .ilike('slug', slugPattern)
+        .limit(1);
+
+      if (historyError) {
+        console.error('[share-event] slug history lookup', historyError);
+        return new Response('Event not found', { status: 404 });
+      }
+
+      const historyEventId = historyRows?.[0]?.event_id;
+      if (historyEventId) {
+        const { data: previous, error: previousError } = await supabase
+          .from('events')
+          .select(eventSelect)
+          .eq('id', historyEventId)
+          .maybeSingle();
+        if (previousError) {
+          console.error('[share-event] history event lookup', previousError);
+          return new Response('Event not found', { status: 404 });
+        }
+        event = previous;
+      }
+    }
+
+    if (!event) {
       return new Response('Event not found', { status: 404 });
     }
 
@@ -225,18 +262,17 @@ Deno.serve(async (req) => {
         ? `\n  <meta property="og:image:width" content="${ogImageWidth}">\n  <meta property="og:image:height" content="${ogImageHeight}">`
         : '';
 
+    // Prefer the event's current slug so renamed links preview and redirect to the new URL.
+    const canonicalSlug = event.slug || eventSlug;
+
     // Build redirect URL (prefer www — avoids apex redirect before SPA)
-    const redirectUrl = ticketId 
-      ? `https://www.growbrohk.com/${orgSlug}/${eventSlug}?ticket=${ticketId}`
-      : `https://www.growbrohk.com/${orgSlug}/${eventSlug}`;
+    const redirectUrl = ticketId
+      ? `https://www.growbrohk.com/${orgSlug}/${canonicalSlug}?ticket=${ticketId}`
+      : `https://www.growbrohk.com/${orgSlug}/${canonicalSlug}`;
 
     // Build share URL (og:url) - use canonicalUrl if provided (e.g. from middleware for direct URLs)
     const canonicalUrlParam = url.searchParams.get('canonicalUrl');
-    const shareUrl = (canonicalUrlParam && /^https:\/\/(www\.)?growbrohk\.com\//.test(canonicalUrlParam))
-      ? canonicalUrlParam
-      : (ticketId
-        ? `https://www.growbrohk.com/s/${orgSlug}/${eventSlug}?ticket=${ticketId}`
-        : `https://www.growbrohk.com/s/${orgSlug}/${eventSlug}`);
+    const shareUrl = canonicalShareUrl(canonicalUrlParam, orgSlug, canonicalSlug, ticketId);
 
     // Detect link preview bots via User-Agent
     const ua = (req.headers.get('user-agent') || '').toLowerCase();
@@ -324,6 +360,36 @@ Deno.serve(async (req) => {
  */
 function normalizeMetaContent(text: string): string {
   return text.replace(/[\s\u00A0]+/g, ' ').trim();
+}
+
+/** Exact, case-insensitive ILIKE pattern. Escapes PostgREST and SQL wildcards. */
+function escapeIlikeExact(value: string): string {
+  return value.replace(/[\\%_*]/g, (char) => `\\${char}`);
+}
+
+function canonicalShareUrl(
+  canonicalUrlParam: string | null,
+  orgSlug: string,
+  canonicalSlug: string,
+  ticketId: string | null
+): string {
+  if (canonicalUrlParam && /^https:\/\/(www\.)?growbrohk\.com\//.test(canonicalUrlParam)) {
+    try {
+      const parsed = new URL(canonicalUrlParam);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        parts[parts.length - 1] = canonicalSlug;
+        parsed.pathname = `/${parts.join('/')}`;
+      }
+      return parsed.toString();
+    } catch {
+      // Fall through to the default share URL.
+    }
+  }
+
+  return ticketId
+    ? `https://www.growbrohk.com/s/${orgSlug}/${canonicalSlug}?ticket=${ticketId}`
+    : `https://www.growbrohk.com/s/${orgSlug}/${canonicalSlug}`;
 }
 
 function escapeHtml(text: string): string {

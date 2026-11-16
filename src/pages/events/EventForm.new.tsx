@@ -113,6 +113,8 @@ export type EventFormCollabEditorContext = {
 
 type EventFormProps = {
   collabEditorContext?: EventFormCollabEditorContext | null;
+  /** Called after save when the public slug changed, so the page header can copy the new link. */
+  onSlugChange?: (slug: string) => void;
 };
 
 interface AccessVariantForm {
@@ -654,7 +656,7 @@ function OptionalTimeSlotFields({
   );
 }
 
-export default function EventForm({ collabEditorContext = null }: EventFormProps) {
+export default function EventForm({ collabEditorContext = null, onSlugChange }: EventFormProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { currentOrg, user } = useAuth();
@@ -697,6 +699,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
   const [locationText, setLocationText] = useState<string>('');
   const [eventSlug, setEventSlug] = useState<string>('');
+  const [slugInput, setSlugInput] = useState<string>('');
   const [eventId, setEventId] = useState<string | null>(null);
   const [collectAttendeeInfo, setCollectAttendeeInfo] = useState<'primary' | 'per_ticket'>('primary');
   
@@ -795,7 +798,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setOptionalSlots(optionalSlotsFromEvent(event));
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setLocationText(event.location_text || '');
-        setEventSlug((event as any).slug || '');
+        const loadedSlug = (event as any).slug || '';
+        setEventSlug(loadedSlug);
+        setSlugInput(loadedSlug);
         setEventId(event.id);
         setCollectAttendeeInfo(event.collect_attendee_info || 'primary');
         setEnableStripe(event.enable_stripe || false);
@@ -1766,10 +1771,15 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       let savedEventId: string;
       let resolvedSlug = eventSlug;
+      const slugChanged = !collabEditorContext && slugInput !== eventSlug;
 
       if (isEditMode && id) {
         // Update existing event
-        const updatedEvent = await updateEvent({ id, ...eventData });
+        const updatedEvent = await updateEvent({
+          id,
+          ...eventData,
+          ...(slugChanged ? { slug: slugInput } : {}),
+        });
         savedEventId = id;
         setEventId(id);
 
@@ -1777,6 +1787,10 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         if (updatedSlug) {
           resolvedSlug = updatedSlug;
           setEventSlug(resolvedSlug);
+          setSlugInput(resolvedSlug);
+          if (updatedSlug !== eventSlug) {
+            onSlugChange?.(updatedSlug);
+          }
         }
 
         // Handle ticket types: delete removed ones, update existing in parallel, create new sequentially
@@ -1814,6 +1828,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         // Get slug from created event
         resolvedSlug = (newEvent as any).slug || eventSlug;
         setEventSlug(resolvedSlug);
+        setSlugInput(resolvedSlug);
 
         // Move temp uploads to permanent paths now that event id exists
         if (effectiveOrgId && user?.id) {
@@ -3130,11 +3145,26 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   Share Link
                 </h2>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
-                  <Input
-                    readOnly
-                    value={`https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}`}
-                    className="flex-1 font-mono text-sm"
-                  />
+                  {collabEditorContext ? (
+                    <Input
+                      readOnly
+                      value={`https://growbrohk.com/${effectiveOrgSlug}/${eventSlug}`}
+                      className="flex-1 font-mono text-sm"
+                    />
+                  ) : (
+                    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                      <span className="shrink-0 font-mono text-sm text-muted-foreground">
+                        {`https://growbrohk.com/${effectiveOrgSlug}/`}
+                      </span>
+                      <Input
+                        value={slugInput}
+                        onChange={(e) => setSlugInput(e.target.value)}
+                        aria-label="Event link slug"
+                        spellCheck={false}
+                        className="flex-1 font-mono text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -3174,6 +3204,11 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                     </Button>
                   </div>
                 </div>
+                {!collabEditorContext && (
+                  <p className="text-xs mt-2" style={{ color: 'rgba(15,31,23,0.62)' }}>
+                    Letters, numbers, and hyphens. Save the event to publish this link. Previous links still open this event.
+                  </p>
+                )}
               </div>
             </div>
             <Separator />

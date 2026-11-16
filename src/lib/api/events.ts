@@ -106,6 +106,27 @@ export interface CreateEventData {
 
 export interface UpdateEventData extends Partial<Omit<CreateEventData, 'org_id'>> {
   id: string;
+  slug?: string;
+}
+
+const RESERVED_EVENT_SLUGS = new Set(['events', 'checkout', 'products']);
+
+/** Exact, case-insensitive ILIKE pattern. Escapes PostgREST and SQL wildcards. */
+function escapeIlikeExact(value: string): string {
+  return value.replace(/[\\%_*]/g, (char) => `\\${char}`);
+}
+
+/**
+ * Trim, turn spaces into hyphens, and keep letters, numbers, and hyphens.
+ * Letter case is preserved.
+ */
+export function normalizeEventSlug(input: string): string {
+  return input
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export interface TicketTypeAccessVariantInput {
@@ -338,6 +359,44 @@ export async function updateEvent(data: UpdateEventData): Promise<Event> {
   const updateData = { ...rest } as Record<string, unknown>;
   delete updateData.org_id;
 
+  if (updateData.slug !== undefined) {
+    if (typeof updateData.slug !== 'string') {
+      throw new Error('Enter a link using letters, numbers, and hyphens.');
+    }
+    const normalized = normalizeEventSlug(updateData.slug);
+    if (!normalized) {
+      throw new Error('Enter a link using letters, numbers, and hyphens.');
+    }
+    if (RESERVED_EVENT_SLUGS.has(normalized.toLowerCase())) {
+      throw new Error('This link is reserved. Choose another.');
+    }
+
+    const { data: owner, error: ownerError } = await supabase
+      .from('events')
+      .select('org_id')
+      .eq('id', id)
+      .single();
+    if (ownerError || !owner) {
+      throw new Error(ownerError?.message || 'Failed to load event');
+    }
+
+    const { data: clashes, error: clashError } = await supabase
+      .from('events')
+      .select('id')
+      .eq('org_id', owner.org_id)
+      .ilike('slug', escapeIlikeExact(normalized))
+      .neq('id', id)
+      .limit(1);
+    if (clashError) {
+      throw new Error(clashError.message || 'Failed to check link');
+    }
+    if (clashes && clashes.length > 0) {
+      throw new Error('This link is already used by another event');
+    }
+
+    updateData.slug = normalized;
+  }
+
   if (typeof updateData.currency === 'string') {
     const nextCurrency = normalizeCurrency(updateData.currency);
     updateData.currency = nextCurrency;
@@ -371,6 +430,9 @@ export async function updateEvent(data: UpdateEventData): Promise<Event> {
     .single();
 
   if (error) {
+    if (error.code === '23505' && updateData.slug !== undefined) {
+      throw new Error('This link is already used by another event');
+    }
     throw new Error(error.message || 'Failed to update event');
   }
 
@@ -1000,27 +1062,70 @@ export async function getPublicEventBySlugs(orgSlug: string, eventSlug: string):
 export async function getPublicEventAndOrgBySlugs(
   orgSlug: string,
   eventSlug: string
-): Promise<{ event: Event; org: NonNullable<Awaited<ReturnType<typeof getOrgBySlug>>> } | null> {
+): Promise<{
+  event: Event;
+  org: NonNullable<Awaited<ReturnType<typeof getOrgBySlug>>>;
+  /** Set when the request used a previous slug. Callers should replace the URL with this. */
+  redirectSlug?: string;
+} | null> {
   const org = await getOrgBySlug(orgSlug);
   if (!org) {
     return null;
   }
 
-  const { data, error } = await supabase
+  const pattern = escapeIlikeExact(eventSlug);
+
+  const { data: currentRows, error } = await supabase
     .from('events')
     .select('*')
     .eq('org_id', org.id)
-    .eq('slug', eventSlug)
+    .ilike('slug', pattern)
     .eq('status', 'published')
-    .single();
+    .limit(1);
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
     throw new Error(error.message || 'Failed to fetch event');
   }
 
-  return { event: data as Event, org };
+  const current = currentRows?.[0];
+  if (current) {
+    return { event: current as Event, org };
+  }
+
+  const { data: historyRows, error: historyError } = await supabase
+    .from('event_slug_history')
+    .select('event_id')
+    .eq('org_id', org.id)
+    .ilike('slug', pattern)
+    .limit(1);
+
+  if (historyError) {
+    throw new Error(historyError.message || 'Failed to fetch event');
+  }
+
+  const historyEventId = historyRows?.[0]?.event_id;
+  if (!historyEventId) {
+    return null;
+  }
+
+  const { data: previous, error: previousError } = await supabase
+    .from('events')
+    .select('*')
+    .eq('id', historyEventId)
+    .eq('status', 'published')
+    .maybeSingle();
+
+  if (previousError) {
+    throw new Error(previousError.message || 'Failed to fetch event');
+  }
+  if (!previous) {
+    return null;
+  }
+
+  const event = previous as Event;
+  if (event.slug && event.slug !== eventSlug) {
+    return { event, org, redirectSlug: event.slug };
+  }
+  return { event, org };
 }
 

@@ -311,7 +311,9 @@ export default function EventDetail() {
                 }}
               />
             ) : isHost ? (
-              <EventForm />
+              <EventForm
+                onSlugChange={(slug) => setEvent((current) => (current ? { ...current, slug } : current))}
+              />
             ) : null}
           </TabsContent>
         )}

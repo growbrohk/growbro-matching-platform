@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { getPublicEventAndOrgBySlugs } from '@/lib/api/events';
@@ -15,6 +15,8 @@ const VISIBILITY_REFRESH_MIN_MS = 30_000;
 export default function PublicEventPage() {
   const { orgSlug, eventSlug } = useParams<{ orgSlug: string; eventSlug: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState<Event | null>(null);
@@ -76,6 +78,7 @@ export default function PublicEventPage() {
     }
 
     let cancelled = false;
+    let redirecting = false;
 
     const fetchEvent = async () => {
       try {
@@ -84,6 +87,12 @@ export default function PublicEventPage() {
         const result = await getPublicEventAndOrgBySlugs(orgSlug, eventSlug);
 
         if (cancelled) return;
+
+        if (result?.redirectSlug && result.redirectSlug !== eventSlug) {
+          redirecting = true;
+          navigate(`/${orgSlug}/${result.redirectSlug}${location.search}`, { replace: true });
+          return;
+        }
 
         if (!result || result.event.status !== 'published') {
           setEvent(null);
@@ -99,7 +108,7 @@ export default function PublicEventPage() {
           setEvent(null);
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !redirecting) {
           setLoading(false);
         }
       }
@@ -110,7 +119,7 @@ export default function PublicEventPage() {
     return () => {
       cancelled = true;
     };
-  }, [orgSlug, eventSlug]);
+  }, [orgSlug, eventSlug, location.search, navigate]);
 
   useEffect(() => {
     if (!event?.id) return;

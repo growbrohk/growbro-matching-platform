@@ -607,6 +607,48 @@ export type Database = {
           },
         ]
       }
+      event_slug_history: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          org_id: string
+          slug: string
+          slug_lower: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          org_id: string
+          slug: string
+          slug_lower?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          org_id?: string
+          slug?: string
+          slug_lower?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_slug_history_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_slug_history_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "orgs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           created_at: string
