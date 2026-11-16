@@ -123,6 +123,35 @@ function buildPartnerPayload(
   return payload;
 }
 
+async function loadMissingAffiliateOrgNames(
+  partners: EventPartnerDraft[]
+): Promise<Map<string, string>> {
+  const ids = [
+    ...new Set(
+      partners
+        .filter((d) => !d.deleted && !d.affiliateOrgName && d.partner.affiliateOrgId)
+        .map((d) => d.partner.affiliateOrgId as string)
+    ),
+  ];
+  const nameMap = new Map<string, string>();
+  if (ids.length === 0) return nameMap;
+
+  const { data: orgs, error } = await supabase.from('orgs').select('id, name').in('id', ids);
+  if (error) throw error;
+  (orgs || []).forEach((o) => nameMap.set(o.id, o.name));
+  return nameMap;
+}
+
+function partnerLinkLabel(
+  title: string,
+  fallback: string,
+  orgName: string | undefined,
+  occurrence: number
+): string {
+  const base = orgName && title ? `${title} – ${orgName}` : title || fallback;
+  return occurrence > 1 ? `${base} #${occurrence}` : base;
+}
+
 export function validateEventPartners(
   enabled: boolean,
   partners: EventPartnerDraft[]
@@ -132,12 +161,16 @@ export function validateEventPartners(
   const active = partners.filter((p) => !p.deleted);
   if (active.length === 0) return 'Add at least one partner or disable the collab section.';
 
-  const orgIds = new Set<string>();
+  const allSalesOrgIds = new Set<string>();
   for (const p of active) {
     const v = p.partner;
     if (!v.affiliateOrgId) return 'Each partner must have an organization selected.';
-    if (orgIds.has(v.affiliateOrgId)) return 'Each partner organization can only be added once.';
-    orgIds.add(v.affiliateOrgId);
+    if (v.pipelineType === 'collab' && v.collabSalesScope === 'all_for_resource') {
+      if (allSalesOrgIds.has(v.affiliateOrgId)) {
+        return "A partner organization can only have one collab link with 'All sales' scope.";
+      }
+      allSalesOrgIds.add(v.affiliateOrgId);
+    }
     if (!v.startDate || !v.endDate) return 'Start and end dates are required for each partner.';
     if (!v.commissionRate || Number.isNaN(parseFloat(v.commissionRate))) {
       return 'Commission rate is required for each partner.';
@@ -179,6 +212,9 @@ export async function syncEventPartners(opts: {
         ? `/${eventSlug}`
         : `/events/${eventId}`;
 
+  const orgNames = await loadMissingAffiliateOrgNames(partners);
+  const orgOccurrence = new Map<string, number>();
+
   for (const draft of partners) {
     if (draft.deleted && draft.trackingLinkId) {
       const { error } = await supabase.from('tracking_links').delete().eq('id', draft.trackingLinkId);
@@ -187,10 +223,11 @@ export async function syncEventPartners(opts: {
     }
     if (draft.deleted) continue;
 
-    const label =
-      draft.affiliateOrgName && eventTitle
-        ? `${eventTitle} – ${draft.affiliateOrgName}`
-        : eventTitle || 'Event partner';
+    const orgId = draft.partner.affiliateOrgId;
+    const occurrence = orgId ? (orgOccurrence.get(orgId) ?? 0) + 1 : 1;
+    if (orgId) orgOccurrence.set(orgId, occurrence);
+    const orgName = draft.affiliateOrgName || (orgId ? orgNames.get(orgId) : undefined);
+    const label = partnerLinkLabel(eventTitle, 'Event partner', orgName, occurrence);
 
     if (draft.trackingLinkId) {
       const updatePayload = {
