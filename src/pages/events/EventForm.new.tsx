@@ -84,15 +84,22 @@ import {
   formatSlotRange,
   backfillSlotCapacitiesFromTicketTypes,
   buildTicketTypeSlotSavePayload,
+  compareTimeSlotKeys,
   deriveValidForDaysFromSlots,
+  emptyOptionalSlots,
   getConfiguredTimeSlots,
   getDefaultNextSlotTimes,
   getEffectiveEventEndDate,
   normalizeTicketTypeFromApi,
+  OPTIONAL_TIME_SLOT_NUMBERS,
+  optionalSlotTimestamps,
+  optionalSlotsFromEvent,
   stripSlotFromValidForSlots,
   stripSlotFromSlotQuotas,
   ticketTypeHasVariantQuotas,
   ticketTypeUsesPickOneSlots,
+  type OptionalSlotTimes,
+  type OptionalTimeSlotNumber,
   type SlotCapacities,
   type TimeSlotKey,
   type ValidForDays,
@@ -547,7 +554,7 @@ function validateAccessVariants(tt: TicketTypeForm, index: number): string[] {
 }
 
 interface OptionalTimeSlotFieldsProps {
-  slotNumber: 2 | 3 | 4;
+  slotNumber: OptionalTimeSlotNumber;
   startAt: Date | null;
   endAt: Date | null;
   minStart?: Date;
@@ -682,12 +689,9 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
   const [uploadingOgPreview, setUploadingOgPreview] = useState(false);
   const [startAt, setStartAt] = useState<Date | null>(null);
   const [endAt, setEndAt] = useState<Date | null>(null);
-  const [day2StartAt, setDay2StartAt] = useState<Date | null>(null);
-  const [day2EndAt, setDay2EndAt] = useState<Date | null>(null);
-  const [day3StartAt, setDay3StartAt] = useState<Date | null>(null);
-  const [day3EndAt, setDay3EndAt] = useState<Date | null>(null);
-  const [day4StartAt, setDay4StartAt] = useState<Date | null>(null);
-  const [day4EndAt, setDay4EndAt] = useState<Date | null>(null);
+  const [optionalSlots, setOptionalSlots] = useState<Record<OptionalTimeSlotNumber, OptionalSlotTimes>>(
+    () => emptyOptionalSlots()
+  );
   const [slotCapacities, setSlotCapacities] = useState<Partial<Record<TimeSlotKey, string>>>({});
   const [slotSoldCounts, setSlotSoldCounts] = useState<EventSlotSoldCounts>({});
   const [status, setStatus] = useState<'draft' | 'published'>('draft');
@@ -788,12 +792,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         setOgPreviewImageUrl(((event as any).og_preview_image_url as string) || '');
         setStartAt(event.start_at ? new Date(event.start_at) : null);
         setEndAt(event.end_at ? new Date(event.end_at) : null);
-        setDay2StartAt(event.day_2_start_at ? new Date(event.day_2_start_at) : null);
-        setDay2EndAt(event.day_2_end_at ? new Date(event.day_2_end_at) : null);
-        setDay3StartAt(event.day_3_start_at ? new Date(event.day_3_start_at) : null);
-        setDay3EndAt(event.day_3_end_at ? new Date(event.day_3_end_at) : null);
-        setDay4StartAt(event.day_4_start_at ? new Date(event.day_4_start_at) : null);
-        setDay4EndAt(event.day_4_end_at ? new Date(event.day_4_end_at) : null);
+        setOptionalSlots(optionalSlotsFromEvent(event));
         setStatus(event.status === 'published' ? 'published' : 'draft');
         setLocationText(event.location_text || '');
         setEventSlug((event as any).slug || '');
@@ -842,12 +841,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         const eventSlots = getConfiguredTimeSlots({
           start_at: event.start_at,
           end_at: event.end_at,
-          day_2_start_at: event.day_2_start_at,
-          day_2_end_at: event.day_2_end_at,
-          day_3_start_at: event.day_3_start_at,
-          day_3_end_at: event.day_3_end_at,
-          day_4_start_at: event.day_4_start_at,
-          day_4_end_at: event.day_4_end_at,
+          ...optionalSlotTimestamps(optionalSlotsFromEvent(event)),
         });
         if (eventSlots.length > 1) {
           const backfilled = backfillSlotCapacitiesFromTicketTypes(
@@ -933,19 +927,56 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
     }
   }, [ticketTypes.length]);
 
-  const hasTimeSlot2 = day2StartAt != null && day2EndAt != null;
-  const hasTimeSlot3 = day3StartAt != null && day3EndAt != null;
-  const hasTimeSlot4 = day4StartAt != null && day4EndAt != null;
+  const slotColumnPayload = optionalSlotTimestamps(optionalSlots);
   const formTimeSlotEvent = startAt && endAt ? {
     start_at: startAt.toISOString(),
     end_at: endAt.toISOString(),
-    day_2_start_at: day2StartAt?.toISOString() ?? null,
-    day_2_end_at: day2EndAt?.toISOString() ?? null,
-    day_3_start_at: day3StartAt?.toISOString() ?? null,
-    day_3_end_at: day3EndAt?.toISOString() ?? null,
-    day_4_start_at: day4StartAt?.toISOString() ?? null,
-    day_4_end_at: day4EndAt?.toISOString() ?? null,
+    ...slotColumnPayload,
   } : null;
+
+  const previousOptionalSlotEnd = (slotNumber: OptionalTimeSlotNumber): Date | undefined => {
+    for (let n = slotNumber - 1; n >= 2; n--) {
+      const previousEnd = optionalSlots[n as OptionalTimeSlotNumber].end;
+      if (previousEnd) return previousEnd;
+    }
+    return endAt ?? undefined;
+  };
+
+  const clearOptionalSlotsFrom = (slotNumber: OptionalTimeSlotNumber) => {
+    const removedKeys = OPTIONAL_TIME_SLOT_NUMBERS
+      .filter((n) => n >= slotNumber)
+      .map((n) => `day_${n}` as TimeSlotKey);
+
+    setOptionalSlots((prev) => {
+      const next = { ...prev };
+      for (const n of OPTIONAL_TIME_SLOT_NUMBERS) {
+        if (n >= slotNumber) next[n] = { start: null, end: null };
+      }
+      return next;
+    });
+    setSlotCapacities((prev) => {
+      const next = { ...prev };
+      for (const key of removedKeys) delete next[key];
+      return next;
+    });
+    setTicketTypes((prev) =>
+      prev.map((tt) => {
+        let nextSlots = tt.valid_for_slots;
+        let quotas = tt.slot_quotas;
+        for (const key of removedKeys) {
+          nextSlots = stripSlotFromValidForSlots(nextSlots, key);
+          quotas = stripSlotFromSlotQuotas(quotas, key);
+        }
+        const slots = nextSlots && nextSlots.length > 0 ? nextSlots : (['day_1'] as TimeSlotKey[]);
+        return {
+          ...tt,
+          valid_for_slots: slots,
+          valid_for_days: deriveValidForDaysFromSlots(slots, !!tt.is_all_access),
+          slot_quotas: quotas,
+        };
+      })
+    );
+  };
   const configuredTimeSlots = formTimeSlotEvent ? getConfiguredTimeSlots(formTimeSlotEvent) : [];
   const hasMultipleTimeSlots = configuredTimeSlots.length > 1;
   const effectiveEventEnd = formTimeSlotEvent
@@ -996,7 +1027,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
 
       return anyChanged ? next : prev;
     });
-  }, [endAt, day2EndAt, day3EndAt, day4EndAt, effectiveEventEnd]);
+  }, [optionalSlots, endAt, effectiveEventEnd]);
 
   const generateAccessCode = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -1083,7 +1114,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         if (i !== ticketIndex) return t;
         const current = t.valid_for_slots || [];
         const nextSlots = checked
-          ? [...current, slotKey].sort()
+          ? [...current, slotKey].sort(compareTimeSlotKeys)
           : current.filter((k) => k !== slotKey);
         const nextQuotas = { ...t.slot_quotas };
         if (checked && !nextQuotas[slotKey]) {
@@ -1576,24 +1607,20 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
       errors.push('Time Slot 1 end time must be after start time');
     }
 
-    const optionalSlots = [
-      { number: 2, start: day2StartAt, end: day2EndAt, previousEnd: endAt },
-      { number: 3, start: day3StartAt, end: day3EndAt, previousEnd: day2EndAt ?? endAt },
-      { number: 4, start: day4StartAt, end: day4EndAt, previousEnd: day3EndAt ?? day2EndAt ?? endAt },
-    ] as const;
-
-    for (const slot of optionalSlots) {
+    for (const slotNumber of OPTIONAL_TIME_SLOT_NUMBERS) {
+      const slot = optionalSlots[slotNumber];
       const hasStart = slot.start != null;
       const hasEnd = slot.end != null;
       if (hasStart !== hasEnd) {
-        errors.push(`Time Slot ${slot.number}: Both start and end times are required`);
+        errors.push(`Time Slot ${slotNumber}: Both start and end times are required`);
         continue;
       }
       if (hasStart && hasEnd && slot.start! >= slot.end!) {
-        errors.push(`Time Slot ${slot.number}: End time must be after start time`);
+        errors.push(`Time Slot ${slotNumber}: End time must be after start time`);
       }
-      if (hasStart && hasEnd && slot.previousEnd && slot.start! < slot.previousEnd) {
-        errors.push(`Time Slot ${slot.number}: Start time must be after the previous time slot ends`);
+      const previousEnd = previousOptionalSlotEnd(slotNumber);
+      if (hasStart && hasEnd && previousEnd && slot.start! < previousEnd) {
+        errors.push(`Time Slot ${slotNumber}: Start time must be after the previous time slot ends`);
       }
     }
 
@@ -1720,12 +1747,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         og_preview_image_url: ogPreviewImageUrl.trim() || null,
         start_at: startAt.toISOString(),
         end_at: endAt.toISOString(),
-        day_2_start_at: day2StartAt?.toISOString() ?? null,
-        day_2_end_at: day2EndAt?.toISOString() ?? null,
-        day_3_start_at: day3StartAt?.toISOString() ?? null,
-        day_3_end_at: day3EndAt?.toISOString() ?? null,
-        day_4_start_at: day4StartAt?.toISOString() ?? null,
-        day_4_end_at: day4EndAt?.toISOString() ?? null,
+        ...slotColumnPayload,
         location_text: locationText.trim() || null,
         status: status,
         collect_attendee_info: collectAttendeeInfo,
@@ -1761,16 +1783,13 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         const currentIds = ticketTypes.filter(tt => tt.id).map(tt => tt.id!);
         const toDelete = existingTicketTypes.filter(tt => !currentIds.includes(tt.id));
 
-        const effectiveEventEndDate = getEffectiveEventEndDate({
-          start_at: startAt.toISOString(),
-          end_at: endAt.toISOString(),
-          day_2_start_at: day2StartAt?.toISOString() ?? null,
-          day_2_end_at: day2EndAt?.toISOString() ?? null,
-          day_3_start_at: day3StartAt?.toISOString() ?? null,
-          day_3_end_at: day3EndAt?.toISOString() ?? null,
-          day_4_start_at: day4StartAt?.toISOString() ?? null,
-          day_4_end_at: day4EndAt?.toISOString() ?? null,
-        });
+        const effectiveEventEndDate = getEffectiveEventEndDate(
+          formTimeSlotEvent ?? {
+            start_at: startAt.toISOString(),
+            end_at: endAt.toISOString(),
+            ...slotColumnPayload,
+          }
+        );
 
         const mutations = ticketTypes.map((tt) =>
           buildTicketTypeMutationFromForm(
@@ -1840,16 +1859,13 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
         }
 
         // Create ticket types (sequential to preserve created_at ordering)
-        const effectiveEventEndDate = getEffectiveEventEndDate({
-          start_at: startAt.toISOString(),
-          end_at: endAt.toISOString(),
-          day_2_start_at: day2StartAt?.toISOString() ?? null,
-          day_2_end_at: day2EndAt?.toISOString() ?? null,
-          day_3_start_at: day3StartAt?.toISOString() ?? null,
-          day_3_end_at: day3EndAt?.toISOString() ?? null,
-          day_4_start_at: day4StartAt?.toISOString() ?? null,
-          day_4_end_at: day4EndAt?.toISOString() ?? null,
-        });
+        const effectiveEventEndDate = getEffectiveEventEndDate(
+          formTimeSlotEvent ?? {
+            start_at: startAt.toISOString(),
+            end_at: endAt.toISOString(),
+            ...slotColumnPayload,
+          }
+        );
         const createMutations = ticketTypes.map((tt) =>
           buildTicketTypeMutationFromForm(tt, effectiveEventEndDate, hasMultipleTimeSlots, savedEventId)
         );
@@ -2182,156 +2198,74 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
             )}
           </div>
 
-          {hasTimeSlot2 && (
-            <OptionalTimeSlotFields
-              slotNumber={2}
-              startAt={day2StartAt}
-              endAt={day2EndAt}
-              minStart={endAt || undefined}
-              onStartChange={setDay2StartAt}
-              onEndChange={setDay2EndAt}
-              showCapacity={hasMultipleTimeSlots}
-              capacityValue={slotCapacities.day_2}
-              onCapacityChange={(v) => updateSlotCapacity('day_2', v)}
-              onRemove={() => {
-                setDay2StartAt(null);
-                setDay2EndAt(null);
-                setDay3StartAt(null);
-                setDay3EndAt(null);
-                setDay4StartAt(null);
-                setDay4EndAt(null);
-                setSlotCapacities((prev) => {
-                  const next = { ...prev };
-                  delete next.day_2;
-                  delete next.day_3;
-                  delete next.day_4;
-                  return next;
-                });
-                setTicketTypes((prev) =>
-                  prev.map((tt) => {
-                    const nextSlots = stripSlotFromValidForSlots(tt.valid_for_slots, 'day_2') ?? ['day_1'];
-                    return {
-                      ...tt,
-                      valid_for_slots: nextSlots,
-                      valid_for_days: deriveValidForDaysFromSlots(nextSlots, !!tt.is_all_access),
-                      slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_2'),
-                    };
-                  })
-                );
-              }}
-              onValidationClear={() => {
-                if (validationErrors.length > 0) setValidationErrors([]);
-              }}
-            />
-          )}
+          {OPTIONAL_TIME_SLOT_NUMBERS.filter((slotNumber) => {
+            const slot = optionalSlots[slotNumber];
+            return slot.start != null || slot.end != null;
+          }).map((slotNumber) => {
+            const slotKey = `day_${slotNumber}` as TimeSlotKey;
+            return (
+              <OptionalTimeSlotFields
+                key={slotNumber}
+                slotNumber={slotNumber}
+                startAt={optionalSlots[slotNumber].start}
+                endAt={optionalSlots[slotNumber].end}
+                minStart={previousOptionalSlotEnd(slotNumber)}
+                onStartChange={(date) => {
+                  setOptionalSlots((prev) => ({
+                    ...prev,
+                    [slotNumber]: { ...prev[slotNumber], start: date },
+                  }));
+                }}
+                onEndChange={(date) => {
+                  setOptionalSlots((prev) => ({
+                    ...prev,
+                    [slotNumber]: { ...prev[slotNumber], end: date },
+                  }));
+                }}
+                showCapacity={hasMultipleTimeSlots}
+                capacityValue={slotCapacities[slotKey]}
+                onCapacityChange={(v) => updateSlotCapacity(slotKey, v)}
+                onRemove={() => {
+                  clearOptionalSlotsFrom(slotNumber);
+                  if (validationErrors.length > 0) setValidationErrors([]);
+                }}
+                onValidationClear={() => {
+                  if (validationErrors.length > 0) setValidationErrors([]);
+                }}
+              />
+            );
+          })}
 
-          {hasTimeSlot3 && (
-            <OptionalTimeSlotFields
-              slotNumber={3}
-              startAt={day3StartAt}
-              endAt={day3EndAt}
-              minStart={day2EndAt || endAt || undefined}
-              onStartChange={setDay3StartAt}
-              onEndChange={setDay3EndAt}
-              showCapacity={hasMultipleTimeSlots}
-              capacityValue={slotCapacities.day_3}
-              onCapacityChange={(v) => updateSlotCapacity('day_3', v)}
-              onRemove={() => {
-                setDay3StartAt(null);
-                setDay3EndAt(null);
-                setDay4StartAt(null);
-                setDay4EndAt(null);
-                setSlotCapacities((prev) => {
-                  const next = { ...prev };
-                  delete next.day_3;
-                  delete next.day_4;
-                  return next;
-                });
-                setTicketTypes((prev) =>
-                  prev.map((tt) => {
-                    const stripped = stripSlotFromValidForSlots(tt.valid_for_slots, 'day_3');
-                    const nextSlots = stripped && stripped.length > 0 ? stripped : ['day_1'];
-                    return {
-                      ...tt,
-                      valid_for_slots: nextSlots,
-                      valid_for_days: deriveValidForDaysFromSlots(nextSlots, !!tt.is_all_access),
-                      slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_3'),
-                    };
-                  })
-                );
-              }}
-              onValidationClear={() => {
-                if (validationErrors.length > 0) setValidationErrors([]);
-              }}
-            />
-          )}
-
-          {hasTimeSlot4 && (
-            <OptionalTimeSlotFields
-              slotNumber={4}
-              startAt={day4StartAt}
-              endAt={day4EndAt}
-              minStart={day3EndAt || day2EndAt || endAt || undefined}
-              onStartChange={setDay4StartAt}
-              onEndChange={setDay4EndAt}
-              showCapacity={hasMultipleTimeSlots}
-              capacityValue={slotCapacities.day_4}
-              onCapacityChange={(v) => updateSlotCapacity('day_4', v)}
-              onRemove={() => {
-                setDay4StartAt(null);
-                setDay4EndAt(null);
-                setSlotCapacities((prev) => {
-                  const next = { ...prev };
-                  delete next.day_4;
-                  return next;
-                });
-                setTicketTypes((prev) =>
-                  prev.map((tt) => {
-                    const stripped = stripSlotFromValidForSlots(tt.valid_for_slots, 'day_4');
-                    const nextSlots = stripped && stripped.length > 0 ? stripped : ['day_1'];
-                    return {
-                      ...tt,
-                      valid_for_slots: nextSlots,
-                      valid_for_days: deriveValidForDaysFromSlots(nextSlots, !!tt.is_all_access),
-                      slot_quotas: stripSlotFromSlotQuotas(tt.slot_quotas, 'day_4'),
-                    };
-                  })
-                );
-              }}
-              onValidationClear={() => {
-                if (validationErrors.length > 0) setValidationErrors([]);
-              }}
-            />
-          )}
-
-          {!hasTimeSlot4 && (
+          {OPTIONAL_TIME_SLOT_NUMBERS.some((slotNumber) => {
+            const slot = optionalSlots[slotNumber];
+            return slot.start == null && slot.end == null;
+          }) && (
             <div>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
                   if (!startAt || !endAt) return;
-                  const previousEnd = hasTimeSlot3
-                    ? day3EndAt!
-                    : hasTimeSlot2
-                      ? day2EndAt!
-                      : endAt;
+                  const nextSlotNumber = OPTIONAL_TIME_SLOT_NUMBERS.find((slotNumber) => {
+                    const slot = optionalSlots[slotNumber];
+                    return slot.start == null && slot.end == null;
+                  });
+                  if (!nextSlotNumber) return;
+                  const previousEnd = previousOptionalSlotEnd(nextSlotNumber);
+                  if (!previousEnd) return;
                   const { start, end } = getDefaultNextSlotTimes(previousEnd);
-                  if (!hasTimeSlot2) {
-                    setDay2StartAt(start);
-                    setDay2EndAt(end);
-                  } else if (!hasTimeSlot3) {
-                    setDay3StartAt(start);
-                    setDay3EndAt(end);
-                  } else {
-                    setDay4StartAt(start);
-                    setDay4EndAt(end);
-                  }
+                  setOptionalSlots((prev) => ({
+                    ...prev,
+                    [nextSlotNumber]: { start, end },
+                  }));
                 }}
                 disabled={!startAt || !endAt}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Time Slot {hasTimeSlot2 ? (hasTimeSlot3 ? 4 : 3) : 2}
+                Add Time Slot {OPTIONAL_TIME_SLOT_NUMBERS.find((slotNumber) => {
+                  const slot = optionalSlots[slotNumber];
+                  return slot.start == null && slot.end == null;
+                })}
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
                 Add another time slot for multi-session events. Ticket types can then be set to a specific time slot or all time slots.
@@ -3362,12 +3296,7 @@ export default function EventForm({ collabEditorContext = null }: EventFormProps
                   description: description || '',
                   start_at: startAt ? startAt.toISOString() : '',
                   end_at: endAt ? endAt.toISOString() : '',
-                  day_2_start_at: day2StartAt ? day2StartAt.toISOString() : null,
-                  day_2_end_at: day2EndAt ? day2EndAt.toISOString() : null,
-                  day_3_start_at: day3StartAt ? day3StartAt.toISOString() : null,
-                  day_3_end_at: day3EndAt ? day3EndAt.toISOString() : null,
-                  day_4_start_at: day4StartAt ? day4StartAt.toISOString() : null,
-                  day_4_end_at: day4EndAt ? day4EndAt.toISOString() : null,
+                  ...slotColumnPayload,
                   status: 'published',
                   location_text: locationText || null,
                   instagram_preview_image_url: instagramPreviewImageUrl || null,

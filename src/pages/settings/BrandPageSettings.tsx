@@ -15,6 +15,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { compressReceiptImage } from '@/lib/images/compressReceiptImage';
+import {
+  EVENT_TIME_SLOT_COLUMNS,
+  getEffectiveEventEnd,
+  type EventTimeSlotFields,
+} from '@/lib/utils/event-time-slots';
 
 function withCacheBust(url: string): string {
   return `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
@@ -148,19 +153,19 @@ export default function BrandPageSettings() {
     try {
       const eventsQuery = supabase
         .from('events')
-        .select('id, title, end_at, day_2_end_at, day_3_end_at, day_4_end_at')
+        .select(`id, title, start_at, end_at, ${EVENT_TIME_SLOT_COLUMNS}`)
         .eq('org_id', currentOrg.id)
         .eq('status', 'published');
       const [eventsRes, productsRes] = await Promise.all([
         eventsQuery,
         (supabase.from('products') as any).select('id, title, is_on_sale').eq('org_id', currentOrg.id).eq('type', 'physical'),
       ]);
-      let eventsData = (eventsRes.data || []) as { id: string; title: string; end_at?: string; day_2_end_at?: string | null; day_3_end_at?: string | null; day_4_end_at?: string | null }[];
+      let eventsData = (eventsRes.data || []) as ({ id: string; title: string } & EventTimeSlotFields)[];
       if (eventsFilter === 'non_expired') {
         const now = new Date();
         eventsData = eventsData.filter((e) => {
-          const latestEnd = e.day_4_end_at || e.day_3_end_at || e.day_2_end_at || e.end_at;
-          return latestEnd && new Date(latestEnd) >= now;
+          if (!e.end_at) return false;
+          return new Date(getEffectiveEventEnd(e)) >= now;
         });
       }
       let productsData = (productsRes.data || []) as { id: string; title: string; is_on_sale?: boolean }[];

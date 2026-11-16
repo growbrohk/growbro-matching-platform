@@ -44,27 +44,44 @@ function formatEventTimeHKT(dateString: string) {
   });
 }
 
+const MAX_EMAIL_TIME_SLOTS = 10;
+
+function configuredEmailSlots(event: {
+  start_at?: string | null;
+  end_at?: string | null;
+  [key: string]: unknown;
+}): { key: string; start: string; end: string }[] {
+  const slots: { key: string; start: string; end: string }[] = [];
+  for (let n = 1; n <= MAX_EMAIL_TIME_SLOTS; n++) {
+    const start = n === 1 ? event.start_at : event[`day_${n}_start_at`];
+    const end = n === 1 ? event.end_at : event[`day_${n}_end_at`];
+    if (typeof start === 'string' && start && typeof end === 'string' && end) {
+      slots.push({ key: `day_${n}`, start, end });
+    }
+  }
+  return slots;
+}
+
+const EMAIL_EVENT_TIME_COLUMNS = [
+  'start_at',
+  'end_at',
+  ...Array.from({ length: MAX_EMAIL_TIME_SLOTS - 1 }, (_, i) => {
+    const n = i + 2;
+    return [`day_${n}_start_at`, `day_${n}_end_at`];
+  }).flat(),
+].join(', ');
+
 /** Format date/time for a ticket type based on valid_for_days (HKT) */
 function formatTicketTypeDateTimeHKT(
   event: {
     start_at: string;
     end_at: string;
-    day_2_start_at?: string | null;
-    day_2_end_at?: string | null;
-    day_3_start_at?: string | null;
-    day_3_end_at?: string | null;
-    day_4_start_at?: string | null;
-    day_4_end_at?: string | null;
+    [key: string]: unknown;
   },
   validForDays: string | null
 ): string {
   const validFor = validForDays || 'day_1';
-  const slots = [
-    { key: 'day_1', start: event.start_at, end: event.end_at },
-    { key: 'day_2', start: event.day_2_start_at, end: event.day_2_end_at },
-    { key: 'day_3', start: event.day_3_start_at, end: event.day_3_end_at },
-    { key: 'day_4', start: event.day_4_start_at, end: event.day_4_end_at },
-  ].filter((slot) => slot.start && slot.end) as { key: string; start: string; end: string }[];
+  const slots = configuredEmailSlots(event);
 
   if (slots.length <= 1 || validFor === 'day_1') {
     return `${formatEventTimeHKT(event.start_at)} – ${formatEventTimeHKT(event.end_at)} (HKT)`;
@@ -183,7 +200,7 @@ Deno.serve(async (req) => {
     ------------------------------------------------------------------------ */
     const { data: event } = await supabase
       .from('events')
-      .select('title, start_at, end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, location_text')
+      .select(`title, ${EMAIL_EVENT_TIME_COLUMNS}, location_text`)
       .eq('id', order.event_id)
       .single();
 
@@ -235,12 +252,7 @@ Deno.serve(async (req) => {
         orderItems.map((oi: any) => (oi.ticket_type?.valid_for_days as string) || 'day_1')
       )];
       if (ticketSlots.length > 0 && uniqueValidFor.every((v) => v === 'each')) {
-        const slots = [
-          { key: 'day_1', start: event.start_at, end: event.end_at },
-          { key: 'day_2', start: event.day_2_start_at, end: event.day_2_end_at },
-          { key: 'day_3', start: event.day_3_start_at, end: event.day_3_end_at },
-          { key: 'day_4', start: event.day_4_start_at, end: event.day_4_end_at },
-        ].filter((s) => s.start && s.end) as { key: string; start: string; end: string }[];
+        const slots = configuredEmailSlots(event);
         eventStartAt = [...new Set<string>(ticketSlots)]
           .map((slotKey) => {
             const slot = slots.find((s) => s.key === slotKey);
@@ -252,18 +264,10 @@ Deno.serve(async (req) => {
       } else if (uniqueValidFor.length === 1) {
         eventStartAt = formatTicketTypeDateTimeHKT(event, uniqueValidFor[0]);
       } else {
-        const dayLabels: Record<string, string> = {
-          day_1: 'Time Slot 1',
-          day_2: 'Time Slot 2',
-          day_3: 'Time Slot 3',
-          day_4: 'Time Slot 4',
-          both: 'All time slots',
-          all: 'All time slots',
-        };
         eventStartAt = uniqueValidFor
           .map((vf: string) => {
             const formatted = formatTicketTypeDateTimeHKT(event, vf);
-            return `${dayLabels[vf] || getValidForDaysLabelHKT(vf)}: ${formatted}`;
+            return `${getValidForDaysLabelHKT(vf)}: ${formatted}`;
           })
           .join('; ');
       }

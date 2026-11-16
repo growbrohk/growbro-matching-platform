@@ -126,26 +126,8 @@ import {
  * 1 slot: "Jan 4 (Sun) 18:00–22:00"
  * 2+ slots: "Jan 4 (Sun) 18:00–22:00, Jan 5 (Mon) 14:00–20:00, ..."
  */
-export function formatEventDateTimeMultiDay(
-  startAt: string,
-  endAt: string,
-  day2StartAt?: string | null,
-  day2EndAt?: string | null,
-  day3StartAt?: string | null,
-  day3EndAt?: string | null,
-  day4StartAt?: string | null,
-  day4EndAt?: string | null
-): string {
-  return formatEventDateTimeMultiDayFromEvent({
-    start_at: startAt,
-    end_at: endAt,
-    day_2_start_at: day2StartAt,
-    day_2_end_at: day2EndAt,
-    day_3_start_at: day3StartAt,
-    day_3_end_at: day3EndAt,
-    day_4_start_at: day4StartAt,
-    day_4_end_at: day4EndAt,
-  });
+export function formatEventDateTimeMultiDay(event: EventTimeSlotFields): string {
+  return formatEventDateTimeMultiDayFromEvent(event);
 }
 
 /**

@@ -3,6 +3,8 @@
  * Organization-based multi-tenant system
  */
 
+import type { SlotCapacities, TimeSlotKey, ValidForDays } from '@/lib/utils/event-time-slots';
+
 // ============================================================================
 // ENUMS AND TYPES
 // ============================================================================
@@ -176,6 +178,18 @@ export interface Event {
   day_3_end_at?: string | null;
   day_4_start_at?: string | null;
   day_4_end_at?: string | null;
+  day_5_start_at?: string | null;
+  day_5_end_at?: string | null;
+  day_6_start_at?: string | null;
+  day_6_end_at?: string | null;
+  day_7_start_at?: string | null;
+  day_7_end_at?: string | null;
+  day_8_start_at?: string | null;
+  day_8_end_at?: string | null;
+  day_9_start_at?: string | null;
+  day_9_end_at?: string | null;
+  day_10_start_at?: string | null;
+  day_10_end_at?: string | null;
   status: EventStatus;
   slug?: string;
   location_text?: string | null;
@@ -190,8 +204,8 @@ export interface Event {
   stripe_fee_bearer?: 'host' | 'user' | null;
   /** ISO 4217 currency ticket prices are charged in. Defaults to HKD. */
   currency?: string | null;
-  /** Per time slot venue capacity (day_1..day_4). Shared pool across ticket types. */
-  slot_capacities?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
+  /** Per time slot venue capacity (day_1..day_10). Shared pool across ticket types. */
+  slot_capacities?: SlotCapacities | null;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -227,16 +241,16 @@ export interface TicketType {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
+  valid_for_days?: ValidForDays;
   /** Time slots this ticket applies to (buyer picks one). NULL for all-access. */
-  valid_for_slots?: ('day_1' | 'day_2' | 'day_3' | 'day_4')[] | null;
+  valid_for_slots?: TimeSlotKey[] | null;
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
-  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
-  slot_remaining?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
+  slot_quotas?: Partial<Record<TimeSlotKey, number>>;
+  slot_remaining?: Partial<Record<TimeSlotKey, number>>;
   /** Event pool remaining per slot (from get_ticket_types_with_remaining). */
-  slot_pool_remaining?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
+  slot_pool_remaining?: Partial<Record<TimeSlotKey, number>> | null;
   remaining_count?: number; // Calculated field: quota - sold tickets (valid/scanned)
   created_at: string;
   updated_at: string;

@@ -1,18 +1,88 @@
 import { formatEventDate, formatEventTime } from '@/lib/utils/datetime';
 
-export type TimeSlotKey = 'day_1' | 'day_2' | 'day_3' | 'day_4';
+export const TIME_SLOT_KEYS = [
+  'day_1',
+  'day_2',
+  'day_3',
+  'day_4',
+  'day_5',
+  'day_6',
+  'day_7',
+  'day_8',
+  'day_9',
+  'day_10',
+] as const;
+
+export type TimeSlotKey = (typeof TIME_SLOT_KEYS)[number];
+export const MAX_TIME_SLOTS = TIME_SLOT_KEYS.length;
+
+export const OPTIONAL_TIME_SLOT_NUMBERS = [2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+export type OptionalTimeSlotNumber = (typeof OPTIONAL_TIME_SLOT_NUMBERS)[number];
+
 export type ValidForDays = TimeSlotKey | 'both' | 'all' | 'each';
 export type SlotCapacities = Partial<Record<TimeSlotKey, number>>;
 
-export interface EventTimeSlotFields {
+export type OptionalSlotColumnFields = {
+  [N in OptionalTimeSlotNumber as `day_${N}_start_at`]?: string | null;
+} & {
+  [N in OptionalTimeSlotNumber as `day_${N}_end_at`]?: string | null;
+};
+
+export interface EventTimeSlotFields extends OptionalSlotColumnFields {
   start_at: string;
   end_at: string;
-  day_2_start_at?: string | null;
-  day_2_end_at?: string | null;
-  day_3_start_at?: string | null;
-  day_3_end_at?: string | null;
-  day_4_start_at?: string | null;
-  day_4_end_at?: string | null;
+}
+
+/** Optional slot columns (day_2 through day_10), for explicit Supabase selects. */
+export const EVENT_TIME_SLOT_COLUMNS =
+  'day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, day_5_start_at, day_5_end_at, day_6_start_at, day_6_end_at, day_7_start_at, day_7_end_at, day_8_start_at, day_8_end_at, day_9_start_at, day_9_end_at, day_10_start_at, day_10_end_at' as const;
+
+const TIME_SLOT_KEY_PATTERN = /^day_([1-9]|10)$/;
+
+export function isTimeSlotKey(value: string | null | undefined): value is TimeSlotKey {
+  return typeof value === 'string' && TIME_SLOT_KEY_PATTERN.test(value);
+}
+
+export function compareTimeSlotKeys(a: TimeSlotKey, b: TimeSlotKey): number {
+  return Number(a.slice(4)) - Number(b.slice(4));
+}
+
+function sortTimeSlotKeys(keys: TimeSlotKey[]): TimeSlotKey[] {
+  return [...keys].sort(compareTimeSlotKeys);
+}
+
+export type OptionalSlotTimes = { start: Date | null; end: Date | null };
+
+export function emptyOptionalSlots(): Record<OptionalTimeSlotNumber, OptionalSlotTimes> {
+  return Object.fromEntries(
+    OPTIONAL_TIME_SLOT_NUMBERS.map((n) => [n, { start: null, end: null }])
+  ) as Record<OptionalTimeSlotNumber, OptionalSlotTimes>;
+}
+
+export function optionalSlotsFromEvent(
+  event: OptionalSlotColumnFields
+): Record<OptionalTimeSlotNumber, OptionalSlotTimes> {
+  const next = emptyOptionalSlots();
+  for (const n of OPTIONAL_TIME_SLOT_NUMBERS) {
+    const start = event[`day_${n}_start_at`];
+    const end = event[`day_${n}_end_at`];
+    next[n] = {
+      start: start ? new Date(start) : null,
+      end: end ? new Date(end) : null,
+    };
+  }
+  return next;
+}
+
+export function optionalSlotTimestamps(
+  slots: Record<OptionalTimeSlotNumber, OptionalSlotTimes>
+): OptionalSlotColumnFields {
+  const out: OptionalSlotColumnFields = {};
+  for (const n of OPTIONAL_TIME_SLOT_NUMBERS) {
+    out[`day_${n}_start_at`] = slots[n].start?.toISOString() ?? null;
+    out[`day_${n}_end_at`] = slots[n].end?.toISOString() ?? null;
+  }
+  return out;
 }
 
 export interface ConfiguredTimeSlot {
@@ -24,9 +94,12 @@ export interface ConfiguredTimeSlot {
 
 const SLOT_FIELD_MAP: { key: TimeSlotKey; slotNumber: number; startKey: keyof EventTimeSlotFields; endKey: keyof EventTimeSlotFields }[] = [
   { key: 'day_1', slotNumber: 1, startKey: 'start_at', endKey: 'end_at' },
-  { key: 'day_2', slotNumber: 2, startKey: 'day_2_start_at', endKey: 'day_2_end_at' },
-  { key: 'day_3', slotNumber: 3, startKey: 'day_3_start_at', endKey: 'day_3_end_at' },
-  { key: 'day_4', slotNumber: 4, startKey: 'day_4_start_at', endKey: 'day_4_end_at' },
+  ...OPTIONAL_TIME_SLOT_NUMBERS.map((n) => ({
+    key: `day_${n}` as TimeSlotKey,
+    slotNumber: n,
+    startKey: `day_${n}_start_at` as keyof EventTimeSlotFields,
+    endKey: `day_${n}_end_at` as keyof EventTimeSlotFields,
+  })),
 ];
 
 export function getConfiguredTimeSlots(event: EventTimeSlotFields): ConfiguredTimeSlot[] {
@@ -165,15 +238,15 @@ export function getTicketTypeSelectedSlots(
 ): TimeSlotKey[] {
   if (isAllAccessValidForDays(ticketType.valid_for_days)) return [];
   if (ticketType.valid_for_slots && ticketType.valid_for_slots.length > 0) {
-    return [...ticketType.valid_for_slots].sort();
+    return sortTimeSlotKeys(ticketType.valid_for_slots);
   }
   if (ticketType.valid_for_days === 'each' && ticketType.slot_quotas) {
-    return (Object.keys(ticketType.slot_quotas) as TimeSlotKey[]).filter((k) =>
-      /^day_[1-4]$/.test(k)
-    ).sort();
+    return sortTimeSlotKeys(
+      (Object.keys(ticketType.slot_quotas) as string[]).filter(isTimeSlotKey)
+    );
   }
   const validFor = (ticketType.valid_for_days || 'day_1') as ValidForDays;
-  if (/^day_[1-4]$/.test(validFor)) return [validFor as TimeSlotKey];
+  if (isTimeSlotKey(validFor)) return [validFor];
   return [];
 }
 
@@ -404,8 +477,8 @@ export function formatOrderEventDateTime(
 ): string {
   const ticketSlots = tickets
     .map((t) => t.time_slot)
-    .filter((s): s is TimeSlotKey => !!s && /^day_[1-4]$/.test(s));
-  const uniqueSlots = [...new Set(ticketSlots)].sort();
+    .filter((s): s is TimeSlotKey => isTimeSlotKey(s));
+  const uniqueSlots = sortTimeSlotKeys([...new Set(ticketSlots)]);
 
   if (uniqueSlots.length > 0) {
     return uniqueSlots
@@ -439,7 +512,7 @@ export function formatOrderEventDateTime(
 export function formatPurchasedTimeSlotShortLabel(
   timeSlot: TimeSlotKey | string | null | undefined
 ): string | null {
-  if (!timeSlot || !/^day_[1-4]$/.test(timeSlot)) return null;
+  if (!isTimeSlotKey(timeSlot)) return null;
   const slotNumber = timeSlot.replace('day_', '');
   return `Time Slot ${slotNumber}`;
 }
@@ -458,8 +531,8 @@ export function formatPurchasedTimeSlotLabel(
     return formatSlotRange(event.start_at, event.end_at);
   }
 
-  if (timeSlot && /^day_[1-4]$/.test(timeSlot)) {
-    const key = timeSlot as TimeSlotKey;
+  if (isTimeSlotKey(timeSlot)) {
+    const key = timeSlot;
     const short = formatPurchasedTimeSlotShortLabel(key);
     const datetime = formatSlotDateTimeByKey(event, key);
     return short ? `${short} — ${datetime}` : datetime;
@@ -480,7 +553,7 @@ export function validForDaysReferencesRemovedSlot(
   if (validForSlots && validForSlots.length > 0) {
     return validForSlots.includes(removedSlotKey);
   }
-  const validFor = validForDays || 'day_1';
+  const validFor = (validForDays || 'day_1') as ValidForDays;
   if (validFor === removedSlotKey) return true;
   if (isAllSlotsValue(validFor)) return true;
   if (validFor === 'each') return true;
@@ -550,37 +623,3 @@ export function getDefaultNextSlotTimes(previousEnd: Date): { start: Date; end: 
   return { start, end };
 }
 
-export const OPTIONAL_TIME_SLOT_NUMBERS = [2, 3, 4] as const;
-
-export type OptionalTimeSlotNumber = (typeof OPTIONAL_TIME_SLOT_NUMBERS)[number];
-
-export function getOptionalSlotStateKeys(slotNumber: OptionalTimeSlotNumber): {
-  startKey: 'day2StartAt' | 'day3StartAt' | 'day4StartAt';
-  endKey: 'day2EndAt' | 'day3EndAt' | 'day4EndAt';
-  dbStartKey: 'day_2_start_at' | 'day_3_start_at' | 'day_4_start_at';
-  dbEndKey: 'day_2_end_at' | 'day_3_end_at' | 'day_4_end_at';
-} {
-  switch (slotNumber) {
-    case 2:
-      return {
-        startKey: 'day2StartAt',
-        endKey: 'day2EndAt',
-        dbStartKey: 'day_2_start_at',
-        dbEndKey: 'day_2_end_at',
-      };
-    case 3:
-      return {
-        startKey: 'day3StartAt',
-        endKey: 'day3EndAt',
-        dbStartKey: 'day_3_start_at',
-        dbEndKey: 'day_3_end_at',
-      };
-    case 4:
-      return {
-        startKey: 'day4StartAt',
-        endKey: 'day4EndAt',
-        dbStartKey: 'day_4_start_at',
-        dbEndKey: 'day_4_end_at',
-      };
-  }
-}

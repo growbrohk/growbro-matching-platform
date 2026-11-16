@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { sortByManualDisplayOrder } from '@/lib/utils/product-display-order';
+import {
+  EVENT_TIME_SLOT_COLUMNS,
+  getConfiguredTimeSlots,
+  getEffectiveEventEnd,
+  type EventTimeSlotFields,
+} from '@/lib/utils/event-time-slots';
+
+const BRAND_EVENT_SELECT =
+  `id, title, slug, start_at, end_at, ${EVENT_TIME_SLOT_COLUMNS}, created_at, instagram_preview_image_url, metadata, currency` as const;
 
 export interface BrandEvent {
   id: string;
@@ -80,7 +89,7 @@ export function useBrandPageData(
 
         let eventsQuery = supabase
           .from('events')
-          .select('id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata, currency')
+          .select(BRAND_EVENT_SELECT)
           .eq('org_id', orgId)
           .eq('status', 'published');
 
@@ -159,7 +168,7 @@ export function useBrandPageData(
           const { data: extraEvents } = await supabase
             .from('events')
             .select(
-              'id, title, slug, start_at, day_2_start_at, day_3_start_at, day_4_start_at, end_at, day_2_end_at, day_3_end_at, day_4_end_at, created_at, instagram_preview_image_url, metadata, currency',
+              BRAND_EVENT_SELECT,
             )
             .in('id', ids)
             .eq('status', 'published');
@@ -209,8 +218,9 @@ export function useBrandPageData(
 
         if (eventsFilter === 'non_expired') {
           eventsData = eventsData.filter((e) => {
-            const latestEnd = e.day_4_end_at || e.day_3_end_at || e.day_2_end_at || e.end_at;
-            return latestEnd && new Date(latestEnd) >= new Date();
+            if (!e.end_at) return false;
+            const latestEnd = getEffectiveEventEnd(e as EventTimeSlotFields);
+            return new Date(latestEnd) >= new Date();
           });
         }
 
@@ -262,11 +272,13 @@ export function useBrandPageData(
           eventsData.map((e) => {
             let imageUrl = e.instagram_preview_image_url || null;
             if (!imageUrl && e.metadata?.image) imageUrl = e.metadata.image;
-            const dateStrings: string[] = [];
-            if (e.start_at) dateStrings.push(e.start_at);
-            if (e.day_2_start_at) dateStrings.push(e.day_2_start_at);
-            if (e.day_3_start_at) dateStrings.push(e.day_3_start_at);
-            if (e.day_4_start_at) dateStrings.push(e.day_4_start_at);
+            const slotEvent = e as EventTimeSlotFields;
+            const configured = e.start_at && e.end_at ? getConfiguredTimeSlots(slotEvent) : [];
+            const dateStrings = configured.length > 0
+              ? configured.map((slot) => slot.startAt)
+              : e.start_at
+                ? [e.start_at]
+                : [];
             const rowSlug = (e as { brand_page_org_slug?: string | null }).brand_page_org_slug;
             return {
               id: e.id,

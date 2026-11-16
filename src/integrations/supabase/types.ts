@@ -413,6 +413,18 @@ export type Database = {
           day_3_start_at: string | null
           day_4_end_at: string | null
           day_4_start_at: string | null
+          day_5_end_at: string | null
+          day_5_start_at: string | null
+          day_6_end_at: string | null
+          day_6_start_at: string | null
+          day_7_end_at: string | null
+          day_7_start_at: string | null
+          day_8_end_at: string | null
+          day_8_start_at: string | null
+          day_9_end_at: string | null
+          day_9_start_at: string | null
+          day_10_end_at: string | null
+          day_10_start_at: string | null
           description: string | null
           currency: string
           enable_fps: boolean | null
@@ -446,6 +458,18 @@ export type Database = {
           day_3_start_at?: string | null
           day_4_end_at?: string | null
           day_4_start_at?: string | null
+          day_5_end_at?: string | null
+          day_5_start_at?: string | null
+          day_6_end_at?: string | null
+          day_6_start_at?: string | null
+          day_7_end_at?: string | null
+          day_7_start_at?: string | null
+          day_8_end_at?: string | null
+          day_8_start_at?: string | null
+          day_9_end_at?: string | null
+          day_9_start_at?: string | null
+          day_10_end_at?: string | null
+          day_10_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null
@@ -478,6 +502,18 @@ export type Database = {
           day_3_start_at?: string | null
           day_4_end_at?: string | null
           day_4_start_at?: string | null
+          day_5_end_at?: string | null
+          day_5_start_at?: string | null
+          day_6_end_at?: string | null
+          day_6_start_at?: string | null
+          day_7_end_at?: string | null
+          day_7_start_at?: string | null
+          day_8_end_at?: string | null
+          day_8_start_at?: string | null
+          day_9_end_at?: string | null
+          day_9_start_at?: string | null
+          day_10_end_at?: string | null
+          day_10_start_at?: string | null
           description?: string | null
           enable_fps?: boolean | null
           enable_payme?: boolean | null

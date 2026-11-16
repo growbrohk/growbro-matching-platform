@@ -6,6 +6,12 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { BookingDraft, AttendeeInfo, ContactInfo } from '@/lib/types/booking';
 import { clearBookingDraft } from '@/lib/types/booking';
+import {
+  OPTIONAL_TIME_SLOT_NUMBERS,
+  type OptionalSlotColumnFields,
+  type TimeSlotKey,
+  type ValidForDays,
+} from '@/lib/utils/event-time-slots';
 
 export interface CreateBookingResponse {
   orderId: string;
@@ -59,12 +65,7 @@ export interface OrderWithEvent {
     title: string;
     start_at: string;
     end_at: string;
-    day_2_start_at?: string | null;
-    day_2_end_at?: string | null;
-    day_3_start_at?: string | null;
-    day_3_end_at?: string | null;
-    day_4_start_at?: string | null;
-    day_4_end_at?: string | null;
+  } & OptionalSlotColumnFields & {
     location_text: string | null;
     venue_name?: string | null;
     category?: string | null;
@@ -89,7 +90,7 @@ export interface OrderWithEvent {
     ticket_type: {
       id: string;
       name: string;
-      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | null;
+      valid_for_days?: TimeSlotKey | 'both' | 'all' | null;
     };
   }>;
   order_addon_items?: Array<{
@@ -108,7 +109,7 @@ export interface OrderWithEvent {
   tickets: Array<{
     id: string;
     ticket_type_id: string;
-    time_slot?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | null;
+    time_slot?: TimeSlotKey | null;
     qr_code: string;
     status: string;
     first_name: string | null;
@@ -118,7 +119,7 @@ export interface OrderWithEvent {
     ticket_type?: {
       id: string;
       name: string;
-      valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
+      valid_for_days?: ValidForDays;
     };
   }>;
 }
@@ -348,12 +349,12 @@ export async function getOrderWithEvent(orderId: string): Promise<OrderWithEvent
       title: eventData.title,
       start_at: eventData.start_at,
       end_at: eventData.end_at,
-      day_2_start_at: eventData.day_2_start_at ?? null,
-      day_2_end_at: eventData.day_2_end_at ?? null,
-      day_3_start_at: eventData.day_3_start_at ?? null,
-      day_3_end_at: eventData.day_3_end_at ?? null,
-      day_4_start_at: eventData.day_4_start_at ?? null,
-      day_4_end_at: eventData.day_4_end_at ?? null,
+      ...Object.fromEntries(
+        OPTIONAL_TIME_SLOT_NUMBERS.flatMap((n) => [
+          [`day_${n}_start_at`, eventData[`day_${n}_start_at`] ?? null],
+          [`day_${n}_end_at`, eventData[`day_${n}_end_at`] ?? null],
+        ])
+      ),
       location_text: eventData.location_text,
       venue_name: eventData.venue_name,
       category: eventData.category,

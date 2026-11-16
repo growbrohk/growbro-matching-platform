@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import type { TimeSlotKey } from '@/lib/utils/event-time-slots';
+import { isTimeSlotKey, type TimeSlotKey } from '@/lib/utils/event-time-slots';
 
 export interface EventTicketRow {
   id: string;
@@ -188,8 +188,7 @@ export function useEventTickets(eventId: string | undefined) {
         } | null;
 
         const rawTimeSlot = (ticket as { time_slot?: string | null }).time_slot;
-        const timeSlot: TimeSlotKey | null =
-          rawTimeSlot && /^day_[1-4]$/.test(rawTimeSlot) ? (rawTimeSlot as TimeSlotKey) : null;
+        const timeSlot: TimeSlotKey | null = isTimeSlotKey(rawTimeSlot) ? rawTimeSlot : null;
         const validForDays = ticketType?.valid_for_days ?? null;
 
         const rawOi = ticket.order_items as

@@ -3,6 +3,8 @@
  * Used for localStorage persistence during checkout flow
  */
 
+import type { TimeSlotKey } from '@/lib/utils/event-time-slots';
+
 export interface BookingDraftLine {
   label: string; // e.g., "1-Day Ticket"
   optionLabel?: string; // e.g., "Adult"
@@ -12,7 +14,7 @@ export interface BookingDraftLine {
   /** Variant used when purchasing via code/affiliate. For per-variant quota tracking. */
   ticketTypeAccessVariantId?: string | null;
   dateTimeLabel?: string; // e.g., "Fri 6 Dec 18:00–22:00"
-  timeSlot?: 'day_1' | 'day_2' | 'day_3' | 'day_4';
+  timeSlot?: TimeSlotKey;
 }
 
 export interface BookingDraftAddonLine {

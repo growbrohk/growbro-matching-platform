@@ -2,9 +2,16 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Event, TicketType, TicketTypeAccessVariant } from '@/lib/types';
 import { DEFAULT_LIST_LIMIT } from '@/lib/constants/query-limits';
 import { normalizeCurrency } from '@/lib/currency';
+import {
+  EVENT_TIME_SLOT_COLUMNS,
+  OPTIONAL_TIME_SLOT_NUMBERS,
+  type SlotCapacities,
+  type TimeSlotKey,
+  type ValidForDays,
+} from '@/lib/utils/event-time-slots';
 
 const EVENT_LIST_SELECT =
-  'id, org_id, venue_org_id, title, description, start_at, end_at, day_2_start_at, day_2_end_at, day_3_start_at, day_3_end_at, day_4_start_at, day_4_end_at, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at';
+  `id, org_id, venue_org_id, title, description, start_at, end_at, ${EVENT_TIME_SLOT_COLUMNS}, status, slug, location_text, instagram_preview_image_url, og_preview_image_url, collect_attendee_info, enable_stripe, enable_payme, enable_fps, payme_link, fps_link, stripe_fee_bearer, metadata, created_at, updated_at` as const;
 
 /**
  * Convert a string to a URL-friendly slug
@@ -67,6 +74,18 @@ export interface CreateEventData {
   day_3_end_at?: string | null;
   day_4_start_at?: string | null;
   day_4_end_at?: string | null;
+  day_5_start_at?: string | null;
+  day_5_end_at?: string | null;
+  day_6_start_at?: string | null;
+  day_6_end_at?: string | null;
+  day_7_start_at?: string | null;
+  day_7_end_at?: string | null;
+  day_8_start_at?: string | null;
+  day_8_end_at?: string | null;
+  day_9_start_at?: string | null;
+  day_9_end_at?: string | null;
+  day_10_start_at?: string | null;
+  day_10_end_at?: string | null;
   status?: 'draft' | 'published' | 'cancelled' | 'completed';
   location_text?: string | null;
   instagram_preview_image_url?: string | null;
@@ -81,7 +100,7 @@ export interface CreateEventData {
   stripe_fee_bearer?: 'host' | 'user' | null;
   /** ISO 4217 currency ticket prices are charged in. Defaults to HKD. */
   currency?: string | null;
-  slot_capacities?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>> | null;
+  slot_capacities?: SlotCapacities | null;
   metadata?: Record<string, any>;
 }
 
@@ -115,12 +134,12 @@ export interface CreateTicketTypeData {
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
-  valid_for_slots?: ('day_1' | 'day_2' | 'day_3' | 'day_4')[] | null;
+  valid_for_days?: ValidForDays;
+  valid_for_slots?: TimeSlotKey[] | null;
   show_remaining_count?: boolean;
   threshold_to_show?: number | null;
   description?: string | null;
-  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
+  slot_quotas?: Partial<Record<TimeSlotKey, number>>;
 }
 
 export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData, 'event_id'>> {
@@ -133,9 +152,9 @@ export interface UpdateTicketTypeData extends Partial<Omit<CreateTicketTypeData,
   availability_mode?: 'always' | 'scheduled';
   available_start_at?: string | null;
   available_end_at?: string | null;
-  valid_for_days?: 'day_1' | 'day_2' | 'day_3' | 'day_4' | 'both' | 'all' | 'each';
-  valid_for_slots?: ('day_1' | 'day_2' | 'day_3' | 'day_4')[] | null;
-  slot_quotas?: Partial<Record<'day_1' | 'day_2' | 'day_3' | 'day_4', number>>;
+  valid_for_days?: ValidForDays;
+  valid_for_slots?: TimeSlotKey[] | null;
+  slot_quotas?: Partial<Record<TimeSlotKey, number>>;
 }
 
 /** When fetchResult is false, skip post-sync row/variant refetches (saves round trips when caller ignores return value). */
@@ -246,23 +265,15 @@ export async function createEvent(data: CreateEventData): Promise<Event> {
   if (data.metadata !== undefined && data.metadata !== null) {
     updateFields.metadata = data.metadata;
   }
-  if (data.day_2_start_at !== undefined) {
-    updateFields.day_2_start_at = data.day_2_start_at;
-  }
-  if (data.day_2_end_at !== undefined) {
-    updateFields.day_2_end_at = data.day_2_end_at;
-  }
-  if (data.day_3_start_at !== undefined) {
-    updateFields.day_3_start_at = data.day_3_start_at;
-  }
-  if (data.day_3_end_at !== undefined) {
-    updateFields.day_3_end_at = data.day_3_end_at;
-  }
-  if (data.day_4_start_at !== undefined) {
-    updateFields.day_4_start_at = data.day_4_start_at;
-  }
-  if (data.day_4_end_at !== undefined) {
-    updateFields.day_4_end_at = data.day_4_end_at;
+  for (const n of OPTIONAL_TIME_SLOT_NUMBERS) {
+    const startKey = `day_${n}_start_at` as const;
+    const endKey = `day_${n}_end_at` as const;
+    if (data[startKey] !== undefined) {
+      updateFields[startKey] = data[startKey];
+    }
+    if (data[endKey] !== undefined) {
+      updateFields[endKey] = data[endKey];
+    }
   }
   if (data.slot_capacities !== undefined) {
     updateFields.slot_capacities = data.slot_capacities;
@@ -873,7 +884,7 @@ export async function getVariantRemainingCounts(eventId: string): Promise<Map<st
 
 export type EventSlotSoldCounts = Partial<
   Record<
-    'day_1' | 'day_2' | 'day_3' | 'day_4',
+    TimeSlotKey,
     { pool_sold: number; by_ticket_type: Record<string, number> }
   >
 >;
