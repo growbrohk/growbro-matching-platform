@@ -71,8 +71,10 @@ export default function PublicEventForm({
   const eventCurrency = normalizeCurrency(event.currency);
   const formatPrice = (amount: number) => formatMoney(amount, eventCurrency);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotKey | null>(null);
+  const ticketPanelRef = useRef<HTMLDivElement>(null);
 
   const handleSelectTimeSlot = (slotKey: TimeSlotKey) => {
+    if (slotKey === selectedTimeSlot) return;
     setSelectedTimeSlot(slotKey);
     setSelections((prev) => {
       const updated = { ...prev };
@@ -84,6 +86,11 @@ export default function PublicEventForm({
       return updated;
     });
   };
+
+  useEffect(() => {
+    if (!selectedTimeSlot) return;
+    ticketPanelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedTimeSlot]);
 
   const getEffectiveRemaining = useCallback((
     tt: TicketType,
@@ -762,44 +769,49 @@ export default function PublicEventForm({
                           return sum + (remaining ?? 0);
                         }, 0);
                         return (
-                          <button
-                            key={slot.key}
-                            type="button"
-                            onClick={() => handleSelectTimeSlot(slot.key)}
-                            className={`text-left border rounded-lg p-3 transition-colors ${
-                              isSelected ? 'ring-2 ring-[#0E7A3A] bg-[#0E7A3A]/5' : 'hover:bg-muted/50'
-                            }`}
-                            style={{ borderColor: 'rgba(14,122,58,0.14)' }}
-                          >
-                            <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                              {slot.slotNumber}. {formatSlotRange(slot.startAt, slot.endAt)}
-                            </span>
-                            {slotAvailability > 0 && (
-                              <span className="block text-xs text-muted-foreground mt-0.5">
-                                Tickets available
+                          <div key={slot.key} className="space-y-2">
+                            <button
+                              type="button"
+                              aria-expanded={isSelected}
+                              onClick={() => handleSelectTimeSlot(slot.key)}
+                              className={`w-full text-left border rounded-lg p-3 transition-colors ${
+                                isSelected ? 'ring-2 ring-[#0E7A3A] bg-[#0E7A3A]/5' : 'hover:bg-muted/50'
+                              }`}
+                              style={{ borderColor: 'rgba(14,122,58,0.14)' }}
+                            >
+                              <span className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                                {slot.slotNumber}. {formatSlotRange(slot.startAt, slot.endAt)}
                               </span>
+                              {slotAvailability > 0 && (
+                                <span className="block text-xs text-muted-foreground mt-0.5">
+                                  Tickets available
+                                </span>
+                              )}
+                            </button>
+                            {isSelected && (
+                              <div
+                                ref={ticketPanelRef}
+                                className="space-y-3 pl-3 border-l-2"
+                                style={{ borderColor: '#0E7A3A' }}
+                              >
+                                <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
+                                  2. Choose tickets
+                                </p>
+                                {slotScopedTicketsWithPrice.length > 0 ? (
+                                  slotScopedTicketsWithPrice.map((item) =>
+                                    renderTicketCard(item, { slotKey: slot.key, hideDateTime: true })
+                                  )
+                                ) : (
+                                  <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
+                                    No tickets available for this time slot.
+                                  </div>
+                                )}
+                              </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {multiSlotEvent && selectedTimeSlot && (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium" style={{ color: '#0F1F17' }}>
-                      2. Choose tickets
-                    </p>
-                    {slotScopedTicketsWithPrice.length > 0 ? (
-                      slotScopedTicketsWithPrice.map((item) =>
-                        renderTicketCard(item, { slotKey: selectedTimeSlot, hideDateTime: true })
-                      )
-                    ) : (
-                      <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground" style={{ borderColor: 'rgba(14,122,58,0.14)' }}>
-                        No tickets available for this time slot.
-                      </div>
-                    )}
                   </div>
                 )}
 
